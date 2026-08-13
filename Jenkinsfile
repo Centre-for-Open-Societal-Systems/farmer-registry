@@ -19,7 +19,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT_ID')]) {
                     sh '''
                         ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                        BRANCH="${GIT_BRANCH##*/}"
+                        BRANCH="${BRANCH_NAME}"
                         TAG="${BRANCH}-${BUILD_NUMBER}"
 
                         echo "=== Building images for branch: ${BRANCH} tag: ${TAG} ==="
@@ -75,7 +75,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT_ID')]) {
                     sh '''
                         ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                        BRANCH="${GIT_BRANCH##*/}"
+                        BRANCH="${BRANCH_NAME}"
                         TAG="${BRANCH}-${BUILD_NUMBER}"
 
                         echo "=== Logging in to ECR ==="
@@ -112,7 +112,7 @@ pipeline {
                 ]) {
                     sh '''
                         ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                        BRANCH="${GIT_BRANCH##*/}"
+                        BRANCH="${BRANCH_NAME}"
                         TAG="${BRANCH}-${BUILD_NUMBER}"
 
                         echo "=== Deploying to dev namespace ==="
@@ -122,7 +122,7 @@ pipeline {
                         helm dependency build ./helm/openg2p-farmer-registry
 
                         helm upgrade --install ${RELEASE_NAME} ./helm/openg2p-farmer-registry \
-                            --namespace gen2 \
+                            --namespace far \
                             --create-namespace \
                             --timeout 10m \
                             --set registry.staffApi.image.repository=${ECR_REGISTRY}/${ECR_BASE}/staff-api \
@@ -140,60 +140,60 @@ pipeline {
 
                         echo "=== Waiting for rollout ==="
                         kubectl rollout status deployment/${RELEASE_NAME}-staff-api \
-                            -n gen2 --timeout=120s || true
+                            -n far --timeout=120s || true
 
                         echo "=== Deployment status ==="
-                        kubectl get pods -n gen2 | grep ${RELEASE_NAME}
+                        kubectl get pods -n far | grep ${RELEASE_NAME}
                     '''
                 }
             }
         }
 
-        stage('Deploy to Staging') {
-            when { branch 'main' }
-            steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT_ID'),
-                    file(credentialsId: 'dev-kubeconfig', variable: 'KUBECONFIG')
-                ]) {
-                    input message: "Approve deployment of farmer-registry:${GIT_BRANCH##*/}-${BUILD_NUMBER} to staging?"
-                    sh '''
-                        ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                        BRANCH="${GIT_BRANCH##*/}"
-                        TAG="${BRANCH}-${BUILD_NUMBER}"
+        // stage('Deploy to Staging') {
+        //     when { branch 'main' }
+        //     steps {
+        //         withCredentials([
+        //             string(credentialsId: 'AWS_ACCOUNT_ID', variable: 'AWS_ACCOUNT_ID'),
+        //             file(credentialsId: 'dev-kubeconfig', variable: 'KUBECONFIG')
+        //         ]) {
+        //             input message: "Approve deployment of farmer-registry:${BRANCH_NAME}-${BUILD_NUMBER} to staging?"
+        //             sh '''
+        //                 ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        //                 BRANCH="${BRANCH_NAME}"
+        //                 TAG="${BRANCH}-${BUILD_NUMBER}"
 
-                        echo "=== Deploying to staging namespace ==="
+        //                 echo "=== Deploying to staging namespace ==="
 
-                        helm repo add openg2p-gitlab \
-                            https://gitlab.com/api/v4/projects/84460547/packages/helm/stable || true
-                        helm dependency build ./helm/openg2p-farmer-registry
+        //                 helm repo add openg2p-gitlab \
+        //                     https://gitlab.com/api/v4/projects/84460547/packages/helm/stable || true
+        //                 helm dependency build ./helm/openg2p-farmer-registry
 
-                        helm upgrade --install ${RELEASE_NAME}-staging ./helm/openg2p-farmer-registry \
-                            --namespace ${NAMESPACE} \
-                            --timeout 10m \
-                            --set registry.staffApi.image.repository=${ECR_REGISTRY}/${ECR_BASE}/staff-api \
-                            --set registry.staffApi.image.tag=${TAG} \
-                            --set registry.partnerApi.image.repository=${ECR_REGISTRY}/${ECR_BASE}/partner-api \
-                            --set registry.partnerApi.image.tag=${TAG} \
-                            --set registry.celeryWorker.image.repository=${ECR_REGISTRY}/${ECR_BASE}/celery \
-                            --set registry.celeryWorker.image.tag=${TAG} \
-                            --set registry.celeryBeat.image.repository=${ECR_REGISTRY}/${ECR_BASE}/celery \
-                            --set registry.celeryBeat.image.tag=${TAG} \
-                            --set registry.dbSeed.image.repository=${ECR_REGISTRY}/${ECR_BASE}/db-seed \
-                            --set registry.dbSeed.image.tag=${TAG} \
-                            --set sanity.image.repository=${ECR_REGISTRY}/${ECR_BASE}/sanity-tests \
-                            --set sanity.image.tag=${TAG}
+        //                 helm upgrade --install ${RELEASE_NAME}-staging ./helm/openg2p-farmer-registry \
+        //                     --namespace ${NAMESPACE} \
+        //                     --timeout 10m \
+        //                     --set registry.staffApi.image.repository=${ECR_REGISTRY}/${ECR_BASE}/staff-api \
+        //                     --set registry.staffApi.image.tag=${TAG} \
+        //                     --set registry.partnerApi.image.repository=${ECR_REGISTRY}/${ECR_BASE}/partner-api \
+        //                     --set registry.partnerApi.image.tag=${TAG} \
+        //                     --set registry.celeryWorker.image.repository=${ECR_REGISTRY}/${ECR_BASE}/celery \
+        //                     --set registry.celeryWorker.image.tag=${TAG} \
+        //                     --set registry.celeryBeat.image.repository=${ECR_REGISTRY}/${ECR_BASE}/celery \
+        //                     --set registry.celeryBeat.image.tag=${TAG} \
+        //                     --set registry.dbSeed.image.repository=${ECR_REGISTRY}/${ECR_BASE}/db-seed \
+        //                     --set registry.dbSeed.image.tag=${TAG} \
+        //                     --set sanity.image.repository=${ECR_REGISTRY}/${ECR_BASE}/sanity-tests \
+        //                     --set sanity.image.tag=${TAG}
 
-                        echo "=== Waiting for rollout ==="
-                        kubectl rollout status deployment/${RELEASE_NAME}-staging-staff-api \
-                            -n ${NAMESPACE} --timeout=120s || true
+        //                 echo "=== Waiting for rollout ==="
+        //                 kubectl rollout status deployment/${RELEASE_NAME}-staging-staff-api \
+        //                     -n ${NAMESPACE} --timeout=120s || true
 
-                        echo "=== Deployment status ==="
-                        kubectl get pods -n ${NAMESPACE} | grep ${RELEASE_NAME}-staging
-                    '''
-                }
-            }
-        }
+        //                 echo "=== Deployment status ==="
+        //                 kubectl get pods -n ${NAMESPACE} | grep ${RELEASE_NAME}-staging
+        //             '''
+        //         }
+        //     }
+        // }
     }
 
     post {
@@ -240,7 +240,7 @@ Jenkins
                     returnStdout: true
                 ).trim()
                 if (committerEmail.contains('noreply')) {
-                    committerEmail = 'devops@yourorg.com'
+                    committerEmail = 'simretyibeltal@gmail.com, Pavan.ns@gmail.com'
                 }
                 mail(
                     to: committerEmail,
