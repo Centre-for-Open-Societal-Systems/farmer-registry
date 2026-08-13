@@ -1,0 +1,31 @@
+global:
+  registryHostname: farmer-registry.dev.openg2p.org
+
+registry:
+  staffApi:
+    image:
+      repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/oan/farmer-registry/staff-api
+      tag: develop
+  partnerApi:
+    image:
+      repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/oan/farmer-registry/partner-api
+      tag: develop
+  celeryWorker:
+    image:
+      repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/oan/farmer-registry/celery
+      tag: develop
+  celeryBeat:
+    image:
+      repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/oan/farmer-registry/celery
+      tag: develop
+  dbSeed:
+    image:
+      repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/oan/farmer-registry/db-seed
+      tag: develop
+    loadSampleData: false
+    loadImages: false
+
+sanity:
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/oan/farmer-registry/sanity-tests
+    tag: develop
