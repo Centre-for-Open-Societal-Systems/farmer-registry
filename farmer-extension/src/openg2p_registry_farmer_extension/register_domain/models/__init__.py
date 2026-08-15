@@ -6,6 +6,9 @@ from .land import G2PRegisterLand, G2PRegisterHistoryLand, G2PIntakeFormLand
 from .farm_inputs import G2PRegisterFarmInputs, G2PRegisterHistoryFarmInputs, G2PIntakeFormFarmInputs
 from .livestock import G2PRegisterLivestock, G2PRegisterHistoryLivestock, G2PIntakeFormLivestock
 from .membership_details import G2PRegisterMembershipDetails, G2PRegisterHistoryMembershipDetails, G2PIntakeFormMembershipDetails
+from .consent_requests import G2PRegisterConsentRequests, G2PRegisterHistoryConsentRequests,G2PIntakeFormConsentRequests
+from .consent_receipts import G2PRegisterConsentReceipts, G2PRegisterHistoryConsentReceipts, G2PIntakeFormConsentReceipts
+from .ids import G2PRegisterIds, G2PRegisterHistoryIds, G2PIntakeFormIds
 from .enums import (
     DisabilityTypeEnum,
     DisabilitySeverityEnum,
@@ -17,4 +20,9 @@ from .enums import (
     CropEndUseEnum,
     LivestockSystemEnum,
     FarmerClusterRoleEnum,
+    PrimaryCommodityEnum,
+    MachineryTypeEnum,
+    FinancialServicesEnum,
+    CropCommodityEnum,
+    WaterSourceEnum
 )
