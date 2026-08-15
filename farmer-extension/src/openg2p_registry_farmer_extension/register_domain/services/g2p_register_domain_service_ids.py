@@ -8,7 +8,7 @@ from .domain_validation_utils import as_int, parse_date, validation_error
 _logger = logging.getLogger("g2p-register-domain-service")
 
 
-class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
+class G2PRegisterDomainServiceIds(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
             self._validate_birth_date(record)
@@ -60,19 +60,7 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             "source_of_income",
             "national_id_masked",
             "disability_type",
-            "is_household_head",
-            "psnp_user",
-            "number_of_males_in_the_family",
-            "father_included",
-            "number_of_females_in_the_family",
-            "mother_included",
-            "number_of_children_in_the_family",
-            "family_size",
-            "is_farmer",
-            "primary_language",
-            "farming_type",
             "latitude",
-
             "longitude",
             "altitude",
             "plus_code",

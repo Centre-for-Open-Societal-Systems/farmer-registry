@@ -3,7 +3,7 @@ from sqlalchemy import Boolean, String, select
 from sqlalchemy.orm import Mapped, mapped_column
 from openg2p_registry_core.models import G2PRegister, G2PRegisterHistory
 from ..services import G2PRegisterDomainServiceMembershipDetails
-from .enums import FarmerClusterRoleEnum
+from .enums import FarmerClusterRoleEnum, PrimaryCommodityEnum, MachineryTypeEnum, FinancialServicesEnum
 
 class G2PMembershipDetails:
 
@@ -12,7 +12,13 @@ class G2PMembershipDetails:
     is_cooperative_union_member: Mapped[bool] = mapped_column(Boolean, nullable=True)
     cooperative_union_name: Mapped[str] = mapped_column(String, nullable=True)
     is_farmer_cluster_member: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    primary_commodity: Mapped[PrimaryCommodityEnum] = mapped_column(String, nullable=True)
     farmer_cluster_role: Mapped[FarmerClusterRoleEnum] = mapped_column(String, nullable=True)   # FarmerClusterRoleEnum
+    do_you_use_machinery: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    what_kind_of_machinery_do_you_use: Mapped[MachineryTypeEnum] = mapped_column(String, nullable=True)
+    do_you_have_financial_access: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    what_financial_services_do_you_use: Mapped[FinancialServicesEnum] = mapped_column(String, nullable=True)
+
 
 # All Register classes should have the prefix G2PRegister
 class G2PRegisterMembershipDetails(G2PRegister, G2PMembershipDetails):
