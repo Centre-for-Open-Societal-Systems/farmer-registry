@@ -3,14 +3,17 @@ from sqlalchemy import Date, String, select
 from sqlalchemy.orm import Mapped, mapped_column
 from openg2p_registry_core.models import G2PRegister, G2PRegisterHistory
 from ..services import G2PRegisterDomainServiceCrop
-from .enums import CropEndUseEnum
+from .enums import CropEndUseEnum, CropCommodityEnum, WaterSourceEnum
 
 class G2PCrop:
 
-    commodity: Mapped[str] = mapped_column(String, nullable=True)      # Attribute lookup
-    planted_date: Mapped[str] = mapped_column(Date, nullable=True)
+    water_source: Mapped[WaterSourceEnum] = mapped_column(String, nullable=True)
+    commodity: Mapped[CropCommodityEnum] = mapped_column(String, nullable=True) # Attribute lookup
+    planted_date_gc = mapped_column(Date, nullable=True)
+    planted_date_ec = mapped_column(Date, nullable=True)
     season: Mapped[str] = mapped_column(String, nullable=True)
-    end_use: Mapped[CropEndUseEnum] = mapped_column(String, nullable=True)        # CropEndUseEnum
+    # end_use: Mapped[CropEndUseEnum] = mapped_column(String, nullable=True)
+    # planted_date: Mapped[str] = mapped_column(Date, nullable=True)      # CropEndUseEnum
 
 # All Register classes should have the prefix G2PRegister
 class G2PRegisterCrop(G2PRegister, G2PCrop):

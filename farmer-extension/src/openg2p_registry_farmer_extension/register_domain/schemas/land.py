@@ -11,14 +11,24 @@ from ..models.enums import LandOwnershipTypeEnum, LandSizeUnitEnum, CurrentLandU
 class G2PSchemaLand:
 
     land_ownership_type: Optional[LandOwnershipTypeEnum] = None
-    certificate_storage_id: Optional[str] = None
+    remark: Optional[str] = None
     land_size: Optional[str] = None
-    unit: Optional[LandSizeUnitEnum] = None
+    land_id: Optional[str] = None
+    kebele: Optional[str] = None
+    certificate_provider: Optional[str] = None
+    land_certificate: Optional[str] = None
     soil_fertility: Optional[str] = None
     current_land_use: Optional[CurrentLandUseEnum] = None
-    farming_type: Optional[FarmingTypeEnum] = None
-    year_of_acquisition: Optional[int] = None
     means_of_acquisition: Optional[str] = None
+    year_of_acquisition: Optional[int] = None
+    integration_status: Optional[str] = None
+
+    # Summary fields
+    total_owned_land: Optional[str] = None
+    total_rented_land: Optional[str] = None
+    total_crop_sharing_land: Optional[str] = None
+    total_land_area: Optional[str] = None
+    land_ownership: Optional[str] = None
 
 
 class G2PRegisterSchemaLand(G2PRegisterBaseSchema, G2PGeoSchema, G2PGeoShapeSchema, G2PSchemaLand):
