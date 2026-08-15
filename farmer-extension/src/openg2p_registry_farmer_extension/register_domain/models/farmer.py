@@ -21,9 +21,51 @@ class G2PFarmer:
     education_level: Mapped[EducationalLevelEnum] = mapped_column(String, nullable=True)       # EducationalLevelEnum
     national_id_masked: Mapped[str] = mapped_column(String, nullable=True)
 
+    # Socio-Economic Data
+    is_household_head: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    psnp_user: Mapped[bool] = mapped_column(Boolean, nullable=True)
+
+    # Household Information
+    number_of_males_in_the_family: Mapped[int] = mapped_column(Integer, nullable=True)
+    father_included: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    number_of_females_in_the_family: Mapped[int] = mapped_column(Integer, nullable=True)
+    mother_included: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    number_of_children_in_the_family: Mapped[int] = mapped_column(Integer, nullable=True)
+    family_size: Mapped[int] = mapped_column(Integer, nullable=True)
+
+    # Farmer Data
+    is_farmer: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    primary_language: Mapped[str] = mapped_column(String, nullable=True)
+    farming_type: Mapped[str] = mapped_column(String, nullable=True)
+
+
 # All Register classes should have the prefix G2PRegister
 class G2PRegisterFarmer(G2PRegister, G2PPerson, G2PGeo, G2PFarmer):
     __tablename__ = "g2p_register_farmers"
+
+    @property
+    def email(self) -> str | None:
+        """Alias property to return email from emails list to satisfy section ui schema."""
+        if self.emails and isinstance(self.emails, list) and len(self.emails) > 0:
+            return self.emails[0]
+        return None
+
+    @email.setter
+    def email(self, value: str | None) -> None:
+        if value:
+            self.emails = [value]
+        else:
+            self.emails = []
+
+    @property
+    def personal_phone_number(self) -> bool | None:
+        """Alias property to return has_personal_phone to satisfy section ui schema."""
+        return self.has_personal_phone
+
+    @personal_phone_number.setter
+    def personal_phone_number(self, value: bool | None) -> None:
+        self.has_personal_phone = value
+
 
     def get_record_name_fields(self) -> str:
         """Return farmer fields used to build record_name."""
@@ -37,9 +79,57 @@ class G2PRegisterFarmer(G2PRegister, G2PPerson, G2PGeo, G2PFarmer):
 class G2PRegisterHistoryFarmer(G2PRegisterHistory, G2PPersonHistory, G2PGeoHistory, G2PFarmer):
     __tablename__ = "g2p_register_history_farmers"
 
+    @property
+    def email(self) -> str | None:
+        """Alias property to return email from emails list to satisfy section ui schema."""
+        if self.emails and isinstance(self.emails, list) and len(self.emails) > 0:
+            return self.emails[0]
+        return None
+
+    @email.setter
+    def email(self, value: str | None) -> None:
+        if value:
+            self.emails = [value]
+        else:
+            self.emails = []
+
+    @property
+    def personal_phone_number(self) -> bool | None:
+        """Alias property to return has_personal_phone to satisfy section ui schema."""
+        return self.has_personal_phone
+
+    @personal_phone_number.setter
+    def personal_phone_number(self, value: bool | None) -> None:
+        self.has_personal_phone = value
+
+
 # All Intake Form classes should have the prefix G2PIntakeForm
 class G2PIntakeFormFarmer(G2PIntakeForm, G2PRegister, G2PPerson, G2PGeo, G2PFarmer):
     __tablename__ = "g2p_intake_form_farmers"
+
+    @property
+    def email(self) -> str | None:
+        """Alias property to return email from emails list to satisfy section ui schema."""
+        if self.emails and isinstance(self.emails, list) and len(self.emails) > 0:
+            return self.emails[0]
+        return None
+
+    @email.setter
+    def email(self, value: str | None) -> None:
+        if value:
+            self.emails = [value]
+        else:
+            self.emails = []
+
+    @property
+    def personal_phone_number(self) -> bool | None:
+        """Alias property to return has_personal_phone to satisfy section ui schema."""
+        return self.has_personal_phone
+
+    @personal_phone_number.setter
+    def personal_phone_number(self, value: bool | None) -> None:
+        self.has_personal_phone = value
+
 
     def get_record_name_fields(self) -> str:
         """Return farmer fields used to build record_name."""

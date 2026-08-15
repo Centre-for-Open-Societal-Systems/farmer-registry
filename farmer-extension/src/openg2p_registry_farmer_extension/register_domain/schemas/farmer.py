@@ -25,6 +25,29 @@ class G2PSchemaFarmer:
     education_level: Optional[EducationalLevelEnum] = None
     national_id_masked: Optional[str] = None
 
+    # Socio-Economic Data
+    is_household_head: Optional[bool] = None
+    psnp_user: Optional[bool] = None
+
+    # Household Information
+    number_of_males_in_the_family: Optional[int] = None
+    father_included: Optional[bool] = None
+    number_of_females_in_the_family: Optional[int] = None
+    mother_included: Optional[bool] = None
+    number_of_children_in_the_family: Optional[int] = None
+    family_size: Optional[int] = None
+
+    # Farmer Data
+    is_farmer: Optional[bool] = None
+    primary_language: Optional[str] = None
+    farming_type: Optional[str] = None
+
+    # Section compatibility properties
+    email: Optional[str] = None
+    personal_phone_number: Optional[bool] = None
+
+
+
 class G2PRegisterSchemaFarmer(G2PRegisterBaseSchema, G2PPersonSchema, G2PGeoSchema, G2PSchemaFarmer):
     """
     Schema for Farmer register.
