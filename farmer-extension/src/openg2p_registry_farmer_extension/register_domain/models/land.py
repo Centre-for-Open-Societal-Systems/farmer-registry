@@ -10,16 +10,26 @@ from ..services import G2PRegisterDomainServiceLand
 
 class G2PLand:
 
-    land_ownership_type: Mapped[LandOwnershipTypeEnum] = mapped_column(String, nullable=True)   # LandOwnershipTypeEnum
-    certificate_storage_id: Mapped[str] = mapped_column(Text, nullable=True)
-    land_size: Mapped[str] = mapped_column(String, nullable=True)
-    unit: Mapped[LandSizeUnitEnum] = mapped_column(String, nullable=True)        # LandSizeUnitEnum
-    soil_fertility: Mapped[str] = mapped_column(String, nullable=True)
-    current_land_use: Mapped[CurrentLandUseEnum] = mapped_column(String, nullable=True)      # CurrentLandUseEnum
-    farming_type: Mapped[FarmingTypeEnum] = mapped_column(String, nullable=True)          # FarmingTypeEnum
-    year_of_acquisition: Mapped[int] = mapped_column(Integer, nullable=True)
-    means_of_acquisition: Mapped[str] = mapped_column(String, nullable=True)  # Attribute lookup
+    # Summary fields
+    total_owned_land: Mapped[str] = mapped_column(String, nullable=True)
+    total_rented_land: Mapped[str] = mapped_column(String, nullable=True)
+    total_crop_sharing_land: Mapped[str] = mapped_column(String, nullable=True)
+    total_land_area: Mapped[str] = mapped_column(String, nullable=True)
+    land_ownership: Mapped[str] = mapped_column(String, nullable=True)
 
+    land_ownership_type: Mapped[LandOwnershipTypeEnum] = mapped_column(String, nullable=True)
+    remark: Mapped[str] = mapped_column(String, nullable=True)
+    land_size: Mapped[str] = mapped_column(String, nullable=True)
+    land_id: Mapped[str] = mapped_column(String, nullable=True)
+    kebele: Mapped[str] = mapped_column(String, nullable=True)
+    certificate_provider: Mapped[str] = mapped_column(String, nullable=True)
+    land_certificate: Mapped[str] = mapped_column(Text, nullable=True)
+    soil_fertility: Mapped[str] = mapped_column(String, nullable=True)
+    current_land_use: Mapped[CurrentLandUseEnum] = mapped_column(String, nullable=True)
+    means_of_acquisition: Mapped[str] = mapped_column(String, nullable=True)
+    year_of_acquisition: Mapped[int] = mapped_column(Integer, nullable=True)
+
+integration_status: Mapped[str] = mapped_column(String, nullable=True)
 # All Register classes should have the prefix G2PRegister
 class G2PRegisterLand(G2PRegister, G2PGeo, G2PGeoShape, G2PLand):
     __tablename__ = "g2p_register_lands"

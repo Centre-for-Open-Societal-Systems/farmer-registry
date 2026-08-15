@@ -88,3 +88,18 @@ class EducationalLevelEnum(StrEnum):
     BASIC = "BASIC"
     INTERMEDIARY = "INTERMEDIARY"
     HIGHER_EDUCATION = "HIGHER_EDUCATION"
+
+class PrimaryCommodityEnum(StrEnum):
+    AVACADO = "AVACADO"
+
+class MachineryTypeEnum(StrEnum):
+    COMBINE_HARVESTER = "COMBINE HARVESTER"
+
+class FinancialServicesEnum(StrEnum):
+    DIGITAL_BANKING = "DIGITAL BANKING"
+
+class CropCommodityEnum(StrEnum):
+    WHEAT = "WHEAT"
+
+class WaterSourceEnum(StrEnum):
+    RAINFED = "RAINFED"
