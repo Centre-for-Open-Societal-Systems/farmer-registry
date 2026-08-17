@@ -3,7 +3,7 @@ from datetime import date
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
-from .domain_validation_utils import parse_date, validation_error
+from .domain_validation_utils import as_bool, parse_date, validation_error
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
@@ -11,6 +11,10 @@ _logger = logging.getLogger("g2p-register-domain-service")
 class G2PRegisterDomainServiceHouseholdMember(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
+            # The checkbox widget submits '' rather than null/false when left
+            # untouched, which Postgres rejects as an invalid boolean literal.
+            if not isinstance(record.get("is_disabled"), bool):
+                record["is_disabled"] = as_bool(record.get("is_disabled")) or False
             self._validate_birth_date(record)
 
     def _validate_birth_date(self, record: dict) -> None:

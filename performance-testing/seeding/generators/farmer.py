@@ -42,6 +42,8 @@ def generate(household_row: dict, anchors: list[str]) -> dict:
         "source_of_income_other": None,
         "language_spoken": random.choice(LANGUAGES_SPOKEN),
         "national_id_masked": fake.numerify("***###" + "####"),
+        "state": "APPROVED",
+        "import_source": "IMPORT_FILE",
     })
 
     row["record_name"] = " ".join(

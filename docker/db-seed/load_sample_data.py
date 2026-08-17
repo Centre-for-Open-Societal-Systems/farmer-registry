@@ -525,7 +525,11 @@ def _as_int(v):
 
 
 def _fr_id(ind: dict) -> str:
-    """Farmer functional id from the individual's id -> FR-####.
+    """Farmer functional id from the individual's id -> FR-{10 digits}.
+
+    Matches the live id-generator's farmer id_type (prefix "FR-", id_length 10 —
+    see docker/local-dev/id-generator.yaml and G2PIdGeneratorService), and the
+    format used by the legacy Odoo farmer profile (`FR-{unique_id}`).
 
     Take the LAST segment, not [1]. The docstring's `IND-####` was only ever the
     two-segment shape; Master Data's sample population is country-prefixed
@@ -535,7 +539,7 @@ def _fr_id(ind: dict) -> str:
     row aborted the transaction: db-seed failed with zero rows loaded, retried,
     and failed identically until BackoffLimitExceeded.
     """
-    return "FR-" + ind["functional_record_id"].rsplit("-", 1)[-1]
+    return "FR-" + ind["functional_record_id"].rsplit("-", 1)[-1].zfill(10)
 
 
 def search_text_person(p: dict) -> str:
@@ -565,6 +569,7 @@ def insert_farmers(cur, individuals: list, extras_by_id: dict) -> None:
         "disability_type", "disability_severity",
         "source_of_income", "source_of_income_other",
         "language_spoken", "education_level", "national_id_masked",
+        "state", "import_source",
     ]
     rows = []
     for ind in individuals:
@@ -593,6 +598,7 @@ def insert_farmers(cur, individuals: list, extras_by_id: dict) -> None:
                 ex.get("disability_severity"), ex.get("source_of_income"),
                 ex.get("source_of_income_other"), ex.get("language_spoken"),
                 ind.get("education_level"), ind.get("foundational_id_masked"),
+                "APPROVED", "IMPORT_FILE",
             )
         )
     sql = (

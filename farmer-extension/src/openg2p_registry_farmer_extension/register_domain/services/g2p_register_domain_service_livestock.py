@@ -30,6 +30,9 @@ class G2PRegisterDomainServiceLivestock(G2PRegisterDomainService):
             "breed",
             "head_count",
             "livestock_system",
+            "gender",
+            "body_condition",
+            "production_type",
         ]
         search_text = []
         if extra:
