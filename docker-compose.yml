@@ -1,0 +1,642 @@
+# Farmer Registry — local development stack.
+#
+# Derived from the openg2p-registry Helm chart (0.0.0-develop.383) values
+# contract. That chart is NOT self-contained: it assumes an OpenG2P environment
+# already provides Postgres, Redis, MinIO, Keycloak, IAM, master-data and the
+# id-generator (the `commons-base` and `commons-services` releases). This file
+# stands those up alongside the registry so the whole login chain runs on a
+# laptop.
+#
+#   docker compose --env-file local/.env up -d --build
+#
+# Then open the Staff Portal at http://portal.localtest.me:3000
+# and log in with admin / admin.
+#
+# ── Read this before changing hostnames ──────────────────────────────────────
+# Keycloak, IAM and MinIO are addressed by *.localtest.me names rather than
+# `localhost`, and each is published on a host port EQUAL to its container port.
+# That is deliberate: those names resolve to 127.0.0.1 from the browser and, via
+# the network aliases below, to the container from inside the compose network. A
+# single URL therefore works from both sides, which is what an OIDC issuer and a
+# shared session cookie require. Using `localhost` breaks one side or the other.
+#
+# ── What this repo builds and what it consumes ───────────────────────────────
+# Under the inverted build model this repo builds only staff-api, partner-api,
+# celery and db-seed (docker/*/Dockerfile, each FROM the pinned platform base).
+# The Staff Portal UI carries no farmer code, so it is consumed from the platform
+# image and extended only to patch a Dashboard button into its header
+# (docker/staff-ui). dashboard-ui is this repo's own Next.js app and the one
+# image here not built on a platform base.
+#
+# ── Integrations switched off ────────────────────────────────────────────────
+# AWE, the audit manager, the consent manager, partner signature validation and
+# keymanager are all commons-services components. They are disabled through their
+# documented flags (see local/.env) rather than left pointing at hosts that do
+# not resolve.
+
+name: farmer
+
+# Registry images are published for linux/amd64 only, so they run emulated on
+# Apple Silicon. Anchored here so the platform is stated once.
+x-amd64: &amd64
+  platform: linux/amd64
+
+services:
+  # ───────────────────────────────────────────────────────────────────────────
+  # Infrastructure (chart equivalent: the `commons-base` release)
+  # ───────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16
+    # The platform's own services (staff-api, partner-api and the two celery
+    # processes) each open a pool sized for production and together hold ~90 of
+    # the image default of 100 slots, leaving nothing for anything else. The
+    # chart runs against a managed server sized well above this, so the ceiling
+    # is raised here rather than the platform's pools being shrunk.
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Every component gets its own database and owner, matching the chart's
+    # per-component postgres-init Jobs. Runs only on a fresh volume.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./local/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - '${POSTGRES_PORT}:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    # Serves two roles the chart splits across two releases: the celery broker
+    # (redisInstallationName) and staff-api/IAM refresh-token storage
+    # (authRedisInstallationName). Both are unauthenticated upstream.
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    ports:
+      - '${MINIO_API_PORT}:9000'
+      - '${MINIO_CONSOLE_PORT}:9001'
+    networks:
+      default:
+        aliases:
+          # The registry hands the browser pre-signed S3 URLs built from this
+          # name, so it has to resolve identically inside and outside.
+          - ${MINIO_HOST}
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  minio-init:
+    image: minio/mc:latest
+    # The MinIO chart creates no buckets; the platform's DocumentBucket enum
+    # requires these three to exist, with the physical name equal to the enum
+    # value.
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        for b in "$$DEFAULT_BUCKET" "$$TEMPLATE_BUCKET" "$$DOCUMENTS_BUCKET"; do
+          mc mb --ignore-existing "local/$$b"
+        done
+        echo "buckets ready"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      DEFAULT_BUCKET: ${DEFAULT_BUCKET}
+      TEMPLATE_BUCKET: ${TEMPLATE_BUCKET}
+      DOCUMENTS_BUCKET: ${DOCUMENTS_BUCKET}
+    restart: 'no'
+
+  keycloak:
+    # Upstream image rather than openg2p/keycloak: it is multi-arch (so it runs
+    # natively here) and supports --import-realm directly. The only thing lost is
+    # the openg2p login theme. Any 24.0.x matches the version the chart pins.
+    image: quay.io/keycloak/keycloak:24.0.4
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${KEYCLOAK_DB}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KC_HTTP_ENABLED: 'true'
+      KC_HEALTH_ENABLED: 'true'
+      # Forces every issuer, authorization and token URL Keycloak advertises to
+      # use this origin. Without it Keycloak derives them from the request host
+      # and the issuer stops matching what IAM validates.
+      KC_HOSTNAME_URL: http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}
+      KC_HOSTNAME_ADMIN_URL: http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}
+      KC_HOSTNAME_STRICT: 'false'
+      KC_PROXY_HEADERS: xforwarded
+    volumes:
+      - ./local/keycloak/realm-staff.json:/opt/keycloak/data/import/realm-staff.json:ro
+    ports:
+      - '${KEYCLOAK_PORT}:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - ${KEYCLOAK_HOST}
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Shared services (chart equivalent: the `commons-services` release)
+  # ───────────────────────────────────────────────────────────────────────────
+  iam:
+    image: ${IAM_IMAGE}
+    <<: *amd64
+    environment:
+      IAM_STAFF_DB_DRIVER: postgresql+asyncpg
+      IAM_STAFF_DB_HOSTNAME: postgres
+      IAM_STAFF_DB_PORT: 5432
+      IAM_STAFF_DB_DBNAME: ${IAM_DB}
+      IAM_STAFF_DB_USERNAME: ${IAM_DB_USER}
+      IAM_STAFF_DB_PASSWORD: ${IAM_DB_PASSWORD}
+      IAM_STAFF_OPENAPI_ROOT_PATH: /
+      IAM_STAFF_KEYCLOAK_BASE_URL: http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}
+      IAM_STAFF_KEYCLOAK_ISSUER_URL: http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}/realms/${KEYCLOAK_REALM}
+      IAM_STAFF_LOGIN_PROVIDERS_TABLE_ENABLED: 'true'
+      IAM_STAFF_LOGIN_PROVIDERS_TABLE_NAME: login_providers
+      IAM_STAFF_AUTH_REDIS_URL: redis://redis:6379/0
+      IAM_STAFF_AUTH_TRANSACTION_STORE_BACKEND: redis
+      IAM_STAFF_CACHE_EXPIRE_SECONDS: '10'
+      IAM_STAFF_AUTH_REFRESH_TOKEN_TTL_SECONDS: '1800'
+      IAM_STAFF_AUTH_ENABLED: 'true'
+      IAM_STAFF_CSRF_ENABLED: 'true'
+      IAM_STAFF_AUTH_VERIFY_SSL: 'false'
+      IAM_STAFF_AUTH_COOKIE_HTTPONLY: 'true'
+      IAM_STAFF_AUTH_COOKIE_PATH: /
+      # The cookie is set by IAM and read by the portal, so it must be scoped to
+      # the domain both share.
+      IAM_STAFF_AUTH_COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      IAM_STAFF_AUTH_COOKIE_MAX_AGE: '1800'
+      IAM_STAFF_AUTH_COOKIE_SET_EXPIRES: 'true'
+      # Plain http locally, so the cookie must not be marked Secure.
+      IAM_STAFF_AUTH_COOKIE_SECURE: 'false'
+      IAM_STAFF_AUTH_COOKIE_SAMESITE: lax
+      IAM_STAFF_DATA_APPLICATION_URLS__KEYCLOAK_APPLICATION_URL: http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}
+      IAM_STAFF_DATA_APPLICATION_URLS__REGISTRY_APPLICATION_URL: http://${STAFF_UI_HOST}:${STAFF_UI_PORT}
+      IAM_STAFF_DATA_APPLICATION_URLS__MINIO_APPLICATION_URL: http://${MINIO_HOST}:${MINIO_CONSOLE_PORT}
+      IAM_STAFF_CORS_ALLOW_ORIGINS: '["http://${STAFF_UI_HOST}:${STAFF_UI_PORT}"]'
+      IAM_STAFF_DATA_CLIENT_SECRETS__STAFF_PORTAL_SECRET: ${IAM_CLIENT_SECRET}
+    volumes:
+      - ./local/iam/login_providers.json:/opt/iam-staff-portal-data/login_providers.json:ro
+    ports:
+      - '${IAM_PORT}:8000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    networks:
+      default:
+        aliases:
+          # Browser-facing: the portal sends the user here to start login.
+          - ${IAM_HOST}
+
+  master-data:
+    image: ${MASTER_DATA_IMAGE}
+    <<: *amd64
+    environment:
+      GEN2_MASTER_DATA_API_DB_HOSTNAME: postgres
+      GEN2_MASTER_DATA_API_DB_PORT: 5432
+      GEN2_MASTER_DATA_API_DB_DBNAME: ${MASTER_DATA_DB}
+      GEN2_MASTER_DATA_API_DB_USERNAME: ${MASTER_DATA_DB_USER}
+      GEN2_MASTER_DATA_API_DB_PASSWORD: ${MASTER_DATA_DB_PASSWORD}
+      # Container port is configurable, so it is set equal to the published port.
+      GEN2_MASTER_DATA_API_PORT: ${MASTER_DATA_PORT}
+      GEN2_MASTER_DATA_API_OPENAPI_ROOT_PATH: /
+      COMMON_KEYCLOAK_CLIENT_ID: ${AUTH_CLIENT_ID}
+      COMMON_AUTH_PROVIDER_API_URL: http://iam:8000
+    ports:
+      - '${MASTER_DATA_PORT}:${MASTER_DATA_PORT}'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  id-generator:
+    image: ${IDGEN_IMAGE}
+    <<: *amd64
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${IDGEN_DB}
+      DB_USER: ${IDGEN_DB_USER}
+      DB_PASSWORD: ${IDGEN_DB_PASSWORD}
+      CONFIG_PATH: /app/config/config.yaml
+    volumes:
+      - ./local/idgenerator/config.yaml:/app/config/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # The registry itself (built from docker/, this repo's own images)
+  # ───────────────────────────────────────────────────────────────────────────
+  staff-api:
+    build:
+      context: .
+      dockerfile: docker/staff-api/Dockerfile
+      platforms:
+        - linux/amd64
+      args:
+        RP_VERSION: ${RP_VERSION}
+    image: openg2p/openg2p-farmer-registry-staff-api:${RP_VERSION}
+    <<: *amd64
+    environment:
+      # 1 worker rather than the chart's 3 — this is a laptop, and every worker
+      # is emulated.
+      STAFF_PORTAL_NO_OF_WORKERS: '1'
+      REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME: postgres
+      REGISTRY_STAFF_PORTAL_API_DB_PORT: 5432
+      REGISTRY_STAFF_PORTAL_API_DB_DBNAME: ${REGISTRY_DB}
+      REGISTRY_STAFF_PORTAL_API_DB_USERNAME: ${REGISTRY_DB_USER}
+      REGISTRY_STAFF_PORTAL_API_DB_PASSWORD: ${REGISTRY_DB_PASSWORD}
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_DRIVER: postgresql+asyncpg
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_HOSTNAME: postgres
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_PORT: 5432
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_DBNAME: ${MASTER_DATA_DB}
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_USERNAME: ${MASTER_DATA_DB_USER}
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_PASSWORD: ${MASTER_DATA_DB_PASSWORD}
+      REGISTRY_STAFF_PORTAL_API_OPENAPI_ROOT_PATH: /
+      REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL: http://iam:8000
+      REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL: redis://redis:6379/0
+      REGISTRY_STAFF_PORTAL_API_AUTH_REFRESH_TOKEN_TTL_SECONDS: '1800'
+      REGISTRY_STAFF_PORTAL_API_CSRF_ENABLED: 'true'
+      REGISTRY_STAFF_PORTAL_API_KEYCLOAK_CLIENT_ID: ${AUTH_CLIENT_ID}
+      REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT: ${MINIO_HOST}:${MINIO_API_PORT}
+      REGISTRY_STAFF_PORTAL_API_MINIO_SECURE: 'false'
+      REGISTRY_STAFF_PORTAL_API_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      REGISTRY_STAFF_PORTAL_API_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # The chart gives these a readonly MinIO account of their own; there is one
+      # account here, so the pre-signed record-image URLs use it too.
+      REGISTRY_STAFF_PORTAL_API_MINIO_READ_ACCESS_KEY: ${MINIO_ROOT_USER}
+      REGISTRY_STAFF_PORTAL_API_MINIO_READ_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      # Record images (incl. db-seed uploads) live in the documents bucket; this
+      # must match so pre-signed record-image URLs resolve.
+      REGISTRY_STAFF_PORTAL_API_MINIO_BUCKET_NAME: ${DOCUMENTS_BUCKET}
+      REGISTRY_STAFF_PORTAL_API_TEMPLATE_BUCKET_NAME: ${TEMPLATE_BUCKET}
+      REGISTRY_STAFF_PORTAL_API_AUDIT_ENABLED: ${AUDIT_ENABLED}
+      REGISTRY_STAFF_PORTAL_API_AWE_ENABLED: ${AWE_ENABLED}
+    ports:
+      - '${STAFF_API_PORT}:8000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/ping')"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+
+  partner-api:
+    build:
+      context: .
+      dockerfile: docker/partner-api/Dockerfile
+      platforms:
+        - linux/amd64
+      args:
+        RP_VERSION: ${RP_VERSION}
+    image: openg2p/openg2p-farmer-registry-partner-api:${RP_VERSION}
+    <<: *amd64
+    environment:
+      PARTNER_NO_OF_WORKERS: '1'
+      REGISTRY_PARTNER_API_DB_HOSTNAME: postgres
+      REGISTRY_PARTNER_API_DB_PORT: 5432
+      REGISTRY_PARTNER_API_DB_DBNAME: ${REGISTRY_DB}
+      REGISTRY_PARTNER_API_DB_USERNAME: ${REGISTRY_DB_USER}
+      REGISTRY_PARTNER_API_DB_PASSWORD: ${REGISTRY_DB_PASSWORD}
+      REGISTRY_PARTNER_API_OPENAPI_ROOT_PATH: /
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_DRIVER: postgresql+asyncpg
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_HOSTNAME: postgres
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_PORT: 5432
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_DBNAME: ${MASTER_DATA_DB}
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_USERNAME: ${MASTER_DATA_DB_USER}
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_PASSWORD: ${MASTER_DATA_DB_PASSWORD}
+      # Partner signature checks, consent enforcement and keymanager all need
+      # commons-services; disabled so the API starts standalone.
+      REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED: ${PARTNER_SIGNATURE_VALIDATION_ENABLED}
+      REGISTRY_PARTNER_API_CONSENT_ENFORCEMENT_ENABLED: ${CONSENT_ENFORCEMENT_ENABLED}
+      REGISTRY_PARTNER_API_CRYPTO_BACKEND: ${CRYPTO_BACKEND}
+      REGISTRY_PARTNER_API_KEYMANAGER_AUTH_ENABLED: ${KEYMANAGER_AUTH_ENABLED}
+      REGISTRY_PARTNER_API_MINIO_ENDPOINT: ${MINIO_HOST}:${MINIO_API_PORT}
+      REGISTRY_PARTNER_API_MINIO_SECURE: 'false'
+      REGISTRY_PARTNER_API_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      REGISTRY_PARTNER_API_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      REGISTRY_PARTNER_API_MINIO_BUCKET_NAME: ${DOCUMENTS_BUCKET}
+      REGISTRY_PARTNER_API_TEMPLATE_BUCKET_NAME: ${TEMPLATE_BUCKET}
+      REGISTRY_PARTNER_API_AUDIT_ENABLED: ${AUDIT_ENABLED}
+    # The base image's gunicorn binds 0.0.0.0:8000 regardless of
+    # REGISTRY_PARTNER_API_PORT, so the container port is fixed at 8000. Nothing
+    # inside the network calls the partner API, so an unequal mapping is fine.
+    ports:
+      - '${PARTNER_API_PORT}:8000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: docker/celery/Dockerfile
+      platforms:
+        - linux/amd64
+      args:
+        RP_VERSION: ${RP_VERSION}
+    image: openg2p/openg2p-farmer-registry-celery:${RP_VERSION}
+    <<: *amd64
+    environment:
+      REGISTRY_CELERY_WORKERS_DB_HOSTNAME: postgres
+      REGISTRY_CELERY_WORKERS_DB_PORT: 5432
+      REGISTRY_CELERY_WORKERS_DB_DBNAME: ${REGISTRY_DB}
+      REGISTRY_CELERY_WORKERS_DB_USERNAME: ${REGISTRY_DB_USER}
+      REGISTRY_CELERY_WORKERS_DB_PASSWORD: ${REGISTRY_DB_PASSWORD}
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_DRIVER: postgresql+asyncpg
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_HOSTNAME: postgres
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_PORT: 5432
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_DBNAME: ${MASTER_DATA_DB}
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_USERNAME: ${MASTER_DATA_DB_USER}
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_PASSWORD: ${MASTER_DATA_DB_PASSWORD}
+      REGISTRY_CELERY_WORKERS_CELERY_BROKER_URL: redis://redis:6379/0
+      REGISTRY_CELERY_WORKERS_CELERY_BACKEND_URL: redis://redis:6379/0
+      REGISTRY_CELERY_WORKERS_WORKER_QUEUE: registry_worker_queue
+      REGISTRY_CELERY_WORKERS_BATCH_SIZE: '2000'
+      REGISTRY_CELERY_WORKERS_WORKER_MAX_ATTEMPTS: '5'
+      REGISTRY_CELERY_WORKERS_MINIO_ENDPOINT: ${MINIO_HOST}:${MINIO_API_PORT}
+      REGISTRY_CELERY_WORKERS_MINIO_SECURE: 'false'
+      REGISTRY_CELERY_WORKERS_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      REGISTRY_CELERY_WORKERS_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      REGISTRY_CELERY_WORKERS_MINIO_BUCKET_NAME: ${DEFAULT_BUCKET}
+      REGISTRY_CELERY_WORKERS_TEMPLATE_BUCKET_NAME: ${TEMPLATE_BUCKET}
+      # Functional ids for the farmer and household registers come from the
+      # id-generator pools in local/idgenerator/config.yaml.
+      REGISTRY_CELERY_WORKERS_FUNCTIONAL_ID_GENERATION_URL: http://id-generator:8000/v1
+      REGISTRY_CELERY_WORKERS_ID_GENERATION_ALLOCATION_PATH: '/idgenerator/{id_type}/id'
+      CELERY_APP: openg2p_registry_celery_worker.main.celery_app
+      CELERY_OPTS: worker -Q registry_worker_queue --loglevel=info
+    depends_on:
+      staff-api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    image: openg2p/openg2p-farmer-registry-celery:${RP_VERSION}
+    <<: *amd64
+    environment:
+      REGISTRY_CELERY_BEAT_DB_HOSTNAME: postgres
+      REGISTRY_CELERY_BEAT_DB_PORT: 5432
+      REGISTRY_CELERY_BEAT_DB_DBNAME: ${REGISTRY_DB}
+      REGISTRY_CELERY_BEAT_DB_USERNAME: ${REGISTRY_DB_USER}
+      REGISTRY_CELERY_BEAT_DB_PASSWORD: ${REGISTRY_DB_PASSWORD}
+      REGISTRY_CELERY_BEAT_CELERY_BROKER_URL: redis://redis:6379/0
+      REGISTRY_CELERY_BEAT_CELERY_BACKEND_URL: redis://redis:6379/0
+      REGISTRY_CELERY_BEAT_WORKER_QUEUE: registry_worker_queue
+      REGISTRY_CELERY_BEAT_BATCH_SIZE: '2000'
+      REGISTRY_CELERY_BEAT_NO_OF_TASKS_TO_PROCESS: '4'
+      REGISTRY_CELERY_BEAT_DATA_TRANSFORMATION_BEAT_PRODUCER_FREQUENCY: '20'
+      REGISTRY_CELERY_BEAT_INGEST_DATA_BEAT_PRODUCER_FREQUENCY: '20'
+      REGISTRY_CELERY_BEAT_INGEST_DATA_CLASSIFICATION_BEAT_PRODUCER_FREQUENCY: '20'
+      REGISTRY_CELERY_BEAT_OUTGEST_DATA_PUBLISH_BEAT_PRODUCER_FREQUENCY: '20'
+      REGISTRY_CELERY_BEAT_OUTGEST_TOPIC_REGISTER_BEAT_PRODUCER_FREQUENCY: '20'
+      REGISTRY_CELERY_BEAT_DEDUPLICATION_BEAT_PRODUCER_FREQUENCY: '30'
+      CELERY_APP: openg2p_registry_celery_beat.main.celery_app
+      CELERY_OPTS: worker --beat --loglevel=info --schedule=/tmp/celery-beat-schedule.db
+    depends_on:
+      staff-api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  db-seed:
+    build:
+      context: .
+      dockerfile: docker/db-seed/Dockerfile
+      platforms:
+        - linux/amd64
+      args:
+        RP_VERSION: ${RP_VERSION}
+    image: openg2p/openg2p-farmer-registry-db-seed:${RP_VERSION}
+    <<: *amd64
+    # One-shot. Applies the farmer register metadata, loads the geo hierarchy and
+    # the farmer demo records, and uploads record images and the DCI templates to
+    # MinIO. Waits for staff-api because the platform migrations must have created
+    # the schema first.
+    environment:
+      PGHOST: postgres
+      PGPORT: '5432'
+      PGDATABASE: ${REGISTRY_DB}
+      PGUSER: ${REGISTRY_DB_USER}
+      PGPASSWORD: ${REGISTRY_DB_PASSWORD}
+      MD_PGHOST: postgres
+      MD_PGPORT: '5432'
+      MD_PGDATABASE: ${MASTER_DATA_DB}
+      MD_PGUSER: ${MASTER_DATA_DB_USER}
+      MD_PGPASSWORD: ${MASTER_DATA_DB_PASSWORD}
+      LOAD_GEO_DATA: ${LOAD_GEO_DATA}
+      LOAD_SAMPLE_DATA: ${LOAD_SAMPLE_DATA}
+      LOAD_IMAGES: ${LOAD_IMAGES}
+      LOAD_TEMPLATES: ${LOAD_TEMPLATES}
+      LOAD_ATTRIBUTES: ${LOAD_ATTRIBUTES}
+      SYNC_GEO_WIDGETS: ${SYNC_GEO_WIDGETS}
+      ATTRIBUTE_DOMAINS: ${ATTRIBUTE_DOMAINS}
+      MDS_BASE_URL: http://master-data:${MASTER_DATA_PORT}
+      IMAGE_BUCKET_NAME: ${DOCUMENTS_BUCKET}
+      TEMPLATE_BUCKET_NAME: ${TEMPLATE_BUCKET}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_SECURE: 'false'
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      AWE_DB_SEED_ENABLED: ${AWE_ENABLED}
+    depends_on:
+      staff-api:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    restart: 'no'
+
+  iam-register:
+    image: curlimages/curl:8.11.1
+    # Registers this registry (its tile plus the roles/permissions catalog) into
+    # IAM, exactly as the chart's iam-register hook Job does. Without it IAM
+    # cannot resolve a user's Keycloak roles into registry permissions, and the
+    # portal renders with nothing granted.
+    depends_on:
+      iam:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    environment:
+      IAM_REGISTER_URL: http://iam:8000/user-access/staff_portal_applications
+      TOKEN_URL: http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token
+      CLIENT_ID: ${AUTH_CLIENT_ID}
+      CLIENT_SECRET: ${AUTH_CLIENT_SECRET}
+      APP_MNEMONIC: ${AUTH_CLIENT_ID}
+      APP_URL: http://${STAFF_UI_HOST}:${STAFF_UI_PORT}
+      # Chart equivalent: registry.iamRegister.applicationDescription.
+      APP_DESCRIPTION: Farmer Registry
+      TOKEN_MAX_ATTEMPTS: '60'
+      REGISTER_MAX_ATTEMPTS: '20'
+    volumes:
+      - ./local/iam-register/payload.json:/payload/payload.json:ro
+      - ./local/iam-register/register.sh:/register.sh:ro
+    entrypoint: ['sh', '/register.sh']
+    restart: 'no'
+
+  staff-ui:
+    # The platform's Staff Portal with one addition: a Dashboard button in the
+    # header, pointing at the dashboard-ui service below. The portal ships as a
+    # prebuilt Next.js bundle and the dashboard is a separate origin, so the
+    # button cannot be a portal route or a component — it is patched into the
+    # compiled bundle at build time. See docker/staff-ui/Dockerfile.
+    #
+    # DASHBOARD_URL is baked into the client bundle, so changing the dashboard's
+    # host or port needs `docker compose build staff-ui`, not just a restart.
+    build:
+      context: .
+      dockerfile: docker/staff-ui/Dockerfile
+      platforms:
+        - linux/amd64
+      args:
+        RP_VERSION: ${RP_VERSION}
+        DASHBOARD_URL: http://${DASHBOARD_UI_HOST}:${DASHBOARD_UI_PORT}
+    image: openg2p/openg2p-farmer-registry-staff-ui:${RP_VERSION}
+    <<: *amd64
+    environment:
+      APP_MNEMONIC: ${RELEASE_NAME}-ui
+      APP_URL: http://${STAFF_UI_HOST}:${STAFF_UI_PORT}
+      APPLICATION_MNEMONIC: ${AUTH_CLIENT_ID}
+      # When CSP_HEADER is unset the base image builds the policy from the
+      # CSP_SRC_* vars and always appends `upgrade-insecure-requests`, which makes
+      # the browser rewrite every asset request to https — fatal here, because the
+      # portal is served over plain http and nothing listens on TLS. CSP_HEADER is
+      # used verbatim instead, so this is that same generated policy with the
+      # upgrade directive dropped. Keycloak and IAM are allowed in connect-src
+      # because the login round trip reaches them from the browser.
+      CSP_HEADER: >-
+        default-src 'self';
+        script-src 'self' 'unsafe-inline';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' blob: data: http://${MINIO_HOST}:${MINIO_API_PORT};
+        font-src 'self';
+        connect-src 'self' http://${IAM_HOST}:${IAM_PORT} http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT};
+        frame-src 'self';
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self' http://${IAM_HOST}:${IAM_PORT} http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT};
+        frame-ancestors 'none'
+      # Server-side call from the Next.js process, so the internal name is fine.
+      BACKEND_API_URL: http://staff-api:8000
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN}
+      # Browser-facing: the user is redirected here to log in.
+      IAM_URL: http://${IAM_HOST}:${IAM_PORT}
+      KEYCLOAK_LOGOUT_URL: http://${KEYCLOAK_HOST}:${KEYCLOAK_PORT}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/logout
+      LOGIN_PROVIDER_ID: '1'
+      # Reached through the portal's own proxy route, so internal again.
+      MASTERDATA_BACKEND_API_URL: http://master-data:${MASTER_DATA_PORT}
+      NODE_ENV: production
+      PAGE_SIZE: '10'
+      PARTNER_IMPORT_EXPORT_ENABLE: 'true'
+      PARTNER_INGEST_URL: http://localhost:${PARTNER_API_PORT}/partner/ingest_data?data_model=dcivc
+      REDIRECT_URL: http://${STAFF_UI_HOST}:${STAFF_UI_PORT}
+      VERIFY_SERVICE_URL: http://${STAFF_UI_HOST}:${STAFF_UI_PORT}/v1/verify
+      VP_CLIENT_ID: did:web:${STAFF_UI_HOST}:v1:verify
+      VP_PRESENTATION_ID: 7f3c2a91-bb84-4d1f-9a6e-41c8e5a0d9f2
+      VP_PURPOSE: Digital identity verification for registry onboarding
+    ports:
+      - '${STAFF_UI_PORT}:3000'
+    depends_on:
+      staff-api:
+        condition: service_healthy
+      iam:
+        condition: service_started
+
+  dashboard-ui:
+    # The in-product analytics dashboard the portal's Dashboard button opens.
+    #
+    # It reads the registry database directly rather than going through
+    # staff-api: the portal's API answers record-level questions, and every panel
+    # here is an aggregate over the whole register, which is a query the API has
+    # no endpoint for. Both connections below are used for SELECTs only.
+    #
+    # Distinct from docker/dashboards, which builds the Superset bundle for a
+    # G2P Insight deployment. The two share no code and neither depends on the
+    # other.
+    build:
+      context: .
+      dockerfile: docker/dashboard-ui/Dockerfile
+      args:
+        # Compiled into the client bundle: the Back button only follows a
+        # returnUrl on this origin, and falls back to it when none was given.
+        NEXT_PUBLIC_PORTAL_URL: http://${STAFF_UI_HOST}:${STAFF_UI_PORT}
+    image: openg2p/openg2p-farmer-registry-dashboard-ui:${RP_VERSION}
+    environment:
+      # The registry — farmers, parcels, approvals.
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: ${REGISTRY_DB_USER}
+      DB_PASSWORD: ${REGISTRY_DB_PASSWORD}
+      DB_NAME: ${REGISTRY_DB}
+      # Master Data — the country pack behind the geography filters and the unit
+      # counts behind the coverage panel. Same server here, different database.
+      MD_DB_HOST: postgres
+      MD_DB_PORT: '5432'
+      MD_DB_USER: ${MASTER_DATA_DB_USER}
+      MD_DB_PASSWORD: ${MASTER_DATA_DB_PASSWORD}
+      MD_DB_NAME: ${MASTER_DATA_DB}
+      NODE_ENV: production
+    ports:
+      - '${DASHBOARD_UI_PORT}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # Not a runtime dependency — the dashboard talks to Postgres, not to the
+      # API — but the platform migrations that create the register tables run
+      # from staff-api, and the first page load would error without them.
+      staff-api:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - ${DASHBOARD_UI_HOST}
+
+volumes:
+  postgres-data:
+  minio-data:

@@ -13,6 +13,8 @@ inverted build model the platform publishes the runnable base images and the
 | `docker/` | Thin Dockerfiles (`FROM openg2p/openg2p-registry-*` + `pip install farmer-extension`) selected at runtime by `REGISTRY_EXTENSION_MODULE` (Option C) |
 | `helm/openg2p-farmer-registry/` | A thin wrapper chart: pins `openg2p-registry` as a dependency and supplies the farmer values overlay (no templates) |
 | `test/sanity/` | The farmer **field-specific** sanity tests (Set 2); the harness + generic tests are inherited from the platform sanity image |
+| `dashboard-ui/` | The analytics dashboard the Staff Portal links to — a Next.js app that reads the registry and master-data databases directly ([details](dashboard-ui/README.md)) |
+| `docker-compose.yml`, `local/` | A local development stack — the registry plus the Postgres/Redis/MinIO/Keycloak/IAM/master-data environment the chart assumes ([details](local/README.md)) |
 
 The `openg2p-registry` base image tag (`RP_VERSION` in each Dockerfile) and the
 chart dependency version in `helm/openg2p-farmer-registry/Chart.yaml` are **hardcoded and
@@ -24,6 +26,17 @@ writes nothing); `-h` prints help. To apply, run `./scripts/bump-rp-version.sh`
 (latest published version) or `./scripts/bump-rp-version.sh <version>` — it updates
 the Dockerfiles and the chart dependency together, so they can never drift. A CI
 check (`test/test_rp_pin_lockstep.py`) fails the build if they ever do.
+
+## Run locally
+
+```bash
+docker compose --env-file local/.env up -d --build
+```
+
+Staff Portal at http://portal.localtest.me:3000, `admin` / `admin`; the
+**Dashboard** button in its header opens the analytics dashboard at
+http://dashboard.localtest.me:3001. See [`local/README.md`](local/README.md) for
+what the stack contains and its limits.
 
 ## Deploy
 

@@ -1,0 +1,30 @@
+# Farmer Registry — functional ID generator pools.
+#
+# Mirrors the chart's idgenerator ConfigMap, with the id_types replaced by the
+# farmer pools declared in helm/openg2p-farmer-registry/values.yaml
+# (registry.idgenerator.idGenerator.appConfig.idTypes). `individual` is there
+# because Helm merges maps and the subchart's reference-registry default survives
+# the overlay — an unused pool, kept so this matches a real deployment.
+id_generator:
+  sequence_limit: 3
+  repeating_limit: 2
+  repeating_block_limit: 2
+  conjugative_even_digits_limit: 3
+  digits_group_limit: 5
+  reverse_digits_group_limit: 5
+  not_start_with:
+    - '0'
+    - '1'
+  restricted_numbers: []
+  pool_min_threshold: 1000
+  pool_generation_batch_size: 5000
+  pool_check_interval_seconds: 30
+  exhaustion_max_attempts: 1000
+  sub_batch_size: 10000
+  id_types:
+    farmer:
+      id_length: 12
+    household:
+      id_length: 10
+    individual:
+      id_length: 12

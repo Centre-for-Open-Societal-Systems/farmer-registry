@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+npm-debug.log
+yarn-error.log
+coverage
+.env.local
+.env.*.local
+*.log
+tsconfig.tsbuildinfo
