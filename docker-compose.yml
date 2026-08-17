@@ -9,6 +9,9 @@ name: farmer-registry
 #   docker compose up --build -d
 #   # then open http://localhost:3001  (login: staff / staff)
 #
+# The Dashboard button in the portal header opens the analytics dashboard at
+# http://localhost:3002.
+#
 # Everything here is dev-only: default secrets, no TLS, single replica.
 
 x-depends-on-infra: &depends-on-infra
@@ -545,6 +548,10 @@ services:
       target: staff-ui
       args:
         STAFF_UI_VERSION: ${REGISTRY_STAFF_PORTAL_UI_VERSION:-1.1.1}
+        # Target of the Dashboard button patched into the portal header. It is
+        # compiled into the client bundle, so changing it needs
+        # `docker compose build farmer-registry-staff-ui`, not just a restart.
+        DASHBOARD_URL: http://localhost:${FARMER_REGISTRY_DASHBOARD_UI_PORT:-3002}
     image: ${REGISTRY_STAFF_PORTAL_UI_IMAGE:-farmer-registry-local/staff-ui:dev}
     container_name: farmer-registry-staff-ui
     extra_hosts:
@@ -572,6 +579,57 @@ services:
       REDIRECT_URL: "http://localhost:${FARMER_REGISTRY_UI_PORT:-3001}"
     ports:
       - "${FARMER_REGISTRY_UI_PORT:-3001}:3000"
+    restart: unless-stopped
+
+  # The in-product analytics dashboard the portal's Dashboard button opens.
+  #
+  # It reads the registry database directly rather than going through the staff
+  # API: that API answers record-level questions, and every panel here is an
+  # aggregate over the whole register, which it has no endpoint for. Both
+  # connections below are used for SELECTs only.
+  #
+  # Built from docker/dashboard-ui/Dockerfile rather than a target of the root
+  # Dockerfile: the other services overlay farmer code onto a published platform
+  # base image, while this is this repo's own Next.js app compiled from source.
+  #
+  # Distinct from docker/dashboards, which builds the Superset bundle for a
+  # G2P Insight deployment. The two share no code and neither depends on the
+  # other.
+  farmer-registry-dashboard-ui:
+    build:
+      context: .
+      dockerfile: docker/dashboard-ui/Dockerfile
+      args:
+        # Compiled into the client bundle: the Back button only follows a
+        # returnUrl on this origin, and falls back to it when none was given.
+        NEXT_PUBLIC_PORTAL_URL: http://localhost:${FARMER_REGISTRY_UI_PORT:-3001}
+    image: farmer-registry-local/dashboard-ui:dev
+    container_name: farmer-registry-dashboard-ui
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # Not a runtime dependency — the dashboard talks to Postgres, not to the
+      # API — but the migrations that create the register tables run from the
+      # staff API, and the first page load would error without them.
+      farmer-registry-staff-api:
+        condition: service_healthy
+    environment:
+      # The registry — farmers, parcels, approvals.
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_SUPERUSER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: farmer_registry_db
+      # Master Data — the country pack behind the geography filters and the unit
+      # counts behind the coverage panel. Same server here, different database.
+      MD_DB_HOST: postgres
+      MD_DB_PORT: 5432
+      MD_DB_USER: ${POSTGRES_SUPERUSER:-postgres}
+      MD_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      MD_DB_NAME: farmer_master_data_db
+      NODE_ENV: production
+    ports:
+      - "${FARMER_REGISTRY_DASHBOARD_UI_PORT:-3002}:3000"
     restart: unless-stopped
 
   farmer-registry-db-seed:

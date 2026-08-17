@@ -11,9 +11,22 @@
 # it still comes from registry_theme_values
 # (primary_color_1), seeded by the extension.
 #
+# It also patches a Dashboard button into the header. The dashboard runs as its
+# own service on its own origin, so it cannot be a portal route, and the portal
+# ships as a prebuilt Next.js bundle, so it cannot be extended with a component
+# either — what is left is patching the compiled bundle, which is what
+# patch-dashboard-nav.js does.
+#
 # Build context = repo root.
 ARG STAFF_UI_VERSION=1.1.1
 FROM openg2p/openg2p-registry-staff-portal-ui:${STAFF_UI_VERSION}
+
+# Browser-facing origin of the dashboard service. It is compiled into the client
+# bundle by patch-dashboard-nav.js below, so changing it needs a rebuild. The
+# default matches the dashboard-ui service's published port in
+# docker-compose.yml.
+ARG DASHBOARD_URL=http://localhost:3002
+ARG DASHBOARD_LABEL=Dashboard
 
 # Publish the Farmer Registry background under its real JPEG filename. The
 # compiled CSS declaration is redirected to this asset below.
@@ -71,3 +84,11 @@ RUN find '/app/.next/static/chunks/app/[locale]' -maxdepth 1 -type f -name 'page
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
     's/\.table-cell-widget label,/.table-cell-widget label.items-baseline,/g' \
     {} +
+
+# ── Add the Dashboard header button ─────────────────────────────────────────
+# Puts a Dashboard control immediately left of Configuration, pointing at the
+# dashboard-ui service, and passes the page it left behind as ?returnUrl= for
+# the dashboard's own Back button to read.
+COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
+RUN DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
+    node /tmp/patch-dashboard-nav.js

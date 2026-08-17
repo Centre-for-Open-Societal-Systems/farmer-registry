@@ -108,6 +108,10 @@ celerybeat.pid
 .env
 .env.*
 !.env.example
+# The local compose stack's env file. Checked in deliberately: it holds no real
+# credentials, only the local-only values that must match local/postgres/init.sql,
+# and `docker compose --env-file local/.env` does not work without it.
+!local/.env
 .envrc
 .venv
 env/
