@@ -13,6 +13,7 @@ class G2PMembershipDetails:
     cooperative_union_name: Mapped[str] = mapped_column(String, nullable=True)
     is_farmer_cluster_member: Mapped[bool] = mapped_column(Boolean, nullable=True)
     farmer_cluster_role: Mapped[FarmerClusterRoleEnum] = mapped_column(String, nullable=True)   # FarmerClusterRoleEnum
+    primary_commodity: Mapped[str] = mapped_column(String, nullable=True)  # Attribute lookup: cluster's focal commodity
 
 # All Register classes should have the prefix G2PRegister
 class G2PRegisterMembershipDetails(G2PRegister, G2PMembershipDetails):

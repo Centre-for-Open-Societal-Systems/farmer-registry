@@ -6,4 +6,8 @@ INSERT INTO "public"."g2p_attributes" ("attribute_id","attribute_code","attribut
 ('LIVESTOCK_BREED','LIVESTOCK_BREED','Livestock Breed','FALSE'),
 ('WATER_SOURCE','WATER_SOURCE','Water Source','FALSE'),
 ('MEANS_OF_ACQUISITION','MEANS_OF_ACQUISITION','Means of Acquisition','FALSE'),
-('SOIL_FERTILITY','SOIL_FERTILITY','Soil Fertility','FALSE');
+('SOIL_FERTILITY','SOIL_FERTILITY','Soil Fertility','FALSE'),
+('LIVESTOCK_GENDER','LIVESTOCK_GENDER','Livestock Gender','FALSE'),
+('LIVESTOCK_BODY_CONDITION','LIVESTOCK_BODY_CONDITION','Livestock Body Condition','FALSE'),
+('LIVESTOCK_PRODUCTION_TYPE','LIVESTOCK_PRODUCTION_TYPE','Livestock Production Type','FALSE'),
+('LANGUAGE','LANGUAGE','Language','FALSE');

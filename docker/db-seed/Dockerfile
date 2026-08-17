@@ -41,6 +41,14 @@ COPY docker/db-seed/load_sample_data.py /seed/load_sample_data.py
 COPY docker/db-seed/upload_images.py    /seed/upload_images.py
 RUN chmod +x /seed/load_sample_data.py /seed/upload_images.py
 
+# Agriculture code lists, sourced from catalogue-service directly — see the
+# script's own docstring for why this is a separate merge-only tool rather
+# than an extra domain on load_attributes_from_mds.py. Not wired into the
+# inherited entrypoint (it has no hook for it); run manually against a
+# reachable catalogue-service Postgres, e.g. after a new country-pack release.
+COPY docker/db-seed/sync_catalogue_attributes.py /seed/sync_catalogue_attributes.py
+RUN chmod +x /seed/sync_catalogue_attributes.py
+
 # Analytics seed, distinct from the demo fixture above.
 #   seed-data/*.json + the inherited load_sample_data.py  -> the ~500-row smoke set
 #                                                            (dbSeed.loadSampleData)

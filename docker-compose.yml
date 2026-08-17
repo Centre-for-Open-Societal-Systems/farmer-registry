@@ -1,0 +1,656 @@
+name: farmer-registry
+
+# Self-contained local dev stack for the Farmer Registry: infra (Postgres,
+# Redis, MinIO, Keycloak), the shared IAM + AWE (Approval Workflow Engine)
+# services, the Master Data (geo/reference) catalogue, and our own farmer
+# services built from source (docker/*/Dockerfile).
+#
+# Quick start:
+#   docker compose up --build -d
+#   # then open http://localhost:3001  (login: staff / staff)
+#
+# Everything here is dev-only: default secrets, no TLS, single replica.
+
+x-depends-on-infra: &depends-on-infra
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  minio:
+    condition: service_healthy
+
+services:
+  # ---------------------------------------------------------------- infra --
+  postgres:
+    image: postgres:16
+    container_name: farmer-registry-postgres
+    # Default max_connections=100 gets exhausted with 6+ services each
+    # pooling connections (staff-api, partner-api, celery x2, master-data,
+    # iam) plus AWE — bump it so a connection-pool spike doesn't lock out
+    # every other service (including plain `psql` for debugging).
+    command: ["postgres", "-c", "max_connections=300"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/local-dev/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: farmer-registry-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: farmer-registry-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-adminsecret}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: farmer-registry-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-adminsecret}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-default-bucket}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing "local/$${MINIO_BUCKET_NAME}"
+        mc mb --ignore-existing local/templates
+        mc mb --ignore-existing local/registrant-photos
+        exit 0
+    restart: "no"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    platform: linux/amd64
+    container_name: farmer-registry-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_PORT: 8080
+      # Browser-facing OIDC endpoints must use the host-published address.
+      # Docker services can still reach this container as `keycloak:8080`.
+      KC_HOSTNAME: "http://localhost:${KEYCLOAK_PORT:-8080}"
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./docker/local-dev/keycloak-realm-staff.json:/opt/keycloak/data/import/staff-realm.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  keycloak-init:
+    image: quay.io/keycloak/keycloak:26.0
+    platform: linux/amd64
+    container_name: farmer-registry-keycloak-init
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_HOST: keycloak
+      KEYCLOAK_PORT: "8080"
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_REALM: staff
+      KEYCLOAK_IAM_CLIENT_SECRET: ${KEYCLOAK_IAM_CLIENT_SECRET:-dev-iam-staff-secret}
+      KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET: ${KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET:-dev-awe-resolver-secret}
+      KEYCLOAK_DEV_USER: ${KEYCLOAK_DEV_USER:-staff}
+      KEYCLOAK_DEV_PASSWORD: ${KEYCLOAK_DEV_PASSWORD:-staff}
+      KEYCLOAK_STAFF_ADMIN_USER: ${KEYCLOAK_STAFF_ADMIN_USER:-admin}
+      KEYCLOAK_STAFF_ADMIN_PASSWORD: ${KEYCLOAK_STAFF_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_AWE_APPROVER_PASSWORD: ${KEYCLOAK_AWE_APPROVER_PASSWORD:-pass}
+      IAM_STAFF_PORT: ${IAM_STAFF_PORT:-8020}
+      FARMER_REGISTRY_UI_PORT: ${FARMER_REGISTRY_UI_PORT:-3001}
+      AWE_UI_PORT: ${AWE_UI_PORT:-8031}
+    volumes:
+      - ./docker/local-dev/keycloak-init.sh:/keycloak-init.sh:ro
+    entrypoint: ["/bin/bash", "/keycloak-init.sh"]
+    restart: "no"
+
+  id-generator:
+    image: ${ID_GENERATOR_IMAGE:-openg2p/openg2p-id-generator:1.0.0}
+    platform: linux/amd64
+    container_name: farmer-registry-id-generator
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: idgenerator
+      DB_USER: ${POSTGRES_SUPERUSER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      CONFIG_PATH: /app/config/default.yaml
+      UVICORN_HOST: 0.0.0.0
+      UVICORN_PORT: 8000
+      UVICORN_LOG_LEVEL: info
+    ports:
+      - "${ID_GENERATOR_PORT:-8040}:8000"
+    volumes:
+      - ./docker/local-dev/id-generator.yaml:/app/config/default.yaml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/idgenerator/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # ------------------------------------------------------------- IAM / AWE --
+  iam-staff-api:
+    image: ${IAM_STAFF_PORTAL_API_IMAGE:-openg2p/iam-staff-portal-api:1.3.0}
+    container_name: farmer-registry-iam-staff-api
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      <<: *depends-on-infra
+      keycloak-init:
+        condition: service_completed_successfully
+    environment:
+      IAM_STAFF_APP_HOST: "0.0.0.0"
+      IAM_STAFF_APP_PORT: 8000
+      IAM_STAFF_AUTH_REDIS_URL: "redis://redis:6379/0"
+      IAM_STAFF_AUTH_TRANSACTION_STORE_BACKEND: redis
+      IAM_STAFF_DB_DRIVER: postgresql+asyncpg
+      IAM_STAFF_DB_HOSTNAME: postgres
+      IAM_STAFF_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      IAM_STAFF_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      IAM_STAFF_DB_DBNAME: iam_staff
+      IAM_STAFF_DB_PORT: 5432
+      IAM_STAFF_OPENAPI_ROOT_PATH: /
+      IAM_STAFF_LOGIN_PROVIDERS_TABLE_ENABLED: "true"
+      IAM_STAFF_AUTH_ENABLED: "true"
+      IAM_STAFF_AUTH_COOKIE_HTTPONLY: "true"
+      IAM_STAFF_AUTH_COOKIE_PATH: /
+      IAM_STAFF_AUTH_COOKIE_DOMAIN: localhost
+      IAM_STAFF_AUTH_COOKIE_MAX_AGE: 1800
+      IAM_STAFF_AUTH_COOKIE_SET_EXPIRES: "true"
+      IAM_STAFF_AUTH_COOKIE_SECURE: "false"
+      IAM_STAFF_DATA_DIR: /opt/iam-staff-portal-data
+      IAM_STAFF_DATA_APPLICATION_URLS__KEYCLOAK_APPLICATION_URL: "http://localhost:${KEYCLOAK_PORT:-8080}"
+      IAM_STAFF_DATA_APPLICATION_URLS__REGISTRY_APPLICATION_URL: "http://localhost:${FARMER_REGISTRY_STAFF_API_PORT:-8001}"
+      IAM_STAFF_DATA_APPLICATION_URLS__MINIO_APPLICATION_URL: "http://localhost:${MINIO_API_PORT:-9000}"
+      IAM_STAFF_DATA_CLIENT_SECRETS__STAFF_KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_IAM_CLIENT_SECRET:-dev-iam-staff-secret}
+      IAM_STAFF_CORS_ALLOW_ORIGINS: '["*"]'
+    volumes:
+      - ./docker/local-dev/iam-login-providers.json:/opt/iam-staff-portal-data/login_providers.json:ro
+    ports:
+      - "${IAM_STAFF_PORT:-8020}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 40s
+    restart: unless-stopped
+
+  # Service name must be `awe` — the AWE UI's nginx proxies /v1/awe/ to awe:8000.
+  awe:
+    image: ${AWE_API_IMAGE:-registry.gitlab.com/openg2p/awe/openg2p-awe:0.0.0-develop.67}
+    container_name: farmer-registry-awe-api
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak-init:
+        condition: service_completed_successfully
+    environment:
+      UVICORN_HOST: "0.0.0.0"
+      UVICORN_PORT: 8000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: awe
+      DB_USER: ${POSTGRES_SUPERUSER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      CONFIG_PATH: /app/config/default.yaml
+      AWE__KEYCLOAK__BASE_URL: "http://localhost:${KEYCLOAK_PORT:-8080}"
+      AWE__KEYCLOAK__REALM: staff
+      AWE__KEYCLOAK__ADMIN_CLIENT_ID: awe-admin-resolver
+      AWE__KEYCLOAK__ADMIN_CLIENT_SECRET: ${KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET:-dev-awe-resolver-secret}
+      AWE__KEYCLOAK__ISSUER: "http://localhost:${KEYCLOAK_PORT:-8080}/realms/staff"
+      AWE__KEYCLOAK__JWKS_URL: "http://localhost:${KEYCLOAK_PORT:-8080}/realms/staff/protocol/openid-connect/certs"
+      AWE__KEYCLOAK__AUDIENCE: ""
+    volumes:
+      - ./docker/local-dev/awe-config.yaml:/app/config/default.yaml:ro
+    ports:
+      - "${AWE_API_PORT:-8030}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/awe/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    restart: unless-stopped
+
+  awe-ui:
+    image: ${AWE_UI_IMAGE:-registry.gitlab.com/openg2p/awe/openg2p-awe-ui:0.0.0-develop.67}
+    container_name: farmer-registry-awe-ui
+    depends_on:
+      awe:
+        condition: service_healthy
+    volumes:
+      - ./docker/local-dev/awe-ui-config.json:/usr/share/nginx/html/config.json:ro
+    ports:
+      - "${AWE_UI_PORT:-8031}:8080"
+    restart: unless-stopped
+
+  # Registers the farmer-registry-staff-portal application's roles/permission
+  # catalog with IAM (idempotent upsert). Without this, every logged-in user
+  # gets an empty permission set and hits 403 "Access Denied" on every page,
+  # regardless of their Keycloak client roles — IAM's own RBAC tables
+  # (staff_roles / staff_role_permissions / staff_application_permissions)
+  # are entirely separate from Keycloak and start out empty.
+  iam-register-farmer-app:
+    image: ${IAM_STAFF_PORTAL_API_IMAGE:-openg2p/iam-staff-portal-api:1.3.0}
+    container_name: farmer-registry-iam-register-app
+    depends_on:
+      iam-staff-api:
+        condition: service_healthy
+    environment:
+      REGISTRY_IAM_PAYLOAD: /opt/farmer-registry-iam-catalog.json
+      REGISTRY_IAM_VARIANTS: '[{"mnemonic":"farmer-registry-staff-portal","url":"http://localhost:${FARMER_REGISTRY_UI_PORT:-3001}"}]'
+      IAM_STAFF_DB_DRIVER: postgresql+asyncpg
+      IAM_STAFF_DB_HOSTNAME: postgres
+      IAM_STAFF_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      IAM_STAFF_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      IAM_STAFF_DB_DBNAME: iam_staff
+      IAM_STAFF_DB_PORT: 5432
+    volumes:
+      - ./docker/local-dev/iam-register-app.py:/opt/iam-register-app.py:ro
+      - ./docker/local-dev/farmer-registry-iam-catalog.json:/opt/farmer-registry-iam-catalog.json:ro
+    entrypoint: ["python", "/opt/iam-register-app.py"]
+    restart: "no"
+
+  # --------------------------------------------------------- master data --
+  farmer-master-data-api:
+    image: ${MASTER_DATA_API_IMAGE:-registry.gitlab.com/openg2p/master-data-service/master-data-api:0.0.0-develop.26}
+    container_name: farmer-registry-master-data-api
+    depends_on:
+      <<: *depends-on-infra
+      iam-staff-api:
+        condition: service_healthy
+    environment:
+      GEN2_MASTER_DATA_API_HOST: "0.0.0.0"
+      GEN2_MASTER_DATA_API_PORT: 8000
+      GEN2_MASTER_DATA_API_NO_OF_WORKERS: 2
+      GEN2_MASTER_DATA_API_OPENAPI_ROOT_PATH: /
+      GEN2_MASTER_DATA_API_WORKER_TYPE: gunicorn
+      GEN2_MASTER_DATA_API_DB_DRIVER: postgresql+asyncpg
+      GEN2_MASTER_DATA_API_DB_HOSTNAME: postgres
+      GEN2_MASTER_DATA_API_DB_PORT: 5432
+      GEN2_MASTER_DATA_API_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      GEN2_MASTER_DATA_API_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      GEN2_MASTER_DATA_API_DB_DBNAME: farmer_master_data_db
+      COMMON_AUTH_ENABLED: "false"
+      COMMON_AUTH_PROVIDER_API_URL: "http://iam-staff-api:8000"
+      COMMON_KEYCLOAK_CLIENT_ID: farmer-registry-staff-portal
+      COMMON_AUTH_REDIS_URL: "redis://redis:6379/0"
+      COMMON_AUTH_VERIFY_SSL: "false"
+    ports:
+      - "${MASTER_DATA_API_PORT:-8042}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    restart: unless-stopped
+
+  # Loads the real Ethiopia region/zone/woreda/kebele hierarchy (14 regions,
+  # 125 zones, 1,379 woredas, 19,535 kebeles) into master-data's geo tables.
+  # Without this, g2p_geo_levels/g2p_geo_level_values are empty and the
+  # Location tab's geo-hierarchy widget has nothing to resolve or display.
+  farmer-registry-geo-seed:
+    image: postgres:16
+    container_name: farmer-registry-geo-seed
+    depends_on:
+      farmer-master-data-api:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: farmer_master_data_db
+      PGUSER: ${POSTGRES_SUPERUSER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - ./docker/local-dev/geo-seed/ethiopia_geo_seed.sql.gz:/opt/ethiopia_geo_seed.sql.gz:ro
+    entrypoint: ["sh", "-c", "gunzip -c /opt/ethiopia_geo_seed.sql.gz | psql -v ON_ERROR_STOP=1"]
+    restart: "no"
+
+  # ---------------------------------------------------- farmer registry --
+  farmer-registry-staff-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: staff-api
+    image: farmer-registry-local/staff-api:dev
+    container_name: farmer-registry-staff-api
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      <<: *depends-on-infra
+      iam-staff-api:
+        condition: service_healthy
+      awe:
+        condition: service_healthy
+      farmer-master-data-api:
+        condition: service_healthy
+    environment: &staff-api-env
+      REGISTRY_STAFF_PORTAL_API_APP_HOST: "0.0.0.0"
+      REGISTRY_STAFF_PORTAL_API_APP_PORT: 8000
+      REGISTRY_STAFF_PORTAL_API_DB_DRIVER: postgresql+asyncpg
+      REGISTRY_STAFF_PORTAL_API_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      REGISTRY_STAFF_PORTAL_API_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME: postgres
+      REGISTRY_STAFF_PORTAL_API_DB_PORT: 5432
+      REGISTRY_STAFF_PORTAL_API_DB_DBNAME: farmer_registry_db
+      REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT: "minio:9000"
+      REGISTRY_STAFF_PORTAL_API_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      REGISTRY_STAFF_PORTAL_API_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-adminsecret}
+      REGISTRY_STAFF_PORTAL_API_MINIO_SECURE: "false"
+      REGISTRY_STAFF_PORTAL_API_MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-default-bucket}
+      REGISTRY_STAFF_PORTAL_API_TEMPLATE_BUCKET_NAME: templates
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_DRIVER: postgresql+asyncpg
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_HOSTNAME: postgres
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_PORT: 5432
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_DBNAME: farmer_master_data_db
+      REGISTRY_STAFF_PORTAL_API_AUTH_ENABLED: "false"
+      REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL: "http://iam-staff-api:8000"
+      REGISTRY_STAFF_PORTAL_API_KEYCLOAK_CLIENT_ID: farmer-registry-staff-portal
+      REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL: "redis://redis:6379/0"
+      REGISTRY_STAFF_PORTAL_API_REGISTRANT_AUTH_REDIS_URL: "redis://redis:6379/0"
+      REGISTRY_STAFF_PORTAL_API_AUDIT_ENABLED: "false"
+      REGISTRY_STAFF_PORTAL_API_OPENAPI_ROOT_PATH: /
+      REGISTRY_STAFF_PORTAL_API_CORS_ALLOW_ORIGINS: '["*"]'
+      # Approval Workflow Engine (AWE) — change request + intake approvals
+      REGISTRY_STAFF_PORTAL_API_AWE_ENABLED: "true"
+      REGISTRY_STAFF_PORTAL_API_AWE_BASE_URL: "http://awe:8000"
+      REGISTRY_STAFF_PORTAL_API_AWE_DEFAULT_CALLBACK_URL: "http://farmer-registry-staff-api:8000/awe/webhooks/decision"
+      REGISTRY_STAFF_PORTAL_API_AWE_CALLBACK_SECRET_ID: ${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}
+      REGISTRY_STAFF_PORTAL_API_AWE_CALLBACK_HMAC_SECRET: ${AWE_REGISTRY_CALLBACK_HMAC_SECRET:-dev-registry-awe-callback-secret}
+    ports:
+      - "${FARMER_REGISTRY_STAFF_API_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 60s
+    restart: unless-stopped
+
+  farmer-registry-partner-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: partner-api
+    image: farmer-registry-local/partner-api:dev
+    container_name: farmer-registry-partner-api
+    depends_on:
+      <<: *depends-on-infra
+      farmer-registry-staff-api:
+        condition: service_healthy
+    environment:
+      REGISTRY_PARTNER_API_APP_HOST: "0.0.0.0"
+      REGISTRY_PARTNER_API_APP_PORT: 8000
+      REGISTRY_PARTNER_API_DB_DRIVER: postgresql+asyncpg
+      REGISTRY_PARTNER_API_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      REGISTRY_PARTNER_API_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REGISTRY_PARTNER_API_DB_HOSTNAME: postgres
+      REGISTRY_PARTNER_API_DB_PORT: 5432
+      REGISTRY_PARTNER_API_DB_DBNAME: farmer_registry_db
+      REGISTRY_PARTNER_API_MINIO_ENDPOINT: "minio:9000"
+      REGISTRY_PARTNER_API_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      REGISTRY_PARTNER_API_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-adminsecret}
+      REGISTRY_PARTNER_API_MINIO_SECURE: "false"
+      REGISTRY_PARTNER_API_DOCUMENT_STORAGE_BACKEND: minio
+      REGISTRY_PARTNER_API_MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-default-bucket}
+      REGISTRY_PARTNER_API_TEMPLATE_BUCKET_NAME: templates
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_DRIVER: postgresql+asyncpg
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_HOSTNAME: postgres
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_PORT: 5432
+      REGISTRY_PARTNER_API_MASTER_DATA_DB_DBNAME: farmer_master_data_db
+      REGISTRY_PARTNER_API_KEYMANAGER_AUTH_ENABLED: "false"
+      REGISTRY_PARTNER_API_AUDIT_ENABLED: "false"
+      REGISTRY_PARTNER_API_OPENAPI_ROOT_PATH: /
+      REGISTRY_PARTNER_API_CORS_ALLOW_ORIGINS: '["*"]'
+    ports:
+      - "${FARMER_REGISTRY_PARTNER_API_PORT:-8006}:8000"
+    restart: unless-stopped
+
+  farmer-registry-celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: celery
+    image: farmer-registry-local/celery:dev
+    container_name: farmer-registry-celery-worker
+    depends_on:
+      <<: *depends-on-infra
+      id-generator:
+        condition: service_healthy
+      farmer-registry-staff-api:
+        condition: service_healthy
+    environment:
+      CELERY_APP: openg2p_registry_celery_worker.main.celery_app
+      CELERY_OPTS: worker -Q farmer_registry_worker_queue --loglevel=info
+      REGISTRY_CELERY_WORKERS_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      REGISTRY_CELERY_WORKERS_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REGISTRY_CELERY_WORKERS_DB_HOSTNAME: postgres
+      REGISTRY_CELERY_WORKERS_DB_PORT: 5432
+      REGISTRY_CELERY_WORKERS_DB_DBNAME: farmer_registry_db
+      REGISTRY_CELERY_WORKERS_CELERY_BROKER_URL: "redis://redis:6379/0"
+      REGISTRY_CELERY_WORKERS_CELERY_BACKEND_URL: "redis://redis:6379/0"
+      REGISTRY_CELERY_WORKERS_WORKER_QUEUE: farmer_registry_worker_queue
+      REGISTRY_CELERY_WORKERS_BATCH_SIZE: 2000
+      REGISTRY_CELERY_WORKERS_WORKER_MAX_ATTEMPTS: 5
+      REGISTRY_CELERY_WORKERS_MINIO_ENDPOINT: "minio:9000"
+      REGISTRY_CELERY_WORKERS_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      REGISTRY_CELERY_WORKERS_MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-adminsecret}
+      REGISTRY_CELERY_WORKERS_MINIO_SECURE: "false"
+      REGISTRY_CELERY_WORKERS_MINIO_BUCKET_NAME: templates
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_DRIVER: postgresql+asyncpg
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_HOSTNAME: postgres
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_PORT: 5432
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_DBNAME: farmer_master_data_db
+      REGISTRY_CELERY_WORKERS_FUNCTIONAL_ID_GENERATION_URL: "http://id-generator:8000/v1"
+      REGISTRY_CELERY_WORKERS_ID_GENERATION_ALLOCATION_PATH: "/idgenerator/{id_type}/id"
+      REGISTRY_CELERY_WORKERS_ID_GENERATION_UPDATION_PATH: ""
+    restart: unless-stopped
+
+  farmer-registry-celery-beat:
+    image: farmer-registry-local/celery:dev
+    pull_policy: never
+    container_name: farmer-registry-celery-beat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      farmer-registry-celery-worker:
+        condition: service_started
+    environment:
+      CELERY_APP: openg2p_registry_celery_beat.main.celery_app
+      CELERY_OPTS: worker --beat -Q celery --loglevel=info --schedule=/tmp/celery-beat-schedule.db
+      REGISTRY_CELERY_BEAT_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      REGISTRY_CELERY_BEAT_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REGISTRY_CELERY_BEAT_DB_HOSTNAME: postgres
+      REGISTRY_CELERY_BEAT_DB_PORT: 5432
+      REGISTRY_CELERY_BEAT_DB_DBNAME: farmer_registry_db
+      REGISTRY_CELERY_BEAT_CELERY_BROKER_URL: "redis://redis:6379/0"
+      REGISTRY_CELERY_BEAT_CELERY_BACKEND_URL: "redis://redis:6379/0"
+      REGISTRY_CELERY_BEAT_WORKER_QUEUE: farmer_registry_worker_queue
+      REGISTRY_CELERY_BEAT_BATCH_SIZE: 2000
+      REGISTRY_CELERY_BEAT_NO_OF_TASKS_TO_PROCESS: 4
+      REGISTRY_CELERY_BEAT_DATA_TRANSFORMATION_BEAT_PRODUCER_FREQUENCY: 20
+      REGISTRY_CELERY_BEAT_INGEST_DATA_BEAT_PRODUCER_FREQUENCY: 20
+      REGISTRY_CELERY_BEAT_INGEST_DATA_CLASSIFICATION_BEAT_PRODUCER_FREQUENCY: 20
+      REGISTRY_CELERY_BEAT_OUTGEST_DATA_PUBLISH_BEAT_PRODUCER_FREQUENCY: 20
+      REGISTRY_CELERY_BEAT_OUTGEST_TOPIC_REGISTER_BEAT_PRODUCER_FREQUENCY: 20
+      REGISTRY_CELERY_BEAT_DEDUPLICATION_BEAT_PRODUCER_FREQUENCY: 30
+    restart: unless-stopped
+
+  farmer-registry-staff-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: staff-ui
+      args:
+        STAFF_UI_VERSION: ${REGISTRY_STAFF_PORTAL_UI_VERSION:-1.1.1}
+    image: ${REGISTRY_STAFF_PORTAL_UI_IMAGE:-farmer-registry-local/staff-ui:dev}
+    container_name: farmer-registry-staff-ui
+    extra_hosts:
+      - "localhost:host-gateway"
+    depends_on:
+      farmer-registry-staff-api:
+        condition: service_healthy
+      iam-staff-api:
+        condition: service_healthy
+      iam-register-farmer-app:
+        condition: service_completed_successfully
+    environment:
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      BACKEND_API_URL: "http://farmer-registry-staff-api:8000"
+      MASTERDATA_BACKEND_API_URL: "http://farmer-master-data-api:8000"
+      DEFAULT_LOCALE: en
+      PARTNER_IMPORT_EXPORT_ENABLE: "true"
+      PAGE_SIZE: 10
+      IAM_URL: "http://localhost:${IAM_STAFF_PORT:-8020}"
+      KEYCLOAK_LOGOUT_URL: "http://localhost:${KEYCLOAK_PORT:-8080}/realms/staff/protocol/openid-connect/logout"
+      LOGIN_PROVIDER_ID: "1"
+      APPLICATION_MNEMONIC: farmer-registry-staff-portal
+      COOKIE_DOMAIN: localhost
+      REDIRECT_URL: "http://localhost:${FARMER_REGISTRY_UI_PORT:-3001}"
+    ports:
+      - "${FARMER_REGISTRY_UI_PORT:-3001}:3000"
+    restart: unless-stopped
+
+  farmer-registry-db-seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: db-seed
+    image: farmer-registry-local/db-seed:dev
+    container_name: farmer-registry-db-seed
+    depends_on:
+      minio:
+        condition: service_healthy
+      farmer-registry-staff-api:
+        condition: service_healthy
+      farmer-registry-geo-seed:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: farmer_registry_db
+      PGUSER: ${POSTGRES_SUPERUSER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      MD_PGHOST: postgres
+      MD_PGPORT: 5432
+      MD_PGDATABASE: farmer_master_data_db
+      MD_PGUSER: ${POSTGRES_SUPERUSER:-postgres}
+      MD_PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      AWE_DB_SEED_ENABLED: ${AWE_DB_SEED_ENABLED:-true}
+      AWE_PGHOST: postgres
+      AWE_PGPORT: 5432
+      AWE_PGDATABASE: awe
+      AWE_PGUSER: ${POSTGRES_SUPERUSER:-postgres}
+      AWE_PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      AWE_CALLBACK_SECRET_ID: ${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}
+      AWE_CALLBACK_HMAC_SECRET: ${AWE_REGISTRY_CALLBACK_HMAC_SECRET:-dev-registry-awe-callback-secret}
+      AWE_CALLBACK_CALLER_SERVICE: ${AWE_CALLBACK_CALLER_SERVICE:-registry}
+      LOAD_SAMPLE_DATA: ${LOAD_SAMPLE_DATA:-true}
+      # Defaults true here (base image default is false): this image's
+      # load_geo_data.py is overridden to load the real, baked-in Ethiopia
+      # hierarchy rather than the base image's generic sample pack, so
+      # there's no reason to skip it for this variant.
+      LOAD_GEO_DATA: ${LOAD_GEO_DATA:-true}
+      LOAD_IMAGES: ${LOAD_IMAGES:-false}
+      LOAD_TEMPLATES: ${LOAD_TEMPLATES:-true}
+      MINIO_ENDPOINT: "minio:9000"
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-adminsecret}
+      MINIO_SECURE: "false"
+      TEMPLATE_BUCKET_NAME: templates
+      IMAGE_BUCKET_NAME: registrant-photos
+    restart: "no"
+
+  # load_sample_data.py's fixture comes from the shared registry-platform demo
+  # CSVs (the generic "Kamuntu" sample-pack country), so its own master-data
+  # geo resolution never matches real Ethiopia names. This runs after it and
+  # reassigns every seeded Farmer/Household row to a random real kebele from
+  # the hierarchy farmer-registry-geo-seed just loaded — see remap_sample_geo.py.
+  farmer-registry-geo-remap:
+    image: farmer-registry-local/db-seed:dev
+    container_name: farmer-registry-geo-remap
+    depends_on:
+      farmer-registry-db-seed:
+        condition: service_completed_successfully
+    environment:
+      MD_PGHOST: postgres
+      MD_PGPORT: 5432
+      MD_PGDATABASE: farmer_master_data_db
+      MD_PGUSER: ${POSTGRES_SUPERUSER:-postgres}
+      MD_PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      REGISTRY_PGHOST: postgres
+      REGISTRY_PGPORT: 5432
+      REGISTRY_PGDATABASE: farmer_registry_db
+      REGISTRY_PGUSER: ${POSTGRES_SUPERUSER:-postgres}
+      REGISTRY_PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - ./docker/local-dev/geo-seed/remap_sample_geo.py:/opt/remap_sample_geo.py:ro
+    entrypoint: ["python", "/opt/remap_sample_geo.py"]
+    restart: "no"
+
+volumes:
+  postgres-data:
+  minio-data:

@@ -15,7 +15,11 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
             self._validate_cluster_membership(record)
 
     def _validate_cooperative_membership(self, record: dict) -> None:
+        # as_bool() only computes a value for validating below — write it
+        # back, or the raw '' / 'true' string it was given stays in the
+        # record and asyncpg rejects it as an invalid Boolean literal.
         is_member = as_bool(record.get("is_primary_cooperative_member"))
+        record["is_primary_cooperative_member"] = is_member
         if is_member is False and not is_blank(record.get("primary_cooperative_name")):
             validation_error(
                 "primary_cooperative_name must be empty when is_primary_cooperative_member is false"
@@ -23,6 +27,7 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
 
     def _validate_union_membership(self, record: dict) -> None:
         is_member = as_bool(record.get("is_cooperative_union_member"))
+        record["is_cooperative_union_member"] = is_member
         if is_member is False and not is_blank(record.get("cooperative_union_name")):
             validation_error(
                 "cooperative_union_name must be empty when is_cooperative_union_member is false"
@@ -30,9 +35,14 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
 
     def _validate_cluster_membership(self, record: dict) -> None:
         is_member = as_bool(record.get("is_farmer_cluster_member"))
+        record["is_farmer_cluster_member"] = is_member
         if is_member is False and not is_blank(record.get("farmer_cluster_role")):
             validation_error(
                 "farmer_cluster_role must be empty when is_farmer_cluster_member is false"
+            )
+        if is_member is False and not is_blank(record.get("primary_commodity")):
+            validation_error(
+                "primary_commodity must be empty when is_farmer_cluster_member is false"
             )
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
@@ -42,6 +52,7 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
             "primary_cooperative_name",
             "cooperative_union_name",
             "farmer_cluster_role",
+            "primary_commodity",
         ]
         search_text = []
         if extra:
