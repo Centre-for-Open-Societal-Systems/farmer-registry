@@ -10,6 +10,9 @@ class G2PSchemaLivestock:
     breed: Optional[str] = None
     head_count: Optional[int] = None
     livestock_system: Optional[LivestockSystemEnum] = None
+    gender: Optional[str] = None
+    body_condition: Optional[str] = None
+    production_type: Optional[str] = None
 
 
 class G2PRegisterSchemaLivestock(G2PRegisterBaseSchema, G2PSchemaLivestock):

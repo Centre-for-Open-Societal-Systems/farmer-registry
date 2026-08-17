@@ -1,5 +1,5 @@
 from openg2p_registry_core.models.g2p_intake_form import G2PIntakeForm
-from sqlalchemy import Boolean, String, select
+from sqlalchemy import Boolean, Numeric, String, select
 from sqlalchemy.orm import Mapped, mapped_column
 from openg2p_registry_core.models import G2PRegister, G2PRegisterHistory
 from ..services import G2PRegisterDomainServiceFarmInputs
@@ -7,9 +7,13 @@ from ..services import G2PRegisterDomainServiceFarmInputs
 class G2PFarmInputs:
 
     fertilizer_use: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    amount_fertilizer_utilized: Mapped[float] = mapped_column(Numeric(12, 3), nullable=True)
     pesticide_use: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    amount_pesticide_utilized: Mapped[float] = mapped_column(Numeric(12, 3), nullable=True)
     insecticide_use: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    amount_insecticide_utilized: Mapped[float] = mapped_column(Numeric(12, 3), nullable=True)
     improved_seed_use: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    amount_improved_seed_utilized: Mapped[float] = mapped_column(Numeric(12, 3), nullable=True)
     water_source: Mapped[str] = mapped_column(String, nullable=True)          # Attribute lookup (Excel: Rainfed; Irrigation GW/Surface; Well; Water Harvesting; Surface Water)
     access_to_machinery: Mapped[bool] = mapped_column(Boolean, nullable=True)
     access_to_finance: Mapped[bool] = mapped_column(Boolean, nullable=True)

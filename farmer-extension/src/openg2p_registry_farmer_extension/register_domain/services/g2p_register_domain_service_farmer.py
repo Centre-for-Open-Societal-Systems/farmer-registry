@@ -1,18 +1,283 @@
 import logging
 from datetime import date
 
+from openg2p_registry_core.models import G2PRegisterChangeRequest
 from openg2p_registry_core.services import G2PRegisterDomainService
+from sqlalchemy import select, update
 
-from .domain_validation_utils import as_int, parse_date, validation_error
+from .domain_validation_utils import (
+    as_bool,
+    as_int,
+    is_embedded_file,
+    parse_date,
+    upload_embedded_file,
+    validation_error,
+)
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
+FARMER_REGISTER_ID = "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd"
+HOUSEHOLD_REGISTER_ID = "9055ab43-c85d-4833-bd00-ca657bb72644"
+
 
 class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
+    _IMPORT_SOURCES = {
+        "INTAKE_FORM",
+        "IMPORT_FILE",
+        "PARTNER",
+        "STAFF_PORTAL",
+        "BENEFICIARY_PORTAL",
+        "AGENT_PORTAL",
+        "VERIFIABLE_CREDENTIAL",
+    }
+
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
+            self._normalize_booleans(record)
+            await self._persist_embedded_profile_photo(record)
             self._validate_birth_date(record)
+            self._populate_age_from_birth_date(record)
             self._validate_estimated_age(record)
+            await self._sync_flattened_geo_names(record)
+
+    @staticmethod
+    def _normalize_booleans(record: dict) -> None:
+        # Select/dropdown-backed booleans (e.g. "Are You a Household Head?")
+        # submit the string 'true'/'false' rather than a real bool, which
+        # asyncpg rejects outright ("Not a boolean value: 'true'"). Checkbox
+        # widgets left untouched submit '' instead, which fails the same way.
+        # as_bool() normalizes both; anything already a real bool passes
+        # through unchanged.
+        for field in ("has_personal_phone", "disabled", "is_psnp_user", "is_household_head"):
+            if not isinstance(record.get(field), bool):
+                record[field] = as_bool(record.get(field)) or False
+
+    @staticmethod
+    async def _persist_embedded_profile_photo(record: dict) -> None:
+        """The header widget's photo picker writes the freshly-picked file
+        into record_image_url (a server-computed, read-only field) instead of
+        record_image_document_id (the field an upload should actually write
+        to — record_image_url only exists as an auto-added presigned URL on
+        read, per G2PRegisterService/G2PRegisterHierarchicalService, and isn't
+        a real column). Left as-is, that embedded file is silently dropped on
+        save. Detect it here, upload it properly, and write the resulting
+        document_id to the correct column instead."""
+        value = record.pop("record_image_url", None)
+        if not is_embedded_file(value):
+            return
+        record["record_image_document_id"] = await upload_embedded_file(
+            value, record.get("created_by")
+        )
+
+    async def _sync_flattened_geo_names(self, record: dict) -> None:
+        """Flatten geo_code_hierarchy_json into region/zone/woreda/kebele_name
+        columns, since the search-result list only supports flat getattr()
+        lookups (no JSON paths). Runs here rather than as a model-level
+        SQLAlchemy validator because G2PGeo already owns a validator on
+        geo_lowest_level_value_id, and SQLAlchemy does not allow a second
+        validator for the same mapped attribute."""
+        level_value_id = record.get("geo_lowest_level_value_id")
+        levels = {"region": None, "zone": None, "woreda": None, "kebele": None}
+        level_ids = {"woreda": None}
+        # Country packs can use either Ethiopia-specific administrative names
+        # or the generic hierarchy names used by the default sample pack.
+        # Persist both shapes in the Farmer-facing region/zone/woreda/kebele
+        # columns so list cards and filters do not depend on a particular pack.
+        level_aliases = {
+            "region": "region",
+            "zone": "zone",
+            "district": "zone",
+            "woreda": "woreda",
+            "ward": "woreda",
+            "kebele": "kebele",
+            "village": "kebele",
+        }
+        if level_value_id:
+            from openg2p_registry_core.services import G2PGeoHierarchyService
+            service = G2PGeoHierarchyService.get_component() or G2PGeoHierarchyService()
+            hierarchy = await service.get_geo_hierarchy(level_value_id)
+            for entry in (hierarchy or {}).get("hierarchy", []):
+                mnemonic = (entry.get("level_mnemonic") or "").strip().lower()
+                target = level_aliases.get(mnemonic)
+                if target:
+                    levels[target] = self._geo_display_name(entry)
+                    if target in level_ids:
+                        level_ids[target] = entry.get("level_value_id")
+        record["region_name"] = levels["region"]
+        record["zone_name"] = levels["zone"]
+        record["woreda_name"] = levels["woreda"]
+        record["kebele_name"] = levels["kebele"]
+        record["woreda_level_value_id"] = level_ids["woreda"]
+
+    async def post_approve(self, change_request: G2PRegisterChangeRequest, session):
+        """Keep linked Household head data aligned with the approved Farmer."""
+        if change_request.section_register_id != FARMER_REGISTER_ID:
+            return
+
+        from ..models import G2PRegisterFarmer
+
+        farmer = (
+            await session.execute(
+                select(G2PRegisterFarmer).where(
+                    G2PRegisterFarmer.internal_record_id
+                    == change_request.internal_record_id
+                )
+            )
+        ).scalar_one_or_none()
+        if farmer:
+            farmer.state = "APPROVED"
+            source = str(change_request.change_request_source or "").upper()
+            if not farmer.import_source and source in self._IMPORT_SOURCES:
+                farmer.import_source = source
+        await self._sync_linked_household_head(farmer, session)
+
+    async def post_ingest(self, register_id, register_row, session):
+        """Keep Household head data aligned after Farmer intake ingestion."""
+        if register_id != FARMER_REGISTER_ID:
+            return
+        register_row.state = "APPROVED"
+        if not register_row.import_source:
+            # post_ingest is the direct ingestion/partner path. Intake-form
+            # approvals use post_approve above and preserve INTAKE_FORM.
+            register_row.import_source = "PARTNER"
+        await self._sync_linked_household_head(register_row, session)
+
+    async def _sync_linked_household_head(self, farmer, session):
+        if not farmer:
+            return
+
+        if farmer.is_household_head and not farmer.link_internal_record_id:
+            await self._create_household_for_head(farmer, session)
+
+        if not farmer.link_internal_record_id:
+            return
+
+        from ..models import G2PRegisterFarmer, G2PRegisterHousehold
+
+        household = (
+            await session.execute(
+                select(G2PRegisterHousehold).where(
+                    G2PRegisterHousehold.internal_record_id
+                    == farmer.link_internal_record_id
+                )
+            )
+        ).scalar_one_or_none()
+        if not household:
+            return
+
+        farmer_name = (farmer.record_name or "").strip()
+        if farmer.is_household_head:
+            await session.execute(
+                update(G2PRegisterFarmer)
+                .where(
+                    G2PRegisterFarmer.link_internal_record_id
+                    == farmer.link_internal_record_id,
+                    G2PRegisterFarmer.internal_record_id
+                    != farmer.internal_record_id,
+                )
+                .values(is_household_head=False)
+            )
+            household.household_head = farmer_name or None
+        elif (
+            farmer_name
+            and (household.household_head or "").strip().casefold()
+            == farmer_name.casefold()
+        ):
+            household.household_head = None
+
+    async def _create_household_for_head(self, farmer, session) -> None:
+        """Auto-create a minimal Household when a Farmer declares themself
+        the household head and isn't linked to one yet — mirrors the legacy
+        Odoo flow, where "Are you a household head?" = yes implicitly
+        established the household (and cascaded the farmer's location to it).
+        Household detail fields (size, income, etc.) are filled in afterward
+        via the Household register's own edit/intake form.
+
+        Mirrors the platform's own record-creation path (see
+        openg2p_registry_core g2p_register_change_request_service.py
+        insert_into_register / _handle_functional_record_id_generation):
+        insert the row directly, then enqueue functional-id generation —
+        the existing celery worker assigns the real HH-########## id
+        exactly as it would for any other new Household record.
+        """
+        import uuid
+        from datetime import datetime, timezone
+
+        from openg2p_registry_core.models import G2PFunctionalIdGenerationQueue
+
+        from ..models import G2PRegisterHousehold
+        from .g2p_register_domain_service_household import (
+            G2PRegisterDomainServiceHousehold,
+        )
+
+        household_internal_id = str(uuid.uuid4())
+        # created_at/last_approved_at are TIMESTAMP WITHOUT TIME ZONE — a
+        # tz-aware value makes asyncpg raise "can't subtract offset-naive and
+        # offset-aware datetimes" on insert.
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        approver = farmer.last_approved_by or farmer.created_by
+
+        household = G2PRegisterHousehold(
+            internal_record_id=household_internal_id,
+            household_head=(farmer.record_name or "").strip() or None,
+            record_status="ACTIVE",
+            created_by=farmer.created_by,
+            created_at=now,
+            last_approved_by=approver,
+            last_approved_at=now,
+            latitude=farmer.latitude,
+            longitude=farmer.longitude,
+            altitude=farmer.altitude,
+            plus_code=farmer.plus_code,
+            address_line_1=farmer.address_line_1,
+            address_line_2=farmer.address_line_2,
+            postal_code=farmer.postal_code,
+            country_code=farmer.country_code,
+            geo_lowest_level_value_id=farmer.geo_lowest_level_value_id,
+        )
+        household_service = G2PRegisterDomainServiceHousehold()
+        payload = {
+            "household_head": household.household_head,
+            "address_line_1": household.address_line_1,
+            "address_line_2": household.address_line_2,
+            "postal_code": household.postal_code,
+            "country_code": household.country_code,
+        }
+        household.record_name = household_service.construct_record_name(payload)
+        household.search_text = household_service.construct_search_text(payload)
+
+        session.add(household)
+        session.add(
+            G2PFunctionalIdGenerationQueue(
+                register_id=HOUSEHOLD_REGISTER_ID,
+                internal_record_id=household_internal_id,
+            )
+        )
+        await session.flush()
+
+        farmer.link_internal_record_id = household_internal_id
+        _logger.info(
+            "Auto-created household %s for household-head farmer %s",
+            household_internal_id,
+            farmer.internal_record_id,
+        )
+
+    @staticmethod
+    def _geo_display_name(entry: dict) -> str | None:
+        """Return a readable geography label without damaging supplied names."""
+        for key in (
+            "level_value_display_name",
+            "level_value_name",
+            "display_name",
+        ):
+            value = str(entry.get(key) or "").strip()
+            if value:
+                return value
+
+        mnemonic = str(entry.get("level_value_mnemonic") or "").strip()
+        if not mnemonic:
+            return None
+        return mnemonic.replace("_", " ").replace("-", " ").title()
 
     def _validate_birth_date(self, record: dict) -> None:
         birth_date = parse_date(record.get("birth_date"))
@@ -30,6 +295,12 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
                 "estimated_age must be consistent with birth_date within one year"
             )
 
+    def _populate_age_from_birth_date(self, record: dict) -> None:
+        """Populate the stored Age when a Gregorian birth date is supplied."""
+        birth_date = parse_date(record.get("birth_date"))
+        if birth_date is not None and as_int(record.get("estimated_age")) is None:
+            record["estimated_age"] = self._calculate_age(birth_date)
+
     @staticmethod
     def _calculate_age(birth_date: date) -> int | None:
         if not birth_date:
@@ -46,6 +317,8 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
 
         keys = [
             "functional_record_id",
+            "state",
+            "import_source",
             "first_name",
             "last_name",
             "foundational_id",
@@ -53,11 +326,13 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             "given_name",
             "gender",
             "birth_date",
+            "birth_date_ec",
             "marital_status",
             "occupation",
             "education_level",
             "language_spoken",
             "source_of_income",
+            "is_household_head",
             "national_id_masked",
             "disability_type",
             "latitude",

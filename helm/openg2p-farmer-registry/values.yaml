@@ -47,6 +47,10 @@ registry:
     image:
       repository: registry.gitlab.com/openg2p/registry/farmer-registry/staff-api
       tag: 0.0.0-develop
+  staffPortalUi:
+    image:
+      repository: registry.gitlab.com/openg2p/registry/farmer-registry/staff-ui
+      tag: 0.0.0-develop
   partnerApi:
     image:
       repository: registry.gitlab.com/openg2p/registry/farmer-registry/partner-api
@@ -99,13 +103,13 @@ registry:
       appConfig:
         idTypes:
           farmer:
-            idLength: 12
+            idLength: 10
           household:
             idLength: 10
 
-  # staffUi and beneApi are consumed as-is from the openg2p-registry base images
-  # (subchart defaults already point at openg2p/openg2p-registry-*), so they are
-  # intentionally not overridden.
+  # beneApi is consumed as-is from the openg2p-registry base image.
+  # staffPortalUi is a thin branding overlay that replaces only the dashboard
+  # background asset.
 
   # ── Farmer e2e sanity suite (image built here; Set 2 field tests) ───────────
   # The subchart ships the reference (Individual) sanity values; override them
