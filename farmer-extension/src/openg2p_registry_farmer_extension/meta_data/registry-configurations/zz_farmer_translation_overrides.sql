@@ -79,3 +79,31 @@ SET "domain_translation" = (
     )
 )::json
 WHERE "language_code" = 'en';
+
+-- G2R-73: labels for the staff web intake form and its tabs. Without these the
+-- staff UI renders the raw tab keys (e.g. "MISSING_MESSAGE: farmer_web_land_tab (en)").
+UPDATE "public"."registry_languages"
+SET "core_translation" = (
+    "core_translation"::jsonb
+    || jsonb_build_object(
+        'farmer_web_personal_tab', 'Personal & Identification',
+        'farmer_web_location_tab', 'Location',
+        'farmer_web_household_tab', 'Household',
+        'farmer_web_land_tab', 'Land',
+        'farmer_web_crops_tab', 'Crops',
+        'farmer_web_livestock_tab', 'Livestock',
+        'farmer_web_farm_inputs_tab', 'Farm Inputs',
+        'farmer_web_membership_tab', 'Membership',
+        'farmer_web_enumerator_tab', 'Enumerator'
+    )
+)::json
+WHERE "language_code" = 'en';
+
+UPDATE "public"."registry_languages"
+SET "domain_translation" = (
+    "domain_translation"::jsonb
+    || jsonb_build_object(
+        'farmer_web_intake', 'Farmer Web Intake'
+    )
+)::json
+WHERE "language_code" = 'en';

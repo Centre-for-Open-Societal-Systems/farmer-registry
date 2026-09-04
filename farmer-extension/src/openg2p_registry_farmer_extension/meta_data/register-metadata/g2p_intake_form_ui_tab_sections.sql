@@ -13,4 +13,20 @@ INSERT INTO "public"."g2p_intake_form_ui_tab_sections" ("tab_section_id","tab_id
 ('tab_section_12','a1a4d25a-1cd4-4356-abac-72482724','farmer_farmer_enumerator_section_01',10),
 ('tab_section_13','a1a4d25a-1cd4-4356-abac-72482725','farmer_farmer_consent_requests_section_01',10),
 ('tab_section_14','a1a4d25a-1cd4-4356-abac-72482726','farmer_farmer_consent_receipts_section_01',10),
-('tab_section_15','a1a4d25a-1cd4-4356-abac-72482721','farmer_farmer_birth_information_section_01',25);
+('tab_section_15','a1a4d25a-1cd4-4356-abac-72482721','farmer_farmer_birth_information_section_01',25),
+-- G2R-73: section attachments for the web intake form tabs above.
+('d3f1c7a0-4b62-4e19-9c85-100000000001','d3f1c7a0-4b62-4e19-9c85-000000000010','farmer_household_lookup_section_01',10),
+('d3f1c7a0-4b62-4e19-9c85-100000000002','d3f1c7a0-4b62-4e19-9c85-000000000010','farmer_farmer_reg_ids_section_01',20),
+('d3f1c7a0-4b62-4e19-9c85-100000000003','d3f1c7a0-4b62-4e19-9c85-000000000010','farmer_farmer_personal_identification_section_01',30),
+('d3f1c7a0-4b62-4e19-9c85-100000000004','d3f1c7a0-4b62-4e19-9c85-000000000010','farmer_farmer_birth_information_section_01',40),
+('d3f1c7a0-4b62-4e19-9c85-100000000005','d3f1c7a0-4b62-4e19-9c85-000000000010','farmer_farmer_socio_economic_and_health_section_04',50),
+('d3f1c7a0-4b62-4e19-9c85-100000000006','d3f1c7a0-4b62-4e19-9c85-000000000020','farmer_farmer_location_section_03',10),
+('d3f1c7a0-4b62-4e19-9c85-100000000007','d3f1c7a0-4b62-4e19-9c85-000000000030','farmer_household_household_information_section_01',10),
+('d3f1c7a0-4b62-4e19-9c85-100000000008','d3f1c7a0-4b62-4e19-9c85-000000000030','farmer_household_household_member_section_02',20),
+('d3f1c7a0-4b62-4e19-9c85-100000000009','d3f1c7a0-4b62-4e19-9c85-000000000040','b8e5d1a3-3f6c-4b2a-9d7e-1c2f4a6b8d0e',10),
+('d3f1c7a0-4b62-4e19-9c85-100000000010','d3f1c7a0-4b62-4e19-9c85-000000000050','a7d69d0c-ed5b-4d78-b2b5-90dfe40c8aa2',10),
+('d3f1c7a0-4b62-4e19-9c85-100000000011','d3f1c7a0-4b62-4e19-9c85-000000000050','farmer_farm_farm_details_section_01',20),
+('d3f1c7a0-4b62-4e19-9c85-100000000012','d3f1c7a0-4b62-4e19-9c85-000000000060','farmer_livestock_livestock_details_section_01',10),
+('d3f1c7a0-4b62-4e19-9c85-100000000013','d3f1c7a0-4b62-4e19-9c85-000000000070','farmer_farm_input_farm_input_details_section_01',10),
+('d3f1c7a0-4b62-4e19-9c85-100000000014','d3f1c7a0-4b62-4e19-9c85-000000000080','farmer_membership_membership_details_01',10),
+('d3f1c7a0-4b62-4e19-9c85-100000000015','d3f1c7a0-4b62-4e19-9c85-000000000090','farmer_farmer_enumerator_section_01',10);
