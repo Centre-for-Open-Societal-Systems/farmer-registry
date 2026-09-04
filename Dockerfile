@@ -19,16 +19,11 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
 
-# The pinned platform declares this awaited method as a plain def. Keep the
-# existing farmer overlay fix until the corresponding upstream image is used.
-RUN python3 -c "\
-import pathlib; \
-p = pathlib.Path('/usr/local/lib/python3.12/site-packages/openg2p_registry_core/services/intake_form_data_service.py'); \
-s = p.read_text(); \
-old = '    def _build_intake_policy_condition('; \
-new = '    async def _build_intake_policy_condition('; \
-assert s.count(old) == 1, f'expected exactly one match, found {s.count(old)}'; \
-p.write_text(s.replace(old, new))"
+# async/await mismatches in the pinned platform's registry-core. See the
+# script for what each patch fixes and why. Applied in every stage that
+# installs registry-core, since they all ship the same broken package.
+COPY docker/patches/patch_platform.py /tmp/patch_platform.py
+RUN python3 /tmp/patch_platform.py && rm /tmp/patch_platform.py
 
 # -------------------------------------------------------------- partner API
 FROM registry.gitlab.com/openg2p/registry/registry-platform/partner-api:${RP_VERSION} AS partner-api
@@ -38,6 +33,9 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
 
+COPY docker/patches/patch_platform.py /tmp/patch_platform.py
+RUN python3 /tmp/patch_platform.py && rm /tmp/patch_platform.py
+
 # ------------------------------------------------------------------- celery
 FROM registry.gitlab.com/openg2p/registry/registry-platform/celery:${RP_VERSION} AS celery
 
@@ -45,6 +43,9 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
+
+COPY docker/patches/patch_platform.py /tmp/patch_platform.py
+RUN python3 /tmp/patch_platform.py && rm /tmp/patch_platform.py
 
 # ----------------------------------------------------------------- staff UI
 FROM openg2p/openg2p-registry-staff-portal-ui:${STAFF_UI_VERSION} AS staff-ui
