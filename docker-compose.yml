@@ -183,7 +183,7 @@ services:
 
   # ------------------------------------------------------------- IAM / AWE --
   iam-staff-api:
-    image: ${IAM_STAFF_PORTAL_API_IMAGE:-openg2p/iam-staff-portal-api:1.3.0}
+    image: ${IAM_STAFF_PORTAL_API_IMAGE:-openg2p/iam-staff-portal-api:1.4.2}
     container_name: farmer-registry-iam-staff-api
     extra_hosts:
       - "localhost:host-gateway"
@@ -231,7 +231,7 @@ services:
 
   # Service name must be `awe` — the AWE UI's nginx proxies /v1/awe/ to awe:8000.
   awe:
-    image: ${AWE_API_IMAGE:-registry.gitlab.com/openg2p/awe/openg2p-awe:0.0.0-develop.67}
+    image: ${AWE_API_IMAGE:-openg2p/openg2p-awe:1.2.2}
     container_name: farmer-registry-awe-api
     extra_hosts:
       - "localhost:host-gateway"
@@ -269,7 +269,7 @@ services:
     restart: unless-stopped
 
   awe-ui:
-    image: ${AWE_UI_IMAGE:-registry.gitlab.com/openg2p/awe/openg2p-awe-ui:0.0.0-develop.67}
+    image: ${AWE_UI_IMAGE:-openg2p/openg2p-awe-ui:1.2.2}
     container_name: farmer-registry-awe-ui
     depends_on:
       awe:
@@ -287,7 +287,7 @@ services:
   # (staff_roles / staff_role_permissions / staff_application_permissions)
   # are entirely separate from Keycloak and start out empty.
   iam-register-farmer-app:
-    image: ${IAM_STAFF_PORTAL_API_IMAGE:-openg2p/iam-staff-portal-api:1.3.0}
+    image: ${IAM_STAFF_PORTAL_API_IMAGE:-openg2p/iam-staff-portal-api:1.4.2}
     container_name: farmer-registry-iam-register-app
     depends_on:
       iam-staff-api:
@@ -309,29 +309,29 @@ services:
 
   # --------------------------------------------------------- master data --
   farmer-master-data-api:
-    image: ${MASTER_DATA_API_IMAGE:-registry.gitlab.com/openg2p/master-data-service/master-data-api:0.0.0-develop.26}
+    image: ${MASTER_DATA_API_IMAGE:-openg2p/master-data-api:1.1.3}
     container_name: farmer-registry-master-data-api
     depends_on:
       <<: *depends-on-infra
       iam-staff-api:
         condition: service_healthy
     environment:
-      GEN2_MASTER_DATA_API_HOST: "0.0.0.0"
-      GEN2_MASTER_DATA_API_PORT: 8000
-      GEN2_MASTER_DATA_API_NO_OF_WORKERS: 2
-      GEN2_MASTER_DATA_API_OPENAPI_ROOT_PATH: /
-      GEN2_MASTER_DATA_API_WORKER_TYPE: gunicorn
-      GEN2_MASTER_DATA_API_DB_DRIVER: postgresql+asyncpg
-      GEN2_MASTER_DATA_API_DB_HOSTNAME: postgres
-      GEN2_MASTER_DATA_API_DB_PORT: 5432
-      GEN2_MASTER_DATA_API_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
-      GEN2_MASTER_DATA_API_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      GEN2_MASTER_DATA_API_DB_DBNAME: farmer_master_data_db
-      COMMON_AUTH_ENABLED: "false"
-      COMMON_AUTH_PROVIDER_API_URL: "http://iam-staff-api:8000"
-      COMMON_KEYCLOAK_CLIENT_ID: farmer-registry-staff-portal
-      COMMON_AUTH_REDIS_URL: "redis://redis:6379/0"
-      COMMON_AUTH_VERIFY_SSL: "false"
+      MASTER_DATA_API_HOST: "0.0.0.0"
+      MASTER_DATA_API_PORT: 8000
+      MASTER_DATA_API_NO_OF_WORKERS: 2
+      MASTER_DATA_API_OPENAPI_ROOT_PATH: /
+      MASTER_DATA_API_WORKER_TYPE: gunicorn
+      MASTER_DATA_API_DB_DRIVER: postgresql+asyncpg
+      MASTER_DATA_API_DB_HOSTNAME: postgres
+      MASTER_DATA_API_DB_PORT: 5432
+      MASTER_DATA_API_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+      MASTER_DATA_API_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      MASTER_DATA_API_DB_DBNAME: farmer_master_data_db
+      MASTER_DATA_API_AUTH_ENABLED: "false"
+      MASTER_DATA_API_AUTH_PROVIDER_API_URL: "http://iam-staff-api:8000"
+      MASTER_DATA_API_KEYCLOAK_CLIENT_ID: farmer-registry-staff-portal
+      MASTER_DATA_API_AUTH_REDIS_URL: "redis://redis:6379/0"
+      MASTER_DATA_API_AUTH_VERIFY_SSL: "false"
     ports:
       - "${MASTER_DATA_API_PORT:-8042}:8000"
     healthcheck:
@@ -547,7 +547,7 @@ services:
       dockerfile: Dockerfile
       target: staff-ui
       args:
-        STAFF_UI_VERSION: ${REGISTRY_STAFF_PORTAL_UI_VERSION:-1.1.1}
+        STAFF_UI_VERSION: ${REGISTRY_STAFF_PORTAL_UI_VERSION:-1.2.1}
         # Target of the Dashboard button patched into the portal header. It is
         # compiled into the client bundle, so changing it needs
         # `docker compose build farmer-registry-staff-ui`, not just a restart.
