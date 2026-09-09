@@ -77,6 +77,16 @@ SET section_description = 'Household information linked to this farmer',
               "widget-data-path": "9055ab43-c85d-4833-bd00-ca657bb72644.size_of_group",
               "widget-data-format": {"minimum": 0, "numericType": "integer", "thousandSeparator": ","},
               "widget-data-validation": {"min": 0}
+            },
+            {
+              "widget": "select",
+              "widget-id": "other_land_owner",
+              "widget-type": "input",
+              "widget-label": "other_land_owner",
+              "widget-readonly": false,
+              "widget-required": false,
+              "widget-data-path": "9055ab43-c85d-4833-bd00-ca657bb72644.other_land_owner",
+              "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}
             }
           ],
           "panel-id": "panel_household_parent_and_size",
@@ -120,7 +130,8 @@ SET section_ui_schema = $schema$
           "widgets": [
             {"widget":"checkbox","widget-id":"father_included","widget-type":"input","widget-label":"father_included","widget-readonly":false,"widget-required":false,"widget-data-path":"9055ab43-c85d-4833-bd00-ca657bb72644.father_included"},
             {"widget":"checkbox","widget-id":"mother_included","widget-type":"input","widget-label":"mother_included","widget-readonly":false,"widget-required":false,"widget-data-path":"9055ab43-c85d-4833-bd00-ca657bb72644.mother_included"},
-            {"widget":"number","widget-id":"size_of_group","widget-type":"input","widget-label":"family_size","widget-readonly":false,"widget-required":false,"widget-data-path":"9055ab43-c85d-4833-bd00-ca657bb72644.size_of_group","widget-data-format":{"minimum":0,"numericType":"integer","thousandSeparator":","},"widget-data-validation":{"min":0}}
+            {"widget":"number","widget-id":"size_of_group","widget-type":"input","widget-label":"family_size","widget-readonly":false,"widget-required":false,"widget-data-path":"9055ab43-c85d-4833-bd00-ca657bb72644.size_of_group","widget-data-format":{"minimum":0,"numericType":"integer","thousandSeparator":","},"widget-data-validation":{"min":0}},
+            {"widget":"select","widget-id":"other_land_owner","widget-type":"input","widget-label":"other_land_owner","widget-readonly":false,"widget-required":false,"widget-data-path":"9055ab43-c85d-4833-bd00-ca657bb72644.other_land_owner","widget-data-source":{"type":"static","options":[{"label":"YES","value":true},{"label":"NO","value":false}]}}
           ],
           "panel-id":"panel_household_parent_and_size",
           "panel-column-span":1,

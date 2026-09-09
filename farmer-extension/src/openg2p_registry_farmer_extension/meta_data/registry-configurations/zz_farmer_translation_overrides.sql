@@ -75,7 +75,12 @@ SET "domain_translation" = (
         'number_of_males_in_family', 'Number Of Males In The Family',
         'number_of_females_in_family', 'Number Of Females In The Family',
         'number_of_children_in_family', 'Number Of Children In The Family',
-        'family_size', 'Family Size'
+        'family_size', 'Family Size',
+        -- The seeded label "Other Land Owner" reads as if it asks for a
+        -- person. The flag actually records whether the household farms land
+        -- owned by someone outside the household (cf. the per-parcel
+        -- land_ownership_type enum, which captures the same idea precisely).
+        'other_land_owner', 'Household Farms Land Owned By Others'
     )
 )::json
 WHERE "language_code" = 'en';
