@@ -20,7 +20,9 @@ class G2PSchemaFarmer:
 
     state: Optional[FarmerStateEnum] = None
     import_source: Optional[FarmerImportSourceEnum] = None
-    birth_date_ec: Optional[date] = None
+    # "YYYY-MM-DD" in the Ethiopic calendar; a string because month 13
+    # (Pagumen) is not a valid date month. See services/ethiopian_calendar.py.
+    birth_date_ec: Optional[str] = None
     estimated_age: Optional[int] = None
     has_personal_phone: Optional[bool] = None
     disabled: Optional[bool] = None

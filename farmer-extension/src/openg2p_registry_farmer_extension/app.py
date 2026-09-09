@@ -135,10 +135,36 @@ class Initializer(BaseInitializer):
                 "g2p_register_history_farmers",
                 "g2p_intake_form_farmers",
             ):
+                # Installations created before the Ethiopic column became a
+                # string still have it as DATE, which cannot hold Pagumen
+                # (month 13) at all. Convert in place, rendering any existing
+                # value with to_char so the stored text keeps the same day.
+                # Guarded on the current type so the ALTER is a no-op on the
+                # second and every later boot.
                 await conn.execute(
                     text(
                         f'ALTER TABLE "public"."{table_name}" '
-                        'ADD COLUMN IF NOT EXISTS "birth_date_ec" DATE'
+                        'ADD COLUMN IF NOT EXISTS "birth_date_ec" VARCHAR'
+                    )
+                )
+                await conn.execute(
+                    text(
+                        f"""
+                        DO $$
+                        BEGIN
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                 WHERE table_schema = 'public'
+                                   AND table_name = '{table_name}'
+                                   AND column_name = 'birth_date_ec'
+                                   AND data_type = 'date'
+                            ) THEN
+                                ALTER TABLE "public"."{table_name}"
+                                ALTER COLUMN "birth_date_ec" TYPE VARCHAR
+                                USING to_char("birth_date_ec", 'YYYY-MM-DD');
+                            END IF;
+                        END $$;
+                        """
                     )
                 )
                 await conn.execute(
