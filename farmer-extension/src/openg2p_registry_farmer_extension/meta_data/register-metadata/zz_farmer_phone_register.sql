@@ -36,6 +36,10 @@ ON CONFLICT (register_id) DO UPDATE SET
     search_result_schema = EXCLUDED.search_result_schema,
     filter_schema = EXCLUDED.filter_schema;
 
+-- phone_type/phone_number are deliberately NOT column-required. sectionValidate
+-- treats any required column as making the whole table mandatory when empty, so
+-- marking them would force every farmer to have a phone number. Gen1 fill is 13%
+-- and phone was left off the mandatory list pending PO sign-off (see b04c3f6).
 INSERT INTO public.g2p_register_sections (
     register_id, section_id, section_register_id, is_core_section,
     section_mnemonic, section_description, documents_required,
@@ -70,7 +74,7 @@ INSERT INTO public.g2p_register_sections (
                       "widget-type": "input",
                       "widget-label": "phone_type",
                       "widget-readonly": false,
-                      "widget-required": true,
+                      "widget-required": false,
                       "widget-data-path": "phone_type",
                       "widget-data-source": {
                         "type": "static",
@@ -87,8 +91,13 @@ INSERT INTO public.g2p_register_sections (
                       "widget-type": "input",
                       "widget-label": "phone_number",
                       "widget-readonly": false,
-                      "widget-required": true,
-                      "widget-data-path": "phone_number"
+                      "widget-required": false,
+                      "widget-data-path": "phone_number",
+                      "widget-data-validation": {
+                        "pattern": "^0?[1-9][0-9]{8}$",
+                        "patternMessage": "Enter the Ethiopian number without the country code, e.g. 0912345678",
+                        "maxLength": 10
+                      }
                     },
                     {
                       "widget": "text",
