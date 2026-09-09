@@ -1,0 +1,28 @@
+
+/* ------------------------------------------------------------------------
+ * Regressions introduced by the 1.2.x staff portal base image.
+ *
+ * Both were confirmed against the STOCK image with none of our patches
+ * applied, so they come from the base and not from anything this overlay
+ * does. Kept in their own file so they can be dropped in one step once the
+ * upstream image fixes them.
+ * --------------------------------------------------------------------- */
+
+/* 1. The expanded intake section is tinted with a theme colour. 1.1.x drew
+ *    every section on the plain card background, expanded or not. The base
+ *    sets data-intake-form-expanded on the section wrapper, which gives a
+ *    stable hook that does not depend on the generated scope class. */
+html body .section[data-intake-form-expanded="true"],
+html body .section[data-intake-form-expanded="true"] .intake-form-accordion-header,
+html body .section[data-intake-form-expanded="true"] .intake-form-accordion-content {
+  background-color: var(--owt-color-bg, #ffffff) !important;
+}
+
+/* 2. The "Create New Submission" menu is painted underneath the page card, so
+ *    the intake form entries cannot be clicked. The menu carries z-50, but the
+ *    card below it establishes a stacking context that wins. Lift the menus
+ *    above it; this also covers the notification popover, which sits in the
+ *    same header row and has the same problem. */
+html body .absolute.z-50 {
+  z-index: 2000 !important;
+}

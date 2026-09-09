@@ -59,6 +59,7 @@ ARG DASHBOARD_LABEL=Dashboard
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/farm_image.jpeg /app/public/images/common/farm_image.jpeg
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/people.svg /app/public/images/common/people.svg
 COPY docker/staff-ui/assets/detail-field-wrapping.css /tmp/detail-field-wrapping.css
+COPY docker/staff-ui/assets/staff-ui-1.2-regressions.css /tmp/staff-ui-1.2-regressions.css
 
 # Prefer the human-readable form description while retaining the mnemonic as
 # a fallback for records that do not yet have a description.
@@ -81,6 +82,12 @@ RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
 # Add the extension-only readability and responsive detail-layout rules.
 RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
     -e '$r /tmp/detail-field-wrapping.css' {} \;
+
+# Undo two 1.2.x base-image regressions: the expanded intake section is tinted
+# with a theme colour, and the New Submission menu is painted under the page
+# card. Both reproduce on the stock image with no overlay applied.
+RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
+    -e '$r /tmp/staff-ui-1.2-regressions.css' {} \;
 
 # Ignore a legacy dashboard_image value and use the transparent extension
 # asset, which removes the people illustration without changing base source.
