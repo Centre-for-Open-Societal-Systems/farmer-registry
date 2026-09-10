@@ -96,6 +96,7 @@ services:
         mc mb --ignore-existing "local/$${MINIO_BUCKET_NAME}"
         mc mb --ignore-existing local/templates
         mc mb --ignore-existing local/registrant-photos
+        mc mb --ignore-existing local/documents
         exit 0
     restart: "no"
 
@@ -679,7 +680,14 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-adminsecret}
       MINIO_SECURE: "false"
       TEMPLATE_BUCKET_NAME: templates
-      IMAGE_BUCKET_NAME: registrant-photos
+      # Must stay "documents": DocumentBucket in registry-core is hard-set
+      # ("the physical bucket name is always the enum value"), and
+      # upload_images.py writes the g2p_registry_documents catalog row with a
+      # hardcoded "documents" regardless of this variable. Pointing it at
+      # registrant-photos uploaded the objects to a bucket the catalog does
+      # not reference, so every search_in_a_register call failed with
+      # NoSuchBucket and the Farmer list rendered empty.
+      IMAGE_BUCKET_NAME: documents
     restart: "no"
 
   # load_sample_data.py's fixture comes from the shared registry-platform demo
