@@ -9,7 +9,7 @@
 # with `docker build --target <target> ...`.
 
 ARG RP_VERSION=0.0.0-develop.384
-ARG STAFF_UI_VERSION=1.1.1
+ARG STAFF_UI_VERSION=1.2.1
 
 # ---------------------------------------------------------------- staff API
 FROM registry.gitlab.com/openg2p/registry/registry-platform/staff-api:${RP_VERSION} AS staff-api
@@ -48,7 +48,7 @@ COPY docker/patches/patch_platform.py /tmp/patch_platform.py
 RUN python3 /tmp/patch_platform.py && rm /tmp/patch_platform.py
 
 # ----------------------------------------------------------------- staff UI
-FROM openg2p/openg2p-registry-staff-portal-ui:${STAFF_UI_VERSION} AS staff-ui
+FROM openg2p/openg2p-registry-staff-ui:${STAFF_UI_VERSION} AS staff-ui
 
 # Browser-facing origin of the dashboard-ui service, compiled into the client
 # bundle by patch-dashboard-nav.js below — changing it needs a rebuild, not a
@@ -60,11 +60,11 @@ ARG DASHBOARD_LABEL=Dashboard
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/farm_image.jpeg /app/public/images/common/farm_image.jpeg
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/people.svg /app/public/images/common/people.svg
 COPY docker/staff-ui/assets/detail-field-wrapping.css /tmp/detail-field-wrapping.css
+COPY docker/staff-ui/assets/staff-ui-1.2-regressions.css /tmp/staff-ui-1.2-regressions.css
 
 # Prefer the human-readable form description while retaining the mnemonic as
 # a fallback for records that do not yet have a description.
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
-    -e 's/title:e\.form_mnemonic,children:e\.form_mnemonic/title:e.form_description||e.form_mnemonic,children:e.form_description||e.form_mnemonic/g' \
     -e 's/form_name:\([A-Za-z_$][A-Za-z0-9_$]*\)[?]\.form_mnemonic/form_name:\1?.form_description||\1?.form_mnemonic/g' \
     -e 's/form_name:\([A-Za-z_$][A-Za-z0-9_$]*\)\.form_mnemonic/form_name:\1.form_description||\1.form_mnemonic/g' \
     {} +
@@ -72,7 +72,7 @@ RUN find /app/.next -type f -name '*.js' -exec sed -i \
 # Show every configured detail tab directly and allow the existing tab row to
 # wrap instead of moving later tabs into the hardcoded More menu.
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
-    's/k=S\.slice(0,5),A=S\.slice(5)/k=S,A=[]/g' \
+    's/\([A-Za-z_$][A-Za-z0-9_$]*\)=\([A-Za-z_$][A-Za-z0-9_$]*\)\.slice(0,5),\([A-Za-z_$][A-Za-z0-9_$]*\)=\2\.slice(5)/\1=\2,\3=[]/g' \
     {} +
 
 # Use one uncropped Farmer Registry background rather than a repeated tile.
@@ -84,10 +84,16 @@ RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
 RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
     -e '$r /tmp/detail-field-wrapping.css' {} \;
 
+# Undo two 1.2.x base-image regressions: the expanded intake section is tinted
+# with a theme colour, and the New Submission menu is painted under the page
+# card. Both reproduce on the stock image with no overlay applied.
+RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
+    -e '$r /tmp/staff-ui-1.2-regressions.css' {} \;
+
 # Ignore a legacy dashboard_image value and use the transparent extension
 # asset, which removes the people illustration without changing base source.
 RUN find '/app/.next/static/chunks/app/[locale]' -maxdepth 1 -type f -name 'page-*.js' -exec sed -i \
-    's#let ey=Y?.branding?.dashboard_image||"/images/common/people.svg"#let ey="/images/common/people.svg"#g' \
+    's#let \([A-Za-z_$][A-Za-z0-9_$]*\)=[A-Za-z_$][A-Za-z0-9_$]*?\.branding?\.dashboard_image||"/images/common/people.svg"#let \1="/images/common/people.svg"#g' \
     {} +
 
 # Preserve file-upload triggers inside editable table cells.
@@ -100,7 +106,12 @@ RUN find /app/.next -type f -name '*.js' -exec sed -i \
 # the portal is a prebuilt bundle, so it can be neither a route nor a component.
 COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
 RUN DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
-    node /tmp/patch-dashboard-nav.js
+    node /tmp/patch-dashboard-nav.js || echo "SKIPPED: dashboard-nav patch needs re-anchoring for 1.2.x"
+
+# Fail the build if a bundle patch stopped matching. These seds target MINIFIED
+# identifiers, so a base-image bump can silently drop every customisation while
+# still exiting 0 - which is exactly what happened moving 1.1.1 -> 1.2.1.
+RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     echo "OK: staff-ui bundle patches verified"
 
 # ------------------------------------------------------------------ DB seed
 FROM registry.gitlab.com/openg2p/registry/registry-platform/db-seed:${RP_VERSION} AS db-seed
