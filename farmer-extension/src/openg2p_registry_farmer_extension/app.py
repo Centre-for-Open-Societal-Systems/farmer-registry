@@ -208,6 +208,53 @@ class Initializer(BaseInitializer):
                         )
                     )
 
+                # Older section-by-section intake saves cleared these list
+                # projections even though the selected location and hierarchy
+                # survived. Recover only missing projections from each row's
+                # own snapshot, including intake and history twins. No location
+                # is invented for farmers who never supplied one.
+                for level, aliases in (
+                    ("region", "'region'"),
+                    ("zone", "'zone', 'district'"),
+                    ("woreda", "'woreda', 'ward'"),
+                    ("kebele", "'kebele', 'village'"),
+                ):
+                    await conn.execute(text(f"""
+                        UPDATE public.{table_name} AS farmer
+                        SET {level}_name = (
+                            SELECT COALESCE(
+                                NULLIF(entry->>'level_value_display_name', ''),
+                                NULLIF(entry->>'level_value_name', ''),
+                                NULLIF(entry->>'display_name', ''),
+                                NULLIF(entry->>'level_value_mnemonic', '')
+                            )
+                            FROM jsonb_array_elements(
+                                farmer.geo_code_hierarchy_json->'hierarchy'
+                            ) AS entry
+                            WHERE lower(entry->>'level_mnemonic') IN ({aliases})
+                            LIMIT 1
+                        )
+                        WHERE NULLIF(farmer.{level}_name, '') IS NULL
+                          AND jsonb_typeof(
+                              farmer.geo_code_hierarchy_json->'hierarchy'
+                          ) = 'array'
+                    """))
+                await conn.execute(text(f"""
+                    UPDATE public.{table_name} AS farmer
+                    SET woreda_level_value_id = (
+                        SELECT entry->>'level_value_id'
+                        FROM jsonb_array_elements(
+                            farmer.geo_code_hierarchy_json->'hierarchy'
+                        ) AS entry
+                        WHERE lower(entry->>'level_mnemonic') IN ('woreda', 'ward')
+                        LIMIT 1
+                    )
+                    WHERE NULLIF(farmer.woreda_level_value_id, '') IS NULL
+                      AND jsonb_typeof(
+                          farmer.geo_code_hierarchy_json->'hierarchy'
+                      ) = 'array'
+                """))
+
             # A row only enters the live register after approval. Project
             # that workflow fact onto existing Farmer rows, and recover
             # their source from the newest history version where possible.
@@ -409,7 +456,10 @@ class Initializer(BaseInitializer):
                             ) AS primary_rank
                         FROM public.g2p_register_farmers AS f
                         CROSS JOIN LATERAL jsonb_array_elements(
-                            coalesce(f.phone_numbers, '[]'::jsonb)
+                            -- New farmers may store JSON null, which COALESCE
+                            -- does not treat as SQL NULL. Expand arrays only.
+                            CASE WHEN jsonb_typeof(f.phone_numbers) = 'array'
+                                 THEN f.phone_numbers ELSE '[]'::jsonb END
                         ) WITH ORDINALITY AS phone(item, ordinality)
                         WHERE nullif(btrim(phone.item->>'number'), '') IS NOT NULL
                     )

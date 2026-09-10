@@ -107,6 +107,11 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         SQLAlchemy validator because G2PGeo already owns a validator on
         geo_lowest_level_value_id, and SQLAlchemy does not allow a second
         validator for the same mapped attribute."""
+        # Intake saves one section at a time. Saving Personal Information after
+        # Address must not overwrite the already-persisted location projections
+        # with None. An explicitly submitted empty ID still clears them.
+        if "geo_lowest_level_value_id" not in record:
+            return
         level_value_id = record.get("geo_lowest_level_value_id")
         levels = {"region": None, "zone": None, "woreda": None, "kebele": None}
         level_ids = {"woreda": None}
