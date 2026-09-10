@@ -20,9 +20,12 @@ class G2PRegisterDomainServiceHousehold(G2PRegisterDomainService):
     def _normalize_booleans(record: dict) -> None:
         # The checkbox widget submits '' rather than null/false when left
         # untouched, which Postgres rejects as an invalid boolean literal.
+        # Map '' to None rather than False: these widgets are optional, so an
+        # untouched control means "not answered", which is distinct from "No"
+        # and must stay NULL in the (nullable) columns.
         for field in ("father_included", "mother_included", "other_land_owner"):
             if not isinstance(record.get(field), bool):
-                record[field] = as_bool(record.get(field)) or False
+                record[field] = as_bool(record.get(field))
 
     def _validate_household_size(self, record: dict) -> None:
         size_of_group = as_int(record.get("size_of_group"))

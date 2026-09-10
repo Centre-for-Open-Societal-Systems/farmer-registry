@@ -8,6 +8,7 @@ from openg2p_registry_core.services import G2PRegisterDomainService
 from sqlalchemy import select, update
 
 from .domain_validation_utils import is_blank, validation_error
+from .validation_rules import PHONE_MAX_LENGTH, PHONE_PATTERN, matches
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
@@ -33,6 +34,20 @@ class G2PRegisterDomainServiceFarmerPhone(G2PRegisterDomainService):
             if is_blank(record.get("phone_number")):
                 validation_error("phone_number is required")
             record["phone_number"] = str(record["phone_number"]).strip()
+
+            # This column holds the national significant number only; the
+            # country lives in country_code, defaulting to ETH. Gen1 stored a
+            # single E.164 string, so a migrated value pasted in whole would
+            # otherwise be accepted here and be wrong (G2R-26 Q2).
+            if not matches(PHONE_PATTERN, record["phone_number"]):
+                validation_error(
+                    "phone_number must be the Ethiopian number without the "
+                    "country code, e.g. 0912345678"
+                )
+            if len(record["phone_number"]) > PHONE_MAX_LENGTH:
+                validation_error(
+                    f"phone_number must be {PHONE_MAX_LENGTH} characters or fewer"
+                )
 
         if sum(bool(record.get("is_primary")) for record in active_records) > 1:
             validation_error("only one primary phone is allowed per farmer")

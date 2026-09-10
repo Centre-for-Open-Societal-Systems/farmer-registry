@@ -30,7 +30,11 @@ from .register_domain.models import (
     G2PIntakeFormConsentRequest, G2PIntakeFormConsentReceipt,
 )
 from .register_domain.factory import G2PRegisterDomainFactory
-from .register_domain.services import G2PRegisterDomainServiceFarmer, G2PRegisterDomainServiceHousehold
+from .register_domain.services import (
+    G2PRegisterDomainServiceFarmer,
+    G2PRegisterDomainServiceHousehold,
+    install_record_image_url_resolution,
+)
 
 _logger = logging.getLogger(_config.logging_default_logger_name)
 
@@ -39,6 +43,13 @@ class Initializer(BaseInitializer):
     def initialize(self, **kwargs):
         super().initialize()
         CoreInitializer().initialize()
+
+        # Intake reads return record_image_document_id but never the presigned
+        # record_image_url the register-side reads add, so a photo captured at
+        # intake has nothing to render on the approval screen. Patches the
+        # platform class rather than registering a subclass — see the function
+        # for why a subclass cannot win the component lookup.
+        install_record_image_url_resolution()
 
         G2PRegisterDomainFactory()
         G2PRegisterDomainServiceFarmer()
@@ -135,10 +146,36 @@ class Initializer(BaseInitializer):
                 "g2p_register_history_farmers",
                 "g2p_intake_form_farmers",
             ):
+                # Installations created before the Ethiopic column became a
+                # string still have it as DATE, which cannot hold Pagumen
+                # (month 13) at all. Convert in place, rendering any existing
+                # value with to_char so the stored text keeps the same day.
+                # Guarded on the current type so the ALTER is a no-op on the
+                # second and every later boot.
                 await conn.execute(
                     text(
                         f'ALTER TABLE "public"."{table_name}" '
-                        'ADD COLUMN IF NOT EXISTS "birth_date_ec" DATE'
+                        'ADD COLUMN IF NOT EXISTS "birth_date_ec" VARCHAR'
+                    )
+                )
+                await conn.execute(
+                    text(
+                        f"""
+                        DO $$
+                        BEGIN
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                 WHERE table_schema = 'public'
+                                   AND table_name = '{table_name}'
+                                   AND column_name = 'birth_date_ec'
+                                   AND data_type = 'date'
+                            ) THEN
+                                ALTER TABLE "public"."{table_name}"
+                                ALTER COLUMN "birth_date_ec" TYPE VARCHAR
+                                USING to_char("birth_date_ec", 'YYYY-MM-DD');
+                            END IF;
+                        END $$;
+                        """
                     )
                 )
                 await conn.execute(
@@ -170,6 +207,53 @@ class Initializer(BaseInitializer):
                             f'ADD COLUMN IF NOT EXISTS "{geo_column}" VARCHAR'
                         )
                     )
+
+                # Older section-by-section intake saves cleared these list
+                # projections even though the selected location and hierarchy
+                # survived. Recover only missing projections from each row's
+                # own snapshot, including intake and history twins. No location
+                # is invented for farmers who never supplied one.
+                for level, aliases in (
+                    ("region", "'region'"),
+                    ("zone", "'zone', 'district'"),
+                    ("woreda", "'woreda', 'ward'"),
+                    ("kebele", "'kebele', 'village'"),
+                ):
+                    await conn.execute(text(f"""
+                        UPDATE public.{table_name} AS farmer
+                        SET {level}_name = (
+                            SELECT COALESCE(
+                                NULLIF(entry->>'level_value_display_name', ''),
+                                NULLIF(entry->>'level_value_name', ''),
+                                NULLIF(entry->>'display_name', ''),
+                                NULLIF(entry->>'level_value_mnemonic', '')
+                            )
+                            FROM jsonb_array_elements(
+                                farmer.geo_code_hierarchy_json->'hierarchy'
+                            ) AS entry
+                            WHERE lower(entry->>'level_mnemonic') IN ({aliases})
+                            LIMIT 1
+                        )
+                        WHERE NULLIF(farmer.{level}_name, '') IS NULL
+                          AND jsonb_typeof(
+                              farmer.geo_code_hierarchy_json->'hierarchy'
+                          ) = 'array'
+                    """))
+                await conn.execute(text(f"""
+                    UPDATE public.{table_name} AS farmer
+                    SET woreda_level_value_id = (
+                        SELECT entry->>'level_value_id'
+                        FROM jsonb_array_elements(
+                            farmer.geo_code_hierarchy_json->'hierarchy'
+                        ) AS entry
+                        WHERE lower(entry->>'level_mnemonic') IN ('woreda', 'ward')
+                        LIMIT 1
+                    )
+                    WHERE NULLIF(farmer.woreda_level_value_id, '') IS NULL
+                      AND jsonb_typeof(
+                          farmer.geo_code_hierarchy_json->'hierarchy'
+                      ) = 'array'
+                """))
 
             # A row only enters the live register after approval. Project
             # that workflow fact onto existing Farmer rows, and recover
@@ -372,7 +456,10 @@ class Initializer(BaseInitializer):
                             ) AS primary_rank
                         FROM public.g2p_register_farmers AS f
                         CROSS JOIN LATERAL jsonb_array_elements(
-                            coalesce(f.phone_numbers, '[]'::jsonb)
+                            -- New farmers may store JSON null, which COALESCE
+                            -- does not treat as SQL NULL. Expand arrays only.
+                            CASE WHEN jsonb_typeof(f.phone_numbers) = 'array'
+                                 THEN f.phone_numbers ELSE '[]'::jsonb END
                         ) WITH ORDINALITY AS phone(item, ordinality)
                         WHERE nullif(btrim(phone.item->>'number'), '') IS NOT NULL
                     )

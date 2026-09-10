@@ -1,5 +1,19 @@
 -- Phase 1 Farmer detail/intake layout. These section definitions are shared by
 -- Registry View and the Farmer intake form, so both experiences remain aligned.
+--
+-- G2R-47: this file is the EFFECTIVE definition of the two sections it names.
+-- db-seed runs `find ... | sort`, so this file loads after g2p_register_sections.sql
+-- and its UPDATE replaces that file's section_ui_schema wholesale. Required flags
+-- and widget-data-validation added only to g2p_register_sections.sql for these
+-- section_ids are silently discarded at seed time -- which is exactly what happened
+-- to the name validation in 83b4a46. Add per-widget validation HERE.
+-- tests/test_metadata_effective_layer.py fails if the two layers disagree.
+--
+-- The farmer photo is NOT captured here. It briefly was, which made it render
+-- twice on the register detail view -- once in this section and once in the
+-- header section's own picker, both writing the same profile picture. It now
+-- lives in its own section, seeded by zz_farmer_photo_section.sql and attached
+-- to the intake form only; see that file for why.
 UPDATE "public"."g2p_register_sections"
 SET "section_ui_schema" = $schema$
 {
@@ -9,19 +23,19 @@ SET "section_ui_schema" = $schema$
         {
           "panels": [
             {
-              "widgets": [{"widget": "text", "widget-id": "first_name", "widget-type": "input", "widget-label": "first_name_english", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.first_name"}],
+              "widgets": [{"widget": "text", "widget-id": "first_name", "widget-type": "input", "widget-label": "first_name_english", "widget-required": true, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.first_name"}],
               "panel-id": "panel_english_first_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
             },
             {
-              "widgets": [{"widget": "text", "widget-id": "middle_name", "widget-type": "input", "widget-label": "middle_name_english", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name"}],
+              "widgets": [{"widget": "text", "widget-id": "middle_name", "widget-type": "input", "widget-label": "middle_name_english", "widget-required": true, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name"}],
               "panel-id": "panel_english_middle_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
             },
             {
-              "widgets": [{"widget": "text", "widget-id": "last_name", "widget-type": "input", "widget-label": "last_name_english", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_name"}],
+              "widgets": [{"widget": "text", "widget-id": "last_name", "widget-type": "input", "widget-label": "last_name_english", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_name"}],
               "panel-id": "panel_english_last_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
@@ -34,19 +48,19 @@ SET "section_ui_schema" = $schema$
         {
           "panels": [
             {
-              "widgets": [{"widget": "text", "widget-id": "first_name_amh", "widget-type": "input", "widget-label": "first_name_amharic", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.first_name_amh"}],
+              "widgets": [{"widget": "text", "widget-id": "first_name_amh", "widget-type": "input", "widget-label": "first_name_amharic", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.first_name_amh"}],
               "panel-id": "panel_amharic_first_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
             },
             {
-              "widgets": [{"widget": "text", "widget-id": "middle_name_amh", "widget-type": "input", "widget-label": "middle_name_amharic", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name_amh"}],
+              "widgets": [{"widget": "text", "widget-id": "middle_name_amh", "widget-type": "input", "widget-label": "middle_name_amharic", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name_amh"}],
               "panel-id": "panel_amharic_middle_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
             },
             {
-              "widgets": [{"widget": "text", "widget-id": "last_name_amh", "widget-type": "input", "widget-label": "last_name_amharic", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_name_amh"}],
+              "widgets": [{"widget": "text", "widget-id": "last_name_amh", "widget-type": "input", "widget-label": "last_name_amharic", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_name_amh"}],
               "panel-id": "panel_amharic_last_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
@@ -59,19 +73,19 @@ SET "section_ui_schema" = $schema$
         {
           "panels": [
             {
-              "widgets": [{"widget": "text", "widget-id": "first_name_om", "widget-type": "input", "widget-label": "first_name_afaan_oromo", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.first_name_om"}],
+              "widgets": [{"widget": "text", "widget-id": "first_name_om", "widget-type": "input", "widget-label": "first_name_afaan_oromo", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.first_name_om"}],
               "panel-id": "panel_oromo_first_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
             },
             {
-              "widgets": [{"widget": "text", "widget-id": "middle_name_om", "widget-type": "input", "widget-label": "middle_name_afaan_oromo", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name_om"}],
+              "widgets": [{"widget": "text", "widget-id": "middle_name_om", "widget-type": "input", "widget-label": "middle_name_afaan_oromo", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name_om"}],
               "panel-id": "panel_oromo_middle_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
             },
             {
-              "widgets": [{"widget": "text", "widget-id": "last_name_om", "widget-type": "input", "widget-label": "last_name_afaan_oromo", "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_name_om"}],
+              "widgets": [{"widget": "text", "widget-id": "last_name_om", "widget-type": "input", "widget-label": "last_name_afaan_oromo", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_name_om"}],
               "panel-id": "panel_oromo_last_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
@@ -124,15 +138,6 @@ SET "section_ui_schema" = $schema$
       "panels": [
         {
           "widgets": [
-            {
-              "widget": "checkbox",
-              "widget-id": "is_household_head",
-              "widget-type": "input",
-              "widget-label": "is_household_head",
-              "widget-readonly": false,
-              "widget-required": false,
-              "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.is_household_head"
-            },
             {
               "widget": "select",
               "widget-id": "source_of_income",

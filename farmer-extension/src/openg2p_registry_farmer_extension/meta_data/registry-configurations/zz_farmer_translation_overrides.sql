@@ -21,6 +21,11 @@ SET "core_translation" = jsonb_set(
 )::json
 WHERE "language_code" = 'en';
 
+-- Postgres caps function calls at 100 arguments (FUNC_MAX_ARGS), so a single
+-- jsonb_build_object() holds at most 50 label pairs. This statement had grown
+-- past that and was failing wholesale at seed time ("cannot pass more than
+-- 100 arguments to a function"), silently dropping every label in it.
+-- Concatenate multiple <=50-pair objects; add new labels to one with room.
 UPDATE "public"."registry_languages"
 SET "domain_translation" = (
     "domain_translation"::jsonb
@@ -71,11 +76,19 @@ SET "domain_translation" = (
         'middle_name_afaan_oromo', E'Middle Name\n(Afaan Oromo)',
         'last_name_afaan_oromo', E'Last Name\n(Afaan Oromo)',
         'father_included', 'Father Included',
-        'mother_included', 'Mother Included',
+        'mother_included', 'Mother Included'
+    )
+    || jsonb_build_object(
         'number_of_males_in_family', 'Number Of Males In The Family',
         'number_of_females_in_family', 'Number Of Females In The Family',
         'number_of_children_in_family', 'Number Of Children In The Family',
-        'family_size', 'Family Size'
+        'family_size', 'Family Size',
+        -- The seeded label "Other Land Owner" reads as if it asks for a
+        -- person. The flag actually records whether the household farms land
+        -- owned by someone outside the household (cf. the per-parcel
+        -- land_ownership_type enum, which captures the same idea precisely).
+        'other_land_owner', 'Household Farms Land Owned By Others',
+        'farmer_photo', 'Farmer Photo'
     )
 )::json
 WHERE "language_code" = 'en';

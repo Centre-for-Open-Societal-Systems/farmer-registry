@@ -13,4 +13,9 @@ INSERT INTO "public"."g2p_intake_form_ui_tab_sections" ("tab_section_id","tab_id
 ('tab_section_12','a1a4d25a-1cd4-4356-abac-72482724','farmer_farmer_enumerator_section_01',10),
 ('tab_section_13','a1a4d25a-1cd4-4356-abac-72482725','farmer_farmer_consent_requests_section_01',10),
 ('tab_section_14','a1a4d25a-1cd4-4356-abac-72482726','farmer_farmer_consent_receipts_section_01',10),
-('tab_section_15','a1a4d25a-1cd4-4356-abac-72482721','farmer_farmer_birth_information_section_01',25);
+('tab_section_15','a1a4d25a-1cd4-4356-abac-72482721','farmer_farmer_birth_information_section_01',25),
+-- G4: sections that exist on the farmer register but were never attached to the intake
+-- form, so staff had no way to capture them. Same tab as the rest of the farmer intake.
+('tab_section_17','a1a4d25a-1cd4-4356-abac-72482721','farmer_household_household_member_section_02',40),
+('tab_section_18','a1a4d25a-1cd4-4356-abac-72482721','farmer_farm_input_farm_input_details_section_01',100),
+('tab_section_19','a1a4d25a-1cd4-4356-abac-72482721','farmer_membership_membership_details_01',110);

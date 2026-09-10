@@ -13,6 +13,20 @@ from .domain_validation_utils import (
     upload_embedded_file,
     validation_error,
 )
+from .ethiopian_calendar import (
+    ethiopic_to_gregorian,
+    format_ethiopic,
+    gregorian_to_ethiopic_string,
+    parse_ethiopic,
+)
+from .validation_rules import (
+    NAME_FIELDS,
+    NAME_MAX_LENGTH,
+    NAME_PATTERN,
+    REQUIRED_NAME_FIELDS,
+    is_interactive,
+    matches,
+)
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
@@ -35,7 +49,9 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         for record in records:
             self._normalize_booleans(record)
             await self._persist_embedded_profile_photo(record)
+            self._validate_names(record)
             self._validate_birth_date(record)
+            self._sync_ethiopian_birth_date(record)
             self._populate_age_from_birth_date(record)
             self._validate_estimated_age(record)
             await self._sync_flattened_geo_names(record)
@@ -54,15 +70,30 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
 
     @staticmethod
     async def _persist_embedded_profile_photo(record: dict) -> None:
-        """The header widget's photo picker writes the freshly-picked file
-        into record_image_url (a server-computed, read-only field) instead of
-        record_image_document_id (the field an upload should actually write
-        to — record_image_url only exists as an auto-added presigned URL on
-        read, per G2PRegisterService/G2PRegisterHierarchicalService, and isn't
-        a real column). Left as-is, that embedded file is silently dropped on
-        save. Detect it here, upload it properly, and write the resulting
-        document_id to the correct column instead."""
+        """A freshly-picked photo arrives as an embedded base64 blob in one of
+        two places, depending on which widget captured it:
+
+        - The header-section widget's picker writes it into record_image_url
+          (a server-computed, read-only field — it only exists as an
+          auto-added presigned URL on read, per
+          G2PRegisterService/G2PRegisterHierarchicalService, and isn't a real
+          column). Left as-is, that embedded file is silently dropped on save.
+          Both the register detail view (zz_farmer_header_layout.sql) and the
+          intake form's photo section (zz_farmer_photo_section.sql) go this
+          way — the intake section reuses that same widget for its picker.
+        - Any 'file' widget bound straight to record_image_document_id writes
+          the blob into a text column instead of a real document reference —
+          the same trap the Land certificate upload normalizes in
+          _persist_embedded_certificate. The intake photo section was built
+          that way first; the branch stays because it is the shape any future
+          plain-file photo binding would take.
+
+        Either way: upload the bytes properly and store the resulting
+        document_id in record_image_document_id. A plain string (an existing
+        document_id, or None) passes through unchanged."""
         value = record.pop("record_image_url", None)
+        if not is_embedded_file(value):
+            value = record.get("record_image_document_id")
         if not is_embedded_file(value):
             return
         record["record_image_document_id"] = await upload_embedded_file(
@@ -76,6 +107,11 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         SQLAlchemy validator because G2PGeo already owns a validator on
         geo_lowest_level_value_id, and SQLAlchemy does not allow a second
         validator for the same mapped attribute."""
+        # Intake saves one section at a time. Saving Personal Information after
+        # Address must not overwrite the already-persisted location projections
+        # with None. An explicitly submitted empty ID still clears them.
+        if "geo_lowest_level_value_id" not in record:
+            return
         level_value_id = record.get("geo_lowest_level_value_id")
         levels = {"region": None, "zone": None, "woreda": None, "kebele": None}
         level_ids = {"woreda": None}
@@ -279,6 +315,44 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             return None
         return mnemonic.replace("_", " ").replace("-", " ").title()
 
+    def _validate_names(self, record: dict) -> None:
+        """Mirror the name rules the intake form applies in the browser.
+
+        widget-data-validation never reaches bulk import, the partner API or
+        ingestion, so without this the "no partial or corrupt record" guarantee
+        holds for browser traffic only.
+
+        Format is checked on every path -- a name with digits in it is wrong
+        however it arrived. Required is checked only on the interactive paths:
+        roughly 6% of genuine Gen1 farmers have no first name at all, and
+        rejecting those would block the migration rather than improve the data.
+        """
+        interactive = is_interactive(record)
+
+        for field in NAME_FIELDS:
+            # A key that was not submitted at all is a partial update of other
+            # attributes, not an attempt to blank the name.
+            if field not in record:
+                continue
+            value = record.get(field)
+            text = "" if value is None else str(value).strip()
+
+            if not text:
+                if interactive and field in REQUIRED_NAME_FIELDS:
+                    validation_error(f"{field} is required")
+                continue
+
+            if len(text) > NAME_MAX_LENGTH:
+                validation_error(
+                    f"{field} must be {NAME_MAX_LENGTH} characters or fewer"
+                )
+            if not matches(NAME_PATTERN, text):
+                validation_error(
+                    f"{field} may contain only letters (Latin or Ethiopic), "
+                    "spaces, hyphens and apostrophes"
+                )
+            record[field] = text
+
     def _validate_birth_date(self, record: dict) -> None:
         birth_date = parse_date(record.get("birth_date"))
         if birth_date is not None and birth_date > date.today():
@@ -294,6 +368,53 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             validation_error(
                 "estimated_age must be consistent with birth_date within one year"
             )
+
+    def _sync_ethiopian_birth_date(self, record: dict) -> None:
+        """Keep birth_date (Gregorian) and birth_date_ec (Ethiopic) in step.
+
+        Runs here rather than in the date widget so every entry path gets it --
+        web intake, bulk ingestion, the partner API and file import all land in
+        validate_domain_attributes, and only the first of those has a UI.
+
+        Whichever side the enumerator filled derives the other. If both arrive,
+        they must agree: silently rewriting one of two explicitly entered
+        values would hide a data-entry error rather than surface it.
+        """
+        # Only touch the pair when the caller actually submitted at least one
+        # of them. A partial update of, say, marital_status carries neither key
+        # and must not have a birth date derived onto it.
+        has_gc = "birth_date" in record
+        has_ec = "birth_date_ec" in record
+        if not has_gc and not has_ec:
+            return
+
+        gregorian = parse_date(record.get("birth_date"))
+        raw_ec = record.get("birth_date_ec")
+        ethiopic = parse_ethiopic(raw_ec)
+
+        if raw_ec not in (None, "") and ethiopic is None:
+            validation_error(
+                "birth_date_ec must be an Ethiopic date in YYYY-MM-DD form"
+            )
+
+        if ethiopic is not None:
+            try:
+                converted = ethiopic_to_gregorian(*ethiopic)
+            except ValueError as exc:
+                validation_error(str(exc))
+            if gregorian is None:
+                record["birth_date"] = converted
+            elif converted != gregorian:
+                validation_error(
+                    "birth_date_ec does not match birth_date "
+                    f"({format_ethiopic(*ethiopic)} EC is {converted} GC, "
+                    f"not {gregorian})"
+                )
+            # Normalize to the padded string form even when it round-trips, so
+            # a legacy date value or an unpadded entry is rewritten on save.
+            record["birth_date_ec"] = format_ethiopic(*ethiopic)
+        elif gregorian is not None:
+            record["birth_date_ec"] = gregorian_to_ethiopic_string(gregorian)
 
     def _populate_age_from_birth_date(self, record: dict) -> None:
         """Populate the stored Age when a Gregorian birth date is supplied."""

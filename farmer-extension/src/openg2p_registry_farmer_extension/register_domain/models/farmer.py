@@ -21,7 +21,12 @@ class G2PFarmer:
 
     # Ethiopian-calendar date is stored separately from the base G2PPerson
     # Gregorian birth_date so both values can be captured and displayed.
-    birth_date_ec: Mapped[Date] = mapped_column(Date, nullable=True)
+    # Held as a "YYYY-MM-DD" string, not a Date: the Ethiopic year has a 13th
+    # month (Pagumen), and both Python's date and Postgres reject month 13
+    # outright, so a date column silently cannot represent the ~1.4% of
+    # birthdays that fall in it. The string form sorts correctly and
+    # round-trips exactly -- see register_domain/services/ethiopian_calendar.py.
+    birth_date_ec: Mapped[str] = mapped_column(String, nullable=True)
     estimated_age: Mapped[int] = mapped_column(Integer, nullable=True)
     has_personal_phone: Mapped[bool] = mapped_column(Boolean, nullable=True)
     disabled: Mapped[bool] = mapped_column(Boolean, nullable=True)
