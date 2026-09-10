@@ -8,6 +8,12 @@
 -- section_ids are silently discarded at seed time -- which is exactly what happened
 -- to the name validation in 83b4a46. Add per-widget validation HERE.
 -- tests/test_metadata_effective_layer.py fails if the two layers disagree.
+--
+-- The farmer photo is NOT captured here. It briefly was, which made it render
+-- twice on the register detail view -- once in this section and once in the
+-- header section's own picker, both writing the same profile picture. It now
+-- lives in its own section, seeded by zz_farmer_photo_section.sql and attached
+-- to the intake form only; see that file for why.
 UPDATE "public"."g2p_register_sections"
 SET "section_ui_schema" = $schema$
 {

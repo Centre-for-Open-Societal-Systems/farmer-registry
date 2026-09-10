@@ -31,6 +31,13 @@ META = (
 PERSONAL = "farmer_farmer_personal_identification_section_01"
 PHONE = "farmer_farmer_phone_numbers_section_01"
 REG_IDS = "farmer_farmer_reg_ids_section_01"
+PHOTO = "farmer_farmer_photo_section_01"
+# Also the scope of docker/staff-ui/assets/intake-photo-widget.css --
+# HeaderSectionWidget derives its CSS class from this id.
+PHOTO_WIDGET_ID = "farmer-photo"
+
+FARMER_REGISTER = "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd"
+FARMER_INTAKE_TAB = "a1a4d25a-1cd4-4356-abac-72482721"
 
 NAME_FIELDS = [
     "first_name",
@@ -106,11 +113,42 @@ def _override_sections():
     return out
 
 
+# (tab_section_id, [register_id,] tab_id, section_id, section_order) -- the
+# register table carries a register_id column the intake table does not.
+_ROW_PATTERNS = {
+    "g2p_register_ui_tab_sections": (
+        r"\(\s*'[^']+'\s*,\s*'[^']+'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*\d+\s*\)"
+    ),
+    "g2p_intake_form_ui_tab_sections": (
+        r"\(\s*'[^']+'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*\d+\s*\)"
+    ),
+}
+
+
+def _tab_attachments(table):
+    """(tab_id, section_id) pairs INSERTed into a *_ui_tab_sections table,
+    across the base multi-row INSERT and the single-row INSERTs in zz_ files."""
+    out = set()
+    for path in sorted(META.glob("*.sql")):
+        text = path.read_text(encoding="utf-8")
+        for statement in re.split(r";\s*\n", text):
+            if "INSERT" not in statement or table not in statement:
+                continue
+            body = statement.split("VALUES", 1)[-1]
+            out.update(re.findall(_ROW_PATTERNS[table], body))
+    return out
+
+
+def effective_schema(section_id):
+    """The section schema the staff UI actually renders, after seed-order
+    overrides."""
+    override = _override_sections().get(section_id)
+    return override[0] if override else _base_sections()[section_id]
+
+
 def effective_widgets(section_id):
     """The widgets the staff UI actually renders, after seed-order overrides."""
-    override = _override_sections().get(section_id)
-    schema = override[0] if override else _base_sections()[section_id]
-    return _widgets(schema, {})
+    return _widgets(effective_schema(section_id), {})
 
 
 class TestEffectiveLayer(unittest.TestCase):
@@ -145,6 +183,102 @@ class TestEffectiveLayer(unittest.TestCase):
             self.assertTrue(matcher.match(good), f"rejected valid name {good!r}")
         for bad in ("", "123", "@bebe"):
             self.assertFalse(matcher.match(bad), f"accepted invalid name {bad!r}")
+
+    def test_photo_capture_reaches_the_intake_form(self):
+        """The intake form never renders the header section (whose picker is the
+        only other photo entry point), so without a widget bound to the photo
+        column staff cannot capture a farmer photo during intake at all -- the
+        gap the photo section exists to close.
+
+        It reuses header-section rather than the generic 'file' widget because
+        that is the only registered widget with an image picker AND a preview:
+        FileInputWidget shows the chosen file's name, not the photo."""
+        photo = effective_widgets(PHOTO)[PHOTO_WIDGET_ID]
+        self.assertEqual(photo.get("widget"), "header-section")
+        self.assertEqual(
+            photo.get("widget-data-path", {}).get("imageUrl"),
+            # HeaderSectionWidget's picker serializes the pick into the
+            # imageUrl path; _persist_embedded_profile_photo uploads it from
+            # there and stores the document_id (test_farmer_photo_upload.py).
+            f"{FARMER_REGISTER}.record_image_url",
+        )
+
+    def test_photo_widget_carries_no_header_only_paths(self):
+        """Load-bearing, not cosmetic. HeaderSectionWidget renders its status
+        <select> and status-reason <input> unconditionally, and in an editable
+        section they are live controls. Omitting their widget-data-path keys is
+        what stops the widget reading or writing them -- findValue() and
+        updateFieldValue() both return early on a missing path. The stylesheet
+        only hides what is left over."""
+        paths = effective_widgets(PHOTO)[PHOTO_WIDGET_ID].get("widget-data-path", {})
+        for key in (
+            "status",
+            "statusReason",
+            "name",
+            "functionalId",
+            "createdBy",
+            "createdAt",
+            "lastApprovedBy",
+            "lastApprovedAt",
+            "completionScore",
+            "idealScore",
+        ):
+            self.assertNotIn(
+                key,
+                paths,
+                f"{key!r} is bound on the intake photo widget; the header "
+                "section would render (and for status, write) it mid-intake",
+            )
+
+    def test_photo_section_is_editable(self):
+        """buildEditableSection only forces widget-readonly=false when the
+        section says section-editable. HeaderSectionWidget defaults to readonly
+        ("widget-readonly !== false"), and a readonly one renders no
+        Upload/Delete overlay -- an avatar with no way to set it."""
+        self.assertIs(effective_schema(PHOTO).get("section-editable"), True)
+
+    def test_photo_widget_id_matches_the_stylesheet_selector(self):
+        """The stylesheet that trims the header-only rows is scoped by the
+        class HeaderSectionWidget builds from this widget-id. Renaming one
+        without the other silently restores the empty rows."""
+        css = (
+            Path(__file__).resolve().parents[2]
+            / "docker"
+            / "staff-ui"
+            / "assets"
+            / "intake-photo-widget.css"
+        ).read_text(encoding="utf-8")
+        selector = f".header-section-widget-{PHOTO_WIDGET_ID}"
+        self.assertIn(f"{selector} .hdr-info", css)
+        self.assertIn(f"{selector} .hdr-right", css)
+
+    def test_photo_section_is_attached_to_the_intake_form(self):
+        self.assertIn(
+            (FARMER_INTAKE_TAB, PHOTO),
+            _tab_attachments("g2p_intake_form_ui_tab_sections"),
+        )
+
+    def test_photo_is_captured_in_exactly_one_place_per_experience(self):
+        """The register detail view already renders and edits the profile
+        picture through the header section's own picker. A second control on
+        the same tab -- which is what happened while this widget lived in
+        Personal Information, a section attached to both tabs -- shows the
+        farmer photo twice, two inputs writing one field."""
+        personal = effective_widgets(PERSONAL)
+        for widget_id in (PHOTO_WIDGET_ID, "record_image_document_id"):
+            self.assertNotIn(
+                widget_id,
+                personal,
+                "the photo widget is back in Personal Information, which the "
+                "detail view renders alongside the header picker",
+            )
+        for tab_id, section_id in _tab_attachments("g2p_register_ui_tab_sections"):
+            self.assertNotEqual(
+                section_id,
+                PHOTO,
+                f"photo section attached to register tab {tab_id}; the header "
+                "section already carries the picker there",
+            )
 
     def test_required_flags_match_gen1_parity(self):
         widgets = effective_widgets(PERSONAL)

@@ -70,15 +70,30 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
 
     @staticmethod
     async def _persist_embedded_profile_photo(record: dict) -> None:
-        """The header widget's photo picker writes the freshly-picked file
-        into record_image_url (a server-computed, read-only field) instead of
-        record_image_document_id (the field an upload should actually write
-        to — record_image_url only exists as an auto-added presigned URL on
-        read, per G2PRegisterService/G2PRegisterHierarchicalService, and isn't
-        a real column). Left as-is, that embedded file is silently dropped on
-        save. Detect it here, upload it properly, and write the resulting
-        document_id to the correct column instead."""
+        """A freshly-picked photo arrives as an embedded base64 blob in one of
+        two places, depending on which widget captured it:
+
+        - The header-section widget's picker writes it into record_image_url
+          (a server-computed, read-only field — it only exists as an
+          auto-added presigned URL on read, per
+          G2PRegisterService/G2PRegisterHierarchicalService, and isn't a real
+          column). Left as-is, that embedded file is silently dropped on save.
+          Both the register detail view (zz_farmer_header_layout.sql) and the
+          intake form's photo section (zz_farmer_photo_section.sql) go this
+          way — the intake section reuses that same widget for its picker.
+        - Any 'file' widget bound straight to record_image_document_id writes
+          the blob into a text column instead of a real document reference —
+          the same trap the Land certificate upload normalizes in
+          _persist_embedded_certificate. The intake photo section was built
+          that way first; the branch stays because it is the shape any future
+          plain-file photo binding would take.
+
+        Either way: upload the bytes properly and store the resulting
+        document_id in record_image_document_id. A plain string (an existing
+        document_id, or None) passes through unchanged."""
         value = record.pop("record_image_url", None)
+        if not is_embedded_file(value):
+            value = record.get("record_image_document_id")
         if not is_embedded_file(value):
             return
         record["record_image_document_id"] = await upload_embedded_file(

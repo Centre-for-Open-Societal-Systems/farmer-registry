@@ -30,7 +30,11 @@ from .register_domain.models import (
     G2PIntakeFormConsentRequest, G2PIntakeFormConsentReceipt,
 )
 from .register_domain.factory import G2PRegisterDomainFactory
-from .register_domain.services import G2PRegisterDomainServiceFarmer, G2PRegisterDomainServiceHousehold
+from .register_domain.services import (
+    G2PRegisterDomainServiceFarmer,
+    G2PRegisterDomainServiceHousehold,
+    install_record_image_url_resolution,
+)
 
 _logger = logging.getLogger(_config.logging_default_logger_name)
 
@@ -39,6 +43,13 @@ class Initializer(BaseInitializer):
     def initialize(self, **kwargs):
         super().initialize()
         CoreInitializer().initialize()
+
+        # Intake reads return record_image_document_id but never the presigned
+        # record_image_url the register-side reads add, so a photo captured at
+        # intake has nothing to render on the approval screen. Patches the
+        # platform class rather than registering a subclass — see the function
+        # for why a subclass cannot win the component lookup.
+        install_record_image_url_resolution()
 
         G2PRegisterDomainFactory()
         G2PRegisterDomainServiceFarmer()
