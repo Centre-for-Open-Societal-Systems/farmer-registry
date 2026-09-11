@@ -19,11 +19,10 @@ pipeline {
        
         STAFF_UI_VERSION = "1.1.1"
 
+        // No DASHBOARD_URL: nothing serves the dashboard in this deployment, so the
+        // staff UI is built without its Dashboard header button (staff-ui passes an
+        // empty DASHBOARD_URL below). Set one again once dashboard-ui is deployed.
 
-        DASHBOARD_URL   = "https://farmer-dashboard.oanstaging.com"
-        DASHBOARD_LABEL = "Dashboard"
-
-    
         NEXT_PUBLIC_PORTAL_URL = "http://portal.localtest.me:3000"
 
         HELM_RELEASE   = "farmer-registry"
@@ -51,7 +50,7 @@ pipeline {
 
                     def components = [
                         [name: 'staff-api',     dockerfile: 'docker/staff-api/Dockerfile',     args: "--build-arg RP_VERSION=${RP_VERSION}"],
-                        [name: 'staff-ui',      dockerfile: 'docker/staff-ui/Dockerfile',      args: "--build-arg STAFF_UI_VERSION=${STAFF_UI_VERSION} --build-arg DASHBOARD_URL=${DASHBOARD_URL} --build-arg DASHBOARD_LABEL=${DASHBOARD_LABEL}"],
+                        [name: 'staff-ui',      dockerfile: 'docker/staff-ui/Dockerfile',      args: "--build-arg STAFF_UI_VERSION=${STAFF_UI_VERSION} --build-arg DASHBOARD_URL="],
                         [name: 'partner-api',   dockerfile: 'docker/partner-api/Dockerfile',   args: "--build-arg RP_VERSION=${RP_VERSION}"],
                         [name: 'celery',        dockerfile: 'docker/celery/Dockerfile',        args: "--build-arg RP_VERSION=${RP_VERSION}"],
                         [name: 'db-seed',       dockerfile: 'docker/db-seed/Dockerfile',       args: "--build-arg RP_VERSION=${RP_VERSION}"],
@@ -85,7 +84,11 @@ pipeline {
         }
 
         stage('Deploy to Staging (far namespace)') {
+            // beforeAgent: decide before asking for vpn-agent2. Without it every build
+            // waits for that node first, and one with DEPLOY_TO_FAR off queues
+            // forever while it is offline instead of skipping this stage.
             when {
+                beforeAgent true
                 allOf {
                     branch 'develop'
                     expression { return params.DEPLOY_TO_FAR }
@@ -108,7 +111,7 @@ registry:
     image:
       repository: ${ECR_REGISTRY}/${ECR_PATH}/staff-api
       tag: "${env.IMAGE_TAG}"
-  staffPortalUi:
+  staffUi:
     image:
       repository: ${ECR_REGISTRY}/${ECR_PATH}/staff-ui
       tag: "${env.IMAGE_TAG}"
@@ -132,15 +135,40 @@ registry:
     image:
       repository: ${ECR_REGISTRY}/${ECR_PATH}/sanity-tests
       tag: "${env.IMAGE_TAG}"
+# Registry only. The chart's analytics layer -- the bulk sample-data generator,
+# reporting views and their hourly refresh, the Superset dashboard import and
+# the Insights maps content -- is left out of this deploy.
+analytics:
+  bulkSample:
+    enabled: false
+  reportingViews:
+    enabled: false
+  dashboards:
+    enabled: false
+mapsContent:
+  enabled: false
 EOF
 
-                        # Dry-run render + diff BEFORE the real upgrade/install.
-                     
-                        helm get values ${HELM_RELEASE} -n ${HELM_NAMESPACE} -a -o yaml > /tmp/far-values-current-\${BUILD_NUMBER}.yaml || true
-                        helm template ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml > /tmp/far-new-\${BUILD_NUMBER}.yaml
-                        echo "Rendered \$(wc -l < /tmp/far-new-\${BUILD_NUMBER}.yaml) lines from this repo's own chart -- review against /tmp/far-values-current-\${BUILD_NUMBER}.yaml before trusting an automatic run, especially the first one."
+                        # Keep the release's own values (hostnames, Keycloak and IAM
+                        # wiring, cookie domain) and change only what this build owns.
+                        # The chart defaults render placeholder *.openg2p.org hosts, so
+                        # upgrading from the CI file alone would reset the live
+                        # environment to them. Only a missing release (a first install)
+                        # may go ahead without values; any other read failure stops here.
+                        if ! helm get values ${HELM_RELEASE} -n ${HELM_NAMESPACE} -o yaml > /tmp/far-values-current-\${BUILD_NUMBER}.yaml 2> /tmp/far-values-current-\${BUILD_NUMBER}.err; then
+                            grep -q 'release: not found' /tmp/far-values-current-\${BUILD_NUMBER}.err || { cat /tmp/far-values-current-\${BUILD_NUMBER}.err; exit 1; }
+                            echo "No ${HELM_RELEASE} release in ${HELM_NAMESPACE} yet -- installing with the chart defaults."
+                            : > /tmp/far-values-current-\${BUILD_NUMBER}.yaml
+                        fi
+
+                        # Dry-run render of exactly what the upgrade below applies.
+                        helm template ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} \
+                            -f /tmp/far-values-current-\${BUILD_NUMBER}.yaml \
+                            -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml > /tmp/far-new-\${BUILD_NUMBER}.yaml
+                        echo "Rendered \$(wc -l < /tmp/far-new-\${BUILD_NUMBER}.yaml) lines to /tmp/far-new-\${BUILD_NUMBER}.yaml"
 
                         helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} \
+                            -f /tmp/far-values-current-\${BUILD_NUMBER}.yaml \
                             -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml --timeout 20m
 
                        

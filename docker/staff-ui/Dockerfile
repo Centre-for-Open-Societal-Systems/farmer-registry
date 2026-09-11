@@ -24,7 +24,8 @@ FROM openg2p/openg2p-registry-staff-portal-ui:${STAFF_UI_VERSION}
 # Browser-facing origin of the dashboard service. It is compiled into the client
 # bundle by patch-dashboard-nav.js below, so changing it needs a rebuild. The
 # default matches the dashboard-ui service's published port in
-# docker-compose.yml.
+# docker-compose.yml. Pass it empty to build without the Dashboard button, for a
+# deployment that runs no dashboard service.
 ARG DASHBOARD_URL=http://localhost:3002
 ARG DASHBOARD_LABEL=Dashboard
 
@@ -90,5 +91,9 @@ RUN find /app/.next -type f -name '*.js' -exec sed -i \
 # dashboard-ui service, and passes the page it left behind as ?returnUrl= for
 # the dashboard's own Back button to read.
 COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
-RUN DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
-    node /tmp/patch-dashboard-nav.js
+RUN if [ -n "${DASHBOARD_URL}" ]; then \
+        DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
+        node /tmp/patch-dashboard-nav.js; \
+    else \
+        echo "DASHBOARD_URL is empty -- building without the Dashboard button"; \
+    fi
