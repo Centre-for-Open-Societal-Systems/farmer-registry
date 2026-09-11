@@ -56,7 +56,10 @@ pipeline {
                         [name: 'celery',        dockerfile: 'docker/celery/Dockerfile',        args: "--build-arg RP_VERSION=${RP_VERSION}"],
                         [name: 'db-seed',       dockerfile: 'docker/db-seed/Dockerfile',       args: "--build-arg RP_VERSION=${RP_VERSION}"],
                         [name: 'sanity-tests',  dockerfile: 'docker/sanity-tests/Dockerfile',  args: "--build-arg RP_VERSION=${RP_VERSION}"],
-                        [name: 'dashboard-ui',  dockerfile: 'docker/dashboard-ui/Dockerfile',  args: "--build-arg NEXT_PUBLIC_PORTAL_URL=${NEXT_PUBLIC_PORTAL_URL}"],
+                        // dashboard-ui is skipped until dashboard-ui/lib/ is committed -- it
+                        // cannot build from a clean checkout without it. The Helm chart does
+                        // not deploy this image, so nothing downstream depends on it yet.
+                        // [name: 'dashboard-ui',  dockerfile: 'docker/dashboard-ui/Dockerfile',  args: "--build-arg NEXT_PUBLIC_PORTAL_URL=${NEXT_PUBLIC_PORTAL_URL}"],
                     ]
 
                     components.each { c ->

@@ -14,9 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-# The Python `lib/` rule above also swallows the dashboard's TypeScript sources.
-!dashboard-ui/lib/
+# Anchored to the root: an unanchored `lib/` also swallowed dashboard-ui/lib/.
+/lib/
 lib64/
 parts/
 sdist/
