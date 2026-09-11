@@ -60,13 +60,19 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
     def _normalize_booleans(record: dict) -> None:
         # Select/dropdown-backed booleans (e.g. "Are You a Household Head?")
         # submit the string 'true'/'false' rather than a real bool, which
-        # asyncpg rejects outright ("Not a boolean value: 'true'"). Checkbox
-        # widgets left untouched submit '' instead, which fails the same way.
+        # asyncpg rejects outright ("Not a boolean value: 'true'"). A control
+        # left untouched submits '' instead, which fails the same way.
         # as_bool() normalizes both; anything already a real bool passes
         # through unchanged.
+        #
+        # '' maps to None, not False: every one of these is optional, so an
+        # unanswered Yes/No is "not asked", which is distinct from "No" and
+        # must stay NULL in the (nullable) columns -- the same rule the
+        # household service applies to its flags. Readers only test
+        # truthiness, so None and False behave alike downstream.
         for field in ("has_personal_phone", "disabled", "is_psnp_user", "is_household_head"):
             if not isinstance(record.get(field), bool):
-                record[field] = as_bool(record.get(field)) or False
+                record[field] = as_bool(record.get(field))
 
     @staticmethod
     async def _persist_embedded_profile_photo(record: dict) -> None:
@@ -444,6 +450,7 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             "last_name",
             "foundational_id",
             "middle_name",
+            "father_first_name",
             "given_name",
             "gender",
             "birth_date",

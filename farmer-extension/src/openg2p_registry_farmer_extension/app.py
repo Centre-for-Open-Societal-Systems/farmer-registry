@@ -190,6 +190,18 @@ class Initializer(BaseInitializer):
                         'ADD COLUMN IF NOT EXISTS "import_source" VARCHAR'
                     )
                 )
+                # Father's name triple (see models/farmer.py). Declared on the
+                # model, so create_all() covers fresh databases; this covers the
+                # ones that already existed.
+                for father_column in (
+                    "father_first_name", "father_middle_name", "father_last_name",
+                ):
+                    await conn.execute(
+                        text(
+                            f'ALTER TABLE "public"."{table_name}" '
+                            f'ADD COLUMN IF NOT EXISTS "{father_column}" VARCHAR'
+                        )
+                    )
                 # region_name/zone_name/woreda_name/kebele_name were declared
                 # on the model (flattened out of geo_code_hierarchy_json) but
                 # never had a matching ALTER TABLE entry here — the same
@@ -305,6 +317,51 @@ class Initializer(BaseInitializer):
                     """
                 )
             )
+
+            # Until the father's name became its own first/middle/last
+            # triple, the intake form's mandatory second name was "Middle
+            # Name" -- and, Ethiopian naming having no middle name of its
+            # own, that slot held the father's name (validation_rules
+            # REQUIRED_NAME_FIELDS was first_name + middle_name). Move it
+            # across for every record a person typed in, so those farmers
+            # satisfy the new required father_first_name without staff
+            # re-entering it, and so "Middle Name" stops displaying a
+            # father as the farmer's own name.
+            #
+            # Only form-entered records: for imports and partner feeds the
+            # source system decides what middle_name means, and the seed's
+            # own sample pack fills it with genuine middle names. Rows that
+            # already carry a father_first_name are left alone, which is
+            # what makes this safe to re-run on every boot. Intake drafts
+            # have no import_source -- they are form-entered by definition.
+            for table_name, source_filter in (
+                (
+                    "g2p_register_farmers",
+                    "AND upper(import_source) IN "
+                    "('INTAKE_FORM', 'STAFF_PORTAL', 'AGENT_PORTAL', "
+                    "'BENEFICIARY_PORTAL')",
+                ),
+                ("g2p_intake_form_farmers", ""),
+            ):
+                moved = await conn.execute(
+                    text(
+                        f"""
+                        UPDATE public.{table_name}
+                        SET father_first_name = middle_name,
+                            middle_name = NULL
+                        WHERE NULLIF(father_first_name, '') IS NULL
+                          AND NULLIF(middle_name, '') IS NOT NULL
+                          {source_filter}
+                        """
+                    )
+                )
+                if moved.rowcount:
+                    _logger.info(
+                        "Moved middle_name into father_first_name for %s "
+                        "form-entered rows of %s",
+                        moved.rowcount,
+                        table_name,
+                    )
 
             # Existing seed/import data often contains a Gregorian birth
             # date but leaves the legacy estimated_age field empty. Keep

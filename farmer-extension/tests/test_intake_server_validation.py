@@ -58,9 +58,33 @@ class TestFarmerNameValidation(unittest.TestCase):
         with self.assertRaises(G2PRegistryException):
             self.validate(record)
 
+    def test_fathers_first_name_required_on_the_form(self):
+        """Gen1 parity: the farmer's first name and the father's first name are
+        the two mandatory identifiers."""
+        record = {"import_source": "INTAKE_FORM", "first_name": "Abebe", "father_first_name": ""}
+        with self.assertRaises(G2PRegistryException) as ctx:
+            self.validate(record)
+        self.assertIn("father_first_name is required", str(ctx.exception))
+
+    def test_middle_name_is_optional(self):
+        """The father is captured as his own triple, so the farmer's middle_name no
+        longer stands in for him and must not block a save."""
+        record = {"import_source": "INTAKE_FORM", "first_name": "Abebe", "middle_name": "", "father_first_name": "Kebede"}
+        self.validate(record)  # must not raise
+
+    def test_fathers_other_names_stay_optional(self):
+        record = {"import_source": "INTAKE_FORM", "first_name": "Abebe", "father_first_name": "Kebede", "father_middle_name": "", "father_last_name": ""}
+        self.validate(record)  # must not raise
+
+    def test_fathers_name_format_is_checked(self):
+        record = {"import_source": "INTAKE_FORM", "first_name": "Abebe", "father_first_name": "Kebede2"}
+        with self.assertRaises(G2PRegistryException) as ctx:
+            self.validate(record)
+        self.assertIn("father_first_name", str(ctx.exception))
+
     def test_grandfather_name_stays_optional(self):
         """Gen1 fill is 26%; parity means it must not block a save."""
-        record = {"import_source": "INTAKE_FORM", "first_name": "Abebe", "middle_name": "Kebede", "last_name": ""}
+        record = {"import_source": "INTAKE_FORM", "first_name": "Abebe", "father_first_name": "Kebede", "last_name": ""}
         self.validate(record)  # must not raise
 
     def test_absent_key_is_not_a_blank_value(self):
@@ -109,3 +133,28 @@ class TestRegIdValueValidation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFarmerBooleanNormalization(unittest.TestCase):
+    def setUp(self):
+        self.normalize = G2PRegisterDomainServiceFarmer._normalize_booleans
+
+    def test_select_strings_become_booleans(self):
+        record = {"disabled": "true", "is_psnp_user": "false"}
+        self.normalize(record)
+        self.assertIs(record["disabled"], True)
+        self.assertIs(record["is_psnp_user"], False)
+
+    def test_unanswered_stays_null_not_no(self):
+        """An untouched Yes/No control submits ''. That is "not asked", which
+        is distinct from "No" and must reach the nullable column as NULL."""
+        record = {"disabled": "", "is_psnp_user": None}
+        self.normalize(record)
+        self.assertIsNone(record["disabled"])
+        self.assertIsNone(record["is_psnp_user"])
+
+    def test_real_booleans_pass_through(self):
+        record = {"disabled": False, "has_personal_phone": True}
+        self.normalize(record)
+        self.assertIs(record["disabled"], False)
+        self.assertIs(record["has_personal_phone"], True)

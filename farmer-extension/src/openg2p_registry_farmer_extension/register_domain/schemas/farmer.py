@@ -43,6 +43,9 @@ class G2PSchemaFarmer:
     first_name_om: Optional[str] = None
     middle_name_om: Optional[str] = None
     last_name_om: Optional[str] = None
+    father_first_name: Optional[str] = None
+    father_middle_name: Optional[str] = None
+    father_last_name: Optional[str] = None
 
     enumerator_name: Optional[str] = None
     enumerator_user_id: Optional[str] = None

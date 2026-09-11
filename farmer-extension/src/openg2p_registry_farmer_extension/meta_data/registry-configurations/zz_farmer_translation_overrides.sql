@@ -88,7 +88,11 @@ SET "domain_translation" = (
         -- owned by someone outside the household (cf. the per-parcel
         -- land_ownership_type enum, which captures the same idea precisely).
         'other_land_owner', 'Household Farms Land Owned By Others',
-        'farmer_photo', 'Farmer Photo'
+        'farmer_photo', 'Farmer Photo',
+        'names_father', E'Father''s Name',
+        'father_first_name', E'Father''s First Name',
+        'father_middle_name', E'Father''s Middle Name',
+        'father_last_name', E'Father''s Last Name'
     )
 )::json
 WHERE "language_code" = 'en';
