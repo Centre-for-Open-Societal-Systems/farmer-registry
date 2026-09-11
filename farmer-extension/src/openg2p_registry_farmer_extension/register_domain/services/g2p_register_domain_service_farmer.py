@@ -70,7 +70,17 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         # must stay NULL in the (nullable) columns -- the same rule the
         # household service applies to its flags. Readers only test
         # truthiness, so None and False behave alike downstream.
+        #
+        # Only touch keys the caller actually sent. Intake saves one section
+        # at a time and the platform writes back every key present in the
+        # record, None included -- so adding a key here for a flag that lives
+        # in another section (disabled and is_psnp_user in Socio-economic,
+        # is_household_head in Household) nulled that column on every save of
+        # Personal Information, Birth, Location, ... Same rule as
+        # _validate_names: an absent key is a partial update, not a blank.
         for field in ("has_personal_phone", "disabled", "is_psnp_user", "is_household_head"):
+            if field not in record:
+                continue
             if not isinstance(record.get(field), bool):
                 record[field] = as_bool(record.get(field))
 
