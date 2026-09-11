@@ -18,6 +18,7 @@ class G2PFarmer:
     # register list without joining workflow tables in the search endpoint.
     state: Mapped[FarmerStateEnum] = mapped_column(String, nullable=True)
     import_source: Mapped[FarmerImportSourceEnum] = mapped_column(String, nullable=True)
+    is_duplicated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=True)
 
     # Ethiopian-calendar date is stored separately from the base G2PPerson
     # Gregorian birth_date so both values can be captured and displayed.
