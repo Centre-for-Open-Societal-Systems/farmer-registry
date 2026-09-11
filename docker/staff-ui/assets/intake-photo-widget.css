@@ -1,0 +1,30 @@
+
+/* ------------------------------------------------------------------------
+ * Intake-form "Farmer Photo" section (zz_farmer_photo_section.sql).
+ *
+ * The section reuses the header-section widget purely as a photo picker,
+ * because it is the only registered widget that previews an image. The
+ * widget's name and score ring render conditionally, but the Functional
+ * Record ID / Record Status / Status Reason rows (.hdr-info) and the
+ * created / approved metadata block (.hdr-right) render unconditionally --
+ * and in an editable section the status row is a live <select> and the
+ * reason a live <input>, neither of which belongs mid-intake.
+ *
+ * widget-data-path deliberately omits those keys, so the widget already
+ * reads and writes nothing for them; what is left is empty chrome. Hide it.
+ *
+ * Scoped to the widget-id from the seed ("farmer-photo") so the register
+ * detail header, which uses the same widget with a different id, is
+ * untouched. The widget injects its own <style> at render time, after the
+ * bundled stylesheet, so !important is needed to win the tie.
+ * --------------------------------------------------------------------- */
+html body .header-section-widget-farmer-photo .hdr-info,
+html body .header-section-widget-farmer-photo .hdr-right {
+  display: none !important;
+}
+
+/* Without the metadata rows the avatar is the whole widget; drop the 35px
+ * top padding that was sized to line the rows up with the detail header. */
+html body .header-section-widget-farmer-photo {
+  padding-top: 8px !important;
+}
