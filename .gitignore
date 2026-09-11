@@ -15,6 +15,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+# The Python `lib/` rule above also swallows the dashboard's TypeScript sources.
+!dashboard-ui/lib/
 lib64/
 parts/
 sdist/
