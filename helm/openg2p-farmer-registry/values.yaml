@@ -329,3 +329,26 @@ mapsContent:
   # Defaults to <release>-maps-content. Whatever this resolves to is what goes
   # into the Insights chart as insightMaps.build.content.configMap.
   nameOverride: ""
+
+# ── Public staff portal UI ───────────────────────────────────────────────────
+# A second staff UI for an environment's public hostname, rendered by
+# templates/staff-ui-public.yaml. The UI takes its origin, cookie domain, IAM URL
+# and login provider from env, so the subchart's own staff UI cannot also answer
+# on a public hostname.
+#
+# It runs registry.staffUi.image, which CI sets on every deploy, so a deploy
+# refreshes both UIs. Off by default: an environment that publishes the portal
+# enables it and supplies the complete env in its release values.
+publicStaffUi:
+  enabled: false
+  replicas: 1
+  # Every variable the staff UI reads, as NAME: value. Values may use templates.
+  env: {}
+  volumes: []
+  volumeMounts: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 768Mi

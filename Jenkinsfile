@@ -16,8 +16,8 @@ pipeline {
      
         RP_VERSION     = "0.0.0-develop.384"
 
-       
-        STAFF_UI_VERSION = "1.1.1"
+        // No STAFF_UI_VERSION here: the staff-ui target in the root Dockerfile owns
+        // that pin, so CI builds the base image the developers build against.
 
         // No DASHBOARD_URL: nothing serves the dashboard in this deployment, so the
         // staff UI is built without its Dashboard header button (staff-ui passes an
@@ -48,13 +48,19 @@ pipeline {
                 script {
                     env.IMAGE_TAG = env.GIT_COMMIT.take(12)
 
+                    // Build the root Dockerfile's targets, the same definition docker
+                    // compose builds, so CI ships what the developers run. The
+                    // per-component docker/*/Dockerfile copies had drifted from it:
+                    // staff-ui was still on the 1.1.1 base without the intake photo
+                    // widget styles, and staff-api, partner-api and celery lacked
+                    // docker/patches/patch_platform.py. sanity-tests has no root target.
                     def components = [
-                        [name: 'staff-api',     dockerfile: 'docker/staff-api/Dockerfile',     args: "--build-arg RP_VERSION=${RP_VERSION}"],
-                        [name: 'staff-ui',      dockerfile: 'docker/staff-ui/Dockerfile',      args: "--build-arg STAFF_UI_VERSION=${STAFF_UI_VERSION} --build-arg DASHBOARD_URL="],
-                        [name: 'partner-api',   dockerfile: 'docker/partner-api/Dockerfile',   args: "--build-arg RP_VERSION=${RP_VERSION}"],
-                        [name: 'celery',        dockerfile: 'docker/celery/Dockerfile',        args: "--build-arg RP_VERSION=${RP_VERSION}"],
-                        [name: 'db-seed',       dockerfile: 'docker/db-seed/Dockerfile',       args: "--build-arg RP_VERSION=${RP_VERSION}"],
-                        [name: 'sanity-tests',  dockerfile: 'docker/sanity-tests/Dockerfile',  args: "--build-arg RP_VERSION=${RP_VERSION}"],
+                        [name: 'staff-api',     dockerfile: 'Dockerfile', target: 'staff-api',   args: "--build-arg RP_VERSION=${RP_VERSION}"],
+                        [name: 'staff-ui',      dockerfile: 'Dockerfile', target: 'staff-ui',    args: "--build-arg DASHBOARD_URL="],
+                        [name: 'partner-api',   dockerfile: 'Dockerfile', target: 'partner-api', args: "--build-arg RP_VERSION=${RP_VERSION}"],
+                        [name: 'celery',        dockerfile: 'Dockerfile', target: 'celery',      args: "--build-arg RP_VERSION=${RP_VERSION}"],
+                        [name: 'db-seed',       dockerfile: 'Dockerfile', target: 'db-seed',     args: "--build-arg RP_VERSION=${RP_VERSION}"],
+                        [name: 'sanity-tests',  dockerfile: 'docker/sanity-tests/Dockerfile',    args: "--build-arg RP_VERSION=${RP_VERSION}"],
                         // dashboard-ui is skipped until dashboard-ui/lib/ is committed -- it
                         // cannot build from a clean checkout without it. The Helm chart does
                         // not deploy this image, so nothing downstream depends on it yet.
@@ -64,8 +70,9 @@ pipeline {
                     components.each { c ->
                         def image  = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${env.IMAGE_TAG}"
                         def latest = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:develop"
+                        def target = c.target ? "--target ${c.target}" : ''
                         sh """
-                            docker build ${c.args} \
+                            docker build ${c.args} ${target} \
                                 -f ${c.dockerfile} -t ${image} -t ${latest} .
                             docker push ${image}
                             docker push ${latest}
