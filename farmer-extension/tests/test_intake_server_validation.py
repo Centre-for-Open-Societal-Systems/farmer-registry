@@ -158,3 +158,13 @@ class TestFarmerBooleanNormalization(unittest.TestCase):
         self.normalize(record)
         self.assertIs(record["disabled"], False)
         self.assertIs(record["has_personal_phone"], True)
+
+    def test_absent_flags_are_not_added(self):
+        """Intake saves one section at a time and the platform persists every
+        key in the record, None included. Adding a flag the section never sent
+        nulls a column another section owns (disabled / is_psnp_user live in
+        Socio-economic, is_household_head in Household) on every unrelated
+        save."""
+        record = {"first_name": "Abebe", "father_first_name": "Kebede"}
+        self.normalize(record)
+        self.assertEqual(record, {"first_name": "Abebe", "father_first_name": "Kebede"})

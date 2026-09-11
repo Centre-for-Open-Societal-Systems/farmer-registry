@@ -145,10 +145,21 @@ templates — does.
   `upgrade-insecure-requests` to the policy it builds from the `CSP_SRC_*`
   variables, which makes the browser reissue every stylesheet, script and image
   over https. Nothing here serves TLS, so all of them fail and the portal is
-  stuck on its "Loading..." shell. `CSP_HEADER` on the `staff-ui` service
-  replaces the generated policy outright and is that same policy without the
-  upgrade directive. A deployment behind TLS should drop the override and let the
-  image build the policy itself.
+  stuck on its "Loading..." shell. `CSP_HEADER` on the staff UI service replaces
+  the generated policy outright: the same policy without the upgrade directive,
+  and with the MinIO origin added to `img-src` — the default `img-src 'self'
+  blob: data:` blocks every MinIO-hosted image (farmer photo, land certificate),
+  and the photo widget then shows its placeholder as if nothing had been
+  uploaded. A deployment behind TLS should drop `CSP_HEADER` and instead set
+  `CSP_SRC_IMG="'self' blob: data: https://<public MinIO host>"`.
+- **MinIO must be reachable from the browser under the API's own endpoint
+  name.** Presigned document URLs are signed against the API's `MINIO_ENDPOINT`
+  and the signature covers the Host header. `minio:9000` only resolves inside
+  the Docker network, so the stack points the staff and partner APIs at
+  `minio.localtest.me:9000` and gives the MinIO container that name as a
+  network alias: inside the network it resolves to the container, on the host
+  to `127.0.0.1` and the published port. A deployment must likewise hand the
+  APIs a MinIO endpoint that browsers can resolve.
 - **Ports are baked into two files.** `local/keycloak/realm-staff.json` and
   `local/iam/login_providers.json` contain absolute URLs, so changing
   `STAFF_UI_PORT`, `IAM_PORT` or `KEYCLOAK_PORT` in `local/.env` means updating
