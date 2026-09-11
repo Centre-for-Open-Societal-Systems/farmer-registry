@@ -58,10 +58,13 @@ ID_TYPE_PATTERNS = {
     "RID": NATIONAL_ID_PATTERN,
 }
 
-# Gen1 parity: first name (94% fill) and father's name. last_name holds the
-# grandfather's name at 26%, birth_date is 10% and phone 13% -- requiring any of
-# those would make the majority of genuine Gen1 records impossible to save.
-REQUIRED_NAME_FIELDS = ("first_name", "middle_name")
+# Gen1 parity: the farmer's first name (94% fill) and the father's first name.
+# The father is captured as his own first/middle/last triple rather than
+# standing in for the farmer's middle_name, which is therefore optional again.
+# last_name holds the grandfather's name at 26%, birth_date is 10% and phone
+# 13% -- requiring any of those would make the majority of genuine Gen1
+# records impossible to save.
+REQUIRED_NAME_FIELDS = ("first_name", "father_first_name")
 
 NAME_FIELDS = (
     "first_name",
@@ -73,6 +76,9 @@ NAME_FIELDS = (
     "first_name_om",
     "middle_name_om",
     "last_name_om",
+    "father_first_name",
+    "father_middle_name",
+    "father_last_name",
 )
 
 # Paths where a human is filling in a form and can be asked for a missing field.

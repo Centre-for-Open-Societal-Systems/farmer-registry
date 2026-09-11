@@ -61,6 +61,7 @@ COPY --chown=nextjs:nodejs docker/staff-ui/assets/farm_image.jpeg /app/public/im
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/people.svg /app/public/images/common/people.svg
 COPY docker/staff-ui/assets/detail-field-wrapping.css /tmp/detail-field-wrapping.css
 COPY docker/staff-ui/assets/staff-ui-1.2-regressions.css /tmp/staff-ui-1.2-regressions.css
+COPY docker/staff-ui/assets/intake-photo-widget.css /tmp/intake-photo-widget.css
 
 # Prefer the human-readable form description while retaining the mnemonic as
 # a fallback for records that do not yet have a description.
@@ -89,6 +90,11 @@ RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
 # card. Both reproduce on the stock image with no overlay applied.
 RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
     -e '$r /tmp/staff-ui-1.2-regressions.css' {} \;
+
+# Hide the record-metadata chrome of the header-section widget where the
+# intake form reuses it as a bare photo picker (zz_farmer_photo_section.sql).
+RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
+    -e '$r /tmp/intake-photo-widget.css' {} \;
 
 # Ignore a legacy dashboard_image value and use the transparent extension
 # asset, which removes the people illustration without changing base source.

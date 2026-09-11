@@ -291,9 +291,11 @@ def load_people_from_mds() -> tuple:
 
     individuals = []
     for i in inds:
-        # The registry's columns are first/middle/last. A pack that names people
-        # as given name + father's name maps onto first + last; middle stays
-        # empty rather than being filled with something the country does not use.
+        # A pack that names people as given name + father's name maps onto
+        # first + last for display, and the father also goes into his own
+        # father_first_name column (the intake form's mandatory second name).
+        # middle stays empty rather than being filled with something the
+        # country does not use.
         individuals.append({
             "internal_record_id": i["individual_id"],
             "functional_record_id": i["individual_id"],
@@ -302,6 +304,7 @@ def load_people_from_mds() -> tuple:
             "first_name": i.get("given_name"),
             "middle_name": None,
             "last_name": i.get("fathers_name"),
+            "father_first_name": i.get("fathers_name"),
             "given_name": i.get("given_name"),
             "gender": i.get("gender"),
             # Only a birth year is carried; a made-up day and month would read as
@@ -559,6 +562,7 @@ def insert_farmers(cur, individuals: list, extras_by_id: dict) -> None:
         "created_by", "created_at", "last_approved_at", "last_approved_by",
         "search_text", "record_status", "record_status_reason",
         "foundational_id", "first_name", "middle_name", "last_name",
+        "father_first_name",
         "given_name", "prefix", "suffix", "gender", "birth_date",
         "phone_numbers", "emails", "marital_status", "occupation",
         "income_level", "language_code", "registration_date",
@@ -582,7 +586,9 @@ def insert_farmers(cur, individuals: list, extras_by_id: dict) -> None:
                 SEEDER, CREATED_AT, CREATED_AT, SEEDER,
                 search_text_person(ind), "ACTIVE", None,
                 ind.get("foundational_id"), ind["first_name"],
-                ind.get("middle_name"), ind["last_name"], ind["given_name"],
+                ind.get("middle_name"), ind["last_name"],
+                ind.get("father_first_name"),
+                ind["given_name"],
                 None, None, ind["gender"], ind["birth_date"],
                 to_json(ind.get("phone_numbers")),
                 to_json([{"type": "personal", "address": ind["emails"], "is_primary": True}]

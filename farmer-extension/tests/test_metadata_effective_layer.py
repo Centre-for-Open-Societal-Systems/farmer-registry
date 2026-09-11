@@ -49,12 +49,20 @@ NAME_FIELDS = [
     "first_name_om",
     "middle_name_om",
     "last_name_om",
+    "father_first_name",
+    "father_middle_name",
+    "father_last_name",
 ]
 
-# Gen1 parity (G2R-26 sign-off): first name and father's name only. last_name
-# holds the grandfather's name at 26% Gen1 fill, birth_date 10%, phone 13% --
-# requiring any of those would make most real Gen1 records impossible to save.
-REQUIRED_FIELDS = {"first_name", "middle_name"}
+# Gen1 parity (G2R-26 sign-off): the farmer's first name and the father's
+# first name only; the father is his own first/middle/last triple, so the
+# farmer's middle_name is optional. last_name holds the grandfather's name at
+# 26% Gen1 fill, birth_date 10%, phone 13% -- requiring any of those would make
+# most real Gen1 records impossible to save.
+REQUIRED_FIELDS = {"first_name", "father_first_name"}
+
+BIRTH = "farmer_farmer_birth_information_section_01"
+SOCIO = "farmer_farmer_socio_economic_and_health_section_04"
 
 
 def _widgets(node, acc):
@@ -288,6 +296,44 @@ class TestEffectiveLayer(unittest.TestCase):
                     widgets[field].get("widget-required") is True,
                     field in REQUIRED_FIELDS,
                 )
+
+    def test_gender_lives_in_birth_information(self):
+        """Gen1 groups gender with the birth details. It used to sit on a row of
+        its own under the name grid in Personal Information, reading as a stray
+        field from another section."""
+        self.assertIn("gender", effective_widgets(BIRTH))
+        self.assertNotIn("gender", effective_widgets(PERSONAL))
+
+    def test_gender_is_bound_to_the_farmer_column(self):
+        gender = effective_widgets(BIRTH)["gender"]
+        self.assertEqual(gender.get("widget-data-path"), f"{FARMER_REGISTER}.gender")
+
+    def test_yes_no_flags_are_selects_not_checkboxes(self):
+        """The checkbox widget captions itself with its current state ("No" while
+        unchecked), so the caption reads as an answer staff can pick -- and
+        clicking it flips the box to Yes. Yes/No questions are selects with
+        boolean option values, which also keep a blank "not asked" state."""
+        widgets = effective_widgets(SOCIO)
+        for field in ("disabled", "is_psnp_user"):
+            with self.subTest(field=field):
+                widget = widgets[field]
+                self.assertEqual(widget.get("widget"), "select")
+                values = [
+                    option["value"]
+                    for option in widget["widget-data-source"]["options"]
+                ]
+                self.assertEqual(values, [True, False])
+
+    def test_disability_details_are_gated_on_a_boolean(self):
+        """The select hands back the option's original (boolean) value, so the
+        show-conditions on the disability fields must compare against true,
+        not the string "true"."""
+        widgets = effective_widgets(SOCIO)
+        for field in ("disability_type", "disability_severity"):
+            with self.subTest(field=field):
+                condition = widgets[field]["widget-data-options"]["condition"]
+                self.assertEqual(condition["field"], f"{FARMER_REGISTER}.disabled")
+                self.assertIs(condition["value"], True)
 
     def test_phone_is_optional_and_local_format(self):
         """Gen1 fill is 13%, so parity means optional -- but when supplied it is

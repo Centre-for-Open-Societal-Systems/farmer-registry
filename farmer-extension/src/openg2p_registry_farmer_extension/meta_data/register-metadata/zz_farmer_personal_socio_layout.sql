@@ -14,6 +14,22 @@
 -- header section's own picker, both writing the same profile picture. It now
 -- lives in its own section, seeded by zz_farmer_photo_section.sql and attached
 -- to the intake form only; see that file for why.
+--
+-- Gender is NOT here either: it sat on a row of its own under the name grid,
+-- reading as a stray field, and Gen1 groups it with date of birth. It lives in
+-- Birth Information (zz_farmer_birth_layout.sql).
+--
+-- Names: the farmer's own first/middle/last in three scripts, then the
+-- father's first/middle/last (English). Required = first_name and
+-- father_first_name only, mirrored server-side by validation_rules.
+--
+-- Yes/No questions (disabled, is_psnp_user) are select widgets with boolean
+-- option values, never checkboxes. The checkbox widget captions itself with
+-- the state it is in ("No" while unchecked), so the caption reads as an
+-- answer staff can pick -- and clicking it flips the box to "Yes". A select
+-- also keeps a third, blank state for "not asked", which the farmer service
+-- stores as NULL rather than coercing to False. The base layer already had
+-- both as selects; this override had regressed them to checkboxes.
 UPDATE "public"."g2p_register_sections"
 SET "section_ui_schema" = $schema$
 {
@@ -29,7 +45,7 @@ SET "section_ui_schema" = $schema$
               "panel-orientation": "vertical"
             },
             {
-              "widgets": [{"widget": "text", "widget-id": "middle_name", "widget-type": "input", "widget-label": "middle_name_english", "widget-required": true, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name"}],
+              "widgets": [{"widget": "text", "widget-id": "middle_name", "widget-type": "input", "widget-label": "middle_name_english", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name"}],
               "panel-id": "panel_english_middle_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
@@ -98,23 +114,26 @@ SET "section_ui_schema" = $schema$
         {
           "panels": [
             {
-              "widgets": [
-                {
-                  "widget": "select",
-                  "widget-id": "gender",
-                  "widget-type": "input",
-                  "widget-label": "gender",
-                  "widget-required": false,
-                  "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.gender",
-                  "widget-data-source": {"type": "static", "options": [{"label": "MALE", "value": "MALE"}, {"label": "FEMALE", "value": "FEMALE"}, {"label": "OTHERS", "value": "OTHERS"}, {"label": "UNKNOWN", "value": "UNKNOWN"}]}
-                }
-              ],
-              "panel-id": "panel_gender",
+              "widgets": [{"widget": "text", "widget-id": "father_first_name", "widget-type": "input", "widget-label": "father_first_name", "widget-required": true, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.father_first_name"}],
+              "panel-id": "panel_father_first_name",
+              "panel-column-span": 1,
+              "panel-orientation": "vertical"
+            },
+            {
+              "widgets": [{"widget": "text", "widget-id": "father_middle_name", "widget-type": "input", "widget-label": "father_middle_name", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.father_middle_name"}],
+              "panel-id": "panel_father_middle_name",
+              "panel-column-span": 1,
+              "panel-orientation": "vertical"
+            },
+            {
+              "widgets": [{"widget": "text", "widget-id": "father_last_name", "widget-type": "input", "widget-label": "father_last_name", "widget-required": false, "widget-data-validation": {"pattern": "^[A-Za-z\\u1200-\\u137F][A-Za-z\\u1200-\\u137F\\s'-]*$", "patternMessage": "Use letters (Latin or Ethiopic), spaces, hyphens and apostrophes only", "maxLength": 100}, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.father_last_name"}],
+              "panel-id": "panel_father_last_name",
               "panel-column-span": 1,
               "panel-orientation": "vertical"
             }
           ],
-          "panel-id": "panel_personal_demographics_row",
+          "panel-id": "panel_names_father_row",
+          "panel-title": "names_father",
           "panel-orientation": "horizontal"
         }
       ],
@@ -179,13 +198,14 @@ SET "section_ui_schema" = $schema$
               "widget-data-source": {"type": "static", "options": [{"label": "SINGLE", "value": "SINGLE"}, {"label": "MARRIED", "value": "MARRIED"}, {"label": "DIVORCED", "value": "DIVORCED"}, {"label": "WIDOWED", "value": "WIDOWED"}, {"label": "SEPARATED", "value": "SEPARATED"}, {"label": "UNKNOWN", "value": "UNKNOWN"}]}
             },
             {
-              "widget": "checkbox",
+              "widget": "select",
               "widget-id": "is_psnp_user",
               "widget-type": "input",
               "widget-label": "is_psnp_user",
               "widget-readonly": false,
               "widget-required": false,
-              "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.is_psnp_user"
+              "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.is_psnp_user",
+              "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}
             }
           ],
           "panel-id": "panel_social_economic_data",
@@ -196,13 +216,14 @@ SET "section_ui_schema" = $schema$
         {
           "widgets": [
             {
-              "widget": "checkbox",
+              "widget": "select",
               "widget-id": "disabled",
               "widget-type": "input",
               "widget-label": "disabled",
               "widget-readonly": false,
               "widget-required": false,
-              "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.disabled"
+              "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.disabled",
+              "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}
             },
             {
               "widget": "select",

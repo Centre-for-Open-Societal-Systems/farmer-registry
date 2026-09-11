@@ -1,12 +1,26 @@
 -- Farmer detail and intake share this Birth Information section. The base
 -- Gregorian field remains authoritative; the extension adds the separately
 -- captured Ethiopian-calendar value and presents estimated_age as Age.
+--
+-- Gender is captured here, with the birth details it is read alongside (Gen1
+-- parity), rather than as a stray row under the name grid in Personal
+-- Information (zz_farmer_personal_socio_layout.sql).
 UPDATE "public"."g2p_register_sections"
 SET "section_ui_schema" = $schema$
 {
   "panels": [
     {
       "widgets": [
+        {
+          "widget": "select",
+          "widget-id": "gender",
+          "widget-type": "input",
+          "widget-label": "gender",
+          "widget-readonly": false,
+          "widget-required": false,
+          "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.gender",
+          "widget-data-source": {"type": "static", "options": [{"label": "MALE", "value": "MALE"}, {"label": "FEMALE", "value": "FEMALE"}, {"label": "OTHERS", "value": "OTHERS"}, {"label": "UNKNOWN", "value": "UNKNOWN"}]}
+        },
         {
           "widget": "date",
           "widget-id": "birth_date",

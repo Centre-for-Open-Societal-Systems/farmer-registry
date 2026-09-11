@@ -49,6 +49,13 @@ class G2PFarmer:
     middle_name_om: Mapped[str] = mapped_column(String, nullable=True)
     last_name_om: Mapped[str] = mapped_column(String, nullable=True)
 
+    # Father's name as its own first/middle/last triple, alongside (not instead
+    # of) the farmer's own middle_name. Gen1 parity: first name and father's
+    # first name are the two mandatory identifiers -- see validation_rules.
+    father_first_name: Mapped[str] = mapped_column(String, nullable=True)
+    father_middle_name: Mapped[str] = mapped_column(String, nullable=True)
+    father_last_name: Mapped[str] = mapped_column(String, nullable=True)
+
     # Enumerator / data-collection provenance
     enumerator_name: Mapped[str] = mapped_column(String, nullable=True)
     enumerator_user_id: Mapped[str] = mapped_column(String, nullable=True)
