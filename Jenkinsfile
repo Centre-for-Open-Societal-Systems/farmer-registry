@@ -44,7 +44,7 @@ pipeline {
             }
         }
 
-
+        stage('Build & Push') {
             steps {
                 script {
                     env.IMAGE_TAG = env.GIT_COMMIT.take(12)
