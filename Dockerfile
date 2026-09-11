@@ -63,6 +63,10 @@ COPY docker/staff-ui/assets/detail-field-wrapping.css /tmp/detail-field-wrapping
 COPY docker/staff-ui/assets/staff-ui-1.2-regressions.css /tmp/staff-ui-1.2-regressions.css
 COPY docker/staff-ui/assets/intake-photo-widget.css /tmp/intake-photo-widget.css
 
+# Checksums of the untouched build, so rehash-patched-assets.sh (below) can
+# tell which assets the patches changed. Same invocation as in that script.
+RUN cd /app/.next && find static -type f \( -name '*.js' -o -name '*.css' \) -exec md5sum {} + | sort > /tmp/static.before
+
 # Prefer the human-readable form description while retaining the mnemonic as
 # a fallback for records that do not yet have a description.
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
@@ -129,6 +133,13 @@ RUN find /app/.next -type f -name '*.js' -exec sed -i \
 COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
 RUN DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
     node /tmp/patch-dashboard-nav.js || echo "SKIPPED: dashboard-nav patch needs re-anchoring for 1.2.x"
+
+# Every patch above edited a content-hashed asset in place, and Next serves
+# /_next/static as immutable -- returning browsers would keep the old file
+# until a hard refresh. Give each changed asset a new hash and rewrite the
+# references so a normal page load picks the patched file up.
+COPY docker/staff-ui/rehash-patched-assets.sh /tmp/rehash-patched-assets.sh
+RUN sh /tmp/rehash-patched-assets.sh && rm /tmp/static.before /tmp/static.after
 
 # Fail the build if a bundle patch stopped matching. These seds target MINIFIED
 # identifiers, so a base-image bump can silently drop every customisation while
