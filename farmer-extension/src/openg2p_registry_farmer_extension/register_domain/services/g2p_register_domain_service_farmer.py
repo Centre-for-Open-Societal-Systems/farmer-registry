@@ -3,7 +3,8 @@ from datetime import date
 
 from openg2p_registry_core.models import G2PRegisterChangeRequest
 from openg2p_registry_core.services import G2PRegisterDomainService
-from sqlalchemy import select, update
+from openg2p_fastapi_common.context import dbengine
+from sqlalchemy import select, text, update
 
 from .domain_validation_utils import (
     as_bool,
@@ -499,3 +500,230 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         )
 
         return " ".join(record_name).strip()
+
+    async def deduplicate_registry_records(
+        self,
+        check_id_documents: bool = True,
+        check_foundational_id: bool = True,
+        check_phones: bool = True,
+        check_household_overlap: bool = True,
+        reset_existing: bool = True,
+    ) -> dict:
+        """
+        Scan all farmer registry records and flag duplicates, recreating Gen 1 deduplication behavior.
+        Matches on:
+        - Configured ID documents (id_type, value) from g2p_register_reg_ids
+        - Foundational IDs from g2p_register_farmers
+        - Phone numbers from g2p_register_farmer_phones
+        - Household member overlap from g2p_register_household_members
+        """
+        _logger.info("Starting registry-wide deduplication scan...")
+        all_duplicate_ids = set()
+        match_entries = []
+        breakdown = {
+            "id_documents": 0,
+            "foundational_id": 0,
+            "phones": 0,
+            "household_overlap": 0,
+        }
+
+        async with dbengine.get().begin() as conn:
+            if reset_existing:
+                _logger.info("Resetting existing is_duplicated flags")
+                await conn.execute(
+                    text("UPDATE public.g2p_register_farmers SET is_duplicated = FALSE WHERE is_duplicated = TRUE")
+                )
+                await conn.execute(
+                    text("DELETE FROM public.dedup_results_register_records WHERE register_id = :reg_id"),
+                    {"reg_id": FARMER_REGISTER_ID},
+                )
+
+            # 1. ID Documents check (Gen 1 style)
+            if check_id_documents:
+                id_doc_query = text(
+                    """
+                    SELECT 
+                        reg_id.id_type,
+                        reg_id.value,
+                        array_agg(DISTINCT reg_id.link_internal_record_id) AS dup_ids
+                    FROM public.g2p_register_reg_ids reg_id
+                    JOIN public.g2p_register_farmers f ON f.internal_record_id = reg_id.link_internal_record_id
+                    WHERE reg_id.status = 'VALID' 
+                      AND reg_id.value IS NOT NULL 
+                      AND TRIM(reg_id.value) != ''
+                    GROUP BY reg_id.id_type, reg_id.value
+                    HAVING count(DISTINCT reg_id.link_internal_record_id) > 1
+                    """
+                )
+                result = await conn.execute(id_doc_query)
+                for row in result.fetchall():
+                    id_type, val, dup_ids = row[0], row[1], list(row[2])
+                    all_duplicate_ids.update(dup_ids)
+                    breakdown["id_documents"] += len(dup_ids)
+                    for i in range(len(dup_ids)):
+                        for j in range(i + 1, len(dup_ids)):
+                            match_entries.append({
+                                "register_id": FARMER_REGISTER_ID,
+                                "primary_internal_record_id": dup_ids[i],
+                                "duplicate_internal_record_id": dup_ids[j],
+                                "match_criteria_type": f"ID_DOC:{id_type}",
+                                "match_value": val,
+                                "match_score": 100.0,
+                            })
+
+            # 2. Foundational ID check
+            if check_foundational_id:
+                foundational_query = text(
+                    """
+                    SELECT 
+                        foundational_id, 
+                        array_agg(DISTINCT internal_record_id) AS dup_ids
+                    FROM public.g2p_register_farmers
+                    WHERE foundational_id IS NOT NULL 
+                      AND TRIM(foundational_id) != ''
+                    GROUP BY foundational_id
+                    HAVING count(DISTINCT internal_record_id) > 1
+                    """
+                )
+                result = await conn.execute(foundational_query)
+                for row in result.fetchall():
+                    val, dup_ids = row[0], list(row[1])
+                    all_duplicate_ids.update(dup_ids)
+                    breakdown["foundational_id"] += len(dup_ids)
+                    for i in range(len(dup_ids)):
+                        for j in range(i + 1, len(dup_ids)):
+                            match_entries.append({
+                                "register_id": FARMER_REGISTER_ID,
+                                "primary_internal_record_id": dup_ids[i],
+                                "duplicate_internal_record_id": dup_ids[j],
+                                "match_criteria_type": "FOUNDATIONAL_ID",
+                                "match_value": val,
+                                "match_score": 100.0,
+                            })
+
+            # 3. Phone Numbers check
+            if check_phones:
+                phone_query = text(
+                    """
+                    SELECT 
+                        p.phone_number, 
+                        array_agg(DISTINCT p.link_internal_record_id) AS dup_ids
+                    FROM public.g2p_register_farmer_phones p
+                    JOIN public.g2p_register_farmers f ON f.internal_record_id = p.link_internal_record_id
+                    WHERE p.phone_number IS NOT NULL 
+                      AND TRIM(p.phone_number) != ''
+                    GROUP BY p.phone_number
+                    HAVING count(DISTINCT p.link_internal_record_id) > 1
+                    """
+                )
+                result = await conn.execute(phone_query)
+                for row in result.fetchall():
+                    val, dup_ids = row[0], list(row[1])
+                    all_duplicate_ids.update(dup_ids)
+                    breakdown["phones"] += len(dup_ids)
+                    for i in range(len(dup_ids)):
+                        for j in range(i + 1, len(dup_ids)):
+                            match_entries.append({
+                                "register_id": FARMER_REGISTER_ID,
+                                "primary_internal_record_id": dup_ids[i],
+                                "duplicate_internal_record_id": dup_ids[j],
+                                "match_criteria_type": "PHONE_NUMBER",
+                                "match_value": val,
+                                "match_score": 100.0,
+                            })
+
+            # 4. Household Member Overlap
+            if check_household_overlap:
+                household_query = text(
+                    """
+                    SELECT 
+                        f.internal_record_id AS individual_id,
+                        array_agg(DISTINCT m.link_internal_record_id) AS household_ids
+                    FROM public.g2p_register_household_members m
+                    JOIN public.g2p_register_farmers f ON (f.foundational_id = m.foundational_id OR f.internal_record_id = m.internal_record_id)
+                    WHERE m.link_internal_record_id IS NOT NULL
+                    GROUP BY f.internal_record_id
+                    HAVING count(DISTINCT m.link_internal_record_id) > 1
+                    """
+                )
+                result = await conn.execute(household_query)
+                for row in result.fetchall():
+                    individual_id, household_ids = row[0], list(row[1])
+                    all_duplicate_ids.add(individual_id)
+                    breakdown["household_overlap"] += 1
+                    match_entries.append({
+                        "register_id": FARMER_REGISTER_ID,
+                        "primary_internal_record_id": individual_id,
+                        "duplicate_internal_record_id": individual_id,
+                        "match_criteria_type": "HOUSEHOLD_OVERLAP",
+                        "match_value": f"Appears in households: {', '.join(household_ids)}",
+                        "match_score": 100.0,
+                    })
+
+            # 5. Mark all duplicate farmer records
+            if all_duplicate_ids:
+                dup_list = list(all_duplicate_ids)
+                await conn.execute(
+                    text("UPDATE public.g2p_register_farmers SET is_duplicated = TRUE WHERE internal_record_id = ANY(:ids)"),
+                    {"ids": dup_list},
+                )
+
+            # 6. Save match details
+            for entry in match_entries:
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO public.dedup_results_register_records (
+                            register_id, primary_internal_record_id, duplicate_internal_record_id,
+                            match_criteria_type, match_value, match_score
+                        ) VALUES (
+                            :register_id, :primary_internal_record_id, :duplicate_internal_record_id,
+                            :match_criteria_type, :match_value, :match_score
+                        )
+                        """
+                    ),
+                    entry,
+                )
+
+        _logger.info(f"Registry deduplication completed: {len(all_duplicate_ids)} duplicates found")
+        return {
+            "status": "SUCCESS",
+            "total_duplicate_farmers": len(all_duplicate_ids),
+            "duplicate_farmer_ids": list(all_duplicate_ids),
+            "breakdown": breakdown,
+            "total_pairs_recorded": len(match_entries),
+        }
+
+    async def get_deduplication_summary(self) -> dict:
+        async with dbengine.get().begin() as conn:
+            dup_count = (await conn.execute(
+                text("SELECT count(*) FROM public.g2p_register_farmers WHERE is_duplicated = TRUE")
+            )).scalar() or 0
+
+            total_count = (await conn.execute(
+                text("SELECT count(*) FROM public.g2p_register_farmers")
+            )).scalar() or 0
+
+            records_result = await conn.execute(
+                text("SELECT match_criteria_type, count(*) FROM public.dedup_results_register_records GROUP BY match_criteria_type")
+            )
+            criteria_counts = {row[0]: row[1] for row in records_result.fetchall()}
+
+            return {
+                "total_farmers": total_count,
+                "duplicated_farmers": dup_count,
+                "unique_farmers": total_count - dup_count,
+                "criteria_counts": criteria_counts,
+            }
+
+    async def reset_deduplication(self) -> dict:
+        async with dbengine.get().begin() as conn:
+            await conn.execute(
+                text("UPDATE public.g2p_register_farmers SET is_duplicated = FALSE WHERE is_duplicated = TRUE")
+            )
+            await conn.execute(
+                text("DELETE FROM public.dedup_results_register_records WHERE register_id = :reg_id"),
+                {"reg_id": FARMER_REGISTER_ID},
+            )
+        return {"status": "SUCCESS", "message": "All duplicate flags and results reset successfully"}
+

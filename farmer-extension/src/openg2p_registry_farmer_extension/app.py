@@ -44,6 +44,9 @@ class Initializer(BaseInitializer):
         super().initialize()
         CoreInitializer().initialize()
 
+        self._patch_filter_builder()
+        self._patch_csrf_for_webhooks()
+
         # Intake reads return record_image_document_id but never the presigned
         # record_image_url the register-side reads add, so a photo captured at
         # intake has nothing to render on the approval screen. Patches the
@@ -54,6 +57,68 @@ class Initializer(BaseInitializer):
         G2PRegisterDomainFactory()
         G2PRegisterDomainServiceFarmer()
         G2PRegisterDomainServiceHousehold()
+
+    def _patch_csrf_for_webhooks(self):
+        try:
+            from iam_core.user_auth.middleware.csrf import CsrfMiddleware
+            orig_should_skip = CsrfMiddleware._should_skip
+
+            def patched_should_skip(this, request):
+                path = getattr(getattr(request, "url", None), "path", "")
+                if path.startswith("/api/v1/farmer-registry/deduplicate"):
+                    return True
+                return orig_should_skip(this, request)
+
+            CsrfMiddleware._should_skip = patched_should_skip
+            _logger.info("CsrfMiddleware patched for deduplication endpoints")
+        except Exception as e:
+            _logger.warning(f"Failed to patch CsrfMiddleware: {e}")
+
+    def _patch_filter_builder(self):
+        try:
+            from openg2p_registry_core.services.filter_builder import FilterBuilder
+            from sqlalchemy import Boolean
+
+            orig_build_field_conditions = FilterBuilder._build_field_conditions
+            orig_validate_value = FilterBuilder._validate_value
+
+            def patched_validate_value(this, field_config, operator, value):
+                filter_type = field_config.get("filter_type")
+                if filter_type == "boolean":
+                    if isinstance(value, str) and value.lower() in ("true", "false"):
+                        return
+                return orig_validate_value(this, field_config, operator, value)
+
+            def patched_build_field_conditions(this, column, field_name, operators, field_config):
+                is_bool_col = hasattr(column, "type") and isinstance(column.type, Boolean)
+                if is_bool_col and isinstance(operators, dict):
+                    converted_operators = {}
+                    for op, val in operators.items():
+                        if isinstance(val, str):
+                            if val.lower() == "true":
+                                converted_operators[op] = True
+                            elif val.lower() == "false":
+                                converted_operators[op] = False
+                            else:
+                                converted_operators[op] = val
+                        elif isinstance(val, list):
+                            converted_operators[op] = [
+                                True if (isinstance(v, str) and v.lower() == "true") or v is True
+                                else False if (isinstance(v, str) and v.lower() == "false") or v is False
+                                else v
+                                for v in val
+                            ]
+                        else:
+                            converted_operators[op] = val
+                    operators = converted_operators
+
+                return orig_build_field_conditions(this, column, field_name, operators, field_config)
+
+            FilterBuilder._validate_value = patched_validate_value
+            FilterBuilder._build_field_conditions = patched_build_field_conditions
+            _logger.info("FilterBuilder boolean handling patched successfully")
+        except Exception as e:
+            _logger.warning(f"Failed to patch FilterBuilder: {e}")
 
     async def fastapi_app_startup(self, app):
         # The explicit CLI `migrate` step is a separate invocation from
@@ -78,6 +143,7 @@ class Initializer(BaseInitializer):
         # the loop that will actually serve requests, so there's no
         # cross-loop reuse.
         await self._migrate_extension_tables()
+        self._register_deduplication_routes(app)
 
     def migrate_database(self, args):
         asyncio.run(self._migrate_extension_tables())
@@ -219,6 +285,12 @@ class Initializer(BaseInitializer):
                             f'ADD COLUMN IF NOT EXISTS "{geo_column}" VARCHAR'
                         )
                     )
+                await conn.execute(
+                    text(
+                        f'ALTER TABLE "public"."{table_name}" '
+                        'ADD COLUMN IF NOT EXISTS "is_duplicated" BOOLEAN DEFAULT FALSE'
+                    )
+                )
 
                 # Older section-by-section intake saves cleared these list
                 # projections even though the selected location and hierarchy
@@ -266,6 +338,33 @@ class Initializer(BaseInitializer):
                           farmer.geo_code_hierarchy_json->'hierarchy'
                       ) = 'array'
                 """))
+
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.dedup_results_register_records (
+                        dedup_result_id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+                        register_id VARCHAR NOT NULL,
+                        primary_internal_record_id VARCHAR NOT NULL,
+                        duplicate_internal_record_id VARCHAR NOT NULL,
+                        match_criteria_type VARCHAR NOT NULL,
+                        match_value VARCHAR,
+                        match_score FLOAT NOT NULL DEFAULT 100.0,
+                        field_matches JSONB NOT NULL DEFAULT '{}'::jsonb,
+                        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() at time zone 'utc'),
+                        status VARCHAR DEFAULT 'FLAGGED'
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS ix_dedup_results_reg_records
+                    ON public.dedup_results_register_records (primary_internal_record_id, duplicate_internal_record_id)
+                    """
+                )
+            )
 
             # A row only enters the live register after approval. Project
             # that workflow fact onto existing Farmer rows, and recover
@@ -643,4 +742,40 @@ class Initializer(BaseInitializer):
         await G2PRegisterConsentReceipt.create_migrate()
         await G2PRegisterHistoryConsentReceipt.create_migrate()
         await G2PIntakeFormConsentReceipt.create_migrate()
+
+    def _register_deduplication_routes(self, app):
+        from fastapi import APIRouter
+        from .register_domain.services import G2PRegisterDomainServiceFarmer
+
+        router = APIRouter(prefix="/api/v1/farmer-registry", tags=["Farmer Registry Deduplication"])
+
+        @router.post("/deduplicate")
+        async def trigger_deduplication(
+            check_id_documents: bool = True,
+            check_foundational_id: bool = True,
+            check_phones: bool = True,
+            check_household_overlap: bool = True,
+            reset_existing: bool = True,
+        ):
+            service = G2PRegisterDomainServiceFarmer()
+            return await service.deduplicate_registry_records(
+                check_id_documents=check_id_documents,
+                check_foundational_id=check_foundational_id,
+                check_phones=check_phones,
+                check_household_overlap=check_household_overlap,
+                reset_existing=reset_existing,
+            )
+
+        @router.get("/deduplicate/summary")
+        async def get_deduplication_summary():
+            service = G2PRegisterDomainServiceFarmer()
+            return await service.get_deduplication_summary()
+
+        @router.post("/deduplicate/reset")
+        async def reset_deduplication():
+            service = G2PRegisterDomainServiceFarmer()
+            return await service.reset_deduplication()
+
+        app.include_router(router)
+
 
