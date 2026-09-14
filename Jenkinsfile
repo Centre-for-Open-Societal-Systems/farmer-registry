@@ -138,6 +138,7 @@ registry:
     image:
       repository: ${ECR_REGISTRY}/${ECR_PATH}/db-seed
       tag: "${env.IMAGE_TAG}"
+    loadAttributes: false
   sanity:
     image:
       repository: ${ECR_REGISTRY}/${ECR_PATH}/sanity-tests
