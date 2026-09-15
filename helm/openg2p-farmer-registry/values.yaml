@@ -20,6 +20,26 @@ global:
   # Ingress host for this registry. Overrides the subchart's generic default.
   registryHostname: '{{ .Release.Name }}.{{ .Release.Namespace }}.openg2p.org'
 
+  # Browser-facing MinIO host. Record images (the farmer photo captured at
+  # intake, land certificates) are served to the BROWSER as pre-signed URLs
+  # built against this value, and the subchart also derives the staff-ui
+  # img-src CSP from it (CSP_SRC_IMG). It must therefore be a hostname a
+  # browser can actually resolve and reach.
+  #
+  # Point it at an in-cluster Service name and the photo silently fails twice
+  # over: the browser cannot resolve the name, and the CSP it generates blocks
+  # the request anyway, so the widget just shows its placeholder with no error
+  # that names the cause.
+  #
+  # Note this host is also what the API SIGNS against, and a pre-signed S3
+  # signature covers the Host header -- so the signer and the browser must use
+  # the SAME name. Fixing only the CSP is not enough; the value itself has to
+  # be the external one. Set minioSecure to match its scheme (https -> true).
+  #
+  # Inherited from the subchart default unless overridden per environment.
+  # minioHost: 'minio-api.{{ .Release.Namespace }}.openg2p.org'
+  # minioSecure: true
+
   # Database wiring, mirroring openg2p-registry's own defaults. Declared here
   # rather than inherited because a parent chart's templates cannot read a
   # subchart's globals — only the other direction — and the analytics Jobs in
