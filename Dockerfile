@@ -63,6 +63,10 @@ COPY docker/staff-ui/assets/detail-field-wrapping.css /tmp/detail-field-wrapping
 COPY docker/staff-ui/assets/staff-ui-1.2-regressions.css /tmp/staff-ui-1.2-regressions.css
 COPY docker/staff-ui/assets/intake-photo-widget.css /tmp/intake-photo-widget.css
 
+# Checksums of the untouched build, so rehash-patched-assets.sh (below) can
+# tell which assets the patches changed. Same invocation as in that script.
+RUN cd /app/.next && find static -type f \( -name '*.js' -o -name '*.css' \) -exec md5sum {} + | sort > /tmp/static.before
+
 # Prefer the human-readable form description while retaining the mnemonic as
 # a fallback for records that do not yet have a description.
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
@@ -96,6 +100,22 @@ RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
 RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
     -e '$r /tmp/intake-photo-widget.css' {} \;
 
+# Upload the farmer photo captured during intake. The widget library pulls any
+# picked image out of the section records before the save (extractProfileImage
+# blanks the field and hands the File over as `SectionChanges.image`). The
+# register-detail save hook uploads that File and stamps the resulting
+# document_id onto the record; the intake save hook only ever handled `files`
+# and dropped `image` on the floor, so a photo taken at intake never reached
+# the server. Mirror the register hook: upload, then set
+# record_image_document_id on every record of the section.
+#   \1 = the matched statement (kept verbatim), \2 = the uploadFile function,
+#   \3 = the SectionChanges argument. The image's sed is BusyBox: POSIX ERE has
+#   no backreferences inside the pattern, so the repeated loop variable is
+#   re-matched with [a-z] instead of \N, and ||/? are bracketed literals.
+RUN find /app/.next -type f -name '*.js' -exec sed -i -E \
+    's/(if\(o\.length>0\)\{let [a-z]=await ([A-Za-z_$][A-Za-z0-9_$]*)\(o\);if\(![a-z][|][|]0===[a-z]\.length\)return!1;c\.push\(\.\.\.[a-z]\)\}c=\[\.\.\.\(([a-z])[?]\.files[|][|]\[\]\)\.filter\([A-Za-z_$][A-Za-z0-9_$]*\),\.\.\.c\],console\.log\("change payload",[a-z][?]\.records\))/\1;if(\3?.image){let __up=await \2([\3.image]),__doc=Array.isArray(__up)?__up[0]:null;__doc\&\&__doc.document_id\&\&(\3.records=(\3.records||[]).map(__r=>({...__r,record_image_document_id:__doc.document_id})))}/g' \
+    {} +
+
 # Ignore a legacy dashboard_image value and use the transparent extension
 # asset, which removes the people illustration without changing base source.
 RUN find '/app/.next/static/chunks/app/[locale]' -maxdepth 1 -type f -name 'page-*.js' -exec sed -i \
@@ -114,10 +134,17 @@ COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
 RUN DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
     node /tmp/patch-dashboard-nav.js || echo "SKIPPED: dashboard-nav patch needs re-anchoring for 1.2.x"
 
+# Every patch above edited a content-hashed asset in place, and Next serves
+# /_next/static as immutable -- returning browsers would keep the old file
+# until a hard refresh. Give each changed asset a new hash and rewrite the
+# references so a normal page load picks the patched file up.
+COPY docker/staff-ui/rehash-patched-assets.sh /tmp/rehash-patched-assets.sh
+RUN sh /tmp/rehash-patched-assets.sh && rm /tmp/static.before /tmp/static.after
+
 # Fail the build if a bundle patch stopped matching. These seds target MINIFIED
 # identifiers, so a base-image bump can silently drop every customisation while
 # still exiting 0 - which is exactly what happened moving 1.1.1 -> 1.2.1.
-RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     echo "OK: staff-ui bundle patches verified"
+RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     here 'record_image_document_id:__doc.document_id' "intake profile image upload";     echo "OK: staff-ui bundle patches verified"
 
 # ------------------------------------------------------------------ DB seed
 FROM registry.gitlab.com/openg2p/registry/registry-platform/db-seed:${RP_VERSION} AS db-seed

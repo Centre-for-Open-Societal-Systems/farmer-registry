@@ -35,6 +35,11 @@ COPY --chown=nextjs:nodejs docker/staff-ui/assets/farm_image.jpeg /app/public/im
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/people.svg /app/public/images/common/people.svg
 COPY docker/staff-ui/assets/detail-field-wrapping.css /tmp/detail-field-wrapping.css
 
+# Checksums of the untouched build, so rehash-patched-assets.sh (at the end of
+# this stage) can tell which assets the patches below actually changed. Must be
+# the same `find ... md5sum | sort` invocation used there.
+RUN cd /app/.next && find static -type f \( -name '*.js' -o -name '*.css' \) -exec md5sum {} + | sort > /tmp/static.before
+
 # The upstream intake selector and submission heading render the machine-facing
 # form_mnemonic verbatim. Keep the mnemonic stable for APIs/integrations and
 # use the form's human-readable description for display, with the mnemonic as
@@ -86,6 +91,35 @@ RUN find /app/.next -type f -name '*.js' -exec sed -i \
     's/\.table-cell-widget label,/.table-cell-widget label.items-baseline,/g' \
     {} +
 
+# Upload the farmer photo captured during intake.
+#
+# The widget library pulls any picked image out of the section records before
+# the save: it walks each record, and for a File (or a serialized File) it
+# stashes the value and blanks the field, then hands the File to the save
+# callback as `SectionChanges.image` (minified: `...C?{image:C}:{}`). The
+# register-detail save hook uploads that File and stamps the returned
+# document_id onto the record as record_image_document_id. The INTAKE save hook
+# only ever handled `change.files` and dropped `change.image` on the floor, so a
+# photo taken during intake was blanked out of the record and then discarded --
+# it never reached the server at all.
+#
+# Mirror the register hook: upload the image, then stamp record_image_document_id
+# onto every record of the section. Anchored on the statement that merges the
+# already-uploaded documents back into the upload result, which sits between the
+# upload and the save-payload build -- the one point where both the image and
+# the records are in scope.
+#
+#   \1 = that merge statement, kept verbatim
+#   \2 = the SectionChanges argument (`i`)
+#   \3 = the records list
+# `h` is the uploadFile hook and `N` the document array in this build; both are
+# matched as single lowercase/uppercase identifiers rather than hardcoded, so an
+# identical bundle with a different minifier pass still matches. BusyBox sed is
+# POSIX ERE: no backreferences inside the pattern, and | must be bracketed.
+RUN find /app/.next -type f -name '*.js' -exec sed -i -E \
+    's/([A-Z]=\[\.\.\.\(([a-z])[?]\.files[|][|]\[\]\)\.filter\([a-z]=>[a-z]&&"object"==typeof [a-z]&&"document_id"in [a-z]\),\.\.\.[A-Z]\];)(let [a-z]=\{submission_id:)/\1if(\2?.image)try{let __u=await h([\2.image]),__d=Array.isArray(__u)?__u[0]:null;__d\&\&__d.document_id\&\&(\2.records=(\2.records||[]).map(__r=>__r\&\&"object"==typeof __r?{...__r,record_image_document_id:__d.document_id}:__r))}catch(__e){console.error("intake profile image upload failed",__e)}\3/g' \
+    {} +
+
 # ── Add the Dashboard header button ─────────────────────────────────────────
 # Puts a Dashboard control immediately left of Configuration, pointing at the
 # dashboard-ui service, and passes the page it left behind as ?returnUrl= for
@@ -97,3 +131,27 @@ RUN if [ -n "${DASHBOARD_URL}" ]; then \
     else \
         echo "DASHBOARD_URL is empty -- building without the Dashboard button"; \
     fi
+
+# Every patch above edited a content-hashed asset in place, and Next serves
+# /_next/static as immutable -- a returning browser keeps the OLD file and never
+# asks for it again, so a patch can be present on the server and absent from
+# every existing tab until a hard refresh. Give each changed asset a new hash
+# and rewrite the references to it.
+#
+# Runs after the dashboard patch above, so an asset that step rewrites is
+# re-hashed too -- including when DASHBOARD_URL is empty and it changes nothing.
+COPY docker/staff-ui/rehash-patched-assets.sh /tmp/rehash-patched-assets.sh
+RUN sh /tmp/rehash-patched-assets.sh && rm -f /tmp/static.before /tmp/static.after
+
+# Fail the build if a bundle patch stopped matching. These seds target MINIFIED
+# identifiers, so a STAFF_UI_VERSION bump can silently drop a customisation
+# while still exiting 0. Assert the results that must be present.
+#
+# The Dashboard button is deliberately NOT asserted: it is optional now, and
+# absent by design when DASHBOARD_URL is empty.
+RUN set -e; \
+    here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; }; \
+    here 'record_image_document_id:__d.document_id' "intake profile image upload"; \
+    here '.table-cell-widget label.items-baseline,' "table-cell upload trigger"; \
+    here 'background-image:url(/images/common/farm_image.jpeg)' "farm background"; \
+    echo "OK: staff-ui bundle patches verified"
