@@ -1,12 +1,6 @@
 pipeline {
     agent any
 
-    parameters {
-     
-        booleanParam(name: 'DEPLOY_TO_FAR', defaultValue: false,
-            description: 'Also run the Deploy stage against the far namespace. Leave OFF until a first deploy through this pipeline has been done deliberately and reviewed.')
-    }
-
     environment {
         AWS_ACCOUNT_ID = "${env.AWS_ACCOUNT_ID}"
         AWS_REGION     = "ap-south-1"
@@ -90,22 +84,30 @@ pipeline {
             }
         }
 
-        stage('Deploy to Staging (far namespace)') {
-            // beforeAgent: decide before asking for vpn-agent2. Without it every build
-            // waits for that node first, and one with DEPLOY_TO_FAR off queues
-            // forever while it is offline instead of skipping this stage.
+        stage('Deploy (far namespace)') {
+            // Every develop build deploys to dev, and every staging build to staging;
+            // other branches only build and push. Each credential is a kubeconfig for
+            // the far:farmer-ci service account on that cluster:
+            //   develop  farmer-dev-kubeconfig      dev, 10.0.1.166; its rights in far
+            //                                       come from ci/k8s/farmer-deploy-rbac.yaml
+            //   staging  staging-farmer-kubeconfig  staging, 10.0.1.212
+            // beforeAgent: decide before asking for vpn-agent2, so a build of any other
+            // branch never waits for that node.
             when {
                 beforeAgent true
-                allOf {
+                anyOf {
                     branch 'develop'
-                    expression { return params.DEPLOY_TO_FAR }
+                    branch 'staging'
                 }
             }
          
             agent { label 'vpn-agent2' }
+            environment {
+                KUBECONFIG_CREDENTIAL = "${env.BRANCH_NAME == 'staging' ? 'staging-farmer-kubeconfig' : 'farmer-dev-kubeconfig'}"
+            }
             steps {
                 unstash 'farmer-chart'
-                withCredentials([file(credentialsId: 'staging-farmer-kubeconfig', variable: 'KUBECONFIG')]) {
+                withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
                     sh """
                      
                         helm repo add openg2p-gitlab https://gitlab.com/api/v4/projects/84460547/packages/helm/stable || true
@@ -175,9 +177,29 @@ EOF
                             -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml > /tmp/far-new-\${BUILD_NUMBER}.yaml
                         echo "Rendered \$(wc -l < /tmp/far-new-\${BUILD_NUMBER}.yaml) lines to /tmp/far-new-\${BUILD_NUMBER}.yaml"
 
-                        helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} \
+                        # The hook Jobs (db-seed, iam-register, sanity) delete their pod
+                        # when they give up, and its log goes with it: all helm reports
+                        # is BackoffLimitExceeded. Copy their logs while helm runs, and
+                        # print them if it fails.
+                        LOGDIR=\$(mktemp -d)
+                        ( set +x
+                          while sleep 5; do
+                            for P in \$(kubectl get pods -n ${HELM_NAMESPACE} -o name | grep -E '/${HELM_RELEASE}-(db-seed|iam-register|sanity)-'); do
+                              kubectl logs \$P -n ${HELM_NAMESPACE} --all-containers --tail=100 > \$LOGDIR/\${P#pod/}.log 2>&1 || true
+                            done
+                          done ) &
+                        trap "set +e; kill \$! 2>/dev/null; wait \$! 2>/dev/null; rm -rf \$LOGDIR" EXIT
+
+                        if ! helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} \
                             -f /tmp/far-values-current-\${BUILD_NUMBER}.yaml \
-                            -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml --timeout 20m
+                            -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml --timeout 20m; then
+                            for F in \$LOGDIR/*.log; do
+                                [ -f \$F ] || continue
+                                echo "=== \$(basename \$F .log): last 100 log lines ==="
+                                cat \$F
+                            done
+                            exit 1
+                        fi
 
                        
                         kubectl rollout status deployment/${HELM_RELEASE}-staff-portal-api -n ${HELM_NAMESPACE} --timeout=180s

@@ -1,0 +1,78 @@
+# Let far:farmer-ci deploy farmer-registry into far on the dev cluster
+# (10.0.1.166). The Jenkinsfile's "Deploy (far namespace)" stage uses it on
+# develop builds, through the farmer-dev-kubeconfig credential.
+#
+# The same grants crop:crop-ci has in crop: the built-in admin role in this one
+# namespace, plus the Istio routing the chart creates (VirtualServices), which
+# admin does not cover. farmer-ci-token gives the account a long-lived token for
+# the kubeconfig.
+#
+# Apply once, as the cluster admin, on the dev box:
+#   sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl apply -f ci/k8s/farmer-deploy-rbac.yaml
+#
+# Then build the kubeconfig there, and upload it to Jenkins as a "Secret file"
+# credential with the ID farmer-dev-kubeconfig:
+#   k() { sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl -n far "$@"; }
+#   k get secret farmer-ci-token -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/farmer-ci-ca.crt
+#   export KUBECONFIG=$HOME/farmer-dev-kubeconfig
+#   kubectl config set-cluster gen2-dev --server=https://10.0.1.166:6443 \
+#     --certificate-authority=/tmp/farmer-ci-ca.crt --embed-certs=true
+#   kubectl config set-credentials farmer-ci \
+#     --token="$(k get secret farmer-ci-token -o jsonpath='{.data.token}' | base64 -d)"
+#   kubectl config set-context farmer-ci --cluster=gen2-dev --user=farmer-ci --namespace=far
+#   kubectl config use-context farmer-ci
+#   kubectl auth can-i list secrets -n far    # yes
+#   unset KUBECONFIG; rm /tmp/farmer-ci-ca.crt
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: farmer-ci
+  namespace: far
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: farmer-ci-token
+  namespace: far
+  annotations:
+    kubernetes.io/service-account.name: farmer-ci
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: farmer-ci-admin
+  namespace: far
+subjects:
+  - kind: ServiceAccount
+    name: farmer-ci
+    namespace: far
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: admin
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ci-deploy-istio
+  namespace: far
+rules:
+  - apiGroups: ["networking.istio.io", "security.istio.io"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: farmer-ci-istio
+  namespace: far
+subjects:
+  - kind: ServiceAccount
+    name: farmer-ci
+    namespace: far
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ci-deploy-istio
