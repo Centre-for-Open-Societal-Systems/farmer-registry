@@ -88,7 +88,7 @@ pipeline {
             // Every develop build deploys to dev, and every staging build to staging;
             // other branches only build and push. Each credential is a kubeconfig for
             // the far:farmer-ci service account on that cluster:
-            //   develop  farmer-dev-kubeconfig      dev, 10.0.1.166; its rights in far
+            //   develop  gen2-dev-kubeconfig        dev, 10.0.1.166; its rights in far
             //                                       come from ci/k8s/farmer-deploy-rbac.yaml
             //   staging  staging-farmer-kubeconfig  staging, 10.0.1.212
             // beforeAgent: decide before asking for vpn-agent2, so a build of any other
@@ -103,7 +103,7 @@ pipeline {
          
             agent { label 'vpn-agent2' }
             environment {
-                KUBECONFIG_CREDENTIAL = "${env.BRANCH_NAME == 'staging' ? 'staging-farmer-kubeconfig' : 'farmer-dev-kubeconfig'}"
+                KUBECONFIG_CREDENTIAL = "${env.BRANCH_NAME == 'staging' ? 'staging-farmer-kubeconfig' : 'gen2-dev-kubeconfig'}"
             }
             steps {
                 unstash 'farmer-chart'
