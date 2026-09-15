@@ -33,8 +33,11 @@ global:
   #
   # Note this host is also what the API SIGNS against, and a pre-signed S3
   # signature covers the Host header -- so the signer and the browser must use
-  # the SAME name. Fixing only the CSP is not enough; the value itself has to
-  # be the external one. Set minioSecure to match its scheme (https -> true).
+  # the SAME name. Fixing only the CSP is not enough, and neither is rewriting
+  # the host at an ingress: the replayed signature is rejected with
+  # SignatureDoesNotMatch. Both halves of that are demonstrated against a real
+  # MinIO in test/staff-ui/test_minio_presigned_host.py. Set minioSecure to
+  # match the scheme (https -> true).
   #
   # Inherited from the subchart default unless overridden per environment.
   # minioHost: 'minio-api.{{ .Release.Namespace }}.openg2p.org'
