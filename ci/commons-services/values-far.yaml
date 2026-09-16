@@ -1,0 +1,46 @@
+# Values overlay for the `commons-services` release in the `far` namespace.
+#
+# Applied by upgrade.sh on top of the release's live values (`helm get
+# values`), together with the chart version pinned in that script. The live values hold the
+# environment's hostnames and wiring and stay untouched; this file holds only
+# what the farmer registry needs from the shared platform services.
+#
+# G2R-172: staff-ui 1.2.1 calls master-data at /geo/get_all_geo_levels and
+# /geo/get_geo_level_values, but the master-data build that was installed by
+# hand (an early pull of the floating 0.0.0-develop.26 tag) only serves the old
+# /geo/get_all_g2p_geo_levels names, so the intake form's Location section got
+# 404s. The chart bump to 2.3.0-rc.217 moves master-data to 1.1.0-rc.55, which
+# serves the current names. An image-only swap is not possible: chart 2.2.0
+# renders GEN2_MASTER_DATA_API_* env names and the new build reads
+# MASTER_DATA_API_*, so it would start with no database configuration.
+masterData:
+  masterDataAPI:
+    image:
+      # The chart default still points at registry.gitlab.com/openg2p/
+      # master-data-service/..., which no longer allows anonymous pulls. Same
+      # image, current path. The tag stays at the chart default (1.1.0-rc.55).
+      repository: registry.gitlab.com/openg2p/platform-services/master-data-service/master-data-api
+  geoSeed:
+    image:
+      # Same path move for the seed the post-upgrade hook runs.
+      repository: registry.gitlab.com/openg2p/platform-services/master-data-service/master-data-db-seed
+    # countryPack is ETH in this chart version's defaults; not repeated here.
+    objectStore:
+      # Boundary geometry (the map layer) is uploaded to MinIO when an endpoint
+      # is set, and the seed aborts if that upload fails or the referenced
+      # secret is missing. The administrative hierarchy the Location widget
+      # needs loads without it. Left off until the MinIO wiring for master-data
+      # in this namespace is confirmed; then set the endpoint and re-run.
+      endpoint: ""
+  # The master-data admin UI would be a new deployment in the namespace;
+  # nothing in the farmer registry uses it.
+  masterDataUi:
+    enabled: false
+
+# Components this chart version would add to the namespace that the farmer
+# registry does not use. Held off so the upgrade stays within what G2R-172
+# requires; enable deliberately when there is a consumer.
+superset:
+  enabled: false
+openg2p-inji-certify:
+  enabled: false
