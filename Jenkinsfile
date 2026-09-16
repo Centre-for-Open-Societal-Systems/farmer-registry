@@ -40,7 +40,18 @@ pipeline {
         stage('Build & Push') {
             steps {
                 script {
-                    env.IMAGE_TAG = env.GIT_COMMIT.take(12)
+                    // Images are deployed by their <branch>-<build number> tag, so
+                    // `kubectl get deploy` names the Jenkins build a namespace runs and
+                    // the build page names the same string. The commit goes on as a
+                    // second tag, so an image still traces back to its source, and the
+                    // bare branch name stays as the moving pointer to its newest build.
+                    // Docker tags allow only [A-Za-z0-9_.-], while branch names carry
+                    // slashes, so anything else becomes '-'.
+                    def branch = (env.BRANCH_NAME ?: 'local').replaceAll('[^A-Za-z0-9_.-]', '-')
+                    env.IMAGE_TAG  = "${branch}-${env.BUILD_NUMBER}"
+                    env.COMMIT_TAG = env.GIT_COMMIT.take(12)
+                    env.BRANCH_TAG = branch
+                    echo "images: ${ECR_PATH}/*:${env.IMAGE_TAG} (commit ${env.COMMIT_TAG})"
 
                     // Build the root Dockerfile's targets, the same definition docker
                     // compose builds, so CI ships what the developers run. The
@@ -62,14 +73,15 @@ pipeline {
                     ]
 
                     components.each { c ->
-                        def image  = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${env.IMAGE_TAG}"
-                        def latest = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:develop"
+                        def repo   = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}"
                         def target = c.target ? "--target ${c.target}" : ''
                         sh """
                             docker build ${c.args} ${target} \
-                                -f ${c.dockerfile} -t ${image} -t ${latest} .
-                            docker push ${image}
-                            docker push ${latest}
+                                -f ${c.dockerfile} \
+                                -t ${repo}:${env.IMAGE_TAG} -t ${repo}:${env.COMMIT_TAG} -t ${repo}:${env.BRANCH_TAG} .
+                            docker push ${repo}:${env.IMAGE_TAG}
+                            docker push ${repo}:${env.COMMIT_TAG}
+                            docker push ${repo}:${env.BRANCH_TAG}
                         """
                     }
                 }
