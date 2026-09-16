@@ -1,6 +1,6 @@
 # Let far:farmer-ci deploy farmer-registry into far on the dev cluster
 # (10.0.1.166). The Jenkinsfile's "Deploy (far namespace)" stage uses it on
-# develop builds, through the farmer-dev-kubeconfig credential.
+# develop builds, through the gen2-dev-kubeconfig credential.
 #
 # The same grants crop:crop-ci has in crop: the built-in admin role in this one
 # namespace, plus the Istio routing the chart creates (VirtualServices), which
@@ -11,10 +11,10 @@
 #   sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl apply -f ci/k8s/farmer-deploy-rbac.yaml
 #
 # Then build the kubeconfig there, and upload it to Jenkins as a "Secret file"
-# credential with the ID farmer-dev-kubeconfig:
+# credential with the ID gen2-dev-kubeconfig:
 #   k() { sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl -n far "$@"; }
 #   k get secret farmer-ci-token -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/farmer-ci-ca.crt
-#   export KUBECONFIG=$HOME/farmer-dev-kubeconfig
+#   export KUBECONFIG=$HOME/gen2-dev-kubeconfig
 #   kubectl config set-cluster gen2-dev --server=https://10.0.1.166:6443 \
 #     --certificate-authority=/tmp/farmer-ci-ca.crt --embed-certs=true
 #   kubectl config set-credentials farmer-ci \
