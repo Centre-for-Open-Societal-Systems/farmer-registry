@@ -37,6 +37,53 @@ masterData:
   masterDataUi:
     enabled: false
 
+# Image paths for the other services this chart version moves. OpenG2P moved its
+# GitLab projects under openg2p/platform-services/ around 2026-08-24, and the old
+# paths answer 403 to anonymous pulls, so a rollout onto a chart default would sit
+# in ImagePullBackOff while the old pod keeps serving -- a stuck upgrade that still
+# reports success, because helm does not wait on these deployments. Same images,
+# same tags, current path; each tag below was checked against the registry.
+#
+# Not listed, deliberately: partner-management and audit-manager, whose tags here
+# match what is already running, so the upgrade does not restart them.
+openg2p-awe:
+  awe:
+    image:
+      repository: registry.gitlab.com/openg2p/platform-services/awe/openg2p-awe
+  ui:
+    image:
+      repository: registry.gitlab.com/openg2p/platform-services/awe/openg2p-awe-ui
+openg2p-iam-service:
+  iamStaffPortalApi:
+    image:
+      repository: registry.gitlab.com/openg2p/platform-services/iam/iam-staff-portal-api
+  # Two deployments this chart version would add to the namespace. The agent
+  # portal reads its config from a secret named `agent-portal`, which this chart
+  # does not create and `far` does not have, so the pod would sit in
+  # CreateContainerConfigError; the IAM staff UI is the IAM admin console, which
+  # nothing here routes to. The image paths stay current so that enabling either
+  # one later does not land back on a path that refuses anonymous pulls.
+  iamAgentPortalApi:
+    enabled: false
+    image:
+      repository: registry.gitlab.com/openg2p/platform-services/iam/iam-agent-portal-api
+  iamStaffUi:
+    enabled: false
+    image:
+      repository: registry.gitlab.com/openg2p/platform-services/iam/iam-staff-ui
+openg2p-consent-manager:
+  consentManagerApi:
+    image:
+      # This subchart keeps the host in a separate `registry` key, which stays.
+      repository: openg2p/platform-services/consent-manager/consent-manager-api
+  ui:
+    image:
+      repository: openg2p/platform-services/consent-manager/consent-manager-ui
+  sanity:
+    image:
+      # sanity's template renders repository:tag directly, so the host goes here.
+      repository: registry.gitlab.com/openg2p/platform-services/consent-manager/consent-manager-sanity
+
 # Components this chart version would add to the namespace that the farmer
 # registry does not use. Held off so the upgrade stays within what G2R-172
 # requires; enable deliberately when there is a consumer.

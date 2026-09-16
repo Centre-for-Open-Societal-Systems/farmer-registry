@@ -91,4 +91,13 @@ echo "$ROUTES" | grep -q '"/geo/get_all_geo_levels"' || {
     echo "master-data does not serve /geo/get_all_geo_levels after the upgrade" >&2
     exit 1
 }
+# 6. The chart renders AWE's config with one accepted issuer, so this upgrade
+#    overwrites any extra issuers added by hand -- a public portal's Keycloak,
+#    typically. Without them AWE answers 401 on tokens from that Keycloak and the
+#    portal shows AWE-ERR-006, as soon as an AWE pod restarts.
+echo "=== AWE accepts these issuers now ==="
+kubectl get cm "$RELEASE-awe-config" -n "$NAMESPACE" -o jsonpath='{.data.config\.yaml}' 2>/dev/null \
+    | sed -n '/keycloak:/,/audience:/p' | sed 's/^/    /' || true
+echo "=== if an environment reaches Keycloak by another hostname, re-add it before using the portal ==="
+
 echo "=== done: $RELEASE now at revision $(helm list -n "$NAMESPACE" -f "^$RELEASE\$" -o json | sed -n 's/.*"revision":"\([0-9]*\)".*/\1/p') ==="
