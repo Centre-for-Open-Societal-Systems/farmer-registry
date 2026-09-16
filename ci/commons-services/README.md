@@ -55,6 +55,27 @@ platform is a deliberate act with the full values, not something this does.
    that the master-data behind `MASTERDATA_BACKEND_API_URL` now serves
    `/geo/get_all_geo_levels`. A missing route is a failure.
 
+## After the upgrade: AWE issuers
+
+AWE validates a token's issuer against `keycloak.issuer` plus
+`keycloak.additional_issuers` in ConfigMap `commons-services-awe-config`. The
+chart templates the first only, so this upgrade rewrites that ConfigMap and
+drops any issuer added by hand — in `far`, the public portal's Keycloak. AWE
+keeps serving until its pod restarts, which this upgrade does, and then answers
+401 `Invalid issuer`, which the registry surfaces as `AWE-ERR-006` on the
+Location and task widgets.
+
+Step 6 of `upgrade.sh` prints the issuers AWE ends up with. If an environment is
+reached through a Keycloak hostname that is not among them, add it back:
+
+```sh
+kubectl -n far get cm commons-services-awe-config -o jsonpath='{.data.config\.yaml}' > awe.yaml
+# add the issuer under keycloak.additional_issuers, then:
+kubectl -n far create configmap commons-services-awe-config \
+  --from-file=config.yaml=awe.yaml --dry-run=client -o yaml | kubectl -n far replace -f -
+kubectl -n far rollout restart deploy/commons-services-awe
+```
+
 ## Rollback
 
 `helm -n far rollback commons-services <revision printed in step 1>`. The
