@@ -1,0 +1,68 @@
+// Standalone job for the shared platform services (`commons-services` release)
+// the farmer registry runs against. Deliberately NOT a stage of the registry's
+// own pipeline (../../Jenkinsfile): the shared services change on their own
+// cadence, and the chart's post-upgrade hooks re-run on every helm upgrade.
+//
+// Set it up once in Jenkins as a Pipeline job with "Pipeline script from SCM"
+// pointing at this file (Script Path: ci/commons-services/Jenkinsfile). It has
+// no triggers, so it only runs from "Build with Parameters". What it applies is
+// ci/commons-services/upgrade.sh from the branch it is built from, so a change
+// to the platform pin or the overlay still goes through a pull request first.
+//
+// Same kubeconfig credentials as the registry deploy: each is a kubeconfig for
+// the far:farmer-ci service account on that cluster (ci/k8s/farmer-deploy-rbac.yaml).
+pipeline {
+    agent { label 'vpn-agent2' }
+
+    options {
+        // One upgrade of a shared release at a time.
+        disableConcurrentBuilds()
+    }
+
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging'],
+            description: 'Cluster to upgrade: dev (gen2-dev-kubeconfig) or staging (staging-farmer-kubeconfig).')
+        string(name: 'CHART_VERSION', defaultValue: '',
+            description: 'openg2p-commons-services chart version. Leave empty for the pin in upgrade.sh; only set it to try a newer chart, and pin that in upgrade.sh afterwards.')
+        booleanParam(name: 'CONFIRM', defaultValue: false,
+            description: 'Tick to run. Left unticked the job stops before touching the cluster.')
+    }
+
+    environment {
+        KUBECONFIG_CREDENTIAL = "${params.ENVIRONMENT == 'staging' ? 'staging-farmer-kubeconfig' : 'gen2-dev-kubeconfig'}"
+        NAMESPACE = "far"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps { checkout scm }
+        }
+
+        stage('Upgrade commons-services') {
+            when {
+                expression { return params.CONFIRM }
+            }
+            steps {
+                withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                    sh """
+                        export NAMESPACE='${NAMESPACE}'
+                        if [ -n '${params.CHART_VERSION}' ]; then export CHART_VERSION='${params.CHART_VERSION}'; fi
+                        sh ci/commons-services/upgrade.sh
+                    """
+                }
+                // The live values the script saved before upgrading, for rollback.
+                archiveArtifacts artifacts: 'commons-services-values-rev*.yaml', allowEmptyArchive: true
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                if (!params.CONFIRM) {
+                    echo "CONFIRM was not ticked: nothing was applied to ${params.ENVIRONMENT}."
+                }
+            }
+        }
+    }
+}
