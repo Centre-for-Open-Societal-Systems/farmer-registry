@@ -21,6 +21,22 @@ SET "core_translation" = jsonb_set(
 )::json
 WHERE "language_code" = 'en';
 
+-- The platform's 1.2.x UI still calls intake submissions "Form Submissions"
+-- (home card, register tab, search box); the platform has since renamed the
+-- concept to "Intake Form" and the other registries show that. Same wording
+-- here, so the Farmer portal reads like the rest of the suite.
+UPDATE "public"."registry_languages"
+SET "core_translation" = (
+    "core_translation"::jsonb
+    || jsonb_build_object(
+        'form_submissions', 'Intake Form',
+        'register_form_submissions', '{subject} - Intake Form',
+        'register_form_submission', '{subject} - Intake Form',
+        'search_form_submissions', 'Search in Intake Form'
+    )
+)::json
+WHERE "language_code" = 'en';
+
 -- Postgres caps function calls at 100 arguments (FUNC_MAX_ARGS), so a single
 -- jsonb_build_object() holds at most 50 label pairs. This statement had grown
 -- past that and was failing wholesale at seed time ("cannot pass more than
