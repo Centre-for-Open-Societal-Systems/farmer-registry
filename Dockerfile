@@ -141,6 +141,13 @@ RUN DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
 COPY docker/staff-ui/assets/patch-empty-value-dash.js /tmp/patch-empty-value-dash.js
 RUN node /tmp/patch-empty-value-dash.js
 
+# Show Configuration and the language switch in the header bar, as 1.1.x did,
+# instead of behind the 1.2.x "More" (three-dot) menu. The inline components
+# are still compiled into the header chunk; the script swaps them into the
+# header's control list and drops the menu.
+COPY docker/staff-ui/assets/patch-header-inline-controls.js /tmp/patch-header-inline-controls.js
+RUN node /tmp/patch-header-inline-controls.js
+
 # Every patch above edited a content-hashed asset in place, and Next serves
 # /_next/static as immutable -- returning browsers would keep the old file
 # until a hard refresh. Give each changed asset a new hash and rewrite the
@@ -151,7 +158,7 @@ RUN sh /tmp/rehash-patched-assets.sh && rm /tmp/static.before /tmp/static.after
 # Fail the build if a bundle patch stopped matching. These seds target MINIFIED
 # identifiers, so a base-image bump can silently drop every customisation while
 # still exiting 0 - which is exactly what happened moving 1.1.1 -> 1.2.1.
-RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     here 'record_image_document_id:__doc.document_id' "intake profile image upload";     gone 'hdr-field-value",title:[A-Za-z_$][A-Za-z0-9_$]*\|\|"-"' "empty-value dash placeholder";     echo "OK: staff-ui bundle patches verified"
+RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     here 'record_image_document_id:__doc.document_id' "intake profile image upload";     gone 'hdr-field-value",title:[A-Za-z_$][A-Za-z0-9_$]*\|\|"-"' "empty-value dash placeholder";     gone '"flex items-center gap-4",children:\[\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\)\]' "header controls behind the More menu";     echo "OK: staff-ui bundle patches verified"
 
 # ------------------------------------------------------------------ DB seed
 FROM registry.gitlab.com/openg2p/registry/registry-platform/db-seed:${RP_VERSION} AS db-seed
