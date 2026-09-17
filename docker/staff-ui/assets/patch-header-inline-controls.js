@@ -28,6 +28,12 @@
  * would still carry the More button and hydration would flag a mismatch.
  * Exits non-zero if fewer than two bundles match, so a base-image change
  * fails the build instead of silently bringing the menu back.
+ *
+ * The required modules are bound at module scope, next to the header's own
+ * imports, not required inline inside the component: the minified component
+ * declares locals named e, t, i, ... that shadow the factory's require
+ * parameter, so `i(60431)` inside the render is a call on an element
+ * ("i is not a function" on every page).
  */
 const fs = require("fs");
 const path = require("path");
@@ -108,21 +114,28 @@ function patch(src) {
 
   const header = find((m) => HEADER_LIST.test(m.body), "header");
   const req = header.requireName;
-  const body = header.body.replace(HEADER_LIST, (_m, jsx, notifications, account) => {
+  // Names no minifier emits, so they cannot collide with the module's locals.
+  const G = "__farGuard", P = "__farPerms", C = "__farConfig", L = "__farLanguage";
+  const useStrict = '"use strict";';
+  const at = header.body.indexOf(useStrict);
+  if (at < 0) throw new Error("header module: no \"use strict\" prologue to bind imports after");
+  const bindings =
+    `var ${G}=${req}(${guardId}),${P}=${req}(${permsId}),` +
+    `${C}=${req}(${config.id}),${L}=${req}(${language.id});`;
+  let body = header.body.slice(0, at + useStrict.length) + bindings + header.body.slice(at + useStrict.length);
+  const before = body;
+  body = body.replace(HEADER_LIST, (_m, jsx, notifications, account) => {
     const el = (expr, props) => `(0,${jsx}.jsx)(${expr},${props})`;
-    const configuration = el(
-      `${req}(${guardId}).A`,
-      `{anyOf:${req}(${permsId}).Ll,children:${el(`${req}(${config.id}).default`, "{}")}}`
-    );
+    const configuration = el(`${G}.A`, `{anyOf:${P}.Ll,children:${el(`${C}.default`, "{}")}}`);
     return (
       `(0,${jsx}.jsxs)("div",{className:"flex items-center gap-4",children:[` +
       configuration +
-      `,${el(`${req}(${language.id}).default`, "{}")}` +
+      `,${el(`${L}.default`, "{}")}` +
       `,${el(`${notifications}.default`, "{}")}` +
       `,${el(`${account}.default`, "{}")}]})`
     );
   });
-  if (body === header.body) throw new Error("header module: list not rewritten");
+  if (body === before) throw new Error("header module: list not rewritten");
   return src.slice(0, header.start) + body + src.slice(header.end);
 }
 
