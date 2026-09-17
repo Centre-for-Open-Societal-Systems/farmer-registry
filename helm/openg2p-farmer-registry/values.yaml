@@ -20,6 +20,31 @@ global:
   # Ingress host for this registry. Overrides the subchart's generic default.
   registryHostname: '{{ .Release.Name }}.{{ .Release.Namespace }}.openg2p.org'
 
+  # Where AWE posts its approval decision back to the registry. The subchart
+  # default routes this through the public ingress
+  # (https://staff-<registryHostname>/awe/webhooks/decision), which means a
+  # call between two Services in the same namespace leaves the cluster, comes
+  # back in through the ingress, and depends on that ingress certificate being
+  # trusted by AWE. On the far namespace the ingress is signed by a private CA
+  # that AWE does not carry, and its webhook client has no verify/CA setting,
+  # so every delivery since the integration went live failed with
+  # CERTIFICATE_VERIFY_FAILED: AWE recorded the request as approved, the
+  # registry never heard, and the submission sat in PENDING with the ingest
+  # worker correctly never picking it up.
+  #
+  # Call the staff-portal-api Service directly instead, as docker-compose.yml
+  # does. The payload is HMAC-signed (X-Approval-Signature, secret from
+  # awe-callback-hmac-secret), so dropping TLS on the in-cluster hop does not
+  # weaken authentication. The Service is named by the subchart's
+  # staffApi.nameOverride ("staff-portal-api") on port 80.
+  #
+  # db-seed writes the same value into AWE's callback_secret.caller_service, so
+  # the seed must run with the deploy (it does: dbSeed is enabled) for AWE to
+  # register the new address. Requests created before this change keep the
+  # https:// URL they were created with and need their pending deliveries
+  # repointed by hand.
+  aweDefaultCallbackUrl: 'http://{{ .Release.Name }}-staff-portal-api/awe/webhooks/decision'
+
   # Browser-facing MinIO host. Record images (the farmer photo captured at
   # intake, land certificates) are served to the BROWSER as pre-signed URLs
   # built against this value, and the subchart also derives the staff-ui
