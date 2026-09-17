@@ -38,11 +38,11 @@ global:
   # weaken authentication. The Service is named by the subchart's
   # staffApi.nameOverride ("staff-portal-api") on port 80.
   #
-  # db-seed writes the same value into AWE's callback_secret.caller_service, so
-  # the seed must run with the deploy (it does: dbSeed is enabled) for AWE to
-  # register the new address. Requests created before this change keep the
-  # https:// URL they were created with and need their pending deliveries
-  # repointed by hand.
+  # db-seed writes the same value into AWE's callback_secret.caller_service
+  # and repoints this registry's still-open requests and their undelivered
+  # webhooks to it (awe_meta_data/40_callback_secret.sql.tpl), so the seed
+  # must run with the deploy (it does: dbSeed is enabled) for AWE to pick the
+  # new address up.
   aweDefaultCallbackUrl: 'http://{{ .Release.Name }}-staff-portal-api/awe/webhooks/decision'
 
   # Browser-facing MinIO host. Record images (the farmer photo captured at
