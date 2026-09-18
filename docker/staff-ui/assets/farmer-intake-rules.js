@@ -324,6 +324,19 @@
     btn.style.top = (input.offsetTop + input.offsetHeight / 2) + "px";
   }
 
+  // The table widget title-cases its headers, so "Expiry Date (GC)" comes
+  // out as "Expiry Date (gc)"; the birth section, which is not a table,
+  // shows the calendar tag in capitals. Make the tables match.
+  function calendarTags() {
+    document.querySelectorAll(".table-widget-container thead th").forEach(function (th) {
+      var fix = function (t) { return t.replace(/\((gc|ec)\)/gi, function (m, c) { return "(" + c.toUpperCase() + ")"; }); };
+      var title = th.getAttribute("title");
+      if (title && /\((gc|ec)\)/.test(title)) th.setAttribute("title", fix(title));
+      th.childNodes.forEach(function (n) { if (n.nodeType === 3 && /\((gc|ec)\)/.test(n.nodeValue)) n.nodeValue = fix(n.nodeValue); });
+      th.querySelectorAll("*").forEach(function (e) { e.childNodes.forEach(function (n) { if (n.nodeType === 3 && /\((gc|ec)\)/.test(n.nodeValue)) n.nodeValue = fix(n.nodeValue); }); });
+    });
+  }
+
   function ecPickers() {
     document.querySelectorAll('.widget-container[data-widget-id$="_ec"] input[type="text"], .widget-container[data-widget-id$="_date"] input[type="text"], td input[type="text"]').forEach(function (input) {
       var btn = input.nextElementSibling;
@@ -616,6 +629,7 @@
     photoHints();
     fileNotes();
     fileCellNames();
+    calendarTags();
     ecPickers();
   }
   new MutationObserver(function () {
