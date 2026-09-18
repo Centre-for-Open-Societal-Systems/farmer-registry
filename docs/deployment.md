@@ -74,7 +74,6 @@ pipeline's; treat it as stale.
 | Remote | Repo | Role |
 | --- | --- | --- |
 | `origin` | `Centre-for-Open-Societal-Systems/farmer-registry` | PR target; `develop` is what dev deploys, `staging` is what staging deploys |
-| `fork` | `asmitonweb/farmer-registry` | push branches here, open PRs against `origin` |
 
 Fork PRs show CI as `action_required` until a COSS maintainer approves the
 workflow run; that is not a failure. Maintainer/reviewer: Suresh (`suresh2692`).
