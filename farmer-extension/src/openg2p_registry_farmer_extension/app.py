@@ -478,6 +478,61 @@ class Initializer(BaseInitializer):
                 )
             )
 
+            # Ethiopic twins of the Gregorian date columns (see the farmer's
+            # birth_date_ec above): a VARCHAR because month 13 exists. Declared
+            # on the models, so create_all() covers fresh databases; this covers
+            # the ones that already existed.
+            for column_name, tables in {
+                "birth_date_ec": (
+                    "g2p_register_household_members",
+                    "g2p_register_history_household_members",
+                    "g2p_intake_form_household_members",
+                ),
+                "planted_date_ec": (
+                    "g2p_register_crops",
+                    "g2p_register_history_crops",
+                    "g2p_intake_form_crops",
+                ),
+                "expiry_date_ec": (
+                    "g2p_register_reg_ids",
+                    "g2p_register_history_reg_ids",
+                    "g2p_intake_form_reg_ids",
+                ),
+            }.items():
+                for table_name in tables:
+                    await conn.execute(
+                        text(
+                            f'ALTER TABLE "public"."{table_name}" '
+                            f'ADD COLUMN IF NOT EXISTS "{column_name}" VARCHAR'
+                        )
+                    )
+
+            # Crops, livestock and farm inputs are children of the FARMER (see
+            # zz_farmer_register_parents.sql). Rows written while their master
+            # register was Land point at a land row and never show on the
+            # farmer's tabs; re-point each at that land's own farmer. A row
+            # whose link is not a land (already a farmer, or unlinked) is left
+            # alone, so this is a no-op on the second and every later boot.
+            for table_name in (
+                "g2p_register_crops",
+                "g2p_register_history_crops",
+                "g2p_register_livestocks",
+                "g2p_register_history_livestocks",
+                "g2p_register_farm_inputs",
+                "g2p_register_history_farm_inputs",
+            ):
+                await conn.execute(
+                    text(
+                        f"""
+                        UPDATE "public"."{table_name}" AS child
+                        SET link_internal_record_id = land.link_internal_record_id
+                        FROM "public"."g2p_register_lands" AS land
+                        WHERE child.link_internal_record_id = land.internal_record_id
+                          AND land.link_internal_record_id IS NOT NULL
+                        """
+                    )
+                )
+
             land_extension_columns = {
                 "area_in_hectare": "NUMERIC(16, 6)",
                 "land_kebele": "VARCHAR",

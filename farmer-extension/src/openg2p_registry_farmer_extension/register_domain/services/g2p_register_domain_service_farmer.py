@@ -10,21 +10,18 @@ from .domain_validation_utils import (
     as_bool,
     as_int,
     is_embedded_file,
+    normalize_coordinates,
     parse_date,
+    sync_ethiopic_date_pair,
     upload_embedded_file,
     validation_error,
-)
-from .ethiopian_calendar import (
-    ethiopic_to_gregorian,
-    format_ethiopic,
-    gregorian_to_ethiopic_string,
-    parse_ethiopic,
 )
 from .validation_rules import (
     NAME_FIELDS,
     NAME_MAX_LENGTH,
     NAME_PATTERN,
     REQUIRED_NAME_FIELDS,
+    NAME_FIELD_LABELS,
     is_interactive,
     matches,
 )
@@ -49,6 +46,7 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
             self._normalize_booleans(record)
+            normalize_coordinates(record)
             await self._persist_embedded_profile_photo(record)
             self._validate_names(record)
             self._validate_birth_date(record)
@@ -354,18 +352,19 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             value = record.get(field)
             text = "" if value is None else str(value).strip()
 
+            label = NAME_FIELD_LABELS.get(field, field)
             if not text:
                 if interactive and field in REQUIRED_NAME_FIELDS:
-                    validation_error(f"{field} is required")
+                    validation_error(f"{label} is required")
                 continue
 
             if len(text) > NAME_MAX_LENGTH:
                 validation_error(
-                    f"{field} must be {NAME_MAX_LENGTH} characters or fewer"
+                    f"{label} must be {NAME_MAX_LENGTH} characters or fewer"
                 )
             if not matches(NAME_PATTERN, text):
                 validation_error(
-                    f"{field} may contain only letters (Latin or Ethiopic), "
+                    f"{label} may contain only letters (Latin or Ethiopic), "
                     "spaces, hyphens and apostrophes"
                 )
             record[field] = text
@@ -373,7 +372,7 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
     def _validate_birth_date(self, record: dict) -> None:
         birth_date = parse_date(record.get("birth_date"))
         if birth_date is not None and birth_date > date.today():
-            validation_error("birth_date must not be in the future")
+            validation_error("Date of birth cannot be in the future")
 
     def _validate_estimated_age(self, record: dict) -> None:
         birth_date = parse_date(record.get("birth_date"))
@@ -383,55 +382,17 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         computed_age = self._calculate_age(birth_date)
         if computed_age is not None and abs(estimated_age - computed_age) > 1:
             validation_error(
-                "estimated_age must be consistent with birth_date within one year"
+                f"Age ({estimated_age}) does not match the date of birth "
+                f"(which gives {computed_age}); leave Age blank to fill it automatically"
             )
 
     def _sync_ethiopian_birth_date(self, record: dict) -> None:
         """Keep birth_date (Gregorian) and birth_date_ec (Ethiopic) in step.
 
-        Runs here rather than in the date widget so every entry path gets it --
-        web intake, bulk ingestion, the partner API and file import all land in
-        validate_domain_attributes, and only the first of those has a UI.
-
-        Whichever side the enumerator filled derives the other. If both arrive,
-        they must agree: silently rewriting one of two explicitly entered
-        values would hide a data-entry error rather than surface it.
+        See sync_ethiopic_date_pair for the rules; the household member, crop
+        and ID registers apply the same helper to their own date pairs.
         """
-        # Only touch the pair when the caller actually submitted at least one
-        # of them. A partial update of, say, marital_status carries neither key
-        # and must not have a birth date derived onto it.
-        has_gc = "birth_date" in record
-        has_ec = "birth_date_ec" in record
-        if not has_gc and not has_ec:
-            return
-
-        gregorian = parse_date(record.get("birth_date"))
-        raw_ec = record.get("birth_date_ec")
-        ethiopic = parse_ethiopic(raw_ec)
-
-        if raw_ec not in (None, "") and ethiopic is None:
-            validation_error(
-                "birth_date_ec must be an Ethiopic date in YYYY-MM-DD form"
-            )
-
-        if ethiopic is not None:
-            try:
-                converted = ethiopic_to_gregorian(*ethiopic)
-            except ValueError as exc:
-                validation_error(str(exc))
-            if gregorian is None:
-                record["birth_date"] = converted
-            elif converted != gregorian:
-                validation_error(
-                    "birth_date_ec does not match birth_date "
-                    f"({format_ethiopic(*ethiopic)} EC is {converted} GC, "
-                    f"not {gregorian})"
-                )
-            # Normalize to the padded string form even when it round-trips, so
-            # a legacy date value or an unpadded entry is rewritten on save.
-            record["birth_date_ec"] = format_ethiopic(*ethiopic)
-        elif gregorian is not None:
-            record["birth_date_ec"] = gregorian_to_ethiopic_string(gregorian)
+        sync_ethiopic_date_pair(record, "birth_date", "birth_date_ec", "Date of birth")
 
     def _populate_age_from_birth_date(self, record: dict) -> None:
         """Populate the stored Age when a Gregorian birth date is supplied."""

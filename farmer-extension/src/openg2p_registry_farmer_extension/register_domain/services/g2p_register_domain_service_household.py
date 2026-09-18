@@ -3,7 +3,7 @@ import logging
 from openg2p_registry_core.services import G2PRegisterDomainService
 from sqlalchemy import select
 
-from .domain_validation_utils import as_bool, as_int, validation_error
+from .domain_validation_utils import as_bool, as_int, normalize_coordinates, validation_error
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
@@ -14,6 +14,7 @@ class G2PRegisterDomainServiceHousehold(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
             self._normalize_booleans(record)
+            normalize_coordinates(record)
             self._validate_household_size(record)
 
     @staticmethod
@@ -33,31 +34,39 @@ class G2PRegisterDomainServiceHousehold(G2PRegisterDomainService):
         female = as_int(record.get("number_of_female_members"))
         children = as_int(record.get("number_of_children"))
 
-        for field_name, value in (
-            ("size_of_group", size_of_group),
-            ("number_of_male_members", male),
-            ("number_of_female_members", female),
-            ("number_of_children", children),
+        # Messages use the form's own labels: they are shown to the enumerator
+        # verbatim in a toast, so "size_of_group must equal
+        # number_of_male_members + ..." read as a system fault, not as
+        # something they could fix (and the form now checks the same rules as
+        # they type -- see docker/staff-ui/assets/farmer-intake-rules.js).
+        for label, value in (
+            ("Family Size", size_of_group),
+            ("Number Of Males In The Family", male),
+            ("Number Of Females In The Family", female),
+            ("Number Of Children In The Family", children),
         ):
             if value is not None and value < 0:
-                validation_error(f"{field_name} must not be negative")
+                validation_error(f"{label} cannot be negative")
 
         if size_of_group is not None and male is not None and female is not None:
             if size_of_group != male + female:
                 validation_error(
-                    "size_of_group must equal number_of_male_members + number_of_female_members"
+                    f"Family Size must equal the number of males plus females "
+                    f"({male} + {female} = {male + female}, not {size_of_group})"
                 )
 
         if size_of_group is not None and children is not None and children > size_of_group:
-            validation_error("number_of_children must not exceed size_of_group")
+            validation_error(
+                f"Number Of Children ({children}) cannot exceed Family Size ({size_of_group})"
+            )
 
         if as_bool(record.get("father_included")) and male is not None and male < 1:
             validation_error(
-                "number_of_male_members must be at least one when father_included is true"
+                "Father Included is ticked, so Number Of Males In The Family must be at least 1"
             )
         if as_bool(record.get("mother_included")) and female is not None and female < 1:
             validation_error(
-                "number_of_female_members must be at least one when mother_included is true"
+                "Mother Included is ticked, so Number Of Females In The Family must be at least 1"
             )
 
     async def post_ingest(self, register_id, register_row, session):

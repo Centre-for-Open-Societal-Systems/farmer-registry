@@ -46,7 +46,7 @@ class G2PRegisterDomainServiceFarmInputs(G2PRegisterDomainService):
             amount = as_float(record.get(field))
             record[field] = amount
             if amount is not None and amount < 0:
-                validation_error(f"{field} must not be negative")
+                validation_error(f"{field.replace('_', ' ').title()} cannot be negative")
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
         _logger.info("Constructing search text for farm inputs")
