@@ -13,9 +13,11 @@
  *   2. Dates: a Gregorian date fills its Ethiopic (EC) twin and vice versa,
  *      for the farmer's birth date and for any table column pair whose
  *      headers end in "(GC)" / "(EC)" (household members, crops, IDs).
- *      Every EC box also gets a calendar button: the browser's date picker
- *      cannot show 13 months of 30 days, so a small Ethiopic one is drawn
- *      here (month / year, 7-day grid aligned by weekday, Pagumen 5 or 6).
+ *      Both boxes are text (YYYY-MM-DD) with the same calendar button: the
+ *      browser's date picker cannot show 13 months of 30 days, nor display
+ *      YYYY-MM-DD outside its own locale, so one small picker is drawn
+ *      here for both calendars (month / year, 7-day grid aligned by
+ *      weekday, Pagumen 5 or 6).
  *   3. Photo: a non-image is refused with a message that names what is
  *      accepted, and a large image is resized to 1024px / JPEG before the
  *      widget previews it, so what is shown is what will be uploaded.
@@ -152,10 +154,15 @@
   function ethiopicMonthLength(y, m) { return m === 13 ? (y % 4 === 3 ? 6 : 5) : 30; }
   function pad(n) { return (n < 10 ? "0" : "") + n; }
 
+  function gregorianMonthLength(y, m) {
+    return m === 2 ? ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28) : [4, 6, 9, 11].indexOf(m) >= 0 ? 30 : 31;
+  }
   function gcToEc(iso) {
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || "");
     if (!m) return null;
-    var e = jdnToEthiopic(gregorianToJdn(+m[1], +m[2], +m[3]));
+    var y = +m[1], mo = +m[2], d = +m[3];
+    if (y < 1 || mo < 1 || mo > 12 || d < 1 || d > gregorianMonthLength(y, mo)) return "invalid";
+    var e = jdnToEthiopic(gregorianToJdn(y, mo, d));
     return e[0] + "-" + pad(e[1]) + "-" + pad(e[2]);
   }
   function ecToGc(text) {
@@ -173,12 +180,14 @@
     syncing = true;
     try {
       if (changed === gc) {
-        // A date input reports partial years (0001-05-15) while the year is
-        // being typed; wait for a plausible one. Only clear an EC value this
-        // script filled in itself, never one the enumerator typed.
-        var e = /^\d{4}-/.test(gc.value) && gc.value.slice(0, 4) >= "1000" ? gcToEc(gc.value) : null;
-        if (gc.value === "" && ec.value !== "" && ec.dataset.farAuto === "1") setNativeValue(ec, "");
-        else if (e && ec.value !== e) { setNativeValue(ec, e); ec.dataset.farAuto = "1"; }
+        // Only clear an EC value this script filled in itself, never one
+        // the enumerator typed. A partial value is "still typing".
+        delete gc.dataset.farAuto;
+        var e = gcToEc(gc.value.trim());
+        if (gc.value.trim() === "") { if (ec.value !== "" && ec.dataset.farAuto === "1") setNativeValue(ec, ""); showError(gc, "gc", ""); }
+        else if (e === "invalid") showError(gc, "gc", "Not a real date (check the month and day)");
+        else if (e === null) showError(gc, "gc", "");
+        else { if (ec.value !== e) { setNativeValue(ec, e); ec.dataset.farAuto = "1"; } showError(gc, "gc", ""); }
         showError(ec, "ec", "");
       } else {
         delete ec.dataset.farAuto;
@@ -193,30 +202,39 @@
     }
   }
 
-  /* --------------------------------------------- 2b. Ethiopic date picker */
+  /* -------------------------------------------- 2b. calendar date picker */
 
-  var ETH_MONTHS = ["Meskerem", "Tikimt", "Hidar", "Tahsas", "Tir", "Yekatit", "Megabit", "Miyazya", "Ginbot", "Sene", "Hamle", "Nehase", "Pagumen"];
+  var MONTHS = {
+    ec: ["Meskerem", "Tikimt", "Hidar", "Tahsas", "Tir", "Yekatit", "Megabit", "Miyazya", "Ginbot", "Sene", "Hamle", "Nehase", "Pagumen"],
+    gc: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+  };
   var WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
   var CAL_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
   var picker = null, pickerFor = null, pickerBtn = null, view = null;
 
-  function ecHeaderOf(input) {
+  function monthLength(cal, y, m) { return cal === "ec" ? ethiopicMonthLength(y, m) : gregorianMonthLength(y, m); }
+  function toJdn(cal, y, m, d) { return cal === "ec" ? ethiopicToJdn(y, m, d) : gregorianToJdn(y, m, d); }
+  function todayIn(cal) {
+    var d = new Date(), g = [d.getFullYear(), d.getMonth() + 1, d.getDate()];
+    return cal === "ec" ? jdnToEthiopic(gregorianToJdn(g[0], g[1], g[2])) : g;
+  }
+
+  function headerOf(input) {
     var td = input.closest("td"), tr = td && td.parentElement, table = td && td.closest("table");
     if (!table) return "";
     var th = table.querySelectorAll("thead th")[Array.prototype.indexOf.call(tr.children, td)];
     return th ? (th.getAttribute("title") || th.textContent || "").trim() : "";
   }
 
-  function isEcInput(input) {
-    if (input.type !== "text" || input.disabled || input.readOnly) return false;
-    var w = input.closest(".widget-container");
-    if (w && /_ec$/.test(w.getAttribute("data-widget-id") || "")) return true;
-    return /\(ec\)\s*$/i.test(ecHeaderOf(input));
-  }
-
-  function todayEc() {
-    var d = new Date();
-    return jdnToEthiopic(gregorianToJdn(d.getFullYear(), d.getMonth() + 1, d.getDate()));
+  // Which calendar a text box holds: "_ec" widgets / "(EC)" columns are
+  // Ethiopic, "_date" widgets / "(GC)" columns Gregorian, anything else none.
+  function calendarOf(input) {
+    if (input.type !== "text" || input.disabled || input.readOnly) return "";
+    var w = input.closest(".widget-container"), id = w ? (w.getAttribute("data-widget-id") || "") : "";
+    if (/_ec$/.test(id)) return "ec";
+    if (/_date$/.test(id)) return "gc";
+    var h = headerOf(input);
+    return /\(ec\)\s*$/i.test(h) ? "ec" : /\(gc\)\s*$/i.test(h) ? "gc" : "";
   }
 
   function closePicker() {
@@ -234,12 +252,12 @@
   }
 
   function renderPicker() {
-    var y = view.y, mo = view.m, len = ethiopicMonthLength(y, mo);
-    var dow = (ethiopicToJdn(y, mo, 1) + 1) % 7; // JDN 0 was a Monday
-    var today = todayEc(), sel = view.sel;
+    var cal = view.cal, y = view.y, mo = view.m, len = monthLength(cal, y, mo), names = MONTHS[cal];
+    var dow = (toJdn(cal, y, mo, 1) + 1) % 7; // JDN 0 was a Monday
+    var today = todayIn(cal), sel = view.sel;
     var h = '<div class="far-ec-head">' +
       '<button type="button" class="far-ec-nav" data-nav="-1" aria-label="Previous month">&#8249;</button>' +
-      '<select class="far-ec-month" aria-label="Month">' + ETH_MONTHS.map(function (n, i) { return '<option value="' + (i + 1) + '"' + (i + 1 === mo ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select>" +
+      '<select class="far-ec-month" aria-label="Month">' + names.map(function (n, i) { return '<option value="' + (i + 1) + '"' + (i + 1 === mo ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select>" +
       '<input class="far-ec-year" type="number" min="1" max="9999" value="' + y + '" aria-label="Year">' +
       '<button type="button" class="far-ec-nav" data-nav="1" aria-label="Next month">&#8250;</button></div>' +
       '<div class="far-ec-grid">' + WEEKDAYS.map(function (d) { return '<span class="far-ec-dow">' + d + "</span>"; }).join("");
@@ -248,7 +266,7 @@
       var cls = "far-ec-day" + (sel && sel[0] === y && sel[1] === mo && sel[2] === d ? " is-selected" : "") + (today[0] === y && today[1] === mo && today[2] === d ? " is-today" : "");
       h += '<button type="button" class="' + cls + '" data-day="' + d + '">' + d + "</button>";
     }
-    h += '</div><div class="far-ec-foot"><button type="button" data-today="1">Today</button><button type="button" data-clear="1">Clear</button></div>';
+    h += '</div><div class="far-ec-foot"><button type="button" data-today="1">Today</button><span class="far-ec-cal">' + (cal === "ec" ? "Ethiopian calendar" : "Gregorian calendar") + '</span><button type="button" data-clear="1">Clear</button></div>';
     picker.innerHTML = h;
   }
 
@@ -262,18 +280,19 @@
       picker = document.createElement("div");
       picker.className = "far-ec-picker";
       picker.setAttribute("role", "dialog");
-      picker.setAttribute("aria-label", "Ethiopian calendar");
+      picker.setAttribute("aria-label", "Calendar");
       document.body.appendChild(picker);
       picker.addEventListener("click", function (e) {
         var t = e.target.closest("button");
         if (!t) return;
+        var months = MONTHS[view.cal].length;
         if (t.dataset.day) { pickerSet(view.y + "-" + pad(view.m) + "-" + pad(+t.dataset.day)); }
-        else if (t.dataset.today) { var td = todayEc(); pickerSet(td[0] + "-" + pad(td[1]) + "-" + pad(td[2])); }
+        else if (t.dataset.today) { var td = todayIn(view.cal); pickerSet(td[0] + "-" + pad(td[1]) + "-" + pad(td[2])); }
         else if (t.dataset.clear) { pickerSet(""); }
         else if (t.dataset.nav) {
           view.m += +t.dataset.nav;
-          if (view.m > 13) { view.m = 1; view.y += 1; }
-          if (view.m < 1) { view.m = 13; view.y -= 1; }
+          if (view.m > months) { view.m = 1; view.y += 1; }
+          if (view.m < 1) { view.m = months; view.y -= 1; }
           renderPicker();
         }
       });
@@ -287,9 +306,10 @@
       // the picker is used so the pattern message does not flash mid-pick.
       picker.addEventListener("mousedown", function (e) { if (e.target.tagName !== "INPUT" && e.target.tagName !== "SELECT") e.preventDefault(); });
     }
+    var cal = calendarOf(input) || "gc";
     var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value.trim());
-    var cur = m ? [+m[1], +m[2], +m[3]] : null, start = cur || todayEc();
-    view = { y: start[0], m: start[1], sel: cur };
+    var cur = m ? [+m[1], +m[2], +m[3]] : null, start = cur || todayIn(cal);
+    view = { cal: cal, y: start[0], m: start[1], sel: cur };
     pickerFor = input; pickerBtn = button;
     picker.style.display = "block";
     renderPicker();
@@ -305,7 +325,7 @@
   }
 
   function ecPickers() {
-    document.querySelectorAll('.widget-container[data-widget-id$="_ec"] input[type="text"], td input[type="text"]').forEach(function (input) {
+    document.querySelectorAll('.widget-container[data-widget-id$="_ec"] input[type="text"], .widget-container[data-widget-id$="_date"] input[type="text"], td input[type="text"]').forEach(function (input) {
       var btn = input.nextElementSibling;
       if (btn && btn.classList.contains("far-ec-btn")) {
         // React re-renders reset className; put the input's class back and
@@ -314,14 +334,15 @@
         placeEcButton(input, btn);
         return;
       }
-      if (!isEcInput(input)) return;
+      var cal = calendarOf(input);
+      if (!cal) return;
       var host = input.parentElement;
       if (getComputedStyle(host).position === "static") host.style.position = "relative";
       btn = document.createElement("button");
       btn.type = "button";
       btn.className = "far-ec-btn";
-      btn.title = "Pick an Ethiopian date";
-      btn.setAttribute("aria-label", "Pick an Ethiopian date");
+      btn.title = cal === "ec" ? "Pick an Ethiopian date" : "Pick a date";
+      btn.setAttribute("aria-label", btn.title);
       btn.innerHTML = CAL_ICON;
       btn.addEventListener("click", function (e) {
         e.preventDefault();
