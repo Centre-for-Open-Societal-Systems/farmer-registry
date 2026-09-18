@@ -3,7 +3,7 @@ from datetime import date
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
-from .domain_validation_utils import parse_date, validation_error
+from .domain_validation_utils import parse_date, sync_ethiopic_date_pair, validation_error
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
@@ -11,13 +11,14 @@ _logger = logging.getLogger("g2p-register-domain-service")
 class G2PRegisterDomainServiceCrop(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
+            sync_ethiopic_date_pair(record, "planted_date", "planted_date_ec", "Planted Date")
             self._validate_planted_date(record)
         self._validate_no_duplicate_commodity(records)
 
     def _validate_planted_date(self, record: dict) -> None:
         planted_date = parse_date(record.get("planted_date"))
         if planted_date is not None and planted_date > date.today():
-            validation_error("planted_date must not be in the future")
+            validation_error("Planted Date cannot be in the future")
 
     def _validate_no_duplicate_commodity(self, records: list[dict]) -> None:
         seen: set[str] = set()
@@ -27,7 +28,7 @@ class G2PRegisterDomainServiceCrop(G2PRegisterDomainService):
                 continue
             normalized = str(value).strip()
             if normalized in seen:
-                validation_error("Duplicate commodity entries are not allowed")
+                validation_error("The same Commodity is listed more than once; each crop needs its own row")
             seen.add(normalized)
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:

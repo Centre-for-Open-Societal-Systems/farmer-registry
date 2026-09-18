@@ -1,0 +1,17 @@
+
+/* ------------------------------------------------------------------------
+ * Intake-form list: the "New Intake" control patch-intake-list-layout.js
+ * restyles into a select-like button. Its menu is a sibling that exists only
+ * while open, and the button's class is memoised without the open flag, so
+ * the open state (arrow flipped, menu joined to the button) keys off the
+ * menu's presence instead - the same look 1.1.x drew with its own class
+ * toggles.
+ * --------------------------------------------------------------------- */
+html body .far-new-intake:has(> div) > .far-new-intake-btn {
+  border-bottom-color: transparent;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+html body .far-new-intake:has(> div) .far-new-intake-arrow {
+  transform: rotate(180deg);
+}

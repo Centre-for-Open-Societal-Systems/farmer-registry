@@ -22,7 +22,7 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
         record["is_primary_cooperative_member"] = is_member
         if is_member is False and not is_blank(record.get("primary_cooperative_name")):
             validation_error(
-                "primary_cooperative_name must be empty when is_primary_cooperative_member is false"
+                "Primary Cooperative Name must be empty when the farmer is not a primary cooperative member"
             )
 
     def _validate_union_membership(self, record: dict) -> None:
@@ -30,7 +30,7 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
         record["is_cooperative_union_member"] = is_member
         if is_member is False and not is_blank(record.get("cooperative_union_name")):
             validation_error(
-                "cooperative_union_name must be empty when is_cooperative_union_member is false"
+                "Cooperative Union Name must be empty when the farmer is not a cooperative union member"
             )
 
     def _validate_cluster_membership(self, record: dict) -> None:
@@ -38,11 +38,11 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
         record["is_farmer_cluster_member"] = is_member
         if is_member is False and not is_blank(record.get("farmer_cluster_role")):
             validation_error(
-                "farmer_cluster_role must be empty when is_farmer_cluster_member is false"
+                "Farmer Cluster Role must be empty when the farmer is not a farmer cluster member"
             )
         if is_member is False and not is_blank(record.get("primary_commodity")):
             validation_error(
-                "primary_commodity must be empty when is_farmer_cluster_member is false"
+                "Primary Commodity must be empty when the farmer is not a farmer cluster member"
             )
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:

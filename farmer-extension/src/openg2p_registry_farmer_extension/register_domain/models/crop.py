@@ -9,6 +9,9 @@ class G2PCrop:
 
     commodity: Mapped[str] = mapped_column(String, nullable=True)      # Attribute lookup
     planted_date: Mapped[str] = mapped_column(Date, nullable=True)
+    # Ethiopic twin of planted_date (YYYY-MM-DD, month 13 allowed), kept in
+    # step by the domain service.
+    planted_date_ec: Mapped[str] = mapped_column(String, nullable=True)
     season: Mapped[str] = mapped_column(String, nullable=True)
     end_use: Mapped[CropEndUseEnum] = mapped_column(String, nullable=True)        # CropEndUseEnum
 

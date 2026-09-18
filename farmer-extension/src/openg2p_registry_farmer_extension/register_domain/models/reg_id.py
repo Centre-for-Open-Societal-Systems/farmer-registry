@@ -10,6 +10,8 @@ class G2PRegId:
     id_type: Mapped[IdTypeEnum] = mapped_column(String, nullable=True)     # IdTypeEnum
     value: Mapped[str] = mapped_column(String, nullable=True)
     expiry_date: Mapped[str] = mapped_column(Date, nullable=True)
+    # Ethiopic twin of expiry_date, kept in step by the domain service.
+    expiry_date_ec: Mapped[str] = mapped_column(String, nullable=True)
     status: Mapped[IdStatusEnum] = mapped_column(String, nullable=True)    # IdStatusEnum
     description: Mapped[str] = mapped_column(String, nullable=True)
 

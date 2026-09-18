@@ -134,6 +134,40 @@ COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
 RUN DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
     node /tmp/patch-dashboard-nav.js || echo "SKIPPED: dashboard-nav patch needs re-anchoring for 1.2.x"
 
+# Show an empty field as empty. The platform's read-only widgets all fall back
+# to "-" for a missing value (Status Reason, Created by, dates, select and
+# table-cell displays); the script skips the "-" literals the same chunk uses
+# for the numeric input's minus sign and negative-number formatting.
+COPY docker/staff-ui/assets/patch-empty-value-dash.js /tmp/patch-empty-value-dash.js
+RUN node /tmp/patch-empty-value-dash.js
+
+# Show Configuration and the language switch in the header bar, as 1.1.x did,
+# instead of behind the 1.2.x "More" (three-dot) menu. The inline components
+# are still compiled into the header chunk; the script swaps them into the
+# header's control list and drops the menu.
+COPY docker/staff-ui/assets/patch-header-inline-controls.js /tmp/patch-header-inline-controls.js
+RUN node /tmp/patch-header-inline-controls.js
+
+# Lay the intake-form list out like the 1.1.x portal and the other registries:
+# the "New Intake" dropdown beside the title, search and pagination on the
+# right, cards underneath - instead of 1.2.x's top-right "Create New
+# Submission +" button, card/table toggle and "Selected filters" bar. The CSS
+# draws the control's open state, which the patched bundle cannot.
+COPY docker/staff-ui/assets/patch-intake-list-layout.js /tmp/patch-intake-list-layout.js
+COPY docker/staff-ui/assets/intake-list-header.css /tmp/intake-list-header.css
+COPY docker/staff-ui/assets/intake-form-fields.css /tmp/intake-form-fields.css
+RUN node /tmp/patch-intake-list-layout.js &&     find /app/.next/static/css -type f -name '*.css' -exec sed -i     -e '$r /tmp/intake-list-header.css' -e '$r /tmp/intake-form-fields.css' {} \;
+
+# On-the-spot intake behaviour the widget library lacks (family size,
+# Gregorian <-> Ethiopic dates, photo checks and resizing, empty geo levels):
+# a plain script served from /public and loaded by the root layout. The
+# photo picked during intake is also listed with the submission's attached
+# documents, next to the certificate uploads.
+COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-intake-rules.js /app/public/farmer-intake-rules.js
+COPY docker/staff-ui/assets/patch-intake-rules-script.js /tmp/patch-intake-rules-script.js
+COPY docker/staff-ui/assets/patch-intake-photo-document.js /tmp/patch-intake-photo-document.js
+RUN node /tmp/patch-intake-rules-script.js && node /tmp/patch-intake-photo-document.js
+
 # Every patch above edited a content-hashed asset in place, and Next serves
 # /_next/static as immutable -- returning browsers would keep the old file
 # until a hard refresh. Give each changed asset a new hash and rewrite the
@@ -144,7 +178,7 @@ RUN sh /tmp/rehash-patched-assets.sh && rm /tmp/static.before /tmp/static.after
 # Fail the build if a bundle patch stopped matching. These seds target MINIFIED
 # identifiers, so a base-image bump can silently drop every customisation while
 # still exiting 0 - which is exactly what happened moving 1.1.1 -> 1.2.1.
-RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     here 'record_image_document_id:__doc.document_id' "intake profile image upload";     echo "OK: staff-ui bundle patches verified"
+RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     here 'record_image_document_id:__doc.document_id' "intake profile image upload";     gone 'hdr-field-value",title:[A-Za-z_$][A-Za-z0-9_$]*\|\|"-"' "empty-value dash placeholder";     gone '"flex items-center gap-4",children:\[\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\)\]' "header controls behind the More menu";     here '(__farIntakeList,{breadcrumb:' "intake list 1.1.x layout";     here 'src:"/farmer-intake-rules.js?v=' "intake rules script";     here '__slot||"farmer_photo"' "intake uploads recorded and listed";     echo "OK: staff-ui bundle patches verified"
 
 # ------------------------------------------------------------------ DB seed
 FROM registry.gitlab.com/openg2p/registry/registry-platform/db-seed:${RP_VERSION} AS db-seed

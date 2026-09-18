@@ -21,6 +21,22 @@ SET "core_translation" = jsonb_set(
 )::json
 WHERE "language_code" = 'en';
 
+-- The platform's 1.2.x UI still calls intake submissions "Form Submissions"
+-- (home card, register tab, search box); the platform has since renamed the
+-- concept to "Intake Form" and the other registries show that. Same wording
+-- here, so the Farmer portal reads like the rest of the suite.
+UPDATE "public"."registry_languages"
+SET "core_translation" = (
+    "core_translation"::jsonb
+    || jsonb_build_object(
+        'form_submissions', 'Intake Form',
+        'register_form_submissions', '{subject} - Intake Form',
+        'register_form_submission', '{subject} - Intake Form',
+        'search_form_submissions', 'Search in Intake Form'
+    )
+)::json
+WHERE "language_code" = 'en';
+
 -- Postgres caps function calls at 100 arguments (FUNC_MAX_ARGS), so a single
 -- jsonb_build_object() holds at most 50 label pairs. This statement had grown
 -- past that and was failing wholesale at seed time ("cannot pass more than
@@ -92,7 +108,16 @@ SET "domain_translation" = (
         'names_father', E'Father''s Name',
         'father_first_name', E'Father''s First Name',
         'father_middle_name', E'Father''s Middle Name',
-        'father_last_name', E'Father''s Last Name'
+        'father_last_name', E'Father''s Last Name',
+        -- Ethiopic twins of the Gregorian dates on the member, crop and ID
+        -- tables, and the placeholder/pattern hint their text boxes show.
+        'planted_date', 'Planted Date (GC)',
+        'planted_date_ec', 'Planted Date (EC)',
+        'expiry_date', 'Expiry Date (GC)',
+        'expiry_date_ec', 'Expiry Date (EC)',
+        'yyyy_mm_dd', 'YYYY-MM-DD (GC)',
+        'yyyy_mm_dd_ec', 'YYYY-MM-DD (EC)',
+        'certificate_file_hint', 'PDF, JPG, PNG or WebP, up to 10 MB'
     )
 )::json
 WHERE "language_code" = 'en';

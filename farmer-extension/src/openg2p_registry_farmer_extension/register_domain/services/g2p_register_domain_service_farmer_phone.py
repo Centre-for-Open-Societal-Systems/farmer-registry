@@ -30,9 +30,9 @@ class G2PRegisterDomainServiceFarmerPhone(G2PRegisterDomainService):
         ]
         for record in active_records:
             if is_blank(record.get("phone_type")):
-                validation_error("phone_type is required")
+                validation_error("Phone Type is required for every phone number")
             if is_blank(record.get("phone_number")):
-                validation_error("phone_number is required")
+                validation_error("Phone Number is required")
             record["phone_number"] = str(record["phone_number"]).strip()
 
             # This column holds the national significant number only; the
@@ -41,16 +41,16 @@ class G2PRegisterDomainServiceFarmerPhone(G2PRegisterDomainService):
             # otherwise be accepted here and be wrong (G2R-26 Q2).
             if not matches(PHONE_PATTERN, record["phone_number"]):
                 validation_error(
-                    "phone_number must be the Ethiopian number without the "
+                    "Phone Number must be the Ethiopian number without the "
                     "country code, e.g. 0912345678"
                 )
             if len(record["phone_number"]) > PHONE_MAX_LENGTH:
                 validation_error(
-                    f"phone_number must be {PHONE_MAX_LENGTH} characters or fewer"
+                    f"Phone Number must be {PHONE_MAX_LENGTH} digits or fewer"
                 )
 
         if sum(bool(record.get("is_primary")) for record in active_records) > 1:
-            validation_error("only one primary phone is allowed per farmer")
+            validation_error("Only one phone number can be the primary phone")
 
     async def post_approve(self, change_request: G2PRegisterChangeRequest, session):
         if change_request.section_register_id != FARMER_PHONE_REGISTER_ID:
