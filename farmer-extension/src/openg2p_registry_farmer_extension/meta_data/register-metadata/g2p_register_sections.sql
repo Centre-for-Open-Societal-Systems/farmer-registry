@@ -32,6 +32,9 @@ INSERT INTO "public"."g2p_register_sections" ("register_id","section_id","sectio
 -- file ever reached an environment seeded before it -- only the zz_*.sql
 -- UPDATEs did. The seed is the source of truth for these sections; the zz_
 -- overrides still run after this and still win.
+-- Applying this file by hand? Re-run every zz_*.sql afterwards (db-seed
+-- does, via find | sort): until they run, the upsert has reset each
+-- overridden section to the base layout.
 ON CONFLICT ("section_id") DO UPDATE SET
     "register_id" = EXCLUDED."register_id",
     "section_register_id" = EXCLUDED."section_register_id",
