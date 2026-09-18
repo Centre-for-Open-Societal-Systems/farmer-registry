@@ -20,6 +20,14 @@
  *      kebele in Master Data) is hidden instead of an empty dropdown, and the
  *      lowest level is labelled "Village/Kebele" whichever mnemonic the
  *      Master Data pack uses.
+ *   5. Other file fields (the land certificate): a hint naming the accepted
+ *      types and size, and a working preview. The widget library serialises
+ *      a picked File into the store as {__type:"File", name, data} and then
+ *      reads it back through useBaseWidget, which turns any object with a
+ *      "name" into that name -- so the widget forgets the File and its
+ *      "Click to preview" opens the bare file name as a relative URL
+ *      (/intake-form/farmer/new/Black.png). The File picked in this page is
+ *      kept here and previewed from a blob URL instead.
  *
  * Injected by the Dockerfile as a plain <script defer> from /public; it walks
  * the DOM (data-widget-id, table headers) rather than the minified React
@@ -216,9 +224,12 @@
     var el = widget.querySelector(".far-photo-note");
     if (!el) {
       el = document.createElement("p");
-      el.className = "far-photo-note text-xs mt-1 leading-tight";
-      var avatar = widget.querySelector(".hdr-avatar");
-      var host = (avatar && avatar.parentElement) || widget;
+      el.className = "far-photo-note text-xs leading-tight";
+      // .hdr-avatar-wrapper is styled to the avatar's fixed 120x120px, so a
+      // note inside it wraps narrow and overflows the widget; put it beside
+      // the avatar in the .hdr-left row, where the (hidden) metadata rows sit.
+      var wrapper = widget.querySelector(".hdr-avatar-wrapper");
+      var host = (wrapper && wrapper.parentElement) || widget;
       host.appendChild(el);
     }
     el.textContent = message;
@@ -297,29 +308,72 @@
   /* ------------------------------------------------- 3b. other file cells */
 
   var FILE_MAX_TEXT = "up to 10 MB";
+  var ACCEPT_WORDS = { "image/*": "JPG, PNG or WebP", "application/pdf": "PDF", "pdf": "PDF", "jpg": "JPG", "jpeg": "JPG", "png": "PNG", "webp": "WebP", "image/jpeg": "JPG", "image/png": "PNG", "image/webp": "WebP" };
   var pickedNames = {};
+  var pickedFiles = {};
+
+  function acceptText(input) {
+    var words = [];
+    (input.getAttribute("accept") || "").split(",").forEach(function (a) {
+      var key = a.trim().toLowerCase().replace(/^\./, "");
+      if (!key) return;
+      var word = ACCEPT_WORDS[key] || key.toUpperCase();
+      if (words.indexOf(word) < 0) words.push(word);
+    });
+    // No accept attribute: the registry's document profile applies
+    // (png, jpg, jpeg, webp, pdf; 10 MB).
+    return (words.length ? words.join(", ") : "PDF, JPG, PNG or WebP") + ", " + FILE_MAX_TEXT;
+  }
 
   function fileNotes() {
     document.querySelectorAll('.widget-container[data-widget-id] input[type="file"]').forEach(function (input) {
+      // The photo picker is a header-section widget INSIDE a widget-container
+      // and has its own note; and once a note is placed, the input is marked
+      // so a re-render of an ancestor cannot add a second one.
+      if (input.dataset.farNote === "1" || input.closest('[class*="header-section-widget-"]')) return;
       var widget = input.closest(".widget-container");
-      if (!widget || widget.closest('[class*="header-section-widget-"]') || widget.querySelector(".far-file-note")) return;
-      var accept = (input.getAttribute("accept") || "").split(",").map(function (a) { return a.trim().replace(/^\./, "").toUpperCase(); }).filter(Boolean);
+      if (!widget) return;
+      input.dataset.farNote = "1";
       var note = document.createElement("p");
       note.className = "far-file-note text-xs mt-1 leading-tight";
       note.style.color = "var(--owt-color-text-muted, #727474)";
-      // No accept attribute: the registry's document profile applies
-      // (png, jpg, jpeg, webp, pdf; 10 MB).
-      note.textContent = (accept.length ? accept.join(", ") : "PDF, JPG, PNG or WebP") + ", " + FILE_MAX_TEXT;
-      (input.closest(".flex-1") || widget).appendChild(note);
+      note.textContent = acceptText(input);
+      // Under the button/file-name row, but never outside this widget.
+      var host = input.closest(".flex-1");
+      if (!host || !widget.contains(host)) host = widget;
+      host.appendChild(note);
     });
   }
 
   // The dialog-table shows a picked file in its row as "[object Object]";
-  // show the file's name instead (remembered from the picker).
+  // show the file's name instead (remembered from the picker). The File
+  // itself is kept for the preview (see 5 above).
   function rememberPick(input) {
     var widget = input.closest(".widget-container");
     var id = widget && widget.getAttribute("data-widget-id");
-    if (id && input.files && input.files[0]) pickedNames[id.replace(/-dlg-\d+-/, "-")] = input.files[0].name;
+    var file = input.files && input.files[0];
+    if (!file) return;
+    if (id) pickedNames[id.replace(/-dlg-\d+-/, "-")] = file.name;
+    pickedFiles[file.name] = file;
+  }
+
+  function previewClick(e) {
+    var button = e.target instanceof Element && e.target.closest('button[title="Click to preview"]');
+    if (!button || !button.closest(".widget-container")) return;
+    var name = button.textContent.trim();
+    var file = pickedFiles[name];
+    if (file) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      var url = URL.createObjectURL(file);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    } else if (name.indexOf("/") < 0 && name.indexOf(":") < 0) {
+      // A bare file name with nothing behind it (a row re-opened after a
+      // reload): the widget would navigate to it as a relative URL.
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
   }
   function fileCellNames() {
     document.querySelectorAll(".table-widget-container td").forEach(function (td) {
@@ -376,6 +430,7 @@
     if (photoWidget(e.target)) photoChange(e);
     else rememberPick(e.target);
   }, true);
+  document.addEventListener("click", previewClick, true);
 
   var scheduled = false;
   function refresh() {
