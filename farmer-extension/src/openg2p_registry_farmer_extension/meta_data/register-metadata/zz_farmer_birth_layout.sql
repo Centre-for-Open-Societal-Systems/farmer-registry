@@ -33,15 +33,15 @@ SET "section_ui_schema" = $schema$
           "widget-data-placeholder": "dd_mm_yyyy"
         },
         {
-          "widget": "date",
+          "widget": "text",
           "widget-id": "birth_date_ec",
           "widget-type": "input",
           "widget-label": "birth_date_ec",
           "widget-readonly": false,
           "widget-required": false,
           "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.birth_date_ec",
-          "widget-data-format": {"dateFormat": "DD/MM/YYYY"},
-          "widget-data-placeholder": "dd_mm_yyyy"
+          "widget-data-placeholder": "yyyy_mm_dd_ec",
+          "widget-data-validation": {"pattern": "^\\d{4}-\\d{2}-\\d{2}$", "patternMessage": "Enter the Ethiopian date as YYYY-MM-DD, e.g. 2015-01-05"}
         },
         {
           "widget": "number",

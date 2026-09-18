@@ -12,10 +12,11 @@
 -- used. The staff portal resolves that lookup against MASTER DATA
 -- (/api/attributes/values proxies to MASTERDATA_BACKEND_API_URL), not this
 -- registry's g2p_attribute_values, and the Ethiopia country pack defines no
--- LANGUAGE list - so the dropdown came back empty everywhere. The options
--- mirror lookup-data/g2p_attribute_values.sql (value = value_code, which is
--- also the form the sample data stores). Move back to the lookup once the
--- pack carries the list.
+-- LANGUAGE list - so the dropdown came back empty everywhere. The options are
+-- generated from lookup-data/g2p_attribute_values.sql by
+-- scripts/sync-static-options.py (value = value_code, which is also the form
+-- the sample data stores); rerun it rather than editing them here. Move back
+-- to the lookup once the pack carries the list.
 UPDATE "public"."g2p_register_sections"
 SET "section_ui_schema" = $schema$
 {
@@ -124,6 +125,7 @@ SET "section_ui_schema" = $schema$
               "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.language_spoken",
               "widget-data-source": {
                 "type": "static",
+                "attribute_id": "LANGUAGE",
                 "options": [
                   {"label": "Amharic", "value": "AMHARIC"},
                   {"label": "Afaan Oromo", "value": "AFAAN_OROMO"},
@@ -153,6 +155,7 @@ SET "section_ui_schema" = $schema$
               "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.local_language",
               "widget-data-source": {
                 "type": "static",
+                "attribute_id": "LANGUAGE",
                 "options": [
                   {"label": "Amharic", "value": "AMHARIC"},
                   {"label": "Afaan Oromo", "value": "AFAAN_OROMO"},

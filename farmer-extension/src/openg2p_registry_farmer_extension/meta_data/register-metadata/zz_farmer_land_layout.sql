@@ -9,6 +9,15 @@
 -- an unspanned horizontal panel that fills the width, and only the leaf
 -- vertical panels carry a span to divide that row's grid - the same
 -- horizontal -> vertical(span 3) pair the Livestocks and Crops sections use.
+--
+-- Land Kebele: the widget library drops a top-level "level_id" from a data
+-- source and then sends the parent under the wrong key, so level_id must sit
+-- inside "params" (the same applies to the intake copy in
+-- g2p_register_sections.sql). "kebele" is the level MNEMONIC, which Master
+-- Data accepts in place of the id. dependsOn walks the farmer's own saved
+-- hierarchy (region, zone, woreda, kebele) to the woreda entry, so the list is
+-- the kebeles of this farmer's woreda and is available in the same session
+-- the location was entered.
 UPDATE public.g2p_register_sections
 SET section_ui_schema = $schema$
 {
@@ -130,9 +139,9 @@ SET section_ui_schema = $schema$
                             "method": "POST",
                             "service": "master-data",
                             "endpoint": "geo-level-values",
-                            "level_id": "level-kebele",
-                            "dependsOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.woreda_level_value_id",
-                            "labelKey": "display_name",
+                            "params": {"level_id": "kebele", "page_size": 1000},
+                            "dependsOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.geo_code_hierarchy_json.hierarchy.2.level_value_id",
+                            "labelKey": "level_value_mnemonic",
                             "valueKey": "level_value_mnemonic"
                           }
                         },
@@ -142,6 +151,7 @@ SET section_ui_schema = $schema$
                           "widget-type": "input",
                           "widget-label": "certificate_storage_id",
                           "widget-data-path": "certificate_storage_id",
+                          "widget-data-helptext": "certificate_file_hint",
                           "widget-data-options": {"accept": ".pdf,.jpg,.jpeg,.png,.webp", "multiple": false, "maxSize": 10485760}
                         },
                         {"widget":"checkbox","column-key":"certificate_provided","widget-type":"input","widget-label":"certificate_provided","widget-readonly":true,"widget-data-path":"certificate_provided"},
@@ -169,13 +179,16 @@ SET section_ui_schema = $schema$
                           "widget-label": "means_of_acquisition",
                           "widget-data-path": "means_of_acquisition",
                           "widget-data-source": {
-                            "type": "api",
-                            "method": "POST",
-                            "params": {"attribute_id": "MEANS_OF_ACQUISITION"},
-                            "service": "attributes",
-                            "endpoint": "values",
-                            "labelKey": "value_display",
-                            "valueKey": "value_id"
+                            "type": "static",
+                            "attribute_id": "MEANS_OF_ACQUISITION",
+                            "options": [
+                              {"label": "INHERITANCE", "value": "INHERITANCE"},
+                              {"label": "DONATION_GIFT", "value": "DONATION_GIFT"},
+                              {"label": "EXPROPRIATION", "value": "EXPROPRIATION"},
+                              {"label": "RENTING_LEASING", "value": "RENTING_LEASING"},
+                              {"label": "REALLOCATION", "value": "REALLOCATION"},
+                              {"label": "DIVORCE_SETTLEMENT", "value": "DIVORCE_SETTLEMENT"}
+                            ]
                           }
                         },
                         {"widget":"text","column-key":"remark","widget-type":"input","widget-label":"remark","widget-data-path":"remark"}

@@ -108,7 +108,15 @@ SET "domain_translation" = (
         'names_father', E'Father''s Name',
         'father_first_name', E'Father''s First Name',
         'father_middle_name', E'Father''s Middle Name',
-        'father_last_name', E'Father''s Last Name'
+        'father_last_name', E'Father''s Last Name',
+        -- Ethiopic twins of the Gregorian dates on the member, crop and ID
+        -- tables, and the placeholder/pattern hint their text boxes show.
+        'planted_date', 'Planted Date (GC)',
+        'planted_date_ec', 'Planted Date (EC)',
+        'expiry_date', 'Expiry Date (GC)',
+        'expiry_date_ec', 'Expiry Date (EC)',
+        'yyyy_mm_dd_ec', 'YYYY-MM-DD (EC)',
+        'certificate_file_hint', 'PDF, JPG, PNG or WebP, up to 10 MB'
     )
 )::json
 WHERE "language_code" = 'en';
