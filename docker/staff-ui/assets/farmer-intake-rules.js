@@ -68,10 +68,16 @@
     el.textContent = message;
   }
 
-  function widgetInput(sectionId, widgetId) {
-    return document.querySelector(
-      '.section[data-section-id="' + sectionId + '"] .widget-container[data-widget-id="' + widgetId + '"] input'
-    );
+  // Look the widget up inside the section the edited field belongs to, not
+  // by section id from the document: the record detail view renders the
+  // same section a second time as "<id>-edit" when staff click Edit
+  // Details, and that copy is the one they are typing into.
+  function widgetInput(section, widgetId) {
+    return section.querySelector('.widget-container[data-widget-id="' + widgetId + '"] input');
+  }
+
+  function sectionKind(section) {
+    return (section.getAttribute("data-section-id") || "").replace(/-edit$/, "");
   }
 
   function intValue(input) {
@@ -87,11 +93,11 @@
   var HH = "farmer_household_information";
   var hhAutoFilled = false;
 
-  function familySizeRule(changed) {
-    var male = widgetInput(HH, "number_of_male_members");
-    var female = widgetInput(HH, "number_of_female_members");
-    var children = widgetInput(HH, "number_of_children");
-    var size = widgetInput(HH, "size_of_group");
+  function familySizeRule(changed, section) {
+    var male = widgetInput(section, "number_of_male_members");
+    var female = widgetInput(section, "number_of_female_members");
+    var children = widgetInput(section, "number_of_children");
+    var size = widgetInput(section, "size_of_group");
     if (!size) return;
     var m = intValue(male), f = intValue(female), c = intValue(children), s = intValue(size);
 
@@ -185,8 +191,8 @@
   }
 
   var BIRTH = "farmer_birth_information";
-  function birthPair(changed) {
-    syncPair(widgetInput(BIRTH, "birth_date"), widgetInput(BIRTH, "birth_date_ec"), changed);
+  function birthPair(changed, section) {
+    syncPair(widgetInput(section, "birth_date"), widgetInput(section, "birth_date_ec"), changed);
   }
 
   // Table rows: cells are positional, so pair columns by their header titles.
@@ -414,10 +420,10 @@
     setTimeout(function () {
       var container = t.closest(".widget-container");
       var section = t.closest(".section");
-      var sid = section && section.getAttribute("data-section-id");
-      if (sid === HH) familySizeRule(t);
-      else if (sid === BIRTH && container) birthPair(t);
-      else if (t.classList.contains("table-cell-input")) tablePair(t);
+      var sid = section ? sectionKind(section) : "";
+      if (sid === HH) familySizeRule(t, section);
+      else if (sid === BIRTH && container) birthPair(t, section);
+      else if (t.closest("td")) tablePair(t);
     }, 0);
   }
 
