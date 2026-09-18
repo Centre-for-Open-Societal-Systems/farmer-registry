@@ -1,0 +1,26 @@
+
+/* ------------------------------------------------------------------------
+ * Intake form: file widgets inside a dialog-table dialog (the land
+ * certificate). The widget lays the Upload button and the picked file's name
+ * out in one row; in the dialog's two-column grid that row is wider than the
+ * cell, so the name was painted over the neighbouring "Certificate Provided"
+ * label. Stack the name under the button instead.
+ * --------------------------------------------------------------------- */
+html body .fixed.inset-0 .widget-container[data-widget-id] .flex.flex-col.sm\:flex-row.sm\:items-center:has(> label.owt-field-input) {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+}
+html body .fixed.inset-0 .widget-container[data-widget-id] .flex.flex-col.sm\:flex-row.sm\:items-center:has(> label.owt-field-input) > * {
+  margin-left: 0 !important;
+  max-width: 100% !important;
+}
+
+/* Inline rule messages written by farmer-intake-rules.js. */
+html body .far-rule-error,
+html body .far-photo-note,
+html body .far-file-note {
+  font-family: Roboto, sans-serif;
+  font-size: 12px;
+  line-height: 1.3;
+}
