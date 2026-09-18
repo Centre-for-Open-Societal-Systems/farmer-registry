@@ -22,15 +22,15 @@ SET "section_ui_schema" = $schema$
           "widget-data-source": {"type": "static", "options": [{"label": "MALE", "value": "MALE"}, {"label": "FEMALE", "value": "FEMALE"}, {"label": "OTHERS", "value": "OTHERS"}, {"label": "UNKNOWN", "value": "UNKNOWN"}]}
         },
         {
-          "widget": "date",
+          "widget": "text",
           "widget-id": "birth_date",
           "widget-type": "input",
           "widget-label": "birth_date",
           "widget-readonly": false,
           "widget-required": false,
           "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.birth_date",
-          "widget-data-format": {"dateFormat": "DD/MM/YYYY", "dateConstraint": "past-only"},
-          "widget-data-placeholder": "dd_mm_yyyy"
+          "widget-data-placeholder": "yyyy_mm_dd",
+          "widget-data-validation": {"pattern": "^\\d{4}-\\d{2}-\\d{2}$", "patternMessage": "Enter the date as YYYY-MM-DD, e.g. 1990-05-15"}
         },
         {
           "widget": "text",

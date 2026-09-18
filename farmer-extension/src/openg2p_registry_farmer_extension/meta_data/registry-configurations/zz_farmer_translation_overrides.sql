@@ -115,6 +115,7 @@ SET "domain_translation" = (
         'planted_date_ec', 'Planted Date (EC)',
         'expiry_date', 'Expiry Date (GC)',
         'expiry_date_ec', 'Expiry Date (EC)',
+        'yyyy_mm_dd', 'YYYY-MM-DD (GC)',
         'yyyy_mm_dd_ec', 'YYYY-MM-DD (EC)',
         'certificate_file_hint', 'PDF, JPG, PNG or WebP, up to 10 MB'
     )
