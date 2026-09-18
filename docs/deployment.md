@@ -76,7 +76,7 @@ pipeline's; treat it as stale.
 | `origin` | `Centre-for-Open-Societal-Systems/farmer-registry` | PR target; `develop` is what dev deploys, `staging` is what staging deploys |
 
 Fork PRs show CI as `action_required` until a COSS maintainer approves the
-workflow run; that is not a failure. Maintainer/reviewer: Suresh (`suresh2692`).
+workflow run; that is not a failure.
 
 ---
 
