@@ -13,6 +13,9 @@
  *   2. Dates: a Gregorian date fills its Ethiopic (EC) twin and vice versa,
  *      for the farmer's birth date and for any table column pair whose
  *      headers end in "(GC)" / "(EC)" (household members, crops, IDs).
+ *      Every EC box also gets a calendar button: the browser's date picker
+ *      cannot show 13 months of 30 days, so a small Ethiopic one is drawn
+ *      here (month / year, 7-day grid aligned by weekday, Pagumen 5 or 6).
  *   3. Photo: a non-image is refused with a message that names what is
  *      accepted, and a large image is resized to 1024px / JPEG before the
  *      widget previews it, so what is shown is what will be uploaded.
@@ -189,6 +192,153 @@
       syncing = false;
     }
   }
+
+  /* --------------------------------------------- 2b. Ethiopic date picker */
+
+  var ETH_MONTHS = ["Meskerem", "Tikimt", "Hidar", "Tahsas", "Tir", "Yekatit", "Megabit", "Miyazya", "Ginbot", "Sene", "Hamle", "Nehase", "Pagumen"];
+  var WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+  var CAL_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+  var picker = null, pickerFor = null, pickerBtn = null, view = null;
+
+  function ecHeaderOf(input) {
+    var td = input.closest("td"), tr = td && td.parentElement, table = td && td.closest("table");
+    if (!table) return "";
+    var th = table.querySelectorAll("thead th")[Array.prototype.indexOf.call(tr.children, td)];
+    return th ? (th.getAttribute("title") || th.textContent || "").trim() : "";
+  }
+
+  function isEcInput(input) {
+    if (input.type !== "text" || input.disabled || input.readOnly) return false;
+    var w = input.closest(".widget-container");
+    if (w && /_ec$/.test(w.getAttribute("data-widget-id") || "")) return true;
+    return /\(ec\)\s*$/i.test(ecHeaderOf(input));
+  }
+
+  function todayEc() {
+    var d = new Date();
+    return jdnToEthiopic(gregorianToJdn(d.getFullYear(), d.getMonth() + 1, d.getDate()));
+  }
+
+  function closePicker() {
+    if (picker) picker.style.display = "none";
+    pickerFor = null; pickerBtn = null;
+  }
+
+  function placePicker(button) {
+    var r = button.getBoundingClientRect(), w = picker.offsetWidth, h = picker.offsetHeight;
+    var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+    var top = r.bottom + 4;
+    if (top + h > window.innerHeight - 8 && r.top - h - 4 > 8) top = r.top - h - 4;
+    picker.style.left = left + "px";
+    picker.style.top = top + "px";
+  }
+
+  function renderPicker() {
+    var y = view.y, mo = view.m, len = ethiopicMonthLength(y, mo);
+    var dow = (ethiopicToJdn(y, mo, 1) + 1) % 7; // JDN 0 was a Monday
+    var today = todayEc(), sel = view.sel;
+    var h = '<div class="far-ec-head">' +
+      '<button type="button" class="far-ec-nav" data-nav="-1" aria-label="Previous month">&#8249;</button>' +
+      '<select class="far-ec-month" aria-label="Month">' + ETH_MONTHS.map(function (n, i) { return '<option value="' + (i + 1) + '"' + (i + 1 === mo ? " selected" : "") + ">" + n + "</option>"; }).join("") + "</select>" +
+      '<input class="far-ec-year" type="number" min="1" max="9999" value="' + y + '" aria-label="Year">' +
+      '<button type="button" class="far-ec-nav" data-nav="1" aria-label="Next month">&#8250;</button></div>' +
+      '<div class="far-ec-grid">' + WEEKDAYS.map(function (d) { return '<span class="far-ec-dow">' + d + "</span>"; }).join("");
+    for (var i = 0; i < dow; i++) h += "<span></span>";
+    for (var d = 1; d <= len; d++) {
+      var cls = "far-ec-day" + (sel && sel[0] === y && sel[1] === mo && sel[2] === d ? " is-selected" : "") + (today[0] === y && today[1] === mo && today[2] === d ? " is-today" : "");
+      h += '<button type="button" class="' + cls + '" data-day="' + d + '">' + d + "</button>";
+    }
+    h += '</div><div class="far-ec-foot"><button type="button" data-today="1">Today</button><button type="button" data-clear="1">Clear</button></div>';
+    picker.innerHTML = h;
+  }
+
+  function pickerSet(value) {
+    if (pickerFor) setNativeValue(pickerFor, value);
+    closePicker();
+  }
+
+  function openPicker(input, button) {
+    if (!picker) {
+      picker = document.createElement("div");
+      picker.className = "far-ec-picker";
+      picker.setAttribute("role", "dialog");
+      picker.setAttribute("aria-label", "Ethiopian calendar");
+      document.body.appendChild(picker);
+      picker.addEventListener("click", function (e) {
+        var t = e.target.closest("button");
+        if (!t) return;
+        if (t.dataset.day) { pickerSet(view.y + "-" + pad(view.m) + "-" + pad(+t.dataset.day)); }
+        else if (t.dataset.today) { var td = todayEc(); pickerSet(td[0] + "-" + pad(td[1]) + "-" + pad(td[2])); }
+        else if (t.dataset.clear) { pickerSet(""); }
+        else if (t.dataset.nav) {
+          view.m += +t.dataset.nav;
+          if (view.m > 13) { view.m = 1; view.y += 1; }
+          if (view.m < 1) { view.m = 13; view.y -= 1; }
+          renderPicker();
+        }
+      });
+      picker.addEventListener("change", function (e) {
+        if (e.target.classList.contains("far-ec-month")) view.m = +e.target.value;
+        else if (e.target.classList.contains("far-ec-year")) { var yy = parseInt(e.target.value, 10); if (yy >= 1 && yy <= 9999) view.y = yy; }
+        else return;
+        renderPicker();
+      });
+      // The widget re-validates on blur; keep focus inside the box while
+      // the picker is used so the pattern message does not flash mid-pick.
+      picker.addEventListener("mousedown", function (e) { if (e.target.tagName !== "INPUT" && e.target.tagName !== "SELECT") e.preventDefault(); });
+    }
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value.trim());
+    var cur = m ? [+m[1], +m[2], +m[3]] : null, start = cur || todayEc();
+    view = { y: start[0], m: start[1], sel: cur };
+    pickerFor = input; pickerBtn = button;
+    picker.style.display = "block";
+    renderPicker();
+    placePicker(button);
+  }
+
+  // The button is a sibling of the input (wrapping a React-managed input
+  // in a new element breaks React's reconciliation), so it is placed over
+  // the input's right end from the input's own geometry, not the parent's.
+  function placeEcButton(input, btn) {
+    btn.style.left = (input.offsetLeft + input.offsetWidth - 28) + "px";
+    btn.style.top = (input.offsetTop + input.offsetHeight / 2) + "px";
+  }
+
+  function ecPickers() {
+    document.querySelectorAll('.widget-container[data-widget-id$="_ec"] input[type="text"], td input[type="text"]').forEach(function (input) {
+      var btn = input.nextElementSibling;
+      if (btn && btn.classList.contains("far-ec-btn")) {
+        // React re-renders reset className; put the input's class back and
+        // follow any width change.
+        input.classList.add("far-ec-input");
+        placeEcButton(input, btn);
+        return;
+      }
+      if (!isEcInput(input)) return;
+      var host = input.parentElement;
+      if (getComputedStyle(host).position === "static") host.style.position = "relative";
+      btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "far-ec-btn";
+      btn.title = "Pick an Ethiopian date";
+      btn.setAttribute("aria-label", "Pick an Ethiopian date");
+      btn.innerHTML = CAL_ICON;
+      btn.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (pickerFor === input) closePicker(); else openPicker(input, btn);
+      });
+      input.classList.add("far-ec-input");
+      input.insertAdjacentElement("afterend", btn);
+      placeEcButton(input, btn);
+    });
+  }
+
+  document.addEventListener("mousedown", function (e) {
+    if (pickerFor && !picker.contains(e.target) && e.target !== pickerBtn && !pickerBtn.contains(e.target)) closePicker();
+  }, true);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && pickerFor) closePicker(); }, true);
+  window.addEventListener("resize", function () { closePicker(); ecPickers(); });
+  document.addEventListener("scroll", function (e) { if (pickerFor && !(picker && picker.contains(e.target))) closePicker(); }, true);
 
   var BIRTH = "farmer_birth_information";
   function birthPair(changed, section) {
@@ -445,6 +595,7 @@
     photoHints();
     fileNotes();
     fileCellNames();
+    ecPickers();
   }
   new MutationObserver(function () {
     if (!scheduled) { scheduled = true; requestAnimationFrame(refresh); }
