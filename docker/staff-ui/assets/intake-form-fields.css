@@ -148,3 +148,10 @@ html body .table-widget-container tr[style*="table-deleted-row-bg"] td:not(:last
   text-decoration: line-through;
   opacity: 0.6;
 }
+
+/* A document id in a register table, resolved to the file by
+ * farmer-intake-rules.js. */
+html body .table-widget-container a.far-doc-link {
+  color: var(--owt-color-info, #2563eb);
+  text-decoration: underline;
+}

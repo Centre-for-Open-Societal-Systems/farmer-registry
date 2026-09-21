@@ -39,6 +39,10 @@
  *   6. Land Kebele is a text box (a country pack need not carry a kebele
  *      level); it is pre-filled with the lowest place chosen in Location and
  *      the enumerator overtypes the kebele name.
+ *   7. A saved land's certificate is a document id in the register table
+ *      (the widget prints the stored value as-is); the id is looked up
+ *      through the portal's own documents call and shown as the file's
+ *      name, opening the pre-signed URL in a new tab.
  *
  * Injected by the Dockerfile as a plain <script defer> from /public; it walks
  * the DOM (data-widget-id, table headers) rather than the minified React
@@ -664,6 +668,62 @@
     });
   }
 
+  /* -------------------------------------------------- 5b. document cells */
+
+  var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var documents = {}; // id -> {source_filename, presigned_url} | "pending" | "missing"
+
+  function csrfToken() {
+    var m = document.cookie.match(/(?:^|; )X-CSRF-Token=([^;]*)/);
+    return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  function fetchDocuments(ids) {
+    ids.forEach(function (id) { documents[id] = "pending"; });
+    var headers = { "Content-Type": "application/json" };
+    var token = csrfToken();
+    if (token) headers["X-CSRF-Token"] = token;
+    fetch("/api/shared/get-documents", { method: "POST", credentials: "include", headers: headers, body: JSON.stringify({ document_ids: ids }) })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (docs) {
+        (Array.isArray(docs) ? docs : []).forEach(function (d) { if (d && d.document_id) documents[d.document_id] = d; });
+        ids.forEach(function (id) { if (documents[id] === "pending") documents[id] = "missing"; });
+        refresh();
+      })
+      .catch(function () { ids.forEach(function (id) { if (documents[id] === "pending") documents[id] = "missing"; }); });
+  }
+
+  // Register-view table cells whose header names a certificate / document
+  // and whose text is a bare document id.
+  function documentCells() {
+    var wanted = [];
+    document.querySelectorAll(".table-widget-container table").forEach(function (table) {
+      var heads = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) { return (th.getAttribute("title") || th.textContent || "").trim().toLowerCase(); });
+      heads.forEach(function (h, idx) {
+        if (!/certificate|document/.test(h) || /provided/.test(h)) return;
+        table.querySelectorAll("tbody tr").forEach(function (tr) {
+          var cell = tr.children[idx];
+          if (!cell || cell.querySelector("input,button,a")) return;
+          var id = cell.textContent.trim();
+          if (!UUID.test(id)) return;
+          var doc = documents[id];
+          if (!doc) { wanted.push(id); return; }
+          if (doc === "pending" || doc === "missing") return;
+          var a = document.createElement("a");
+          a.href = doc.presigned_url || "#";
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.className = "far-doc-link";
+          a.textContent = doc.source_filename || "View document";
+          a.title = "Open " + (doc.source_filename || "document");
+          cell.textContent = "";
+          cell.appendChild(a);
+        });
+      });
+    });
+    if (wanted.length) fetchDocuments(wanted.filter(function (id, i) { return wanted.indexOf(id) === i; }));
+  }
+
   /* ------------------------------------------------------ 6. land kebele */
 
   // The lowest place chosen in the Location section, e.g. the woreda when
@@ -746,6 +806,7 @@
     photoHints();
     fileNotes();
     fileCellNames();
+    documentCells();
     rememberPlace();
     landKebele();
     calendarTags();
