@@ -1,0 +1,117 @@
+{
+  "realm": "staff",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "accessTokenLifespan": 1800,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "clients": [
+    {
+      "clientId": "staff-portal",
+      "name": "Staff Portal (IAM login client)",
+      "description": "The client IAM authenticates staff users with. Its redirect URI is IAM's OIDC callback, not the portal's.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "staff-portal-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://iam.localtest.me:8000/*",
+        "http://portal.localtest.me:3000/*"
+      ],
+      "webOrigins": [
+        "http://iam.localtest.me:8000",
+        "http://portal.localtest.me:3000"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://portal.localtest.me:3000/*"
+      }
+    },
+    {
+      "clientId": "farmer-staff-portal",
+      "name": "Farmer Registry Staff Portal",
+      "description": "Per-release client carrying the registry role catalog. Chart equivalent: global.authClientId. Service accounts are enabled because iam-register authenticates as this client via client_credentials.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "farmer-staff-portal-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "implicitFlowEnabled": false,
+      "fullScopeAllowed": true,
+      "redirectUris": [
+        "http://portal.localtest.me:3000/*"
+      ],
+      "webOrigins": [
+        "http://portal.localtest.me:3000"
+      ],
+      "attributes": {
+        "post.logout.redirect.uris": "http://portal.localtest.me:3000/*"
+      }
+    }
+  ],
+  "roles": {
+    "client": {
+      "farmer-staff-portal": [
+        { "name": "Intake Officer", "description": "Operations role" },
+        { "name": "Intake Validator", "description": "Operations role" },
+        { "name": "Data Editor", "description": "Operations role" },
+        { "name": "Data Validator", "description": "Operations role" },
+        { "name": "Data Supervisor", "description": "Operations role" },
+        { "name": "Integration Manager", "description": "Operations role" },
+        { "name": "Operations Administrator", "description": "Operations role" },
+        { "name": "Schema Designer", "description": "Configuration role" },
+        { "name": "Integration Specialist", "description": "Configuration role" },
+        { "name": "Reference Data Specialist", "description": "Configuration role" },
+        { "name": "Technical Administrator", "description": "Configuration role" }
+      ]
+    }
+  },
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "admin@openg2p.org",
+      "firstName": "Admin",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "farmer-staff-portal": [
+          "Operations Administrator",
+          "Technical Administrator"
+        ]
+      }
+    },
+    {
+      "username": "service-account-staff-portal",
+      "enabled": true,
+      "serviceAccountClientId": "staff-portal",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "view-clients",
+          "query-clients",
+          "view-realm"
+        ]
+      }
+    }
+  ]
+}

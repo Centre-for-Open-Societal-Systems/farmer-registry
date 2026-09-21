@@ -12,6 +12,8 @@ class G2PHousehold:
     number_of_children: Mapped[int] = mapped_column(Integer, nullable=True)
     number_of_female_members: Mapped[int] = mapped_column(Integer, nullable=True)
     number_of_male_members: Mapped[int] = mapped_column(Integer, nullable=True)
+    father_included: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    mother_included: Mapped[bool] = mapped_column(Boolean, nullable=True)
     other_land_owner: Mapped[bool] = mapped_column(Boolean, nullable=True)
 
 

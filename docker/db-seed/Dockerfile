@@ -22,7 +22,7 @@
 #
 # Build context = repo root (so farmer-extension/ and docker/db-seed/ are both
 # reachable).
-ARG RP_VERSION=0.0.0-develop.383
+ARG RP_VERSION=0.0.0-develop.384
 FROM registry.gitlab.com/openg2p/registry/registry-platform/db-seed:${RP_VERSION}
 
 # The RP db-seed image ships the reference registry's seed; clear it so only
@@ -40,6 +40,14 @@ COPY docker/db-seed/seed-data/                                             /seed
 COPY docker/db-seed/load_sample_data.py /seed/load_sample_data.py
 COPY docker/db-seed/upload_images.py    /seed/upload_images.py
 RUN chmod +x /seed/load_sample_data.py /seed/upload_images.py
+
+# Agriculture code lists, sourced from catalogue-service directly — see the
+# script's own docstring for why this is a separate merge-only tool rather
+# than an extra domain on load_attributes_from_mds.py. Not wired into the
+# inherited entrypoint (it has no hook for it); run manually against a
+# reachable catalogue-service Postgres, e.g. after a new country-pack release.
+COPY docker/db-seed/sync_catalogue_attributes.py /seed/sync_catalogue_attributes.py
+RUN chmod +x /seed/sync_catalogue_attributes.py
 
 # Analytics seed, distinct from the demo fixture above.
 #   seed-data/*.json + the inherited load_sample_data.py  -> the ~500-row smoke set

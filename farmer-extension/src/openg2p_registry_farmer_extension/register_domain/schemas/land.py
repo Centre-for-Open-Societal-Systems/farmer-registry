@@ -11,14 +11,19 @@ from ..models.enums import LandOwnershipTypeEnum, LandSizeUnitEnum, CurrentLandU
 class G2PSchemaLand:
 
     land_ownership_type: Optional[LandOwnershipTypeEnum] = None
+    area_in_hectare: Optional[float] = None
+    land_kebele: Optional[str] = None
+    certificate_provided: Optional[bool] = None
     certificate_storage_id: Optional[str] = None
-    land_size: Optional[str] = None
+    land_size: Optional[float] = None
     unit: Optional[LandSizeUnitEnum] = None
     soil_fertility: Optional[str] = None
     current_land_use: Optional[CurrentLandUseEnum] = None
     farming_type: Optional[FarmingTypeEnum] = None
     year_of_acquisition: Optional[int] = None
     means_of_acquisition: Optional[str] = None
+    land_id: Optional[str] = None
+    remark: Optional[str] = None
 
 
 class G2PRegisterSchemaLand(G2PRegisterBaseSchema, G2PGeoSchema, G2PGeoShapeSchema, G2PSchemaLand):
@@ -29,7 +34,12 @@ class G2PRegisterSchemaLand(G2PRegisterBaseSchema, G2PGeoSchema, G2PGeoShapeSche
     """
 
 
-class G2PRegisterHistorySchemaLand(G2PRegisterHistorySchema, G2PGeoHistorySchema, G2PGeoShapeHistorySchema):
+class G2PRegisterHistorySchemaLand(
+    G2PRegisterHistorySchema,
+    G2PGeoHistorySchema,
+    G2PGeoShapeHistorySchema,
+    G2PSchemaLand,
+):
     """
     Schema for Land/Farm Details history.
     Inherits fields from G2PRegisterHistorySchema, G2PGeoHistorySchema, and G2PGeoShapeHistorySchema.

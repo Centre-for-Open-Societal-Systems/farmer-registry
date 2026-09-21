@@ -1,5 +1,5 @@
 from openg2p_registry_core.models.g2p_intake_form import G2PIntakeForm
-from sqlalchemy import Integer, String, Text, select
+from sqlalchemy import Boolean, Integer, Numeric, String, Text, select
 from sqlalchemy.orm import Mapped, mapped_column
 from openg2p_registry_core.models import (
     G2PRegister, G2PRegisterHistory, G2PGeo, G2PGeoShape,
@@ -11,14 +11,19 @@ from ..services import G2PRegisterDomainServiceLand
 class G2PLand:
 
     land_ownership_type: Mapped[LandOwnershipTypeEnum] = mapped_column(String, nullable=True)   # LandOwnershipTypeEnum
+    area_in_hectare: Mapped[float] = mapped_column(Numeric(16, 6), nullable=True)
+    land_kebele: Mapped[str] = mapped_column(String, nullable=True)
+    certificate_provided: Mapped[bool] = mapped_column(Boolean, nullable=True)
     certificate_storage_id: Mapped[str] = mapped_column(Text, nullable=True)
-    land_size: Mapped[str] = mapped_column(String, nullable=True)
+    land_size: Mapped[float] = mapped_column(Numeric(16, 6), nullable=True)
     unit: Mapped[LandSizeUnitEnum] = mapped_column(String, nullable=True)        # LandSizeUnitEnum
     soil_fertility: Mapped[str] = mapped_column(String, nullable=True)
     current_land_use: Mapped[CurrentLandUseEnum] = mapped_column(String, nullable=True)      # CurrentLandUseEnum
     farming_type: Mapped[FarmingTypeEnum] = mapped_column(String, nullable=True)          # FarmingTypeEnum
     year_of_acquisition: Mapped[int] = mapped_column(Integer, nullable=True)
     means_of_acquisition: Mapped[str] = mapped_column(String, nullable=True)  # Attribute lookup
+    land_id: Mapped[str] = mapped_column(String, nullable=True)  # farmer-assigned/external parcel identifier
+    remark: Mapped[str] = mapped_column(Text, nullable=True)
 
 # All Register classes should have the prefix G2PRegister
 class G2PRegisterLand(G2PRegister, G2PGeo, G2PGeoShape, G2PLand):

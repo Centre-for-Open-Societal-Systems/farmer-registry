@@ -14,6 +14,8 @@ class G2PSchemaHousehold:
     number_of_children: Optional[int] = None
     number_of_female_members: Optional[int] = None
     number_of_male_members: Optional[int] = None
+    father_included: Optional[bool] = None
+    mother_included: Optional[bool] = None
     other_land_owner: Optional[bool] = None
 
 
@@ -25,7 +27,9 @@ class G2PRegisterSchemaHousehold(G2PRegisterBaseSchema, G2PGeoSchema, G2PSchemaH
     """
 
 
-class G2PRegisterHistorySchemaHousehold(G2PRegisterHistorySchema, G2PGeoHistorySchema):
+class G2PRegisterHistorySchemaHousehold(
+    G2PRegisterHistorySchema, G2PGeoHistorySchema, G2PSchemaHousehold
+):
     """
     Schema for Household history.
     Inherits fields from G2PRegisterHistorySchema and G2PGeoHistorySchema.

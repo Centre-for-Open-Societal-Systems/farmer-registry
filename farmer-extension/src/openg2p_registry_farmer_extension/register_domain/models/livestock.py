@@ -11,6 +11,9 @@ class G2PLivestock:
     breed: Mapped[str] = mapped_column(String, nullable=True)             # Attribute lookup
     head_count: Mapped[int] = mapped_column(Integer, nullable=True)
     livestock_system: Mapped[LivestockSystemEnum] = mapped_column(String, nullable=True)  # LivestockSystemEnum
+    gender: Mapped[str] = mapped_column(String, nullable=True)            # Attribute lookup
+    body_condition: Mapped[str] = mapped_column(String, nullable=True)    # Attribute lookup
+    production_type: Mapped[str] = mapped_column(String, nullable=True)   # Attribute lookup
 
 # All Register classes should have the prefix G2PRegister
 class G2PRegisterLivestock(G2PRegister, G2PLivestock):

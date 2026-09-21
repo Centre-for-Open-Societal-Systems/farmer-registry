@@ -104,7 +104,13 @@ def main() -> None:
                     SET source_filename = EXCLUDED.source_filename
                 RETURNING document_id
                 """,
-                (document_id, object_key, "documents", object_key, "seeder", now),
+                # bucket_name, not a hardcoded "documents": the physical
+                # upload above honours IMAGE_BUCKET_NAME, so hardcoding here
+                # let the two diverge silently. Pointing IMAGE_BUCKET_NAME at
+                # registrant-photos put the objects in one bucket and the
+                # catalog rows in another, and every search_in_a_register call
+                # then failed with NoSuchBucket.
+                (document_id, object_key, bucket_name, object_key, "seeder", now),
             )
             row = cur.fetchone()
             catalog_document_id = row[0] if row else document_id

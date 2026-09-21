@@ -1,0 +1,234 @@
+/* Keep Registry detail-card labels and values readable. OpenG2P's readonly
+ * widgets intentionally default to single-line ellipses; the Farmer Registry
+ * has longer domain labels that need to wrap instead. Tables are excluded so
+ * they retain their horizontal-scroll behaviour. */
+
+/* The upstream detail renderer can place five panels on one row at wide
+ * breakpoints and gives each label only half of that panel. That is too narrow
+ * for Farmer labels such as "Number Of Children In The Family". Give each
+ * detail panel a useful minimum width and let excess panels wrap onto the next
+ * row. Intake accordions are deliberately excluded here and keep their own
+ * form layout rules below. */
+html body .section:not(.intake-form-accordion-item) > .section-panels > .panel-wrapper {
+  flex: 1 1 360px !important;
+  min-width: min(360px, 100%) !important;
+}
+
+/* Horizontal metadata panels also carry an inline 200px grid minimum in the
+ * base application. Override that inline layout so long labels have room and
+ * the grid becomes two/three rows naturally on smaller detail pages. */
+html body .section:not(.intake-form-accordion-item)
+  > .section-panels
+  > .panel-wrapper
+  > .grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr)) !important;
+  row-gap: 1rem !important;
+}
+
+/* Linked-register cards use a separate fixed three-column grid. Make it use
+ * the same readable, responsive sizing as the rest of the detail page. */
+html body .section:not(.intake-form-accordion-item) .register-lookup-record-panel {
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)) !important;
+  row-gap: 1rem !important;
+}
+
+html body .section:not(.intake-form-accordion-item)
+  .register-lookup-record-panel
+  > div {
+  padding-left: 24px !important;
+  padding-right: 24px !important;
+}
+
+html body .section-panels .panel-wrapper :is(
+  .TextDisplayWidget,
+  .TextAreaDisplayWidget,
+  .SelectDisplayWidget,
+  .PhoneDisplayWidget,
+  .NumberDisplayWidget,
+  .CurrencyDisplayWidget,
+  .RadioDisplayWidget,
+  .DateDisplayWidget,
+  .DateTimeDisplayWidget,
+  .CheckboxDisplayWidget,
+  .BooleanDisplayWidget,
+  .FileDisplayWidget,
+  .DisplayFieldWidget
+) {
+  min-width: 0 !important;
+  overflow: visible !important;
+}
+
+html body .section-panels .panel-wrapper :is(
+  .TextDisplayWidget,
+  .TextAreaDisplayWidget,
+  .SelectDisplayWidget,
+  .PhoneDisplayWidget,
+  .NumberDisplayWidget,
+  .CurrencyDisplayWidget,
+  .RadioDisplayWidget,
+  .DateDisplayWidget,
+  .DateTimeDisplayWidget,
+  .CheckboxDisplayWidget,
+  .BooleanDisplayWidget,
+  .FileDisplayWidget,
+  .DisplayFieldWidget
+) > .text-gray-600,
+html body .section-panels .panel-wrapper label.text-gray-700 {
+  height: auto !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  /* Translation labels may contain an intentional newline, for example
+   * "First Name\n(English)". Preserve it while still wrapping long words. */
+  white-space: pre-line !important;
+  line-height: 1.35 !important;
+}
+
+html body .section-panels .panel-wrapper :is(
+  .TextDisplayWidget,
+  .TextAreaDisplayWidget,
+  .SelectDisplayWidget,
+  .PhoneDisplayWidget,
+  .NumberDisplayWidget,
+  .CurrencyDisplayWidget,
+  .RadioDisplayWidget,
+  .DateDisplayWidget,
+  .DateTimeDisplayWidget,
+  .CheckboxDisplayWidget,
+  .BooleanDisplayWidget,
+  .FileDisplayWidget,
+  .DisplayFieldWidget
+) > .flex-1 {
+  min-width: 0 !important;
+  overflow: visible !important;
+}
+
+html body .section-panels .panel-wrapper :is(
+  .TextDisplayWidget,
+  .SelectDisplayWidget,
+  .PhoneDisplayWidget,
+  .NumberDisplayWidget,
+  .CurrencyDisplayWidget,
+  .RadioDisplayWidget,
+  .DateDisplayWidget,
+  .DateTimeDisplayWidget,
+  .CheckboxDisplayWidget,
+  .BooleanDisplayWidget,
+  .DisplayFieldWidget
+) > .flex-1 > .text-gray-900 {
+  height: auto !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  line-height: 1.35 !important;
+}
+
+/* The renderer injects width/min-width/max-width: 50% with !important on
+ * labels. At desktop widths reserve a little more space for the label while
+ * still leaving a stable value column. */
+@media (min-width: 640px) {
+  html body .section:not(.intake-form-accordion-item) .section-panels .panel-wrapper :is(
+    .TextDisplayWidget,
+    .TextAreaDisplayWidget,
+    .SelectDisplayWidget,
+    .PhoneDisplayWidget,
+    .NumberDisplayWidget,
+    .CurrencyDisplayWidget,
+    .RadioDisplayWidget,
+    .DateDisplayWidget,
+    .DateTimeDisplayWidget,
+    .CheckboxDisplayWidget,
+    .BooleanDisplayWidget,
+    .FileDisplayWidget,
+    .DisplayFieldWidget
+  ) > .text-gray-600,
+  html body .section:not(.intake-form-accordion-item)
+    .section-panels
+    .panel-wrapper
+    label.text-gray-700 {
+    width: 58% !important;
+    min-width: 180px !important;
+    max-width: 240px !important;
+    flex: 0 0 58% !important;
+    padding-right: 16px !important;
+  }
+}
+
+/* Below the sm breakpoint the widgets already change to a vertical layout;
+ * make the label genuinely full width instead of retaining the injected 50%.
+ */
+@media (max-width: 639px) {
+  html body .section-panels .panel-wrapper :is(
+    .TextDisplayWidget,
+    .TextAreaDisplayWidget,
+    .SelectDisplayWidget,
+    .PhoneDisplayWidget,
+    .NumberDisplayWidget,
+    .CurrencyDisplayWidget,
+    .RadioDisplayWidget,
+    .DateDisplayWidget,
+    .DateTimeDisplayWidget,
+    .CheckboxDisplayWidget,
+    .BooleanDisplayWidget,
+    .FileDisplayWidget,
+    .DisplayFieldWidget
+  ) > .text-gray-600,
+  html body .section-panels .panel-wrapper label.text-gray-700 {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex-basis: auto !important;
+    padding-right: 0 !important;
+  }
+}
+
+/* The record header uses its own label/value classes rather than the standard
+ * readonly widget classes. Allow those fields to wrap as well. */
+html body [class*="header-section-widget-"] :is(
+  .hdr-field-label,
+  .hdr-field-value,
+  .hdr-meta-label,
+  .hdr-meta-value
+) {
+  height: auto !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  line-height: 1.35 !important;
+}
+
+/* Intake forms use the same widgets inside accordion panels. Keep long section
+ * titles, modification badges, field labels, and lookup actions visible at all
+ * viewport widths. */
+html body .intake-form-accordion-item .intake-form-accordion-header > div {
+  flex-wrap: wrap !important;
+  row-gap: 0.5rem !important;
+}
+
+html body .intake-form-accordion-item .intake-form-accordion-header h2,
+html body .intake-form-accordion-item .section-panels .panel-wrapper label.text-gray-700,
+html body .intake-form-accordion-item .section-panels .panel-wrapper .text-gray-600 {
+  height: auto !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  white-space: pre-line !important;
+  line-height: 1.35 !important;
+}
+
+html body .intake-form-accordion-item .intake-form-accordion-content button:has(> span.truncate) {
+  width: auto !important;
+  min-height: 30px !important;
+  height: auto !important;
+}
+
+html body .intake-form-accordion-item .intake-form-accordion-content span.truncate {
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  line-height: 1.25 !important;
+}

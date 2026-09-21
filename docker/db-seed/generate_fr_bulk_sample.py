@@ -342,7 +342,8 @@ def main():
         "occupation", "education_level", "estimated_age", "has_personal_phone",
         "disabled", "disability_type", "disability_severity", "source_of_income",
         "language_spoken", "latitude", "longitude", "country_code",
-        "geo_lowest_level_value_id", "geo_code_hierarchy_json"])
+        "geo_lowest_level_value_id", "geo_code_hierarchy_json",
+        "state", "import_source"])
     lands = Copier(conn, "g2p_register_lands", [
         "internal_record_id", "link_internal_record_id", "functional_record_id",
         "record_status", "created_at", "created_by", "last_approved_at",
@@ -413,7 +414,7 @@ def main():
             weighted(rng, DISABILITY_SEV) if disabled else None,
             weighted(rng, INCOME), rng.choice(["am", "om", "ti", "so"]),
             f"{8.0 + rng.random() * 6:.5f}", f"{35.0 + rng.random() * 8:.5f}",
-            "ET", leaf_id, hierarchy,
+            "ET", leaf_id, hierarchy, "APPROVED", "IMPORT_FILE",
         ])
 
         # Sub-table functional ids are SEQUENTIAL, not a truncated uuid.

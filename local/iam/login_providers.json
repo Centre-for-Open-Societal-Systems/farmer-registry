@@ -1,0 +1,31 @@
+[
+  {
+    "id": 1,
+    "user_type": "staff",
+    "provider_name": "Keycloak",
+    "description": "Login with Keycloak",
+    "icon_base64": "NULL",
+    "client_id": "staff-portal",
+    "client_secret": "staff-portal-secret",
+    "token_endpoint_auth_method": "client_secret_basic",
+    "keymanager_app_id": "",
+    "keymanager_ref_id": "",
+    "authorization_endpoint": "http://keycloak.localtest.me:8080/realms/staff/protocol/openid-connect/auth",
+    "userinfo_endpoint": "http://keycloak.localtest.me:8080/realms/staff/protocol/openid-connect/userinfo",
+    "token_endpoint": "http://keycloak.localtest.me:8080/realms/staff/protocol/openid-connect/token",
+    "server_metadata_url": "http://keycloak.localtest.me:8080/realms/staff/.well-known/openid-configuration",
+    "adapter_name": "",
+    "jwks_uri": "http://keycloak.localtest.me:8080/realms/staff/protocol/openid-connect/certs",
+    "jwt_assertion_aud": "NULL",
+    "scope": "openid profile email",
+    "enable_pkce": true,
+    "extra_authorize_params": "NULL",
+    "issuer": "http://keycloak.localtest.me:8080/realms/staff",
+    "audiences": "",
+    "oauth_callback_url": "http://iam.localtest.me:8000/auth/callback",
+    "default_redirect_uri": "http://portal.localtest.me:3000",
+    "created_at": "2026-01-01 00:00:00",
+    "updated_at": "2026-01-01 00:00:00",
+    "active": true
+  }
+]

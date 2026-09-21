@@ -34,6 +34,7 @@ class LandOwnershipTypeEnum(StrEnum):
     OWNER = "OWNER"
     TENANT = "TENANT"
     CROP_SHARE = "CROP_SHARE"
+    FAMILY_GIFT = "FAMILY_GIFT"
 
 
 class LandSizeUnitEnum(StrEnum):
@@ -88,3 +89,70 @@ class EducationalLevelEnum(StrEnum):
     BASIC = "BASIC"
     INTERMEDIARY = "INTERMEDIARY"
     HIGHER_EDUCATION = "HIGHER_EDUCATION"
+
+
+class IdTypeEnum(StrEnum):
+    UID = "UID"
+    RID = "RID"
+    NATIONAL_ID = "NATIONAL_ID"
+    FARMER_ODK_ACK_ID = "FARMER_ODK_ACK_ID"
+    MEMBER_ODK_ACK_ID = "MEMBER_ODK_ACK_ID"
+    OTHER = "OTHER"
+
+
+class IdStatusEnum(StrEnum):
+    VALID = "VALID"
+    INVALID = "INVALID"
+
+
+class ConsentTypeEnum(StrEnum):
+    BASELINE = "BASELINE"
+    SPECIFIC = "SPECIFIC"
+
+
+class ConsentOriginEnum(StrEnum):
+    BENEFICIARY = "BENEFICIARY"
+    AGENT = "AGENT"
+    STAFF = "STAFF"
+    PARTNER = "PARTNER"
+
+
+class ConsentStatusEnum(StrEnum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    REVOKED = "REVOKED"
+    DENIED = "DENIED"
+    EXPIRED = "EXPIRED"
+
+
+class FarmerLandOwnershipEnum(StrEnum):
+    OWNER = "OWNER"
+    TENANT = "TENANT"
+    HYBRID = "HYBRID"
+
+
+class PhoneTypeEnum(StrEnum):
+    # Matches the ATI Odoo source (g2p_ati/models/phone_number.py), which
+    # extends g2p.phone.number with exactly these three types.
+    PRIMARY = "PRIMARY"
+    SECONDARY = "SECONDARY"
+    OTHER = "OTHER"
+
+
+class FarmerStateEnum(StrEnum):
+    DRAFT = "DRAFT"
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+
+class FarmerImportSourceEnum(StrEnum):
+    INTAKE_FORM = "INTAKE_FORM"
+    IMPORT_FILE = "IMPORT_FILE"
+    PARTNER = "PARTNER"
+    STAFF_PORTAL = "STAFF_PORTAL"
+    BENEFICIARY_PORTAL = "BENEFICIARY_PORTAL"
+    AGENT_PORTAL = "AGENT_PORTAL"
+    VERIFIABLE_CREDENTIAL = "VERIFIABLE_CREDENTIAL"

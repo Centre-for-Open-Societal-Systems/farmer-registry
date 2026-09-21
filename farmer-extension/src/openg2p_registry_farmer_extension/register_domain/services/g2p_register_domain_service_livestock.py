@@ -19,7 +19,7 @@ class G2PRegisterDomainServiceLivestock(G2PRegisterDomainService):
                 continue
             normalized = str(value).strip()
             if normalized in seen:
-                validation_error("Duplicate livestock_type entries are not allowed")
+                validation_error("The same Livestock Type is listed more than once; each type needs its own row")
             seen.add(normalized)
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
@@ -30,6 +30,9 @@ class G2PRegisterDomainServiceLivestock(G2PRegisterDomainService):
             "breed",
             "head_count",
             "livestock_system",
+            "gender",
+            "body_condition",
+            "production_type",
         ]
         search_text = []
         if extra:
