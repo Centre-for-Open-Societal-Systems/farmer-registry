@@ -10,14 +10,13 @@
 -- vertical panels carry a span to divide that row's grid - the same
 -- horizontal -> vertical(span 3) pair the Livestocks and Crops sections use.
 --
--- Land Kebele: the widget library drops a top-level "level_id" from a data
--- source and then sends the parent under the wrong key, so level_id must sit
--- inside "params" (the same applies to the intake copy in
--- g2p_register_sections.sql). "kebele" is the level MNEMONIC, which Master
--- Data accepts in place of the id. dependsOn walks the farmer's own saved
--- hierarchy (region, zone, woreda, kebele) to the woreda entry, so the list is
--- the kebeles of this farmer's woreda and is available in the same session
--- the location was entered.
+-- Land Kebele is free text (same in the intake copy in
+-- g2p_register_sections.sql): it used to be a Master Data lookup of the
+-- "kebele" level under the farmer's woreda, but a country pack need not carry
+-- that level at all (the deployed ETH pack stops at woreda), and then the
+-- dropdown could never list anything and the field was always null. The
+-- portal pre-fills the box with the lowest place chosen in Location
+-- (farmer-intake-rules.js) and the enumerator overtypes the kebele name.
 UPDATE public.g2p_register_sections
 SET section_ui_schema = $schema$
 {
@@ -129,21 +128,13 @@ SET section_ui_schema = $schema$
                           }
                         },
                         {
-                          "widget": "select",
+                          "widget": "text",
                           "column-key": "land_kebele",
                           "widget-type": "input",
                           "widget-label": "land_kebele",
+                          "widget-readonly": false,
                           "widget-data-path": "land_kebele",
-                          "widget-data-source": {
-                            "type": "api",
-                            "method": "POST",
-                            "service": "master-data",
-                            "endpoint": "geo-level-values",
-                            "params": {"level_id": "kebele", "page_size": 1000},
-                            "dependsOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.geo_code_hierarchy_json.hierarchy.2.level_value_id",
-                            "labelKey": "level_value_mnemonic",
-                            "valueKey": "level_value_mnemonic"
-                          }
+                          "widget-data-placeholder": "Kebele the land is in"
                         },
                         {
                           "widget": "file",
