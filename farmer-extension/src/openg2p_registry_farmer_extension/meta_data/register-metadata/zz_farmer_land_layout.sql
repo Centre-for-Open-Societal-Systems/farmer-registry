@@ -10,13 +10,6 @@
 -- vertical panels carry a span to divide that row's grid - the same
 -- horizontal -> vertical(span 3) pair the Livestocks and Crops sections use.
 --
--- Certificate Provided is derived on save from the uploaded certificate
--- (the land service sets it), so the Add/Edit dialog does not show it: the
--- column carries a "show" condition that is never true (notEmpty on a field
--- no row has; "equals" would not do, the library reads a boolean false as
--- equal to any non-truthy string). The table row still lists it --
--- conditions only govern the dialog in this widget library.
---
 -- Land Kebele is free text (same in the intake copy in
 -- g2p_register_sections.sql): it used to be a Master Data lookup of the
 -- "kebele" level under the farmer's woreda, but a country pack need not carry
@@ -152,7 +145,7 @@ SET section_ui_schema = $schema$
                           "widget-data-helptext": "certificate_file_hint",
                           "widget-data-options": {"accept": ".pdf,.jpg,.jpeg,.png,.webp", "multiple": false, "maxSize": 10485760}
                         },
-                        {"widget":"checkbox","column-key":"certificate_provided","widget-type":"input","widget-label":"certificate_provided","widget-readonly":true,"widget-data-path":"certificate_provided","widget-data-options":{"action":"show","condition":{"field":"__never_set__","operator":"notEmpty"}}},
+                        {"widget":"checkbox","column-key":"certificate_provided","widget-type":"input","widget-label":"certificate_provided","widget-readonly":true,"widget-data-path":"certificate_provided"},
                         {"widget":"text","column-key":"soil_fertility","widget-type":"input","widget-label":"soil_fertility","widget-data-path":"soil_fertility"},
                         {
                           "widget": "select",
