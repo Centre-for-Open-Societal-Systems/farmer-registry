@@ -187,11 +187,57 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         if register_id != FARMER_REGISTER_ID:
             return
         register_row.state = "APPROVED"
+        submission = await self._ingest_submission(register_row, session)
         if not register_row.import_source:
-            # post_ingest is the direct ingestion/partner path. Intake-form
-            # approvals use post_approve above and preserve INTAKE_FORM.
-            register_row.import_source = "PARTNER"
+            # Every ingested farmer arrives here (post_approve is the change
+            # request path). The submission says who sent it: the web intake
+            # form (STAFF_PORTAL) or a partner.
+            register_row.import_source = self._import_source_of(submission)
+        self._fill_enumerator(register_row, submission)
         await self._sync_linked_household_head(register_row, session)
+
+    @staticmethod
+    async def _ingest_submission(register_row, session):
+        """The intake submission this farmer was ingested from, or None. The
+        intake row keeps the internal_record_id the register row was given."""
+        from openg2p_registry_core.models import G2PIntakeFormSubmission
+
+        from ..models import G2PIntakeFormFarmer
+
+        return (
+            await session.execute(
+                select(G2PIntakeFormSubmission)
+                .join(
+                    G2PIntakeFormFarmer,
+                    G2PIntakeFormFarmer.submission_id == G2PIntakeFormSubmission.submission_id,
+                )
+                .where(G2PIntakeFormFarmer.internal_record_id == register_row.internal_record_id)
+                .order_by(G2PIntakeFormSubmission.first_created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+    @staticmethod
+    def _import_source_of(submission) -> str:
+        source = str(getattr(submission, "submission_source", "") or "").upper()
+        return "INTAKE_FORM" if source == "STAFF_PORTAL" else "PARTNER"
+
+    @staticmethod
+    def _fill_enumerator(register_row, submission) -> None:
+        """The Enumerator section (who collected the record and when) is
+        never typed in: the web intake form renders only its first tab, so
+        the Enumerator tab's fields stayed empty on every farmer. Fill them
+        from the submission -- the staff user who created it and the day it
+        was started -- unless the payload already carried them (a partner
+        may send its own enumerator)."""
+        if submission is None:
+            return
+        if not register_row.enumerator_name and submission.created_by:
+            register_row.enumerator_name = submission.created_by
+        if not register_row.data_collection_date:
+            started = submission.first_created_at or submission.finalized_at
+            if started:
+                register_row.data_collection_date = started.date() if hasattr(started, "date") else started
 
     async def _sync_linked_household_head(self, farmer, session):
         if not farmer:

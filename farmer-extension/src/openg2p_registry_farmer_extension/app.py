@@ -587,6 +587,42 @@ class Initializer(BaseInitializer):
                 )
             )
 
+            # Farmers ingested from the web intake form were stamped
+            # import_source PARTNER (post_ingest assumed every ingest was a
+            # partner's) and had no Enumerator data (the intake form renders
+            # only its first tab, so that section was never typed in). The
+            # farmer service now reads both off the submission on ingest;
+            # this fills in the farmers ingested before that. The intake
+            # row keeps the register row's internal_record_id, which is the
+            # link to the submission. Only blank / PARTNER values are
+            # touched, so it is a no-op afterwards.
+            await conn.execute(
+                text(
+                    """
+                    WITH latest AS (
+                        SELECT DISTINCT ON (i.internal_record_id)
+                               i.internal_record_id, s.submission_source, s.created_by,
+                               COALESCE(s.first_created_at, s.finalized_at)::date AS collected_on
+                        FROM "public"."g2p_intake_form_farmers" i
+                        JOIN "public"."g2p_intake_form_submissions" s ON s.submission_id = i.submission_id
+                        WHERE i.internal_record_id IS NOT NULL
+                        ORDER BY i.internal_record_id, s.first_created_at DESC
+                    )
+                    UPDATE "public"."g2p_register_farmers" AS f
+                    SET import_source = CASE
+                            WHEN f.import_source IS DISTINCT FROM 'PARTNER' THEN f.import_source
+                            WHEN l.submission_source = 'STAFF_PORTAL' THEN 'INTAKE_FORM'
+                            ELSE f.import_source END,
+                        enumerator_name = COALESCE(f.enumerator_name, l.created_by),
+                        data_collection_date = COALESCE(f.data_collection_date, l.collected_on)
+                    FROM latest l
+                    WHERE f.internal_record_id = l.internal_record_id
+                      AND (f.enumerator_name IS NULL OR f.data_collection_date IS NULL
+                           OR (f.import_source = 'PARTNER' AND l.submission_source = 'STAFF_PORTAL'))
+                    """
+                )
+            )
+
             land_extension_columns = {
                 "area_in_hectare": "NUMERIC(16, 6)",
                 "land_kebele": "VARCHAR",
