@@ -112,7 +112,16 @@ pipeline {
                      
                         helm repo add openg2p-gitlab https://gitlab.com/api/v4/projects/84460547/packages/helm/stable || true
                         helm repo update openg2p-gitlab
-                        helm dependency build ${HELM_CHART_DIR}
+                        # `update`, not `build`: Chart.lock is gitignored (it pins a
+                        # moving -develop tag, so it buys no determinism), which leaves
+                        # the workspace copy on the agent as the only one -- and git
+                        # never cleans an ignored file between builds. `build` trusts
+                        # that stale lock and refuses the moment Chart.yaml's pin moves:
+                        # "the lock file (Chart.lock) is out of sync with the
+                        # dependencies file (Chart.yaml)", which is exactly what failed
+                        # staging #4 on the .383 -> .384 bump. `update` re-resolves from
+                        # Chart.yaml and rewrites the lock.
+                        helm dependency update ${HELM_CHART_DIR}
 
                         cat > /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml <<EOF
 registry:
