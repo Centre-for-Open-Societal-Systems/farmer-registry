@@ -245,6 +245,19 @@ DB names/users derive from the release name: `farmer_registry` /
 the one `commons-postgresql-0` instance, which is why `helm uninstall` leaves
 the databases behind (see §11).
 
+**Upload size on the host reverse proxy.** Browsers reach the portal through
+an nginx on the EC2 host (`nginx/1.24.0 (Ubuntu)` in its error pages), in
+front of the cluster ingress. nginx's default `client_max_body_size` is 1 MB,
+and the intake form uploads files of up to 10 MB (`maxSize` on the file
+widgets: land certificate, farmer photo): anything larger is answered by the
+host with `413 Request Entity Too Large` and never reaches the API. The
+portal tells the user so ("The file is too large for the server to accept")
+and refuses to save the section, but the fix is on the box, not in this
+repo -- `client_max_body_size 12m;` in the `server` (or `location /api/`)
+block that proxies the staff portal, then `nginx -t && systemctl reload
+nginx`. Images are resized in the browser to about 1 MB before upload;
+PDFs are sent as picked, so a 3 MB scan needs the limit raised.
+
 ---
 
 ## 4. Deploy: the shared platform (`ci/commons-services/`)
