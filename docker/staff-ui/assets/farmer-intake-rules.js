@@ -656,8 +656,10 @@
         if (!cell || cell.querySelector("input,select,button")) return;
         var text = cell.textContent.trim().toLowerCase();
         var attached = file >= 0 && tr.children[file] && tr.children[file].textContent.trim() !== "" && tr.children[file].textContent.trim() !== "-";
-        if (text === "true" || (text === "false" && attached)) cell.textContent = "Yes";
-        else if (text === "false") cell.textContent = "No";
+        // The flag is not in the dialog (derived on save), so an unsaved row
+        // has no value for it at all: read it from the file column.
+        if (text === "true" || ((text === "false" || text === "" || text === "-") && attached)) cell.textContent = "Yes";
+        else if (text === "false" || text === "" || text === "-") cell.textContent = "No";
       });
     });
   }
