@@ -3,27 +3,25 @@ from datetime import date
 
 from openg2p_registry_core.models import G2PRegisterChangeRequest
 from openg2p_registry_core.services import G2PRegisterDomainService
-from sqlalchemy import select, update
+from openg2p_fastapi_common.context import dbengine
+from sqlalchemy import select, text, update
 
 from .domain_validation_utils import (
     as_bool,
     as_int,
     is_embedded_file,
+    normalize_coordinates,
     parse_date,
+    sync_ethiopic_date_pair,
     upload_embedded_file,
     validation_error,
-)
-from .ethiopian_calendar import (
-    ethiopic_to_gregorian,
-    format_ethiopic,
-    gregorian_to_ethiopic_string,
-    parse_ethiopic,
 )
 from .validation_rules import (
     NAME_FIELDS,
     NAME_MAX_LENGTH,
     NAME_PATTERN,
     REQUIRED_NAME_FIELDS,
+    NAME_FIELD_LABELS,
     is_interactive,
     matches,
 )
@@ -48,6 +46,7 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
             self._normalize_booleans(record)
+            normalize_coordinates(record)
             await self._persist_embedded_profile_photo(record)
             self._validate_names(record)
             self._validate_birth_date(record)
@@ -70,7 +69,17 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         # must stay NULL in the (nullable) columns -- the same rule the
         # household service applies to its flags. Readers only test
         # truthiness, so None and False behave alike downstream.
+        #
+        # Only touch keys the caller actually sent. Intake saves one section
+        # at a time and the platform writes back every key present in the
+        # record, None included -- so adding a key here for a flag that lives
+        # in another section (disabled and is_psnp_user in Socio-economic,
+        # is_household_head in Household) nulled that column on every save of
+        # Personal Information, Birth, Location, ... Same rule as
+        # _validate_names: an absent key is a partial update, not a blank.
         for field in ("has_personal_phone", "disabled", "is_psnp_user", "is_household_head"):
+            if field not in record:
+                continue
             if not isinstance(record.get(field), bool):
                 record[field] = as_bool(record.get(field))
 
@@ -178,11 +187,57 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         if register_id != FARMER_REGISTER_ID:
             return
         register_row.state = "APPROVED"
+        submission = await self._ingest_submission(register_row, session)
         if not register_row.import_source:
-            # post_ingest is the direct ingestion/partner path. Intake-form
-            # approvals use post_approve above and preserve INTAKE_FORM.
-            register_row.import_source = "PARTNER"
+            # Every ingested farmer arrives here (post_approve is the change
+            # request path). The submission says who sent it: the web intake
+            # form (STAFF_PORTAL) or a partner.
+            register_row.import_source = self._import_source_of(submission)
+        self._fill_enumerator(register_row, submission)
         await self._sync_linked_household_head(register_row, session)
+
+    @staticmethod
+    async def _ingest_submission(register_row, session):
+        """The intake submission this farmer was ingested from, or None. The
+        intake row keeps the internal_record_id the register row was given."""
+        from openg2p_registry_core.models import G2PIntakeFormSubmission
+
+        from ..models import G2PIntakeFormFarmer
+
+        return (
+            await session.execute(
+                select(G2PIntakeFormSubmission)
+                .join(
+                    G2PIntakeFormFarmer,
+                    G2PIntakeFormFarmer.submission_id == G2PIntakeFormSubmission.submission_id,
+                )
+                .where(G2PIntakeFormFarmer.internal_record_id == register_row.internal_record_id)
+                .order_by(G2PIntakeFormSubmission.first_created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+    @staticmethod
+    def _import_source_of(submission) -> str:
+        source = str(getattr(submission, "submission_source", "") or "").upper()
+        return "INTAKE_FORM" if source == "STAFF_PORTAL" else "PARTNER"
+
+    @staticmethod
+    def _fill_enumerator(register_row, submission) -> None:
+        """The Enumerator section (who collected the record and when) is
+        never typed in: the web intake form renders only its first tab, so
+        the Enumerator tab's fields stayed empty on every farmer. Fill them
+        from the submission -- the staff user who created it and the day it
+        was started -- unless the payload already carried them (a partner
+        may send its own enumerator)."""
+        if submission is None:
+            return
+        if not register_row.enumerator_name and submission.created_by:
+            register_row.enumerator_name = submission.created_by
+        if not register_row.data_collection_date:
+            started = submission.first_created_at or submission.finalized_at
+            if started:
+                register_row.data_collection_date = started.date() if hasattr(started, "date") else started
 
     async def _sync_linked_household_head(self, farmer, session):
         if not farmer:
@@ -343,18 +398,19 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             value = record.get(field)
             text = "" if value is None else str(value).strip()
 
+            label = NAME_FIELD_LABELS.get(field, field)
             if not text:
                 if interactive and field in REQUIRED_NAME_FIELDS:
-                    validation_error(f"{field} is required")
+                    validation_error(f"{label} is required")
                 continue
 
             if len(text) > NAME_MAX_LENGTH:
                 validation_error(
-                    f"{field} must be {NAME_MAX_LENGTH} characters or fewer"
+                    f"{label} must be {NAME_MAX_LENGTH} characters or fewer"
                 )
             if not matches(NAME_PATTERN, text):
                 validation_error(
-                    f"{field} may contain only letters (Latin or Ethiopic), "
+                    f"{label} may contain only letters (Latin or Ethiopic), "
                     "spaces, hyphens and apostrophes"
                 )
             record[field] = text
@@ -362,7 +418,7 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
     def _validate_birth_date(self, record: dict) -> None:
         birth_date = parse_date(record.get("birth_date"))
         if birth_date is not None and birth_date > date.today():
-            validation_error("birth_date must not be in the future")
+            validation_error("Date of birth cannot be in the future")
 
     def _validate_estimated_age(self, record: dict) -> None:
         birth_date = parse_date(record.get("birth_date"))
@@ -372,55 +428,17 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         computed_age = self._calculate_age(birth_date)
         if computed_age is not None and abs(estimated_age - computed_age) > 1:
             validation_error(
-                "estimated_age must be consistent with birth_date within one year"
+                f"Age ({estimated_age}) does not match the date of birth "
+                f"(which gives {computed_age}); leave Age blank to fill it automatically"
             )
 
     def _sync_ethiopian_birth_date(self, record: dict) -> None:
         """Keep birth_date (Gregorian) and birth_date_ec (Ethiopic) in step.
 
-        Runs here rather than in the date widget so every entry path gets it --
-        web intake, bulk ingestion, the partner API and file import all land in
-        validate_domain_attributes, and only the first of those has a UI.
-
-        Whichever side the enumerator filled derives the other. If both arrive,
-        they must agree: silently rewriting one of two explicitly entered
-        values would hide a data-entry error rather than surface it.
+        See sync_ethiopic_date_pair for the rules; the household member, crop
+        and ID registers apply the same helper to their own date pairs.
         """
-        # Only touch the pair when the caller actually submitted at least one
-        # of them. A partial update of, say, marital_status carries neither key
-        # and must not have a birth date derived onto it.
-        has_gc = "birth_date" in record
-        has_ec = "birth_date_ec" in record
-        if not has_gc and not has_ec:
-            return
-
-        gregorian = parse_date(record.get("birth_date"))
-        raw_ec = record.get("birth_date_ec")
-        ethiopic = parse_ethiopic(raw_ec)
-
-        if raw_ec not in (None, "") and ethiopic is None:
-            validation_error(
-                "birth_date_ec must be an Ethiopic date in YYYY-MM-DD form"
-            )
-
-        if ethiopic is not None:
-            try:
-                converted = ethiopic_to_gregorian(*ethiopic)
-            except ValueError as exc:
-                validation_error(str(exc))
-            if gregorian is None:
-                record["birth_date"] = converted
-            elif converted != gregorian:
-                validation_error(
-                    "birth_date_ec does not match birth_date "
-                    f"({format_ethiopic(*ethiopic)} EC is {converted} GC, "
-                    f"not {gregorian})"
-                )
-            # Normalize to the padded string form even when it round-trips, so
-            # a legacy date value or an unpadded entry is rewritten on save.
-            record["birth_date_ec"] = format_ethiopic(*ethiopic)
-        elif gregorian is not None:
-            record["birth_date_ec"] = gregorian_to_ethiopic_string(gregorian)
+        sync_ethiopic_date_pair(record, "birth_date", "birth_date_ec", "Date of birth")
 
     def _populate_age_from_birth_date(self, record: dict) -> None:
         """Populate the stored Age when a Gregorian birth date is supplied."""
@@ -499,3 +517,230 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         )
 
         return " ".join(record_name).strip()
+
+    async def deduplicate_registry_records(
+        self,
+        check_id_documents: bool = True,
+        check_foundational_id: bool = True,
+        check_phones: bool = True,
+        check_household_overlap: bool = True,
+        reset_existing: bool = True,
+    ) -> dict:
+        """
+        Scan all farmer registry records and flag duplicates, recreating Gen 1 deduplication behavior.
+        Matches on:
+        - Configured ID documents (id_type, value) from g2p_register_reg_ids
+        - Foundational IDs from g2p_register_farmers
+        - Phone numbers from g2p_register_farmer_phones
+        - Household member overlap from g2p_register_household_members
+        """
+        _logger.info("Starting registry-wide deduplication scan...")
+        all_duplicate_ids = set()
+        match_entries = []
+        breakdown = {
+            "id_documents": 0,
+            "foundational_id": 0,
+            "phones": 0,
+            "household_overlap": 0,
+        }
+
+        async with dbengine.get().begin() as conn:
+            if reset_existing:
+                _logger.info("Resetting existing is_duplicated flags")
+                await conn.execute(
+                    text("UPDATE public.g2p_register_farmers SET is_duplicated = FALSE WHERE is_duplicated = TRUE")
+                )
+                await conn.execute(
+                    text("DELETE FROM public.dedup_results_register_records WHERE register_id = :reg_id"),
+                    {"reg_id": FARMER_REGISTER_ID},
+                )
+
+            # 1. ID Documents check (Gen 1 style)
+            if check_id_documents:
+                id_doc_query = text(
+                    """
+                    SELECT 
+                        reg_id.id_type,
+                        reg_id.value,
+                        array_agg(DISTINCT reg_id.link_internal_record_id) AS dup_ids
+                    FROM public.g2p_register_reg_ids reg_id
+                    JOIN public.g2p_register_farmers f ON f.internal_record_id = reg_id.link_internal_record_id
+                    WHERE reg_id.status = 'VALID' 
+                      AND reg_id.value IS NOT NULL 
+                      AND TRIM(reg_id.value) != ''
+                    GROUP BY reg_id.id_type, reg_id.value
+                    HAVING count(DISTINCT reg_id.link_internal_record_id) > 1
+                    """
+                )
+                result = await conn.execute(id_doc_query)
+                for row in result.fetchall():
+                    id_type, val, dup_ids = row[0], row[1], list(row[2])
+                    all_duplicate_ids.update(dup_ids)
+                    breakdown["id_documents"] += len(dup_ids)
+                    for i in range(len(dup_ids)):
+                        for j in range(i + 1, len(dup_ids)):
+                            match_entries.append({
+                                "register_id": FARMER_REGISTER_ID,
+                                "primary_internal_record_id": dup_ids[i],
+                                "duplicate_internal_record_id": dup_ids[j],
+                                "match_criteria_type": f"ID_DOC:{id_type}",
+                                "match_value": val,
+                                "match_score": 100.0,
+                            })
+
+            # 2. Foundational ID check
+            if check_foundational_id:
+                foundational_query = text(
+                    """
+                    SELECT 
+                        foundational_id, 
+                        array_agg(DISTINCT internal_record_id) AS dup_ids
+                    FROM public.g2p_register_farmers
+                    WHERE foundational_id IS NOT NULL 
+                      AND TRIM(foundational_id) != ''
+                    GROUP BY foundational_id
+                    HAVING count(DISTINCT internal_record_id) > 1
+                    """
+                )
+                result = await conn.execute(foundational_query)
+                for row in result.fetchall():
+                    val, dup_ids = row[0], list(row[1])
+                    all_duplicate_ids.update(dup_ids)
+                    breakdown["foundational_id"] += len(dup_ids)
+                    for i in range(len(dup_ids)):
+                        for j in range(i + 1, len(dup_ids)):
+                            match_entries.append({
+                                "register_id": FARMER_REGISTER_ID,
+                                "primary_internal_record_id": dup_ids[i],
+                                "duplicate_internal_record_id": dup_ids[j],
+                                "match_criteria_type": "FOUNDATIONAL_ID",
+                                "match_value": val,
+                                "match_score": 100.0,
+                            })
+
+            # 3. Phone Numbers check
+            if check_phones:
+                phone_query = text(
+                    """
+                    SELECT 
+                        p.phone_number, 
+                        array_agg(DISTINCT p.link_internal_record_id) AS dup_ids
+                    FROM public.g2p_register_farmer_phones p
+                    JOIN public.g2p_register_farmers f ON f.internal_record_id = p.link_internal_record_id
+                    WHERE p.phone_number IS NOT NULL 
+                      AND TRIM(p.phone_number) != ''
+                    GROUP BY p.phone_number
+                    HAVING count(DISTINCT p.link_internal_record_id) > 1
+                    """
+                )
+                result = await conn.execute(phone_query)
+                for row in result.fetchall():
+                    val, dup_ids = row[0], list(row[1])
+                    all_duplicate_ids.update(dup_ids)
+                    breakdown["phones"] += len(dup_ids)
+                    for i in range(len(dup_ids)):
+                        for j in range(i + 1, len(dup_ids)):
+                            match_entries.append({
+                                "register_id": FARMER_REGISTER_ID,
+                                "primary_internal_record_id": dup_ids[i],
+                                "duplicate_internal_record_id": dup_ids[j],
+                                "match_criteria_type": "PHONE_NUMBER",
+                                "match_value": val,
+                                "match_score": 100.0,
+                            })
+
+            # 4. Household Member Overlap
+            if check_household_overlap:
+                household_query = text(
+                    """
+                    SELECT 
+                        f.internal_record_id AS individual_id,
+                        array_agg(DISTINCT m.link_internal_record_id) AS household_ids
+                    FROM public.g2p_register_household_members m
+                    JOIN public.g2p_register_farmers f ON (f.foundational_id = m.foundational_id OR f.internal_record_id = m.internal_record_id)
+                    WHERE m.link_internal_record_id IS NOT NULL
+                    GROUP BY f.internal_record_id
+                    HAVING count(DISTINCT m.link_internal_record_id) > 1
+                    """
+                )
+                result = await conn.execute(household_query)
+                for row in result.fetchall():
+                    individual_id, household_ids = row[0], list(row[1])
+                    all_duplicate_ids.add(individual_id)
+                    breakdown["household_overlap"] += 1
+                    match_entries.append({
+                        "register_id": FARMER_REGISTER_ID,
+                        "primary_internal_record_id": individual_id,
+                        "duplicate_internal_record_id": individual_id,
+                        "match_criteria_type": "HOUSEHOLD_OVERLAP",
+                        "match_value": f"Appears in households: {', '.join(household_ids)}",
+                        "match_score": 100.0,
+                    })
+
+            # 5. Mark all duplicate farmer records
+            if all_duplicate_ids:
+                dup_list = list(all_duplicate_ids)
+                await conn.execute(
+                    text("UPDATE public.g2p_register_farmers SET is_duplicated = TRUE WHERE internal_record_id = ANY(:ids)"),
+                    {"ids": dup_list},
+                )
+
+            # 6. Save match details
+            for entry in match_entries:
+                await conn.execute(
+                    text(
+                        """
+                        INSERT INTO public.dedup_results_register_records (
+                            register_id, primary_internal_record_id, duplicate_internal_record_id,
+                            match_criteria_type, match_value, match_score
+                        ) VALUES (
+                            :register_id, :primary_internal_record_id, :duplicate_internal_record_id,
+                            :match_criteria_type, :match_value, :match_score
+                        )
+                        """
+                    ),
+                    entry,
+                )
+
+        _logger.info(f"Registry deduplication completed: {len(all_duplicate_ids)} duplicates found")
+        return {
+            "status": "SUCCESS",
+            "total_duplicate_farmers": len(all_duplicate_ids),
+            "duplicate_farmer_ids": list(all_duplicate_ids),
+            "breakdown": breakdown,
+            "total_pairs_recorded": len(match_entries),
+        }
+
+    async def get_deduplication_summary(self) -> dict:
+        async with dbengine.get().begin() as conn:
+            dup_count = (await conn.execute(
+                text("SELECT count(*) FROM public.g2p_register_farmers WHERE is_duplicated = TRUE")
+            )).scalar() or 0
+
+            total_count = (await conn.execute(
+                text("SELECT count(*) FROM public.g2p_register_farmers")
+            )).scalar() or 0
+
+            records_result = await conn.execute(
+                text("SELECT match_criteria_type, count(*) FROM public.dedup_results_register_records GROUP BY match_criteria_type")
+            )
+            criteria_counts = {row[0]: row[1] for row in records_result.fetchall()}
+
+            return {
+                "total_farmers": total_count,
+                "duplicated_farmers": dup_count,
+                "unique_farmers": total_count - dup_count,
+                "criteria_counts": criteria_counts,
+            }
+
+    async def reset_deduplication(self) -> dict:
+        async with dbengine.get().begin() as conn:
+            await conn.execute(
+                text("UPDATE public.g2p_register_farmers SET is_duplicated = FALSE WHERE is_duplicated = TRUE")
+            )
+            await conn.execute(
+                text("DELETE FROM public.dedup_results_register_records WHERE register_id = :reg_id"),
+                {"reg_id": FARMER_REGISTER_ID},
+            )
+        return {"status": "SUCCESS", "message": "All duplicate flags and results reset successfully"}
+

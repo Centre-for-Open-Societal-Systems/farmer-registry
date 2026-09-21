@@ -108,15 +108,6 @@ INSERT INTO public.g2p_register_sections (
                       "widget-required": false,
                       "widget-data-path": "country_code",
                       "default": "ETH"
-                    },
-                    {
-                      "widget": "checkbox",
-                      "column-key": "is_primary",
-                      "widget-type": "input",
-                      "widget-label": "is_primary_phone",
-                      "widget-readonly": false,
-                      "widget-required": false,
-                      "widget-data-path": "is_primary"
                     }
                   ],
                   "widget-data-add-label": "add_phone",

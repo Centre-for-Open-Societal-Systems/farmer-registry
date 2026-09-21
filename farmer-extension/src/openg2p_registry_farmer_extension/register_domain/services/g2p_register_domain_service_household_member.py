@@ -3,7 +3,7 @@ from datetime import date
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
-from .domain_validation_utils import as_bool, parse_date, validation_error
+from .domain_validation_utils import as_bool, parse_date, sync_ethiopic_date_pair, validation_error
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
@@ -15,12 +15,15 @@ class G2PRegisterDomainServiceHouseholdMember(G2PRegisterDomainService):
             # untouched, which Postgres rejects as an invalid boolean literal.
             if not isinstance(record.get("is_disabled"), bool):
                 record["is_disabled"] = as_bool(record.get("is_disabled")) or False
+            # Whichever calendar the enumerator used, derive the other before
+            # the future-date check so both columns are checked as one date.
+            sync_ethiopic_date_pair(record, "birth_date", "birth_date_ec", "Date of birth")
             self._validate_birth_date(record)
 
     def _validate_birth_date(self, record: dict) -> None:
         birth_date = parse_date(record.get("birth_date"))
         if birth_date is not None and birth_date > date.today():
-            validation_error("birth_date must not be in the future")
+            validation_error("Date of birth cannot be in the future")
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
         _logger.info("Constructing search text for household member")

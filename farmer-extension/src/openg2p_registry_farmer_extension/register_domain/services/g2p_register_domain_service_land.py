@@ -89,18 +89,27 @@ class G2PRegisterDomainServiceLand(G2PRegisterDomainService):
     def _validate_land_size(self, record: dict) -> None:
         land_size = as_float(record.get("land_size"))
         if land_size is not None and land_size <= 0:
-            validation_error("land_size must be greater than zero when provided")
+            validation_error("Land Size must be greater than zero")
 
     def _validate_year_of_acquisition(self, record: dict) -> None:
         year = as_int(record.get("year_of_acquisition"))
         if year is not None and year > date.today().year:
-            validation_error("year_of_acquisition must not be in the future")
+            validation_error("Year Of Acquisition cannot be in the future")
 
     async def post_approve(self, change_request: G2PRegisterChangeRequest, session):
         """Recompute the parent farmer's land rollups after any land CR is approved."""
         if change_request.section_register_id != LAND_REGISTER_ID:
             return
         await self._recompute_farmer_land_rollups(change_request.internal_record_id, session)
+
+    async def post_ingest(self, register_id, register_row, session):
+        """Same rollups when a land arrives through an approved intake: the
+        ingest worker inserts the row directly and calls this hook, never
+        post_approve, so without it a farmer registered with lands showed
+        empty totals on the Lands tab until someone edited a land."""
+        if register_id != LAND_REGISTER_ID:
+            return
+        await self._recompute_farmer_land_rollups(register_row.internal_record_id, session)
 
     async def _recompute_farmer_land_rollups(self, land_internal_record_id: str, session) -> None:
         from ..models import G2PRegisterLand, G2PRegisterFarmer

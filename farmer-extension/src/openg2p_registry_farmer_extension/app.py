@@ -44,6 +44,9 @@ class Initializer(BaseInitializer):
         super().initialize()
         CoreInitializer().initialize()
 
+        self._patch_filter_builder()
+        self._patch_csrf_for_webhooks()
+
         # Intake reads return record_image_document_id but never the presigned
         # record_image_url the register-side reads add, so a photo captured at
         # intake has nothing to render on the approval screen. Patches the
@@ -54,6 +57,68 @@ class Initializer(BaseInitializer):
         G2PRegisterDomainFactory()
         G2PRegisterDomainServiceFarmer()
         G2PRegisterDomainServiceHousehold()
+
+    def _patch_csrf_for_webhooks(self):
+        try:
+            from iam_core.user_auth.middleware.csrf import CsrfMiddleware
+            orig_should_skip = CsrfMiddleware._should_skip
+
+            def patched_should_skip(this, request):
+                path = getattr(getattr(request, "url", None), "path", "")
+                if path.startswith("/api/v1/farmer-registry/deduplicate"):
+                    return True
+                return orig_should_skip(this, request)
+
+            CsrfMiddleware._should_skip = patched_should_skip
+            _logger.info("CsrfMiddleware patched for deduplication endpoints")
+        except Exception as e:
+            _logger.warning(f"Failed to patch CsrfMiddleware: {e}")
+
+    def _patch_filter_builder(self):
+        try:
+            from openg2p_registry_core.services.filter_builder import FilterBuilder
+            from sqlalchemy import Boolean
+
+            orig_build_field_conditions = FilterBuilder._build_field_conditions
+            orig_validate_value = FilterBuilder._validate_value
+
+            def patched_validate_value(this, field_config, operator, value):
+                filter_type = field_config.get("filter_type")
+                if filter_type == "boolean":
+                    if isinstance(value, str) and value.lower() in ("true", "false"):
+                        return
+                return orig_validate_value(this, field_config, operator, value)
+
+            def patched_build_field_conditions(this, column, field_name, operators, field_config):
+                is_bool_col = hasattr(column, "type") and isinstance(column.type, Boolean)
+                if is_bool_col and isinstance(operators, dict):
+                    converted_operators = {}
+                    for op, val in operators.items():
+                        if isinstance(val, str):
+                            if val.lower() == "true":
+                                converted_operators[op] = True
+                            elif val.lower() == "false":
+                                converted_operators[op] = False
+                            else:
+                                converted_operators[op] = val
+                        elif isinstance(val, list):
+                            converted_operators[op] = [
+                                True if (isinstance(v, str) and v.lower() == "true") or v is True
+                                else False if (isinstance(v, str) and v.lower() == "false") or v is False
+                                else v
+                                for v in val
+                            ]
+                        else:
+                            converted_operators[op] = val
+                    operators = converted_operators
+
+                return orig_build_field_conditions(this, column, field_name, operators, field_config)
+
+            FilterBuilder._validate_value = patched_validate_value
+            FilterBuilder._build_field_conditions = patched_build_field_conditions
+            _logger.info("FilterBuilder boolean handling patched successfully")
+        except Exception as e:
+            _logger.warning(f"Failed to patch FilterBuilder: {e}")
 
     async def fastapi_app_startup(self, app):
         # The explicit CLI `migrate` step is a separate invocation from
@@ -78,6 +143,7 @@ class Initializer(BaseInitializer):
         # the loop that will actually serve requests, so there's no
         # cross-loop reuse.
         await self._migrate_extension_tables()
+        self._register_deduplication_routes(app)
 
     def migrate_database(self, args):
         asyncio.run(self._migrate_extension_tables())
@@ -219,6 +285,12 @@ class Initializer(BaseInitializer):
                             f'ADD COLUMN IF NOT EXISTS "{geo_column}" VARCHAR'
                         )
                     )
+                await conn.execute(
+                    text(
+                        f'ALTER TABLE "public"."{table_name}" '
+                        'ADD COLUMN IF NOT EXISTS "is_duplicated" BOOLEAN DEFAULT FALSE'
+                    )
+                )
 
                 # Older section-by-section intake saves cleared these list
                 # projections even though the selected location and hierarchy
@@ -266,6 +338,33 @@ class Initializer(BaseInitializer):
                           farmer.geo_code_hierarchy_json->'hierarchy'
                       ) = 'array'
                 """))
+
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.dedup_results_register_records (
+                        dedup_result_id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+                        register_id VARCHAR NOT NULL,
+                        primary_internal_record_id VARCHAR NOT NULL,
+                        duplicate_internal_record_id VARCHAR NOT NULL,
+                        match_criteria_type VARCHAR NOT NULL,
+                        match_value VARCHAR,
+                        match_score FLOAT NOT NULL DEFAULT 100.0,
+                        field_matches JSONB NOT NULL DEFAULT '{}'::jsonb,
+                        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() at time zone 'utc'),
+                        status VARCHAR DEFAULT 'FLAGGED'
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    """
+                    CREATE INDEX IF NOT EXISTS ix_dedup_results_reg_records
+                    ON public.dedup_results_register_records (primary_internal_record_id, duplicate_internal_record_id)
+                    """
+                )
+            )
 
             # A row only enters the live register after approval. Project
             # that workflow fact onto existing Farmer rows, and recover
@@ -375,6 +474,151 @@ class Initializer(BaseInitializer):
                     )::integer
                     WHERE birth_date IS NOT NULL
                       AND estimated_age IS NULL
+                    """
+                )
+            )
+
+            # Ethiopic twins of the Gregorian date columns (see the farmer's
+            # birth_date_ec above): a VARCHAR because month 13 exists. Declared
+            # on the models, so create_all() covers fresh databases; this covers
+            # the ones that already existed.
+            for column_name, tables in {
+                "birth_date_ec": (
+                    "g2p_register_household_members",
+                    "g2p_register_history_household_members",
+                    "g2p_intake_form_household_members",
+                ),
+                "planted_date_ec": (
+                    "g2p_register_crops",
+                    "g2p_register_history_crops",
+                    "g2p_intake_form_crops",
+                ),
+                "expiry_date_ec": (
+                    "g2p_register_reg_ids",
+                    "g2p_register_history_reg_ids",
+                    "g2p_intake_form_reg_ids",
+                ),
+            }.items():
+                for table_name in tables:
+                    await conn.execute(
+                        text(
+                            f'ALTER TABLE "public"."{table_name}" '
+                            f'ADD COLUMN IF NOT EXISTS "{column_name}" VARCHAR'
+                        )
+                    )
+
+            # Crops, livestock and farm inputs are children of the FARMER (see
+            # zz_farmer_register_parents.sql). Rows written while their master
+            # register was Land point at a land row and never show on the
+            # farmer's tabs; re-point each at that land's own farmer. A row
+            # whose link is not a land (already a farmer, or unlinked) is left
+            # alone, so this is a no-op on the second and every later boot.
+            for table_name in (
+                "g2p_register_crops",
+                "g2p_register_history_crops",
+                "g2p_register_livestocks",
+                "g2p_register_history_livestocks",
+                "g2p_register_farm_inputs",
+                "g2p_register_history_farm_inputs",
+            ):
+                await conn.execute(
+                    text(
+                        f"""
+                        UPDATE "public"."{table_name}" AS child
+                        SET link_internal_record_id = land.link_internal_record_id
+                        FROM "public"."g2p_register_lands" AS land
+                        WHERE child.link_internal_record_id = land.internal_record_id
+                          AND land.link_internal_record_id IS NOT NULL
+                        """
+                    )
+                )
+
+            # Land rollups on the farmer (total / owned / rented / crop-sharing
+            # area and ownership) were only recomputed when a land CHANGE
+            # REQUEST was approved; a land that arrived through intake never
+            # touched them, so farmers registered with lands showed empty
+            # totals. The land service fills them on ingest now; this fills in
+            # the farmers that already have active lands and no totals, with
+            # the same buckets and unit factors as
+            # G2PRegisterDomainServiceLand._recompute_farmer_land_rollups.
+            # Only NULL totals are touched, so it is a no-op afterwards.
+            await conn.execute(
+                text(
+                    """
+                    WITH per_land AS (
+                        SELECT l.link_internal_record_id AS farmer_id,
+                               l.land_ownership_type,
+                               COALESCE(l.land_size, 0) * CASE COALESCE(l.unit, 'HECTARE')
+                                   WHEN 'ACRE' THEN 0.404686
+                                   WHEN 'SQUARE_METER' THEN 0.0001
+                                   WHEN 'SQUARE_KM' THEN 100.0
+                                   WHEN 'SQUARE_FOOT' THEN 0.0000092903
+                                   WHEN 'SQUARE_YARD' THEN 0.0000836127
+                                   ELSE 1.0 END AS hectares
+                        FROM "public"."g2p_register_lands" l
+                        WHERE l.record_status = 'ACTIVE'
+                          AND l.link_internal_record_id IS NOT NULL
+                    ),
+                    per_farmer AS (
+                        SELECT farmer_id,
+                               SUM(hectares) FILTER (WHERE land_ownership_type = 'OWNER') AS owned,
+                               SUM(hectares) FILTER (WHERE land_ownership_type = 'TENANT') AS rented,
+                               SUM(hectares) FILTER (WHERE land_ownership_type IS DISTINCT FROM 'OWNER'
+                                                       AND land_ownership_type IS DISTINCT FROM 'TENANT') AS shared,
+                               SUM(hectares) AS total,
+                               COUNT(DISTINCT land_ownership_type) FILTER (WHERE land_ownership_type IS NOT NULL) AS kinds,
+                               MIN(land_ownership_type) FILTER (WHERE land_ownership_type IS NOT NULL) AS only_kind
+                        FROM per_land
+                        GROUP BY farmer_id
+                    )
+                    UPDATE "public"."g2p_register_farmers" AS f
+                    SET total_land_area = ROUND(COALESCE(p.total, 0)::numeric, 6),
+                        total_land_owned_area = ROUND(COALESCE(p.owned, 0)::numeric, 6),
+                        total_land_rent_area = ROUND(COALESCE(p.rented, 0)::numeric, 6),
+                        total_land_crop_sharing_area = ROUND(COALESCE(p.shared, 0)::numeric, 6),
+                        land_ownership = CASE
+                            WHEN p.kinds = 0 THEN NULL
+                            WHEN p.kinds = 1 AND p.only_kind IN ('OWNER', 'TENANT') THEN p.only_kind
+                            ELSE 'HYBRID' END
+                    FROM per_farmer p
+                    WHERE f.internal_record_id = p.farmer_id
+                      AND f.total_land_area IS NULL
+                    """
+                )
+            )
+
+            # Farmers ingested from the web intake form were stamped
+            # import_source PARTNER (post_ingest assumed every ingest was a
+            # partner's) and had no Enumerator data (the intake form renders
+            # only its first tab, so that section was never typed in). The
+            # farmer service now reads both off the submission on ingest;
+            # this fills in the farmers ingested before that. The intake
+            # row keeps the register row's internal_record_id, which is the
+            # link to the submission. Only blank / PARTNER values are
+            # touched, so it is a no-op afterwards.
+            await conn.execute(
+                text(
+                    """
+                    WITH latest AS (
+                        SELECT DISTINCT ON (i.internal_record_id)
+                               i.internal_record_id, s.submission_source, s.created_by,
+                               COALESCE(s.first_created_at, s.finalized_at)::date AS collected_on
+                        FROM "public"."g2p_intake_form_farmers" i
+                        JOIN "public"."g2p_intake_form_submissions" s ON s.submission_id = i.submission_id
+                        WHERE i.internal_record_id IS NOT NULL
+                        ORDER BY i.internal_record_id, s.first_created_at DESC
+                    )
+                    UPDATE "public"."g2p_register_farmers" AS f
+                    SET import_source = CASE
+                            WHEN f.import_source IS DISTINCT FROM 'PARTNER' THEN f.import_source
+                            WHEN l.submission_source = 'STAFF_PORTAL' THEN 'INTAKE_FORM'
+                            ELSE f.import_source END,
+                        enumerator_name = COALESCE(f.enumerator_name, l.created_by),
+                        data_collection_date = COALESCE(f.data_collection_date, l.collected_on)
+                    FROM latest l
+                    WHERE f.internal_record_id = l.internal_record_id
+                      AND (f.enumerator_name IS NULL OR f.data_collection_date IS NULL
+                           OR (f.import_source = 'PARTNER' AND l.submission_source = 'STAFF_PORTAL'))
                     """
                 )
             )
@@ -643,4 +887,40 @@ class Initializer(BaseInitializer):
         await G2PRegisterConsentReceipt.create_migrate()
         await G2PRegisterHistoryConsentReceipt.create_migrate()
         await G2PIntakeFormConsentReceipt.create_migrate()
+
+    def _register_deduplication_routes(self, app):
+        from fastapi import APIRouter
+        from .register_domain.services import G2PRegisterDomainServiceFarmer
+
+        router = APIRouter(prefix="/api/v1/farmer-registry", tags=["Farmer Registry Deduplication"])
+
+        @router.post("/deduplicate")
+        async def trigger_deduplication(
+            check_id_documents: bool = True,
+            check_foundational_id: bool = True,
+            check_phones: bool = True,
+            check_household_overlap: bool = True,
+            reset_existing: bool = True,
+        ):
+            service = G2PRegisterDomainServiceFarmer()
+            return await service.deduplicate_registry_records(
+                check_id_documents=check_id_documents,
+                check_foundational_id=check_foundational_id,
+                check_phones=check_phones,
+                check_household_overlap=check_household_overlap,
+                reset_existing=reset_existing,
+            )
+
+        @router.get("/deduplicate/summary")
+        async def get_deduplication_summary():
+            service = G2PRegisterDomainServiceFarmer()
+            return await service.get_deduplication_summary()
+
+        @router.post("/deduplicate/reset")
+        async def reset_deduplication():
+            service = G2PRegisterDomainServiceFarmer()
+            return await service.reset_deduplication()
+
+        app.include_router(router)
+
 

@@ -39,4 +39,19 @@ FROM (VALUES
 -- above (the platform already owns that policy_key), and without this filter the
 -- orphan's FK violation aborts the whole statement, taking the valid stages with it.
 WHERE EXISTS (SELECT 1 FROM "public"."approval_policy" p WHERE p.id = v."policy_id")
-ON CONFLICT DO NOTHING;
+-- DO UPDATE, not DO NOTHING: a stage that already exists (seeded before a mode
+-- change) must pick up the new mode/mode_value. With DO NOTHING the 'all' ->
+-- 'any-n' change in this file never reached any environment seeded before it,
+-- leaving every stage unanimous once admin was added as a second approver.
+-- The WHERE keeps it a no-op (and updated_at untouched) when nothing changed.
+-- Targeting "id" leaves uq_stage_policy_order unguarded; that only bites if a
+-- row holds one of our (policy_id, stage_order) pairs under a different id,
+-- which the EXISTS filter above and the fixed seed ids rule out.
+ON CONFLICT ("id") DO UPDATE SET
+    "name"       = EXCLUDED."name",
+    "mode"       = EXCLUDED."mode",
+    "mode_value" = EXCLUDED."mode_value",
+    "updated_at" = NOW()
+WHERE "approval_stage"."mode"       IS DISTINCT FROM EXCLUDED."mode"
+   OR "approval_stage"."mode_value" IS DISTINCT FROM EXCLUDED."mode_value"
+   OR "approval_stage"."name"       IS DISTINCT FROM EXCLUDED."name";

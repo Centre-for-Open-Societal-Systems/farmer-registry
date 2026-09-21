@@ -33,4 +33,16 @@ FROM (VALUES
 -- Same reason as the stage filter: a rule whose stage was skipped must not abort
 -- the statement and take the valid rules with it.
 WHERE EXISTS (SELECT 1 FROM "public"."approval_stage" s WHERE s.id = v."stage_id")
-ON CONFLICT DO NOTHING;
+-- DO UPDATE so an edit to an existing rule (flipping required, swapping the
+-- user) reaches environments seeded before it, instead of silently no-op'ing
+-- the way the stage mode change did. rule_value is json, which has no equality
+-- operator, hence the ::text comparison. The WHERE keeps a re-run a no-op.
+ON CONFLICT ("id") DO UPDATE SET
+    "rule_type"  = EXCLUDED."rule_type",
+    "rule_value" = EXCLUDED."rule_value",
+    "kind"       = EXCLUDED."kind",
+    "required"   = EXCLUDED."required",
+    "updated_at" = NOW()
+WHERE "approver_rule"."rule_value"::text IS DISTINCT FROM EXCLUDED."rule_value"::text
+   OR "approver_rule"."required" IS DISTINCT FROM EXCLUDED."required"
+   OR "approver_rule"."kind"     IS DISTINCT FROM EXCLUDED."kind";

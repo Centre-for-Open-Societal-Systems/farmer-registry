@@ -1,0 +1,157 @@
+
+/* ------------------------------------------------------------------------
+ * Intake form: file widgets inside a dialog-table dialog (the land
+ * certificate). The widget lays the Upload button and the picked file's name
+ * out in one row; in the dialog's two-column grid that row is wider than the
+ * cell, so the name was painted over the neighbouring "Certificate Provided"
+ * label. Stack the name under the button instead.
+ * --------------------------------------------------------------------- */
+html body .fixed.inset-0 .widget-container[data-widget-id] .flex.flex-col.sm\:flex-row.sm\:items-center:has(> label.owt-field-input) {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+}
+html body .fixed.inset-0 .widget-container[data-widget-id] .flex.flex-col.sm\:flex-row.sm\:items-center:has(> label.owt-field-input) > * {
+  margin-left: 0 !important;
+  max-width: 100% !important;
+}
+
+/* Inline rule messages written by farmer-intake-rules.js. */
+html body .far-rule-error,
+html body .far-photo-note,
+html body .far-file-note {
+  font-family: Roboto, sans-serif;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+/* The photo hint sits beside the avatar in the widget's .hdr-left row (the
+ * metadata rows that normally fill that spot are hidden on the intake photo
+ * section, see intake-photo-widget.css). */
+html body .header-section-widget-farmer-photo .far-photo-note {
+  align-self: center;
+  max-width: 320px;
+  margin: 0;
+}
+
+/* Ethiopic date picker drawn by farmer-intake-rules.js next to every EC
+ * box (the browser's own picker cannot show 13 months of 30 days). */
+html body .far-ec-input {
+  padding-right: 30px !important;
+}
+html body .far-ec-btn {
+  position: absolute;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+}
+html body .far-ec-btn:hover,
+html body .far-ec-btn:focus-visible {
+  color: var(--owt-color-primary-dark, #F07B1A);
+  outline: none;
+}
+html body .far-ec-picker {
+  position: fixed;
+  z-index: 10000;
+  width: 264px;
+  padding: 10px;
+  background: var(--owt-color-bg, #fff);
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  font: 13px Roboto, sans-serif;
+  color: var(--owt-color-text, #011627);
+}
+html body .far-ec-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+html body .far-ec-head select,
+html body .far-ec-head input {
+  height: 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0 6px;
+  font: inherit;
+  background: #fff;
+}
+html body .far-ec-head select { flex: 1; min-width: 0; }
+html body .far-ec-head input { width: 66px; }
+html body .far-ec-nav {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+html body .far-ec-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+html body .far-ec-dow {
+  font-size: 11px;
+  color: #6b7280;
+  padding: 2px 0;
+}
+html body .far-ec-day {
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+html body .far-ec-day:hover { background: #f3f4f6; }
+html body .far-ec-day.is-today { box-shadow: inset 0 0 0 1px var(--owt-color-primary-dark, #F07B1A); }
+html body .far-ec-day.is-selected,
+html body .far-ec-day.is-selected:hover {
+  background: var(--owt-color-primary-dark, #F07B1A);
+  color: #fff;
+}
+html body .far-ec-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+html body .far-ec-foot button {
+  border: 0;
+  background: transparent;
+  color: var(--owt-color-info, #2563eb);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* A saved table row marked for deletion (Remove keeps it until the section
+ * saves, so the server can delete it). The theme tints it #F3F1F4, which
+ * reads as nothing happened; strike it through and dim it instead. */
+html body .table-widget-container tr[style*="table-deleted-row-bg"] {
+  background-color: #FEE2E2 !important;
+}
+html body .table-widget-container tr[style*="table-deleted-row-bg"] td:not(:last-child) {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* A document id in a register table, resolved to the file by
+ * farmer-intake-rules.js. */
+html body .table-widget-container a.far-doc-link {
+  color: var(--owt-color-info, #2563eb);
+  text-decoration: underline;
+}

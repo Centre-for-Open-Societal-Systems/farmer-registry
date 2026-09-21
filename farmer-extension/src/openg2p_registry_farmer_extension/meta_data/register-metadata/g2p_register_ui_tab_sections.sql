@@ -19,4 +19,14 @@ INSERT INTO "public"."g2p_register_ui_tab_sections" ("tab_section_id","register_
 ('a2b3c4d5-e6f7-4809-b012-3456789abcd2','a1a4d25a-1cd4-4356-abac-985a0b3c6bcd','farmer_enumerator_tab','farmer_farmer_enumerator_section_01',10),
 ('a2b3c4d5-e6f7-4809-b012-3456789abcd3','a1a4d25a-1cd4-4356-abac-985a0b3c6bcd','farmer_consent_requests_tab','farmer_farmer_consent_requests_section_01',10),
 ('a2b3c4d5-e6f7-4809-b012-3456789abcd4','a1a4d25a-1cd4-4356-abac-985a0b3c6bcd','farmer_consent_receipts_tab','farmer_farmer_consent_receipts_section_01',10),
-('a2b3c4d5-e6f7-4809-b012-3456789abcd5','a1a4d25a-1cd4-4356-abac-985a0b3c6bcd','farmer_farmer_tab','farmer_farmer_birth_information_section_01',15);
+('a2b3c4d5-e6f7-4809-b012-3456789abcd5','a1a4d25a-1cd4-4356-abac-985a0b3c6bcd','farmer_farmer_tab','farmer_farmer_birth_information_section_01',15)
+-- Upsert, not a bare INSERT: on an existing database a bare INSERT hits the
+-- primary key and the WHOLE statement fails (db-seed runs with
+-- ON_ERROR_STOP=0, so silently), and no row added or changed in this file
+-- after the first seed ever reached that environment. The zz_*.sql files
+-- still run after this and still win.
+ON CONFLICT ("tab_section_id") DO UPDATE SET
+    "register_id" = EXCLUDED."register_id",
+    "tab_id" = EXCLUDED."tab_id",
+    "section_id" = EXCLUDED."section_id",
+    "section_order" = EXCLUDED."section_order";

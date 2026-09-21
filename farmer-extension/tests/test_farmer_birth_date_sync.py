@@ -42,7 +42,7 @@ class TestEthiopianBirthDateSync(unittest.TestCase):
         record = {"birth_date": date(1990, 5, 15), "birth_date_ec": "1983-09-07"}
         with self.assertRaises(G2PRegistryException) as ctx:
             self.sync(record)
-        self.assertIn("does not match birth_date", str(ctx.exception))
+        self.assertIn("does not match Date of birth (GC)", str(ctx.exception))
 
     def test_malformed_ethiopic_is_rejected(self):
         record = {"birth_date_ec": "15/09/1982"}

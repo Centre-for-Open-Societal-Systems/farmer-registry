@@ -14,7 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Anchored to the root: an unanchored `lib/` also swallowed dashboard-ui/lib/.
+/lib/
 lib64/
 parts/
 sdist/

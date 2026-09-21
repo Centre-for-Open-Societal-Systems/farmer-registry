@@ -2,7 +2,7 @@ import logging
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
-from .domain_validation_utils import is_blank, validation_error
+from .domain_validation_utils import is_blank, sync_ethiopic_date_pair, validation_error
 from .validation_rules import ID_TYPE_PATTERNS, matches
 
 _logger = logging.getLogger("g2p-register-domain-service")
@@ -13,10 +13,11 @@ class G2PRegisterDomainServiceRegId(G2PRegisterDomainService):
         for record in records:
             self._validate_value_required(record)
             self._validate_value_format(record)
+            sync_ethiopic_date_pair(record, "expiry_date", "expiry_date_ec", "Expiry Date")
 
     def _validate_value_required(self, record: dict) -> None:
         if not is_blank(record.get("id_type")) and is_blank(record.get("value")):
-            validation_error("value is required when id_type is set")
+            validation_error("ID Value is required when an ID Type is selected")
 
     def _validate_value_format(self, record: dict) -> None:
         """Check the ID value against the rule for its own type.
@@ -39,7 +40,7 @@ class G2PRegisterDomainServiceRegId(G2PRegisterDomainService):
         record["value"] = str(value).strip()
         if not matches(pattern, record["value"]):
             validation_error(
-                f"value is not a valid {id_type}: expected 12-17 digits, "
+                f"ID Value is not a valid {id_type}: expected 12-17 digits, "
                 "optionally prefixed with FAN-"
             )
 

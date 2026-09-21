@@ -32,7 +32,7 @@ class TestFarmerNameValidation(unittest.TestCase):
         record = {"import_source": "INTAKE_FORM", "first_name": "Abebe1", "middle_name": "Kebede"}
         with self.assertRaises(G2PRegistryException) as ctx:
             self.validate(record)
-        self.assertIn("first_name", str(ctx.exception))
+        self.assertIn("First Name (English)", str(ctx.exception))
 
     def test_trims_surrounding_whitespace(self):
         record = {"import_source": "INTAKE_FORM", "first_name": "  Abebe  ", "middle_name": "Kebede"}
@@ -43,7 +43,7 @@ class TestFarmerNameValidation(unittest.TestCase):
         record = {"import_source": "INTAKE_FORM", "first_name": "", "middle_name": "Kebede"}
         with self.assertRaises(G2PRegistryException) as ctx:
             self.validate(record)
-        self.assertIn("first_name is required", str(ctx.exception))
+        self.assertIn("First Name (English) is required", str(ctx.exception))
 
     def test_required_names_not_enforced_on_bulk_import(self):
         """~6% of genuine Gen1 farmers have no first name; rejecting them would
@@ -64,7 +64,7 @@ class TestFarmerNameValidation(unittest.TestCase):
         record = {"import_source": "INTAKE_FORM", "first_name": "Abebe", "father_first_name": ""}
         with self.assertRaises(G2PRegistryException) as ctx:
             self.validate(record)
-        self.assertIn("father_first_name is required", str(ctx.exception))
+        self.assertIn("Father's First Name is required", str(ctx.exception))
 
     def test_middle_name_is_optional(self):
         """The father is captured as his own triple, so the farmer's middle_name no
@@ -80,7 +80,7 @@ class TestFarmerNameValidation(unittest.TestCase):
         record = {"import_source": "INTAKE_FORM", "first_name": "Abebe", "father_first_name": "Kebede2"}
         with self.assertRaises(G2PRegistryException) as ctx:
             self.validate(record)
-        self.assertIn("father_first_name", str(ctx.exception))
+        self.assertIn("Father's First Name", str(ctx.exception))
 
     def test_grandfather_name_stays_optional(self):
         """Gen1 fill is 26%; parity means it must not block a save."""
@@ -158,3 +158,13 @@ class TestFarmerBooleanNormalization(unittest.TestCase):
         self.normalize(record)
         self.assertIs(record["disabled"], False)
         self.assertIs(record["has_personal_phone"], True)
+
+    def test_absent_flags_are_not_added(self):
+        """Intake saves one section at a time and the platform persists every
+        key in the record, None included. Adding a flag the section never sent
+        nulls a column another section owns (disabled / is_psnp_user live in
+        Socio-economic, is_household_head in Household) on every unrelated
+        save."""
+        record = {"first_name": "Abebe", "father_first_name": "Kebede"}
+        self.normalize(record)
+        self.assertEqual(record, {"first_name": "Abebe", "father_first_name": "Kebede"})

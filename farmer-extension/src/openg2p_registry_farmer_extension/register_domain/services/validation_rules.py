@@ -66,6 +66,24 @@ ID_TYPE_PATTERNS = {
 # records impossible to save.
 REQUIRED_NAME_FIELDS = ("first_name", "father_first_name")
 
+# The labels the intake form shows for the name fields (the domain
+# translations in zz_farmer_translation_overrides.sql). Validation messages
+# use these so the toast names the box the enumerator can see, not a column.
+NAME_FIELD_LABELS = {
+    "first_name": "First Name (English)",
+    "middle_name": "Middle Name (English)",
+    "last_name": "Last Name (English)",
+    "first_name_amh": "First Name (Amharic)",
+    "middle_name_amh": "Middle Name (Amharic)",
+    "last_name_amh": "Last Name (Amharic)",
+    "first_name_om": "First Name (Afaan Oromo)",
+    "middle_name_om": "Middle Name (Afaan Oromo)",
+    "last_name_om": "Last Name (Afaan Oromo)",
+    "father_first_name": "Father's First Name",
+    "father_middle_name": "Father's Middle Name",
+    "father_last_name": "Father's Last Name",
+}
+
 NAME_FIELDS = (
     "first_name",
     "middle_name",
