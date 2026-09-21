@@ -102,6 +102,15 @@ class G2PRegisterDomainServiceLand(G2PRegisterDomainService):
             return
         await self._recompute_farmer_land_rollups(change_request.internal_record_id, session)
 
+    async def post_ingest(self, register_id, register_row, session):
+        """Same rollups when a land arrives through an approved intake: the
+        ingest worker inserts the row directly and calls this hook, never
+        post_approve, so without it a farmer registered with lands showed
+        empty totals on the Lands tab until someone edited a land."""
+        if register_id != LAND_REGISTER_ID:
+            return
+        await self._recompute_farmer_land_rollups(register_row.internal_record_id, session)
+
     async def _recompute_farmer_land_rollups(self, land_internal_record_id: str, session) -> None:
         from ..models import G2PRegisterLand, G2PRegisterFarmer
 
