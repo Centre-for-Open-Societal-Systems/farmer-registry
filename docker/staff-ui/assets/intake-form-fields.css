@@ -137,3 +137,14 @@ html body .far-ec-foot button {
   font: inherit;
   cursor: pointer;
 }
+
+/* A saved table row marked for deletion (Remove keeps it until the section
+ * saves, so the server can delete it). The theme tints it #F3F1F4, which
+ * reads as nothing happened; strike it through and dim it instead. */
+html body .table-widget-container tr[style*="table-deleted-row-bg"] {
+  background-color: #FEE2E2 !important;
+}
+html body .table-widget-container tr[style*="table-deleted-row-bg"] td:not(:last-child) {
+  text-decoration: line-through;
+  opacity: 0.6;
+}

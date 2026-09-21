@@ -21,7 +21,12 @@
  *
  * The block the sed inserted is replaced wholesale; the list and label
  * variables are read off the minified statement before it rather than
- * hardcoded. One File per section save is what the library hands over, so a
+ * hardcoded, and so is the toast binding (from the "section saved" toast in
+ * the same function). When the upload comes back empty -- the API helper
+ * toasts the transport error and returns null, e.g. on the 413 a reverse
+ * proxy returns for a large certificate -- the save is abandoned with a
+ * message that says so, instead of saving the section without the file and
+ * announcing success. One File per section save is what the library hands over, so a
  * dialog with several certificate rows attaches the first.
  *
  * Only the static (browser) chunk carries the sed's insertion: the server
@@ -39,6 +44,10 @@ const ID = "[A-Za-z_$][A-Za-z0-9_$]*";
 const HEAD = new RegExp(
   `fileLabels:(${ID})\\}=\\(0,${ID}\\.${ID}\\)\\(${ID}\\)\\|\\|\\{\\},${ID}=void 0===${ID}\\?\\[\\]:${ID},(${ID})=\\[\\];`
 );
+// l.oR.success(J("toast_section_saved_successfully")) -- the toast module binding.
+const TOAST = new RegExp(`(${ID})\\.oR\\.success\\(${ID}\\("toast_section_saved_successfully"\\)\\)`);
+const UPLOAD_FAILED =
+  "The file could not be uploaded, so this section was not saved. Use a PDF, JPG, PNG or WebP up to 10 MB and try again.";
 // The sed's insertion, from `if(<changes>?.image){` to its closing brace.
 const SED_BLOCK = new RegExp(
   String.raw`if\((${ID})\?\.image\)\{let __up=await (${ID})\(\[\1\.image\]\),__doc=Array\.isArray\(__up\)\?__up\[0\]:null;` +
@@ -55,9 +64,10 @@ function listJs(dir) {
   return out;
 }
 
-function block(changes, upload, labels, docs) {
+function block(changes, upload, labels, docs, toast) {
   return (
     `if(${changes}?.image){let __up=await ${upload}([${changes}.image]),__doc=Array.isArray(__up)?__up[0]:null;` +
+    `if(!__doc||!__doc.document_id){${toast}.oR.error(${JSON.stringify(UPLOAD_FAILED)},{position:"top-right",autoClose:8e3});return!1}` +
     `if(__doc&&__doc.document_id){let __slot=null;` +
     `${changes}.records=(${changes}.records||[]).map(__r=>{` +
     `let __k=Object.keys(__r).find(k=>/_storage_id$/.test(k)&&!__r[k]);` +
@@ -75,7 +85,9 @@ for (const file of listJs(path.join(ROOT, "static"))) {
   const head = HEAD.exec(before.slice(0, sed.index));
   if (!head) throw new Error(`${file}: photo upload found but the labels/documents statement did not match`);
   const [, labels, docs] = head;
-  const after = before.slice(0, sed.index) + block(sed[1], sed[2], labels, docs) + before.slice(sed.index + sed[0].length);
+  const toast = TOAST.exec(before.slice(sed.index));
+  if (!toast) throw new Error(`${file}: photo upload found but the section-saved toast did not match`);
+  const after = before.slice(0, sed.index) + block(sed[1], sed[2], labels, docs, toast[1]) + before.slice(sed.index + sed[0].length);
   fs.writeFileSync(file, after);
   patched += 1;
   console.log("  patched " + path.relative(ROOT, file));

@@ -25,14 +25,20 @@
  *      kebele in Master Data) is hidden instead of an empty dropdown, and the
  *      lowest level is labelled "Village/Kebele" whichever mnemonic the
  *      Master Data pack uses.
- *   5. Other file fields (the land certificate): a hint naming the accepted
- *      types and size, and a working preview. The widget library serialises
+ *   5. Other file fields (the land certificate): the file is checked on pick
+ *      (type from the input's accept list, at most 10 MB; a big image is
+ *      resized like the photo) and refused on the spot with a message, so a
+ *      file that could not be uploaded is never shown as attached; a hint
+ *      naming the accepted types and size; and a working preview. The widget library serialises
  *      a picked File into the store as {__type:"File", name, data} and then
  *      reads it back through useBaseWidget, which turns any object with a
  *      "name" into that name -- so the widget forgets the File and its
  *      "Click to preview" opens the bare file name as a relative URL
  *      (/intake-form/farmer/new/Black.png). The File picked in this page is
  *      kept here and previewed from a blob URL instead.
+ *   6. Land Kebele is a text box (a country pack need not carry a kebele
+ *      level); it is pre-filled with the lowest place chosen in Location and
+ *      the enumerator overtypes the kebele name.
  *
  * Injected by the Dockerfile as a plain <script defer> from /public; it walks
  * the DOM (data-widget-id, table headers) rather than the minified React
@@ -547,6 +553,72 @@
     pickedFiles[file.name] = file;
   }
 
+  var FILE_MAX_BYTES = 10 * 1024 * 1024; // the widgets' maxSize
+  var EXT_TYPES = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+
+  function fileNote(input, message, isError) {
+    var widget = input.closest(".widget-container");
+    var note = widget && widget.querySelector(".far-file-note");
+    if (!note) return;
+    note.textContent = message;
+    note.style.color = isError ? "var(--toast-failed-color, #DC3545)" : "var(--owt-color-text-muted, #727474)";
+  }
+
+  // Types the input accepts, as MIME types; no accept attribute means the
+  // registry's document profile (pdf, jpg, jpeg, png, webp).
+  function acceptedTypes(input) {
+    var out = [];
+    (input.getAttribute("accept") || "").split(",").forEach(function (a) {
+      var key = a.trim().toLowerCase();
+      if (!key) return;
+      if (key.indexOf("/") >= 0) out.push(key);
+      else if (EXT_TYPES[key.replace(/^\./, "")]) out.push(EXT_TYPES[key.replace(/^\./, "")]);
+    });
+    return out.length ? out : ["application/pdf", "image/jpeg", "image/png", "image/webp"];
+  }
+
+  function typeAccepted(file, types) {
+    var ext = (file.name.split(".").pop() || "").toLowerCase();
+    var mime = file.type || EXT_TYPES[ext] || "";
+    return types.some(function (t) { return t === mime || (/\/\*$/.test(t) && mime.indexOf(t.slice(0, -1)) === 0); });
+  }
+
+  // Runs before the widget sees the file (capture phase, see wiring): a
+  // refused file never reaches it, so its name is never shown as attached
+  // and the section cannot be saved with an upload that would fail.
+  function fileCheck(e) {
+    var input = e.target, file = input.files && input.files[0];
+    if (!file) return;
+    if (input.dataset.farChecked === "1") { delete input.dataset.farChecked; rememberPick(input); return; }
+    var hint = acceptText(input);
+    if (!typeAccepted(file, acceptedTypes(input))) {
+      e.stopImmediatePropagation();
+      input.value = "";
+      fileNote(input, "\"" + file.name + "\" is not accepted: use " + hint + ".", true);
+      return;
+    }
+    // A big image is resized like the photo, whatever its size, so a
+    // 14 MB camera shot is a fine certificate; the 10 MB rule is for the
+    // rest (PDF scans), which are sent as picked.
+    if (/^image\//.test(file.type) && file.size > PHOTO_MAX_BYTES) {
+      e.stopImmediatePropagation();
+      shrink(file, function (small) {
+        if (!small) { input.value = ""; fileNote(input, "\"" + file.name + "\" could not be read as an image. Choose another file.", true); return; }
+        fileNote(input, "Resized to " + Math.round(small.size / 1024) + " KB for upload. " + hint, false);
+        replaceFiles(input, small);
+      });
+      return;
+    }
+    if (file.size > FILE_MAX_BYTES) {
+      e.stopImmediatePropagation();
+      input.value = "";
+      fileNote(input, "\"" + file.name + "\" is " + (file.size / 1048576).toFixed(1) + " MB; the limit is 10 MB.", true);
+      return;
+    }
+    fileNote(input, hint, false);
+    rememberPick(input);
+  }
+
   function previewClick(e) {
     var button = e.target instanceof Element && e.target.closest('button[title="Click to preview"]');
     if (!button || !button.closest(".widget-container")) return;
@@ -570,6 +642,51 @@
       if (td.textContent.trim() !== "[object Object]") return;
       var names = Object.keys(pickedNames);
       td.textContent = names.length ? pickedNames[names[names.length - 1]] : "Attached file";
+    });
+    // "Certificate Provided" is derived on save from the uploaded file; the
+    // row shows the raw flag ("false") until then. Read it as Yes / No, and
+    // Yes as soon as the row has a file attached (the save fails loudly now
+    // if that upload does not happen).
+    document.querySelectorAll(".table-widget-container table").forEach(function (table) {
+      var heads = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) { return (th.getAttribute("title") || th.textContent || "").trim().toLowerCase(); });
+      var flag = heads.indexOf("certificate provided"), file = heads.indexOf("land certificate");
+      if (flag < 0) return;
+      table.querySelectorAll("tbody tr").forEach(function (tr) {
+        var cell = tr.children[flag];
+        if (!cell || cell.querySelector("input,select,button")) return;
+        var text = cell.textContent.trim().toLowerCase();
+        var attached = file >= 0 && tr.children[file] && tr.children[file].textContent.trim() !== "" && tr.children[file].textContent.trim() !== "-";
+        // The flag is not in the dialog (derived on save), so an unsaved row
+        // has no value for it at all: read it from the file column.
+        if (text === "true" || ((text === "false" || text === "" || text === "-") && attached)) cell.textContent = "Yes";
+        else if (text === "false" || text === "" || text === "-") cell.textContent = "No";
+      });
+    });
+  }
+
+  /* ------------------------------------------------------ 6. land kebele */
+
+  // The lowest place chosen in the Location section, e.g. the woreda when
+  // the country pack has no kebele level. Remembered as it is chosen: the
+  // Location section is collapsed -- its selects unmounted -- by the time
+  // the Lands dialog opens.
+  var lowestPlace = "";
+  function rememberPlace() {
+    var selects = document.querySelectorAll('.widget-container[data-widget-id$="geo_hierarchy"] select');
+    if (!selects.length) return;
+    var chosen = "";
+    selects.forEach(function (select) {
+      if (select.disabled || select.selectedIndex <= 0) return;
+      chosen = select.options[select.selectedIndex].textContent.trim();
+    });
+    if (chosen) lowestPlace = chosen;
+  }
+
+  function landKebele() {
+    document.querySelectorAll('.widget-container[data-widget-id$="land_kebele"] input[type="text"]').forEach(function (input) {
+      if (input.dataset.farPrefilled === "1" || input.value.trim() !== "" || input.readOnly || input.disabled) return;
+      input.dataset.farPrefilled = "1";
+      if (lowestPlace) setNativeValue(input, lowestPlace);
     });
   }
 
@@ -618,7 +735,7 @@
   document.addEventListener("change", function (e) {
     if (!(e.target instanceof HTMLInputElement) || e.target.type !== "file") return;
     if (photoWidget(e.target)) photoChange(e);
-    else rememberPick(e.target);
+    else fileCheck(e);
   }, true);
   document.addEventListener("click", previewClick, true);
 
@@ -629,6 +746,8 @@
     photoHints();
     fileNotes();
     fileCellNames();
+    rememberPlace();
+    landKebele();
     calendarTags();
     ecPickers();
   }

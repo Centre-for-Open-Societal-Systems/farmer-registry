@@ -10,14 +10,20 @@
 -- vertical panels carry a span to divide that row's grid - the same
 -- horizontal -> vertical(span 3) pair the Livestocks and Crops sections use.
 --
--- Land Kebele: the widget library drops a top-level "level_id" from a data
--- source and then sends the parent under the wrong key, so level_id must sit
--- inside "params" (the same applies to the intake copy in
--- g2p_register_sections.sql). "kebele" is the level MNEMONIC, which Master
--- Data accepts in place of the id. dependsOn walks the farmer's own saved
--- hierarchy (region, zone, woreda, kebele) to the woreda entry, so the list is
--- the kebeles of this farmer's woreda and is available in the same session
--- the location was entered.
+-- Certificate Provided is derived on save from the uploaded certificate
+-- (the land service sets it), so the Add/Edit dialog does not show it: the
+-- column carries a "show" condition that is never true (notEmpty on a field
+-- no row has; "equals" would not do, the library reads a boolean false as
+-- equal to any non-truthy string). The table row still lists it --
+-- conditions only govern the dialog in this widget library.
+--
+-- Land Kebele is free text (same in the intake copy in
+-- g2p_register_sections.sql): it used to be a Master Data lookup of the
+-- "kebele" level under the farmer's woreda, but a country pack need not carry
+-- that level at all (the deployed ETH pack stops at woreda), and then the
+-- dropdown could never list anything and the field was always null. The
+-- portal pre-fills the box with the lowest place chosen in Location
+-- (farmer-intake-rules.js) and the enumerator overtypes the kebele name.
 UPDATE public.g2p_register_sections
 SET section_ui_schema = $schema$
 {
@@ -129,21 +135,13 @@ SET section_ui_schema = $schema$
                           }
                         },
                         {
-                          "widget": "select",
+                          "widget": "text",
                           "column-key": "land_kebele",
                           "widget-type": "input",
                           "widget-label": "land_kebele",
+                          "widget-readonly": false,
                           "widget-data-path": "land_kebele",
-                          "widget-data-source": {
-                            "type": "api",
-                            "method": "POST",
-                            "service": "master-data",
-                            "endpoint": "geo-level-values",
-                            "params": {"level_id": "kebele", "page_size": 1000},
-                            "dependsOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.geo_code_hierarchy_json.hierarchy.2.level_value_id",
-                            "labelKey": "level_value_mnemonic",
-                            "valueKey": "level_value_mnemonic"
-                          }
+                          "widget-data-placeholder": "Kebele the land is in"
                         },
                         {
                           "widget": "file",
@@ -154,7 +152,7 @@ SET section_ui_schema = $schema$
                           "widget-data-helptext": "certificate_file_hint",
                           "widget-data-options": {"accept": ".pdf,.jpg,.jpeg,.png,.webp", "multiple": false, "maxSize": 10485760}
                         },
-                        {"widget":"checkbox","column-key":"certificate_provided","widget-type":"input","widget-label":"certificate_provided","widget-readonly":true,"widget-data-path":"certificate_provided"},
+                        {"widget":"checkbox","column-key":"certificate_provided","widget-type":"input","widget-label":"certificate_provided","widget-readonly":true,"widget-data-path":"certificate_provided","widget-data-options":{"action":"show","condition":{"field":"__never_set__","operator":"notEmpty"}}},
                         {"widget":"text","column-key":"soil_fertility","widget-type":"input","widget-label":"soil_fertility","widget-data-path":"soil_fertility"},
                         {
                           "widget": "select",

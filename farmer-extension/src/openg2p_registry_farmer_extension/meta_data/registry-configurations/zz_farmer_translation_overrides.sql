@@ -25,6 +25,11 @@ WHERE "language_code" = 'en';
 -- (home card, register tab, search box); the platform has since renamed the
 -- concept to "Intake Form" and the other registries show that. Same wording
 -- here, so the Farmer portal reads like the rest of the suite.
+--
+-- With that rename the register page's "..." menu read "Intake Form" (the
+-- submissions list) directly above "Intake Forms" (the submenu that starts
+-- a new one). The submenu is "New Intake" -- the same words as the button on
+-- the intake list page -- so the two entries say what they do.
 UPDATE "public"."registry_languages"
 SET "core_translation" = (
     "core_translation"::jsonb
@@ -32,7 +37,8 @@ SET "core_translation" = (
         'form_submissions', 'Intake Form',
         'register_form_submissions', '{subject} - Intake Form',
         'register_form_submission', '{subject} - Intake Form',
-        'search_form_submissions', 'Search in Intake Form'
+        'search_form_submissions', 'Search in Intake Form',
+        'intake_forms', 'New Intake'
     )
 )::json
 WHERE "language_code" = 'en';

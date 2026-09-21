@@ -397,3 +397,26 @@ class TestEffectiveLayer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestBaseFilesAreUpserts(unittest.TestCase):
+    """Every g2p_*.sql base file is a multi-row INSERT. db-seed runs it with
+    ON_ERROR_STOP=0 on every deploy, so on an already-seeded database a bare
+    INSERT hits the primary key and the whole statement fails silently -- and
+    a row added later (tab_section_17..19, 9 Sep) never appears there. The
+    files therefore have to end in an ON CONFLICT clause."""
+
+    def test_every_base_insert_carries_on_conflict(self):
+        for path in sorted(META.glob("g2p_*.sql")):
+            text = path.read_text(encoding="utf-8")
+            # Statements end at a ";" followed by a line break; the JSON
+            # payloads inside the rows carry none of those.
+            inserts = re.findall(r"INSERT INTO[\s\S]*?;(?=[ \t]*(?:\n|$))", text)
+            with self.subTest(file=path.name):
+                self.assertTrue(inserts, f"{path.name}: no INSERT found")
+                for statement in inserts:
+                    self.assertRegex(
+                        statement,
+                        r"ON CONFLICT \(\"\w+\"\) DO (UPDATE SET|NOTHING)",
+                        f"{path.name} has a bare INSERT and cannot change an existing database",
+                    )

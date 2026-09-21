@@ -533,6 +533,60 @@ class Initializer(BaseInitializer):
                     )
                 )
 
+            # Land rollups on the farmer (total / owned / rented / crop-sharing
+            # area and ownership) were only recomputed when a land CHANGE
+            # REQUEST was approved; a land that arrived through intake never
+            # touched them, so farmers registered with lands showed empty
+            # totals. The land service fills them on ingest now; this fills in
+            # the farmers that already have active lands and no totals, with
+            # the same buckets and unit factors as
+            # G2PRegisterDomainServiceLand._recompute_farmer_land_rollups.
+            # Only NULL totals are touched, so it is a no-op afterwards.
+            await conn.execute(
+                text(
+                    """
+                    WITH per_land AS (
+                        SELECT l.link_internal_record_id AS farmer_id,
+                               l.land_ownership_type,
+                               COALESCE(l.land_size, 0) * CASE COALESCE(l.unit, 'HECTARE')
+                                   WHEN 'ACRE' THEN 0.404686
+                                   WHEN 'SQUARE_METER' THEN 0.0001
+                                   WHEN 'SQUARE_KM' THEN 100.0
+                                   WHEN 'SQUARE_FOOT' THEN 0.0000092903
+                                   WHEN 'SQUARE_YARD' THEN 0.0000836127
+                                   ELSE 1.0 END AS hectares
+                        FROM "public"."g2p_register_lands" l
+                        WHERE l.record_status = 'ACTIVE'
+                          AND l.link_internal_record_id IS NOT NULL
+                    ),
+                    per_farmer AS (
+                        SELECT farmer_id,
+                               SUM(hectares) FILTER (WHERE land_ownership_type = 'OWNER') AS owned,
+                               SUM(hectares) FILTER (WHERE land_ownership_type = 'TENANT') AS rented,
+                               SUM(hectares) FILTER (WHERE land_ownership_type IS DISTINCT FROM 'OWNER'
+                                                       AND land_ownership_type IS DISTINCT FROM 'TENANT') AS shared,
+                               SUM(hectares) AS total,
+                               COUNT(DISTINCT land_ownership_type) FILTER (WHERE land_ownership_type IS NOT NULL) AS kinds,
+                               MIN(land_ownership_type) FILTER (WHERE land_ownership_type IS NOT NULL) AS only_kind
+                        FROM per_land
+                        GROUP BY farmer_id
+                    )
+                    UPDATE "public"."g2p_register_farmers" AS f
+                    SET total_land_area = ROUND(COALESCE(p.total, 0)::numeric, 6),
+                        total_land_owned_area = ROUND(COALESCE(p.owned, 0)::numeric, 6),
+                        total_land_rent_area = ROUND(COALESCE(p.rented, 0)::numeric, 6),
+                        total_land_crop_sharing_area = ROUND(COALESCE(p.shared, 0)::numeric, 6),
+                        land_ownership = CASE
+                            WHEN p.kinds = 0 THEN NULL
+                            WHEN p.kinds = 1 AND p.only_kind IN ('OWNER', 'TENANT') THEN p.only_kind
+                            ELSE 'HYBRID' END
+                    FROM per_farmer p
+                    WHERE f.internal_record_id = p.farmer_id
+                      AND f.total_land_area IS NULL
+                    """
+                )
+            )
+
             land_extension_columns = {
                 "area_in_hectare": "NUMERIC(16, 6)",
                 "land_kebele": "VARCHAR",
