@@ -19,9 +19,12 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
 
-# async/await mismatches in the pinned platform's registry-core. See the
-# script for what each patch fixes and why. Applied in every stage that
-# installs registry-core, since they all ship the same broken package.
+# Fixes for bugs the pinned platform ships: async/await mismatches in
+# registry-core, and iam_core's permission lookup, which asks IAM by bare role
+# name and so takes another registry's same-named roles on a shared IAM. See
+# the script for what each patch fixes and why. Applied in every stage that
+# installs registry-core, since they all ship the same packages (a patch whose
+# file is absent from a stage is skipped).
 COPY docker/patches/patch_platform.py /tmp/patch_platform.py
 RUN python3 /tmp/patch_platform.py && rm /tmp/patch_platform.py
 
