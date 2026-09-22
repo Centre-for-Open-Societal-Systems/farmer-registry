@@ -414,6 +414,15 @@ Ordered. Items marked *(manual)* are not scripted anywhere in this repo.
    (cluster-wide, `ca.crt`, used by UI deployments via `NODE_EXTRA_CA_CERTS`).
 5. Apply `ci/k8s/farmer-deploy-rbac.yaml`; build the kubeconfig; add the
    Jenkins Secret-file credential (§5).
+5b. *(manual, only when commons-services is in a **different** namespace from
+   the registry)* Apply `ci/k8s/commons-aliases.yaml` — ExternalName aliases for
+   the nine `commons-services-*` hosts the chart addresses by bare short name.
+   Without them those names are NXDOMAIN and the failures are silent: a missing
+   master-data alias renders the intake form's Location dropdowns as an absent
+   block, and a missing pm-partner-api alias breaks partner signature
+   validation. Edit both namespaces in the file first. Skip it entirely where
+   commons-services shares the registry's namespace (the dev cluster) — the
+   bare names are correct there.
 6. Jenkins: multibranch pipeline on the repo; credentials `aws-ecr-creds`,
    env `AWS_ACCOUNT_ID`; node `vpn-agent2` with `helm`, `kubectl`, VPN.
    Standalone `ci/commons-services` job (§4.2).
@@ -450,6 +459,17 @@ kubectl -n $NS logs job/$R-db-seed --tail=50
 
 # Master data routes as the UI sees them
 kubectl -n $NS exec deploy/$R-staff-portal-ui -- sh -c 'wget -qO- "$MASTERDATA_BACKEND_API_URL/openapi.json"' | grep -o '"/geo/[a-z_]*"' | sort -u
+
+# Every commons-services host the chart names resolves from a consuming pod.
+# Bare short names resolve in the pod's OWN namespace, so where commons-services
+# is elsewhere each needs an ExternalName alias (§7 step 5b). Empty output for
+# any line is the fault — and it fails silently, so check it rather than waiting
+# for a widget to go blank.
+for h in iam-staff-portal-api master-data-api pm-partner-api pm-staff-portal-api \
+         cm-partner-api cm-api keymanager auditmanager; do
+  printf '%-24s ' "$h"
+  kubectl -n $NS exec deploy/$R-partner-api -- getent hosts "commons-services-$h" || echo "UNRESOLVED"
+done
 
 # AWE wiring (after PR #33)
 kubectl -n $NS exec -i commons-postgresql-0 -- sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U postgres -d awe -X -c "SELECT id, caller_service FROM callback_secret;"'
@@ -494,7 +514,8 @@ schema top-up is additive and needs no undo.
 | --- | --- |
 | `helm list` shows a release `failed` | last upgrade's hook Job failed or timed out. `helm history`, then the hook logs printed in the Jenkins build. `helm upgrade` still runs on a `failed` release (only `pending-*` blocks it), but understand the failure first. `farmer-registry` was `failed` at rev 15 (2026-09-15) when last checked. |
 | `ImagePullBackOff` on `commons-services-*` | image path moved to `registry.gitlab.com/openg2p/platform-services/...`; the old `openg2p/master-data-service/...` path denies anonymous pulls. `values-far.yaml` overrides master-data and geo-seed; PR #32 adds partner-management. `cm-api-expire-*` and `kc-sa-role-*` were in this state on 2026-09-17. |
-| Location dropdowns 404 (`get_all_g2p_geo_levels`) | master-data serving old route names — the reason `ci/commons-services` exists. Verify on the pod, not on a local image of the same tag. |
+| A widget renders nothing at all — no error, no empty control (Location dropdowns are the known case) | **Check DNS from the consuming pod before suspecting the service's version.** The chart addresses the shared services by bare short name, which resolves in the consuming pod's own namespace; where commons-services is in a different namespace an ExternalName alias must exist (`ci/k8s/commons-aliases.yaml`). `kubectl -n $NS exec deploy/$R-partner-api -- getent hosts commons-services-master-data-api` — empty output is the fault. Four were missing on staging (2026-09-22) and this was misread as the route-rename issue below. |
+| Location dropdowns 404 (`get_all_g2p_geo_levels`) | master-data serving old route names — the reason `ci/commons-services` exists. Verify **the routes actually served** on the pod, not on a local image of the same tag: `kubectl -n $NS exec deploy/$R-staff-portal-ui -- sh -c 'wget -qO- "$MASTERDATA_BACKEND_API_URL/openapi.json"' \| grep -o '"/geo/[a-z_]*"'`. If that lists `get_all_geo_levels`, the build is current and the cause is the DNS row above. |
 | Approval stuck in `PENDING`, AWE shows `approved` | webhook not delivered. `SELECT status, left(last_error,80), count(*) FROM webhook_delivery GROUP BY 1,2` in the `awe` DB. Before PR #33: `CERTIFICATE_VERIFY_FAILED` to the ingress host. |
 | Submission `APPROVED` but no farmer created | `register_ingest_process_status` — if `NOT_APPLICABLE` the approval was set by hand without the ingest flag; if `FAILED` read `register_ingest_process_last_error_code` and the celery-worker log. |
 | Farmer photo missing, no error | `global.minioHost` points at an in-cluster name; must be browser-resolvable and identical to the signer's host (`test/staff-ui/test_minio_presigned_host.py`). |
