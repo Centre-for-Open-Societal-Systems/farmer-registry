@@ -1,0 +1,255 @@
+{# ============================================================================== #}
+{# OpenG2P Gen 2 Farmer Registry Jinja2 Transformation Template                  #}
+{# Transforms ODK Central submissions into OpenG2P Gen 2 Intake Form Schema     #}
+{# Used by Registry Celery Worker when ingesting via OpenG2P Connector Service   #}
+{# ============================================================================== #}
+
+{%- set d = expanded if expanded is defined else (data if data is defined else (submission if submission is defined else {})) -%}
+
+{# --- Basic / Personal Info --- #}
+{%- set basic = d.get('basic_info', {}) or {} -%}
+{%- set personal = basic.get('personal_info', {}) or d.get('personal_info', {}) or d.get('farmer_information', {}) or {} -%}
+{%- set locale = basic.get('locale_info', {}) or d.get('locale_info', {}) or {} -%}
+{%- set hh_q = d.get('household_questions', {}) or {} -%}
+{%- set socio = d.get('socio_economic_data', {}) or {} -%}
+{%- set nat_id = d.get('national_id_section', {}) or d.get('identification', {}) or {} -%}
+{%- set member = d.get('membership', {}) or {} -%}
+{%- set farm_in = d.get('agricultural_input', {}) or {} -%}
+{%- set loc_obj = d.get('farmer_location', {}) or d.get('location', {}) or {} -%}
+{%- set meta = d.get('survey_metadata', {}) or {} -%}
+{%- set sys = d.get('__system', {}) or {} -%}
+
+{# --- Names --- #}
+{%- set first_name = personal.get('first_name_english', '') or personal.get('first_name', '') or '' -%}
+{%- set middle_name = personal.get('father_name_english', '') or personal.get('middle_name', '') or '' -%}
+{%- set last_name = personal.get('grandfather_name_english', '') or personal.get('last_name', '') or '' -%}
+
+{%- set first_name_amh = personal.get('first_name_amharic', '') or personal.get('first_name_amh', '') or '' -%}
+{%- set middle_name_amh = personal.get('father_name_amharic', '') or personal.get('middle_name_amh', '') or '' -%}
+{%- set last_name_amh = personal.get('grandfather_name_amharic', '') or personal.get('last_name_amh', '') or '' -%}
+
+{%- set first_name_om = personal.get('first_name_other', '') or personal.get('first_name_om', '') or '' -%}
+{%- set middle_name_om = personal.get('father_name_other', '') or personal.get('middle_name_om', '') or '' -%}
+{%- set last_name_om = personal.get('grandfather_name_other', '') or personal.get('last_name_om', '') or '' -%}
+
+{# --- Gender & Dates --- #}
+{%- set raw_gender = (personal.get('gender', '') or 'UNKNOWN') | upper -%}
+{%- set gender = 'MALE' if raw_gender in ['M', 'MALE'] else ('FEMALE' if raw_gender in ['F', 'FEMALE'] else 'UNKNOWN') -%}
+{%- set dob = (personal.get('date_of_birth', '') or '').split('T')[0] -%}
+{%- set dob_ec = (personal.get('date_of_birth_ec', '') or '').split('T')[0] -%}
+{%- set age = personal.get('age', None) -%}
+
+{# --- Phones --- #}
+{%- set phone_pri = personal.get('primary_phone_number', '') or personal.get('phone_number', '') or '' -%}
+{%- set phone_sec = personal.get('secondary_phone_number', '') or '' -%}
+{%- set phones_list = [] -%}
+{%- if phone_pri -%}
+  {%- set _ = phones_list.append({"phone_number": phone_pri, "phone_type": "PRIMARY", "country_code": "ETH", "is_primary": true}) -%}
+{%- endif -%}
+{%- if phone_sec -%}
+  {%- set _ = phones_list.append({"phone_number": phone_sec, "phone_type": "SECONDARY", "country_code": "ETH", "is_primary": false}) -%}
+{%- endif -%}
+
+{# --- GPS Parsing --- #}
+{%- set loc_str = loc_obj.get('location', '') if loc_obj is mapping else loc_obj -%}
+{%- set loc_parts = (loc_str | string).strip().split() if loc_str else [] -%}
+{%- set lat = (loc_parts[0] | float) if loc_parts | length >= 1 else None -%}
+{%- set lon = (loc_parts[1] | float) if loc_parts | length >= 2 else None -%}
+{%- set alt = (loc_parts[2] | float) if loc_parts | length >= 3 else None -%}
+{%- set acc = (loc_parts[3] | float) if loc_parts | length >= 4 else None -%}
+
+{# --- Geographic Hierarchy Names --- #}
+{%- set reg_name = locale.get('region', '') -%}
+{%- set zone_name = locale.get('zone', '') -%}
+{%- set woreda_name = locale.get('woreda', '') -%}
+{%- set kebele_name = locale.get('kebele', '') -%}
+
+{# --- IDs --- #}
+{%- set fan_id = nat_id.get('national_fan', '') or nat_id.get('national_uid', '') or '' -%}
+{%- set rid_id = nat_id.get('national_rid', '') or '' -%}
+{%- set ack_id = d.get('farmer_reference_id', {}).get('farmer_reference_id', '') or d.get('farmer_reference_id', '') or '' -%}
+{%- set reg_ids = [] -%}
+{%- if fan_id -%}
+  {%- set _ = reg_ids.append({"id_type": "UID", "value": fan_id, "status": "VALID"}) -%}
+{%- endif -%}
+{%- if rid_id -%}
+  {%- set _ = reg_ids.append({"id_type": "RID", "value": rid_id, "status": "VALID"}) -%}
+{%- endif -%}
+{%- if ack_id -%}
+  {%- set _ = reg_ids.append({"id_type": "FARMER_ODK_ACK_ID", "value": ack_id, "status": "VALID"}) -%}
+{%- endif -%}
+
+{# --- Land Repeats --- #}
+{%- set raw_lands = d.get('land_info', {}).get('land_info_repeat', []) or d.get('land_info_repeat', []) or [] -%}
+{%- set lands_records = [] -%}
+{%- for l in (raw_lands if raw_lands is iterable and raw_lands is not mapping and raw_lands is not string else []) -%}
+  {%- set raw_own = (l.get('land_ownership', '') or 'OWNER') | upper -%}
+  {%- set own_type = 'OWNER' if 'OWN' in raw_own else ('TENANT' if 'RENT' in raw_own else ('CROP_SHARE' if 'SHARE' in raw_own else 'FAMILY_GIFT')) -%}
+  {%- set _ = lands_records.append({
+      "land_id": l.get('land_id', '') or ("LND-" ~ loop.index),
+      "area_in_hectare": (l.get('total_land_area', 0.0) or 0.0) | float,
+      "land_ownership_type": own_type,
+      "land_kebele": l.get('land_kebele', kebele_name) or kebele_name
+  }) -%}
+{%- endfor -%}
+
+{# --- Crop Repeats --- #}
+{%- set raw_crops = d.get('crop_information', {}).get('crop_repeat', []) or d.get('crop_repeat', []) or [] -%}
+{%- set crops_records = [] -%}
+{%- for c in (raw_crops if raw_crops is iterable and raw_crops is not mapping and raw_crops is not string else []) -%}
+  {%- set _ = crops_records.append({
+      "commodity": (c.get('crop_name_rep', '') or c.get('crop_name', '') or '') | upper,
+      "planted_date": (c.get('crop_date', '') or '').split('T')[0],
+      "season": (c.get('crop_season', '') or 'KHARIF') | upper,
+      "end_use": "FOOD_HUMAN_CONSUMPTION"
+  }) -%}
+{%- endfor -%}
+
+{# --- Livestock Repeats --- #}
+{%- set raw_livestock = d.get('livestock_info', {}).get('livestock_repeat', []) or d.get('livestock_repeat', []) or [] -%}
+{%- set livestock_records = [] -%}
+{%- for ls in (raw_livestock if raw_livestock is iterable and raw_livestock is not mapping and raw_livestock is not string else []) -%}
+  {%- set _ = livestock_records.append({
+      "livestock_type": (ls.get('animal_rep', '') or ls.get('animal', '') or '') | upper,
+      "head_count": (ls.get('num_animals', 1) or 1) | int,
+      "livestock_system": (ls.get('livestock_system', '') or 'MIXED') | upper
+  }) -%}
+{%- endfor -%}
+
+{# --- Household Member Repeats --- #}
+{%- set raw_members = d.get('other_hh_members', {}).get('other_hh_members_repeat', []) or d.get('other_farmers_repeat', []) or [] -%}
+{%- set members_records = [] -%}
+{%- for m in (raw_members if raw_members is iterable and raw_members is not mapping and raw_members is not string else []) -%}
+  {%- set m_name = m.get('other_member_name_english', '') or m.get('name', '') or '' -%}
+  {%- set m_parts = m_name.split() if m_name else [] -%}
+  {%- set _ = members_records.append({
+      "first_name": m_parts[0] if m_parts | length >= 1 else 'Member',
+      "middle_name": m_parts[1] if m_parts | length >= 2 else (middle_name or ''),
+      "last_name": m_parts[2] if m_parts | length >= 3 else (last_name or ''),
+      "gender": (m.get('member_gender', '') or 'UNKNOWN') | upper,
+      "birth_date": (m.get('member_dob', '') or '').split('T')[0]
+  }) -%}
+{%- endfor -%}
+
+{# --- Farm Input Details --- #}
+{%- set has_fert = farm_in.get('fertilizer_use', '') in ['yes', 'true', '1', True] -%}
+{%- set has_pest = farm_in.get('pesticide_use', '') in ['yes', 'true', '1', True] -%}
+{%- set has_insec = farm_in.get('insecticide_use', '') in ['yes', 'true', '1', True] -%}
+{%- set has_seed = farm_in.get('improved_seed_use', '') in ['yes', 'true', '1', True] -%}
+{%- set farm_input_records = [{
+    "fertilizer_use": has_fert,
+    "amount_fertilizer_utilized": (farm_in.get('fertilizer_amount', 0) or 0) | float,
+    "pesticide_use": has_pest,
+    "amount_pesticide_utilized": (farm_in.get('pesticide_amount', 0) or 0) | float,
+    "insecticide_use": has_insec,
+    "amount_insecticide_utilized": (farm_in.get('insecticide_amount', 0) or 0) | float,
+    "improved_seed_use": has_seed,
+    "amount_improved_seed_utilized": (farm_in.get('improved_seed_amount', 0) or 0) | float
+}] -%}
+
+{# --- Socio-Economic & Booleans --- #}
+{%- set is_head = hh_q.get('household_head', '') in ['yes', 'true', '1', True] -%}
+{%- set is_psnp = hh_q.get('is_psnp_user', '') in ['yes', 'true', '1', True] -%}
+{%- set is_disabled = personal.get('disability', '') in ['yes', 'true', '1', True] -%}
+{%- set marital = (socio.get('marital_status', '') or 'MARRIED') | upper -%}
+{%- set edu = (socio.get('education_level', '') or 'CAN_READ_AND_WRITE') | upper -%}
+{%- set income_src = (socio.get('income_source', '') or 'CROP_PRODUCTION') | upper -%}
+
+{# --- Enumerator Metadata --- #}
+{%- set enum_name = meta.get('enumerator_name', '') or sys.get('submitterName', '') -%}
+{%- set enum_id = meta.get('enumerator_id', '') or sys.get('submitterId', '') -%}
+{%- set collection_date = (meta.get('survey_start', '') or sys.get('submissionDate', '') or '').split('T')[0] -%}
+
+{# ==================== FINAL TARGET INTAKE FORM JSON ==================== #}
+{
+  "fr_farmer_personal_info": [
+    {
+      "first_name": {{ first_name | tojson }},
+      "middle_name": {{ middle_name | tojson }},
+      "last_name": {{ last_name | tojson }},
+      "first_name_amh": {{ first_name_amh | tojson }},
+      "middle_name_amh": {{ middle_name_amh | tojson }},
+      "last_name_amh": {{ last_name_amh | tojson }},
+      "first_name_om": {{ first_name_om | tojson }},
+      "middle_name_om": {{ middle_name_om | tojson }},
+      "last_name_om": {{ last_name_om | tojson }},
+      "phone_numbers": {{ phones_list | tojson }},
+      "gender": {{ gender | tojson }},
+      "marital_status": {{ marital | tojson }},
+      "education_level": {{ edu | tojson }},
+      "state": "PENDING",
+      "import_source": "PARTNER"
+    }
+  ],
+  "fr_farmer_phone_numbers": {{ phones_list | tojson }},
+  "fr_farmer_birth_information": [
+    {
+      "birth_date": {{ dob | tojson }},
+      "birth_date_ec": {{ dob_ec | tojson }},
+      "estimated_age": {{ age if age is not none else 'null' }}
+    }
+  ],
+  "fr_farmer_location": [
+    {
+      "region_name": {{ reg_name | tojson }},
+      "zone_name": {{ zone_name | tojson }},
+      "woreda_name": {{ woreda_name | tojson }},
+      "kebele_name": {{ kebele_name | tojson }},
+      "latitude": {{ (lat | string) | tojson if lat is not none else 'null' }},
+      "longitude": {{ (lon | string) | tojson if lon is not none else 'null' }},
+      "altitude": {{ (alt | string) | tojson if alt is not none else 'null' }},
+      "accuracy": {{ (acc | string) | tojson if acc is not none else 'null' }}
+    }
+  ],
+  "fr_farmer_reg_ids": {{ reg_ids | tojson }},
+  "fr_farmer_household_lookup": [
+    {
+      "is_household_head": {{ is_head | tojson }}
+    }
+  ],
+  "fr_farmer_socio_and_health": [
+    {
+      "source_of_income": {{ income_src | tojson }},
+      "is_psnp_user": {{ is_psnp | tojson }},
+      "disabled": {{ is_disabled | tojson }}
+    }
+  ],
+  {%- if lands_records | length > 0 %}
+  "intake_fr_farmer_land": {{ lands_records | tojson }},
+  {%- if crops_records | length > 0 %}
+  "intake_fr_farmer_crops": {{ crops_records | tojson }},
+  {%- endif %}
+  {%- if livestock_records | length > 0 %}
+  "fr_farmer_livestocks": {{ livestock_records | tojson }},
+  {%- endif %}
+  {%- if has_fert or has_pest or has_insec or has_seed %}
+  "fr_farmer_farm_input": {{ farm_input_records | tojson }},
+  {%- endif %}
+  {%- endif %}
+  {%- set is_coop = member.get('primary_cooperative', '') in ['yes', 'true', '1', True] -%}
+  {%- set is_union = member.get('coop_union', '') in ['yes', 'true', '1', True] -%}
+  {%- set is_cluster = member.get('farmer_cluster', '') in ['yes', 'true', '1', True] -%}
+  "fr_farmer_membership": [
+    {
+      "is_primary_cooperative_member": {{ is_coop | tojson }},
+      "primary_cooperative_name": {{ (member.get('name_of_primary_cooperative', '') if is_coop else '') | tojson }},
+      "is_cooperative_union_member": {{ is_union | tojson }},
+      "cooperative_union_name": {{ (member.get('name_of_coop_union', '') if is_union else '') | tojson }},
+      "is_farmer_cluster_member": {{ is_cluster | tojson }},
+      "farmer_cluster_role": {{ ((member.get('farmer_role', '') or 'MEMBER') | upper if is_cluster else '') | tojson }},
+      "primary_commodity": {{ ((member.get('primary_commodity', '') or '') | upper if is_cluster else '') | tojson }}
+    }
+  ],
+  "fr_household_members": {{ members_records | tojson }},
+  "fr_farmer_enumerator": [
+    {
+      "enumerator_name": {{ enum_name | tojson }},
+      "enumerator_user_id": {{ enum_id | tojson }},
+      "data_collection_date": {{ collection_date | tojson }},
+      "enumerator_latitude": {{ lat if lat is not none else 'null' }},
+      "enumerator_longitude": {{ lon if lon is not none else 'null' }},
+      "enumerator_altitude": {{ alt if alt is not none else 'null' }},
+      "enumerator_accuracy": {{ acc if acc is not none else 'null' }}
+    }
+  ]
+}
