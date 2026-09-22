@@ -627,6 +627,10 @@ class Initializer(BaseInitializer):
                 "area_in_hectare": "NUMERIC(16, 6)",
                 "land_kebele": "VARCHAR",
                 "certificate_provided": "BOOLEAN",
+                # land_size is on the G2PLand mixin as Numeric(16, 6) and was
+                # never listed here, so a table that predates the mixin field
+                # kept whatever type first created it. See the retype below.
+                "land_size": "NUMERIC(16, 6)",
             }
             for column_name, column_type in land_extension_columns.items():
                 for table_name in (
@@ -640,6 +644,89 @@ class Initializer(BaseInitializer):
                             f'ADD COLUMN IF NOT EXISTS "{column_name}" {column_type}'
                         )
                     )
+
+            # `ADD COLUMN IF NOT EXISTS` above fixes a MISSING land_size; it
+            # cannot fix a column that exists with the WRONG type, and on
+            # staging two of the three land tables held it as varchar:
+            #
+            #   g2p_register_lands          numeric            (worked)
+            #   g2p_register_history_lands  character varying  (broken)
+            #   g2p_intake_form_lands       character varying  (broken)
+            #
+            # The model declares it once, on the shared G2PLand mixin, so every
+            # read goes through SQLAlchemy's Numeric type. Reading a varchar
+            # twin raises InvalidRequestError("Unknown PG numeric type: 1043")
+            # from AsyncpgNumeric.result_processor -- 1043 being varchar's OID.
+            # That surfaced as a SYS-ERR-001 toast on save_intake_form_submission
+            # (reads g2p_intake_form_lands) and get_number_of_versions (reads
+            # g2p_register_history_lands), while ordinary register reads were
+            # fine because g2p_register_lands is the one table with the right
+            # type. Same bug class as the `state` column noted above, one step
+            # further along: the column exists, but its type was never migrated.
+            #
+            # Guarded on the current type, so this is a no-op on every boot
+            # after the first and on any database that was always correct.
+            #
+            # The USING clause cannot be a bare cast: this runs on every
+            # startup, and one unparseable row would fail the boot rather than
+            # the request. Values that are not a plain number become NULL --
+            # a land area that is not a number carries no meaning anyway -- and
+            # the count of those is logged below before anything is changed, so
+            # the loss is never silent.
+            #
+            # g2p_register_lands is deliberately left alone where it is a bare
+            # `numeric`: OID 1700 is a decimal type as far as the driver is
+            # concerned, so it reads correctly, and narrowing a populated
+            # column to NUMERIC(16, 6) can overflow. Consistency there is not
+            # worth failing a boot for.
+            for table_name in (
+                "g2p_register_lands",
+                "g2p_register_history_lands",
+                "g2p_intake_form_lands",
+            ):
+                discarded = (
+                    await conn.execute(
+                        text(
+                            f"""
+                            SELECT count(*) FROM "public"."{table_name}"
+                             WHERE "land_size" IS NOT NULL
+                               AND btrim("land_size"::text) <> ''
+                               AND btrim("land_size"::text) !~ '^-?[0-9]+(\\.[0-9]+)?$'
+                            """
+                        )
+                    )
+                ).scalar()
+                if discarded:
+                    _logger.warning(
+                        "%s: %s land_size value(s) are not numeric and will be set to "
+                        "NULL while the column is converted to NUMERIC(16, 6)",
+                        table_name,
+                        discarded,
+                    )
+                await conn.execute(
+                    text(
+                        f"""
+                        DO $$
+                        BEGIN
+                            IF EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                 WHERE table_schema = 'public'
+                                   AND table_name = '{table_name}'
+                                   AND column_name = 'land_size'
+                                   AND data_type IN ('character varying', 'text')
+                            ) THEN
+                                ALTER TABLE "public"."{table_name}"
+                                ALTER COLUMN "land_size" TYPE NUMERIC(16, 6)
+                                USING CASE
+                                    WHEN btrim("land_size") ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                                    THEN btrim("land_size")::numeric
+                                    ELSE NULL
+                                END;
+                            END IF;
+                        END $$;
+                        """
+                    )
+                )
 
             await conn.execute(
                 text(
