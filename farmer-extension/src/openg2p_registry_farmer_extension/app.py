@@ -737,6 +737,26 @@ class Initializer(BaseInitializer):
             # Convert the legacy Farmer.phone_numbers JSON projection into
             # proper child records. Deterministic IDs and ON CONFLICT make
             # this safe to run on every upgrade or container restart.
+            #
+            # Only for farmers with no phone rows yet. The phone service
+            # writes the child rows back into phone_numbers as a projection,
+            # so a farmer registered through the intake form has both the
+            # real row (UUID id) and the JSON; expanding the JSON again on
+            # the next boot minted a second "<farmer>-phone-1" row for the
+            # same number, without country code -- the duplicate on the
+            # Phone Numbers tab. First, drop the ones already minted.
+            await conn.execute(
+                text(
+                    """
+                    DELETE FROM public.g2p_register_farmer_phones AS synthetic
+                    USING public.g2p_register_farmer_phones AS real
+                    WHERE synthetic.internal_record_id LIKE synthetic.link_internal_record_id || '-phone-%'
+                      AND real.link_internal_record_id = synthetic.link_internal_record_id
+                      AND real.internal_record_id NOT LIKE real.link_internal_record_id || '-phone-%'
+                      AND real.phone_number = synthetic.phone_number
+                    """
+                )
+            )
             await conn.execute(
                 text(
                     """
@@ -763,6 +783,10 @@ class Initializer(BaseInitializer):
                                  THEN f.phone_numbers ELSE '[]'::jsonb END
                         ) WITH ORDINALITY AS phone(item, ordinality)
                         WHERE nullif(btrim(phone.item->>'number'), '') IS NOT NULL
+                          AND NOT EXISTS (
+                              SELECT 1 FROM public.g2p_register_farmer_phones AS existing
+                              WHERE existing.link_internal_record_id = f.internal_record_id
+                          )
                     )
                     INSERT INTO public.g2p_register_farmer_phones (
                         internal_record_id,
