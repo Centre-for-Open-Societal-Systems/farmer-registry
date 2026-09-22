@@ -44,8 +44,14 @@ masterData:
 # reports success, because helm does not wait on these deployments. Same images,
 # same tags, current path; each tag below was checked against the registry.
 #
-# Not listed, deliberately: partner-management and audit-manager, whose tags here
-# match what is already running, so the upgrade does not restart them.
+# partner-management is listed even though its Deployments do not restart -- their
+# rendered pod template matches the one in the release manifest. The kc-sa-role
+# hook Job is the reason: helm creates it fresh on every upgrade and it pulls the
+# staff-portal-api image, so on the old path it wedges in ImagePullBackOff and helm
+# waits on the hook until the upgrade times out. Seen on the 2026-09-16 run.
+#
+# Not listed, deliberately: audit-manager, whose tag here matches what is already
+# running, so the upgrade neither restarts nor pulls it.
 openg2p-awe:
   awe:
     image:
@@ -83,6 +89,18 @@ openg2p-consent-manager:
     image:
       # sanity's template renders repository:tag directly, so the host goes here.
       repository: registry.gitlab.com/openg2p/platform-services/consent-manager/consent-manager-sanity
+partner-management:
+  staffPortalApi:
+    image:
+      # Also the image of the kc-sa-role hook Job, which pulls on every upgrade.
+      # Separate `registry` key here, as in consent-manager: only the path moves.
+      repository: openg2p/platform-services/partner-management/staff-portal-api
+  partnerApi:
+    image:
+      repository: openg2p/platform-services/partner-management/partner-api
+  staffPortalUi:
+    image:
+      repository: openg2p/platform-services/partner-management/staff-portal-ui
 
 # Components this chart version would add to the namespace that the farmer
 # registry does not use. Held off so the upgrade stays within what G2R-172

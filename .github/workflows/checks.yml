@@ -1,10 +1,12 @@
 name: Checks
 
-# Fast, Docker-free checks that gate a change before the build. Currently: the
-# openg2p-registry pin must stay in lockstep across the Dockerfiles and the Helm
-# chart dependency (test/test_rp_pin_lockstep.py). Runs in parallel with
-# build-publish.yml; a split pin shows red in seconds instead of surfacing as a
-# broken sanity image three deploys later.
+# Fast, Docker-free checks that gate a change before the build:
+#   * the openg2p-registry pin must stay in lockstep across the Dockerfiles and
+#     the Helm chart dependency (test/test_rp_pin_lockstep.py);
+#   * the platform overlay patches must still apply to the pinned sources and
+#     behave as documented (test/test_patch_platform_iam_permissions.py).
+# Runs in parallel with build-publish.yml; a split pin or a patch that no longer
+# matches shows red in seconds instead of surfacing as a broken image later.
 
 on:
   push:
@@ -22,3 +24,5 @@ jobs:
       - run: pip install --quiet pytest
       - name: openg2p-registry pin lockstep
         run: python -m pytest test/test_rp_pin_lockstep.py -q
+      - name: platform overlay patches still apply
+        run: python -m pytest test/test_patch_platform_iam_permissions.py -q
