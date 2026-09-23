@@ -1,7 +1,7 @@
 #!/bin/sh
 # Upgrade the shared platform services (`commons-services` release) in the
 # farmer namespace to the chart version pinned below, with the overlay and the
-# Master Data schema top-up kept next to this script. See README.md.
+# Master Data schema top-up kept next to this script. See docs/commons-services-upgrade.md.
 #
 # Run once per environment, deliberately, by the standalone Jenkins job in this
 # directory or by anyone holding that cluster's kubeconfig:
@@ -20,7 +20,7 @@ set -eu
 NAMESPACE="${NAMESPACE:-far}"
 RELEASE="${RELEASE:-commons-services}"
 # Master Data 1.1.0-rc.55 (serves the current /geo route names), IAM 1.4.0-rc.90,
-# audit-manager 1.0.1. README.md: "Why 2.3.0-rc.217".
+# audit-manager 1.0.1. docs/commons-services-upgrade.md: "Why 2.3.0-rc.217".
 CHART_VERSION="${CHART_VERSION:-2.3.0-rc.217}"
 CHART="openg2p-gitlab/openg2p-commons-services"
 # The registry release whose staff-ui pod the final check runs from.

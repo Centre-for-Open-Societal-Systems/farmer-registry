@@ -292,7 +292,7 @@ pipeline.
 | `values-far.yaml` | overlay applied on top of the live values: master-data image path moved to `platform-services/`, geo-seed image path, `objectStore.endpoint: ""`, `masterDataUi/superset/inji-certify` disabled |
 | `master-data-schema-topup.sql` | idempotent `ADD COLUMN IF NOT EXISTS` set for master-data, run in the pod before the upgrade |
 | `apply-sql-in-pod.py` | runs SQL from stdin inside the master-data-api pod with its own DB env (old or new prefix) |
-| `README.md` | rationale, how to regenerate the top-up SQL, why rc.217 |
+| `../docs/commons-services-upgrade.md` | rationale, how to regenerate the top-up SQL, why rc.217 |
 
 ### 4.2 Job setup (one-time, in Jenkins)
 
