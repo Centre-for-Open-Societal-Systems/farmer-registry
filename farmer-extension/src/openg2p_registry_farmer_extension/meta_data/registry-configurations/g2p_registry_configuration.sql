@@ -18,7 +18,4 @@ VALUES
     )
 ON CONFLICT ("configuration_id") DO UPDATE SET
     "registry_name" = EXCLUDED."registry_name",
-    "registry_logo" = EXCLUDED."registry_logo",
-    "registry_favicon" = EXCLUDED."registry_favicon",
-    "registry_theme_id" = EXCLUDED."registry_theme_id",
     "registry_language_id" = EXCLUDED."registry_language_id";
