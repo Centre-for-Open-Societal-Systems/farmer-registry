@@ -2,7 +2,7 @@
 
 Everything needed to build, deploy, upgrade, verify, roll back and debug the
 Farmer Registry on the `far` namespace of the dev and staging clusters. Written
-against the repo as of 2026-09-17 (`develop` @ PR #31 merged, PR #33 open).
+against the repo as of 2026-09-17 (including recent platform dependency updates and AWE callback fixes).
 Where something is *not* in the repo and only exists on a cluster or in Jenkins,
 it is called out explicitly, because those are the parts that bite on a rebuild.
 
@@ -194,7 +194,7 @@ created, so the last run's Job stays visible until the next deploy):
 | Weight | Job | Notes |
 | --- | --- | --- |
 | pre-install/upgrade | `awe-callback-hmac-secret` | generates `farmer-registry-awe-callback-hmac` (key `hmac-secret`) if absent |
-| 10 | `farmer-registry-db-seed` | registry schema/meta_data, AWE policy + `callback_secret` (and, from PR #33, repoints open AWE requests), sample data/images/templates per `registry.dbSeed.load*` |
+| 10 | `farmer-registry-db-seed` | registry schema/meta_data, AWE policy + `callback_secret` (repointing open AWE requests to cluster-internal callback URLs), sample data/images/templates per `registry.dbSeed.load*` |
 | 11 / 12 / 13 | sanity `pm-seed`, `cm-seed`, `data-seed` | seed a persistent sanity partner into PM/CM and a sanity farmer |
 | 19 / 20 | `iam-register` configmap + Job | registers the "Farmer Registry" tile, roles and permissions in IAM |
 | 25 | `farmer-registry-sanity` | farmer e2e suite (`registry.sanity.*`), `runE2e`/`failOnError` at subchart defaults |
@@ -292,7 +292,7 @@ pipeline.
 | `values-far.yaml` | overlay applied on top of the live values: master-data image path moved to `platform-services/`, geo-seed image path, `objectStore.endpoint: ""`, `masterDataUi/superset/inji-certify` disabled |
 | `master-data-schema-topup.sql` | idempotent `ADD COLUMN IF NOT EXISTS` set for master-data, run in the pod before the upgrade |
 | `apply-sql-in-pod.py` | runs SQL from stdin inside the master-data-api pod with its own DB env (old or new prefix) |
-| `README.md` | rationale, how to regenerate the top-up SQL, why rc.217 |
+| `../docs/commons-services-upgrade.md` | rationale, how to regenerate the top-up SQL, why rc.217 |
 
 ### 4.2 Job setup (one-time, in Jenkins)
 
@@ -302,7 +302,7 @@ Run with *Build with Parameters*; with `CONFIRM` unticked it checks out and
 stops. The pre-upgrade live values are archived with the build as
 `commons-services-values-rev<N>.yaml`.
 
-Check the job exists before relying on it — PR #30 only merged on 2026-09-16.
+Check the job exists before relying on it — this functionality was introduced in mid-September 2026.
 
 ### 4.3 What `upgrade.sh` does
 
@@ -341,7 +341,7 @@ is settled: a fresh namespace or rebuild must recreate this ConfigMap by hand
 `*.openg2p.test` host. `SSL_CERT_FILE` *replaces* Python's default trust store,
 so the bundle must keep the public roots (it does).
 
-PR #33 removes the registry's own dependence on this for the AWE callback by
+Recent updates remove the registry's own dependence on this for the AWE callback by
 calling `staff-portal-api` in-cluster over http.
 
 ---
@@ -365,7 +365,7 @@ header comment: extract `ca.crt` and `token` from `farmer-ci-token`,
 `kubectl config set-cluster/set-credentials/set-context`, verify with
 `kubectl auth can-i list secrets -n far`) and upload it to Jenkins as a
 **Secret file** credential with ID `gen2-dev-kubeconfig` (dev) or
-`staging-farmer-kubeconfig` (staging). PR #27 switched the dev credential id to
+`staging-farmer-kubeconfig` (staging). The dev credential ID was recently switched to
 `gen2-dev-kubeconfig`; check `origin/develop` before copying ids.
 
 ---
@@ -391,7 +391,7 @@ against it and the staff-ui CSP is derived from it), the `far-ca-bundle` volume
 contradicts the PR-only rule. There is no tracked per-environment values file
 yet. Until there is, the least-bad path: put the change in
 `helm/openg2p-farmer-registry/values.yaml` if it is environment-independent
-(as PR #33 does), or raise it with Suresh if it is not. **Back up
+(as recent updates do), or raise it with Suresh if it is not. **Back up
 `helm get values` before any manual change.**
 
 ---
@@ -414,6 +414,15 @@ Ordered. Items marked *(manual)* are not scripted anywhere in this repo.
    (cluster-wide, `ca.crt`, used by UI deployments via `NODE_EXTRA_CA_CERTS`).
 5. Apply `ci/k8s/farmer-deploy-rbac.yaml`; build the kubeconfig; add the
    Jenkins Secret-file credential (§5).
+5b. *(manual, only when commons-services is in a **different** namespace from
+   the registry)* Apply `ci/k8s/commons-aliases.yaml` — ExternalName aliases for
+   the nine `commons-services-*` hosts the chart addresses by bare short name.
+   Without them those names are NXDOMAIN and the failures are silent: a missing
+   master-data alias renders the intake form's Location dropdowns as an absent
+   block, and a missing pm-partner-api alias breaks partner signature
+   validation. Edit both namespaces in the file first. Skip it entirely where
+   commons-services shares the registry's namespace (the dev cluster) — the
+   bare names are correct there.
 6. Jenkins: multibranch pipeline on the repo; credentials `aws-ecr-creds`,
    env `AWS_ACCOUNT_ID`; node `vpn-agent2` with `helm`, `kubectl`, VPN.
    Standalone `ci/commons-services` job (§4.2).
@@ -451,7 +460,18 @@ kubectl -n $NS logs job/$R-db-seed --tail=50
 # Master data routes as the UI sees them
 kubectl -n $NS exec deploy/$R-staff-portal-ui -- sh -c 'wget -qO- "$MASTERDATA_BACKEND_API_URL/openapi.json"' | grep -o '"/geo/[a-z_]*"' | sort -u
 
-# AWE wiring (after PR #33)
+# Every commons-services host the chart names resolves from a consuming pod.
+# Bare short names resolve in the pod's OWN namespace, so where commons-services
+# is elsewhere each needs an ExternalName alias (§7 step 5b). Empty output for
+# any line is the fault — and it fails silently, so check it rather than waiting
+# for a widget to go blank.
+for h in iam-staff-portal-api master-data-api pm-partner-api pm-staff-portal-api \
+         cm-partner-api cm-api keymanager auditmanager; do
+  printf '%-24s ' "$h"
+  kubectl -n $NS exec deploy/$R-partner-api -- getent hosts "commons-services-$h" || echo "UNRESOLVED"
+done
+
+# AWE wiring (updated internal callback)
 kubectl -n $NS exec -i commons-postgresql-0 -- sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U postgres -d awe -X -c "SELECT id, caller_service FROM callback_secret;"'
 kubectl -n $NS exec -i commons-postgresql-0 -- sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U postgres -d awe -X -c "SELECT status, count(*) FROM webhook_delivery GROUP BY 1;"'
 
@@ -493,9 +513,10 @@ schema top-up is additive and needs no undo.
 | Symptom | Cause / where to look |
 | --- | --- |
 | `helm list` shows a release `failed` | last upgrade's hook Job failed or timed out. `helm history`, then the hook logs printed in the Jenkins build. `helm upgrade` still runs on a `failed` release (only `pending-*` blocks it), but understand the failure first. `farmer-registry` was `failed` at rev 15 (2026-09-15) when last checked. |
-| `ImagePullBackOff` on `commons-services-*` | image path moved to `registry.gitlab.com/openg2p/platform-services/...`; the old `openg2p/master-data-service/...` path denies anonymous pulls. `values-far.yaml` overrides master-data and geo-seed; PR #32 adds partner-management. `cm-api-expire-*` and `kc-sa-role-*` were in this state on 2026-09-17. |
-| Location dropdowns 404 (`get_all_g2p_geo_levels`) | master-data serving old route names — the reason `ci/commons-services` exists. Verify on the pod, not on a local image of the same tag. |
-| Approval stuck in `PENDING`, AWE shows `approved` | webhook not delivered. `SELECT status, left(last_error,80), count(*) FROM webhook_delivery GROUP BY 1,2` in the `awe` DB. Before PR #33: `CERTIFICATE_VERIFY_FAILED` to the ingress host. |
+| `ImagePullBackOff` on `commons-services-*` | image path moved to `registry.gitlab.com/openg2p/platform-services/...`; the old `openg2p/master-data-service/...` path denies anonymous pulls. `values-far.yaml` overrides master-data and geo-seed; partner-management is also overridden to use the updated path. `cm-api-expire-*` and `kc-sa-role-*` were in this state on 2026-09-17. |
+| A widget renders nothing at all — no error, no empty control (Location dropdowns are the known case) | **Check DNS from the consuming pod before suspecting the service's version.** The chart addresses the shared services by bare short name, which resolves in the consuming pod's own namespace; where commons-services is in a different namespace an ExternalName alias must exist (`ci/k8s/commons-aliases.yaml`). `kubectl -n $NS exec deploy/$R-partner-api -- getent hosts commons-services-master-data-api` — empty output is the fault. Four were missing on staging (2026-09-22) and this was misread as the route-rename issue below. |
+| Location dropdowns 404 (`get_all_g2p_geo_levels`) | master-data serving old route names — the reason `ci/commons-services` exists. Verify **the routes actually served** on the pod, not on a local image of the same tag: `kubectl -n $NS exec deploy/$R-staff-portal-ui -- sh -c 'wget -qO- "$MASTERDATA_BACKEND_API_URL/openapi.json"' \| grep -o '"/geo/[a-z_]*"'`. If that lists `get_all_geo_levels`, the build is current and the cause is the DNS row above. |
+| Approval stuck in `PENDING`, AWE shows `approved` | webhook not delivered. `SELECT status, left(last_error,80), count(*) FROM webhook_delivery GROUP BY 1,2` in the `awe` DB. (Historically caused by \`CERTIFICATE_VERIFY_FAILED\` prior to internal callback routing). |
 | Submission `APPROVED` but no farmer created | `register_ingest_process_status` — if `NOT_APPLICABLE` the approval was set by hand without the ingest flag; if `FAILED` read `register_ingest_process_last_error_code` and the celery-worker log. |
 | Farmer photo missing, no error | `global.minioHost` points at an in-cluster name; must be browser-resolvable and identical to the signer's host (`test/staff-ui/test_minio_presigned_host.py`). |
 | Staff-ui build fails `PATCH NOT APPLIED` | a bundle sed no longer matches the base 1.2.x build; re-anchor the patch in the root `Dockerfile`. |
@@ -527,7 +548,7 @@ pass `-p`: `docker-compose.yml` names the project `farmer-registry` and a bare
 `up` on a machine with an older project attaches to the wrong volumes. See
 `local/README.md`. Local uses the in-cluster-style AWE callback
 `http://farmer-registry-staff-api:8000/awe/webhooks/decision`, which is what
-PR #33 aligns the cluster with.
+matches the cluster's behavior.
 
 ---
 
