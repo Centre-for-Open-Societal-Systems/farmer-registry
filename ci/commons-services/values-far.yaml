@@ -20,6 +20,43 @@ masterData:
       # master-data-service/..., which no longer allows anonymous pulls. Same
       # image, current path. The tag stays at the chart default (1.1.0-rc.55).
       repository: registry.gitlab.com/openg2p/platform-services/master-data-service/master-data-api
+    # Auth wiring master-data has never had. Both were applied to staging by
+    # hand on 2026-09-23 (a `kubectl set env`, because the release's chart is a
+    # local patch that cannot be rebuilt -- see README "Before you run this");
+    # they live here so the eventual chart upgrade carries them instead of
+    # silently reverting the Deployment to the broken state.
+    #
+    # The key is a MAP named envVars (not env / extraEnv / a list), and its
+    # values are tpl-evaluated by the subchart. Verified against
+    # openg2p-commons-services 2.2.0-patched1; re-check the shape when the pin
+    # moves, because this service has already changed env prefixes once
+    # (GEN2_MASTER_DATA_API_ -> MASTER_DATA_API_ -> COMMON_ for the iam_core
+    # settings, whose env_prefix is `common_`).
+    envVars:
+      # master-data mounts iam_core's session middleware, whose
+      # RedisRefreshTokenStore falls back to redis://localhost:6379/0 when
+      # unset -- there is no Redis in that pod, so every authenticated request
+      # raised a connection error and the API answered 500. The intake form's
+      # Location section is the visible casualty: its geo-hierarchy widget
+      # calls /geo/get_all_geo_levels on every render.
+      #
+      # This mirrors IAM's own IAM_STAFF_AUTH_REDIS_URL template, and the DB
+      # index is not a free choice: master-data READS the refresh_token:* keys
+      # that IAM WRITES, so a different instance or index resolves a valid
+      # session to None and turns the 500 into a 401.
+      #
+      # Never present in any of the nine revisions of this release -- a gap
+      # from master-data acquiring the middleware without the values following,
+      # not a regression.
+      COMMON_AUTH_REDIS_URL: 'redis://{{ tpl .Values.global.redisInstallationName $ }}-master:6379/0'
+  # global.authProviderApiUrl ships as http://iam-staff-portal-api, which
+  # resolves nowhere; the chart's own global.iamServiceUrl one line away
+  # already carries the correct Service name. Only the master-data Deployment
+  # consumes it in the whole rendered release, so overriding the global is
+  # safe and fixes the defect rather than patching around it.
+  #
+  # Kept under masterData for locality with the change above, but it is a
+  # global -- see the `global:` block at the end of this file.
   geoSeed:
     image:
       # Same path move for the seed the post-upgrade hook runs.
@@ -109,3 +146,14 @@ superset:
   enabled: false
 openg2p-inji-certify:
   enabled: false
+
+# Chart-level defect, fixed here because only one Deployment consumes it.
+# global.authProviderApiUrl ships as `http://iam-staff-portal-api`, a Service
+# name that exists in no namespace, while global.iamServiceUrl -- declared a
+# few lines away in the same block -- carries the correct
+# `http://commons-services-iam-staff-portal-api`. Only
+# Deployment/commons-services-master-data-api reads authProviderApiUrl in the
+# whole rendered release, so the blast radius of correcting it is exactly one
+# workload. Applied to staging by hand alongside COMMON_AUTH_REDIS_URL above.
+global:
+  authProviderApiUrl: http://commons-services-iam-staff-portal-api

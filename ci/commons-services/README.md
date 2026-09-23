@@ -18,6 +18,59 @@ chart's post-upgrade hooks (geo seed, iam-register) re-run on every
 | `master-data-schema-topup.sql` | Idempotent `ADD COLUMN IF NOT EXISTS` set for Master Data, generated from the target image's models. Run inside the master-data-api pod before the upgrade. |
 | `apply-sql-in-pod.py` | Runs SQL from stdin inside the master-data-api pod, using the DB settings from the pod environment (either prefix). |
 
+## Before you run this against staging — two blockers found 2026-09-23
+
+Both were established read-only against the live `commons-services` release
+(namespace `commons`, revision 9, chart `openg2p-commons-services-2.2.0-patched1`).
+Neither is fixed. **`upgrade.sh` is unsafe on that release until they are.**
+
+**1. The release's "user-supplied" values are 216 KB of frozen computed defaults.**
+
+```sh
+helm -n commons get values commons-services --revision 9 -o yaml | head -1
+# COMPUTED VALUES: null
+```
+
+That first line is the header `helm get values -a` prints. Someone dumped an earlier
+revision's *computed* values and fed the output back as a `-f` file, so the parser read
+the header as a null-valued key and everything beneath it became a user-supplied
+override — 16 top-level keys, every subchart's entire default tree, against an umbrella
+`values.yaml` of 37 KB.
+
+`upgrade.sh` preserves live values **by design** (step 1). Running it would therefore
+pin every 2.2.0 default as an explicit override on top of the newer chart, silently
+overriding defaults the new chart depends on. That is worse than the AWE issuer loss
+below, and it is invisible in review because the diff is framed as "we kept your
+values". **The 2.3.x plan starts by reducing those values to genuine overrides, not
+with the upgrade.**
+
+**2. `2.2.0-patched1` cannot be rebuilt, and the patch is not in any source.**
+
+The patch is a **single missing newline** in the vendored `openg2p-master-data`
+subchart (`templates/gen2-master-data-api/deployment.yaml`, line 29):
+`{{- include "gen2MasterData.imagePullSecrets" . | nindent 6 }}` emits no trailing
+newline and the following `{{- if .Values.hostAliases }}` chomps the separator, so when
+an image pull secret is set while `hostAliases` and `affinity` are both empty, stock
+renders `- name: ecr-pull-secretaffinity:` and the manifest **fails to parse at all**.
+
+It is unrecoverable from the cluster: a Helm release secret stores the umbrella chart
+but no subchart bodies, and all 13 umbrella templates are byte-identical to stock.
+`helm dependency build` would fetch the buggy subchart (published
+`openg2p-master-data 0.0.0-develop.26` is byte-identical to stock); it fails first
+anyway, because the stored `Chart.yaml` names the dependency by its alias (`masterData`)
+while `Chart.lock` uses `openg2p-master-data`.
+
+This is an upstream chart bug worth filing — every installation hitting that values
+combination is affected, and `patched1` exists only because someone hit it and patched
+around it without publishing the result. If that artifact surfaces, the proper chart
+path reopens.
+
+**Consequence for `values-far.yaml`:** the master-data auth values it now carries
+(`COMMON_AUTH_REDIS_URL`, `global.authProviderApiUrl`) were applied to staging by hand
+with `kubectl set env`, because no safe chart path existed. That is drift on a
+Helm-managed Deployment and any upgrade reverts it — which is exactly why they are in
+the overlay, so the upgrade puts them back rather than undoing them.
+
 ## Running it
 
 **From Jenkins (preferred).** Create a Pipeline job once, "Pipeline script
