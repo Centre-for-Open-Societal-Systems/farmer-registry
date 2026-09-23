@@ -1,0 +1,210 @@
+# ExternalName aliases for the shared platform services, applied ONCE per
+# cluster by the cluster admin — the same shape and lifecycle as
+# farmer-deploy-rbac.yaml, and deliberately NOT a chart template or a pipeline
+# stage (see "When this is needed" below).
+#
+#   sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl apply -f ci/k8s/commons-aliases.yaml
+#
+# ---------------------------------------------------------------------------
+# Why this file exists
+# ---------------------------------------------------------------------------
+# The openg2p-registry chart addresses the shared services by BARE SHORT NAME:
+#
+#   iamServiceUrl:              http://commons-services-iam-staff-portal-api
+#   masterDataApiUrl:           http://commons-services-master-data-api
+#   partnerManagementApiUrl:    http://commons-services-pm-partner-api
+#   ... and five more, listed below
+#
+# A bare short name resolves inside the CONSUMING pod's own namespace. Where
+# commons-services is installed into that same namespace the names resolve
+# directly and this file is unnecessary. Where it is installed into a separate
+# namespace, every one of them is an NXDOMAIN unless an alias exists — and the
+# chart neither provisions those aliases nor verifies them.
+#
+# That is not a hypothetical. On the staging cluster (2026-09-22) four of the
+# nine were missing from `far`, and the failures were silent in three different
+# ways:
+#
+#   * master-data-api      The intake form's Location section renders its five
+#                          geo dropdowns from a single geo-hierarchy widget that
+#                          calls master-data at request time. With the name
+#                          unresolvable the widget rendered NOTHING — no error,
+#                          no empty selects, just an absent block. This was
+#                          initially misdiagnosed as master-data serving
+#                          pre-rename /geo/ route names (G2R-172), and a chart
+#                          upgrade was nearly run to "fix" a build that was
+#                          already correct.
+#   * pm-partner-api       registryCryptoBackend defaults to `partner-mgmt` and
+#                          partnerSignatureValidationEnabled defaults to true,
+#                          so this is where partner PUBLIC KEYS are fetched.
+#                          Partner-API signature validation was failing.
+#   * keymanager           Inert while registryKeymanagerAuthEnabled is false —
+#                          wired but unused, so a trap rather than a fault.
+#   * pm-staff-portal-api  Referenced only by the sanity Job's SANITY_PM_ADMIN_URL.
+#
+# Note why the sanity suite did not catch any of it: it runs with
+# SANITY_RUN_E2E=false (the chart default, in every registry on that cluster),
+# so it reports green on smoke tests alone while a host it references does not
+# resolve. SANITY_FAIL_ON_ERROR is true — the suite would have failed the build
+# had the relevant nine tests not been deselected.
+#
+# ---------------------------------------------------------------------------
+# Why aliases and not fully-qualified URLs in the values
+# ---------------------------------------------------------------------------
+# Qualifying the URLs (as keycloakBaseUrl and the postgres host already are)
+# looks tidier and is wrong here: it would hardcode a namespace. On the dev
+# cluster the `commons` and `commons-services` releases are installed INTO
+# `far`, so `commons-services-pm-partner-api.commons.svc.cluster.local` names a
+# namespace that holds nothing. The bare short name is CORRECT there. Aliases
+# patch only the split-namespace layout, which is why this is an opt-in file
+# applied per cluster rather than a template that fires everywhere.
+#
+# ---------------------------------------------------------------------------
+# When this is needed
+# ---------------------------------------------------------------------------
+# Only when commons-services lives in a different namespace from the registry.
+# Check before applying:
+#
+#   kubectl get svc -A | grep commons-services-      # where do they really live?
+#   kubectl -n far exec deploy/farmer-registry-partner-api -- \
+#     getent hosts commons-services-pm-partner-api   # empty output = needed
+#
+# ---------------------------------------------------------------------------
+# Adjusting it
+# ---------------------------------------------------------------------------
+# Both namespaces below are environment facts, not constants:
+#   * metadata.namespace  — where the registry runs (this file assumes `far`)
+#   * the `.commons.` segment of externalName — where commons-services runs
+# Change both if either differs. ExternalName is a DNS CNAME, so the port block
+# is not used for routing; it is kept at 80/80 to match the aliases already in
+# these clusters and because the chart's URLs carry no explicit port (except
+# auditManagerUrl, which spells out :80 and resolves the same way).
+#
+# Keep this list in step with the chart: every `commons-services-*` host in the
+# pinned openg2p-registry values.yaml needs an entry, or it fails this way.
+---
+# global.iamServiceUrl — IAM staff-portal API. Permission resolution for every
+# staff-api request; an outage here is a 403 on everything.
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-iam-staff-portal-api
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-iam-staff-portal-api.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# global.masterDataApiUrl — geo hierarchy and code lists. The intake form's
+# Location dropdowns come from here.
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-master-data-api
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-master-data-api.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# global.partnerManagementApiUrl — source of partner public keys while
+# registryCryptoBackend is `partner-mgmt` (the default).
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-pm-partner-api
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-pm-partner-api.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# global.partnerManagementAdminApiUrl — PM admin API; the sanity suite's
+# SANITY_PM_ADMIN_URL.
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-pm-staff-portal-api
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-pm-staff-portal-api.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# global.consentManagerUrl — Consent Manager partner API (/validate PDP).
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-cm-partner-api
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-cm-partner-api.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# global.consentManagerStaffUrl — Consent Manager staff API.
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-cm-api
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-cm-api.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# global.keymanagerInstallationName — partner-api signature crypto. Unused
+# while registryKeymanagerAuthEnabled is false, but wired.
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-keymanager
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-keymanager.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# global.auditManagerUrl — audit event sink (spelled http://...:80 in values).
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-auditmanager
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-auditmanager.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80
+---
+# Not referenced by the registry chart's values: it reaches AWE over the public
+# ingress host (global.aweBaseUrl), not in-cluster. Included because both `far`
+# and `live` carry it and a partial set is how this class of fault starts —
+# something outside the registry chart (the AWE UI, an operator's curl) uses it.
+# Drop this entry if an audit shows nothing in the namespace resolves it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: commons-services-awe
+  namespace: far
+spec:
+  type: ExternalName
+  externalName: commons-services-awe.commons.svc.cluster.local
+  ports:
+    - port: 80
+      targetPort: 80

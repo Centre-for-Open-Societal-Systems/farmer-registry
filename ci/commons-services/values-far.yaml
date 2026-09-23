@@ -20,6 +20,71 @@ masterData:
       # master-data-service/..., which no longer allows anonymous pulls. Same
       # image, current path. The tag stays at the chart default (1.1.0-rc.55).
       repository: registry.gitlab.com/openg2p/platform-services/master-data-service/master-data-api
+    # THE ENV PREFIX. The image running in `far` is a 1.1.0-generation build
+    # whose Settings subclasses iam_core's with
+    # `env_prefix="master_data_api_"`. iam_core's middleware resolves config by
+    # `get_config(strict=False)`, which matches on isinstance and therefore
+    # returns the APP's Settings -- so the chart's GEN2_MASTER_DATA_API_* and
+    # COMMON_* variables, written for the 0.0.0-develop.26 generation, are
+    # read by nothing. Not one of them. The app ran entirely on class defaults:
+    # db_hostname 'localhost', auth_redis_url redis://localhost:6379/0,
+    # auth_provider_api_url None. The database was never reachable and the
+    # startup migration has never completed under these models.
+    #
+    # It presents as an HTTP 500 from /geo/get_all_geo_levels, which the
+    # staff-ui proxy flattens to {"statusText":"Internal Server Error"} with
+    # the upstream body dropped -- so the intake form's Location section, whose
+    # geo-hierarchy widget calls that endpoint on every render, shows nothing.
+    #
+    # The `postgres-checker` init container passes throughout, because it is a
+    # shell script doing ${VAR} expansion: it validates a hostname the
+    # application itself never consults.
+    #
+    # Values below are the ones the chart already computed for this
+    # environment, read off the live Deployment's old-prefix variables and
+    # re-keyed -- not re-derived. The key is a MAP named envVars (not env /
+    # extraEnv / a list). Verified against openg2p-commons-services
+    # 2.2.0-patched1 with the ECR image override in place; re-check both the
+    # shape and the prefix when either pin moves.
+    envVars:
+      # Pinned rather than left to the class default (which is already
+      # postgresql+asyncpg in this image). The whole incident is an implicit
+      # default changing underneath the chart; this one costs nothing to fix
+      # in place.
+      MASTER_DATA_API_DB_DRIVER: postgresql+asyncpg
+      MASTER_DATA_API_DB_HOSTNAME: commons-postgresql
+      MASTER_DATA_API_DB_PORT: "5432"
+      MASTER_DATA_API_DB_DBNAME: master_data
+      MASTER_DATA_API_DB_USERNAME: master_data_user
+      # master-data mounts iam_core's session middleware, which checks
+      # refresh_token:* on every authenticated request. Mirrors IAM's own
+      # IAM_STAFF_AUTH_REDIS_URL template, and the DB index is not a free
+      # choice: master-data READS the keys IAM WRITES, so a different instance
+      # or index resolves a valid session to None and turns the 500 into a 401.
+      MASTER_DATA_API_AUTH_REDIS_URL: 'redis://{{ tpl .Values.global.redisInstallationName $ }}-master:6379/0'
+      # Only consulted for endpoints carrying a non-empty @require_permissions
+      # (geo:create, referenceData:create, ...). The registry UI's geo reads
+      # are @require_permissions({}) -- an EMPTY set, which still requires a
+      # valid principal but resolves to no roles and makes no IAM call at all.
+      # So these two are not on the Location section's critical path; they are
+      # here for the admin write paths.
+      MASTER_DATA_API_AUTH_PROVIDER_API_URL: http://commons-services-iam-staff-portal-api
+      MASTER_DATA_API_KEYCLOAK_CLIENT_ID: registry-staff-portal
+    # Separate map, for valueFrom. The password is never a literal: this
+    # mirrors the secretKeyRef the chart already uses for the old-prefix name.
+    envVarsFrom:
+      MASTER_DATA_API_DB_PASSWORD:
+        secretKeyRef:
+          name: master-data
+          key: master-data-db-user
+  # global.authProviderApiUrl ships as http://iam-staff-portal-api, which
+  # resolves nowhere; the chart's own global.iamServiceUrl one line away
+  # already carries the correct Service name. Only the master-data Deployment
+  # consumes it in the whole rendered release, so overriding the global is
+  # safe and fixes the defect rather than patching around it.
+  #
+  # Kept under masterData for locality with the change above, but it is a
+  # global -- see the `global:` block at the end of this file.
   geoSeed:
     image:
       # Same path move for the seed the post-upgrade hook runs.
@@ -109,3 +174,17 @@ superset:
   enabled: false
 openg2p-inji-certify:
   enabled: false
+
+# Chart-level defect, fixed here because only one Deployment consumes it.
+# global.authProviderApiUrl ships as `http://iam-staff-portal-api`, a Service
+# name that exists in no namespace, while global.iamServiceUrl -- declared a
+# few lines away in the same block -- carries the correct
+# `http://commons-services-iam-staff-portal-api`. Only
+# Deployment/commons-services-master-data-api reads authProviderApiUrl in the
+# whole rendered release, so the blast radius of correcting it is exactly one
+# workload. Applied to staging by hand alongside the MASTER_DATA_API_* set
+# above. Note it is read only under the MASTER_DATA_API_ prefix by the image
+# actually running, so the global alone does not reach the app -- see the
+# envVars block for why.
+global:
+  authProviderApiUrl: http://commons-services-iam-staff-portal-api
