@@ -267,6 +267,15 @@ analytics:
     # remembering to add it here.
     matchPrefix: fr_rpt_
 
+    # Record every refresh outcome in the reporting_refresh_log table (created
+    # by the job) in addition to the JSON line each outcome prints on stdout.
+    # The table feeds refresh-health dashboards and alerts; see
+    # docs/reporting-refresh-log.md. Rows older than retentionDays are deleted
+    # at the end of each run.
+    refreshLog:
+      enabled: true
+      retentionDays: 90
+
   dashboards:
     enabled: true
     image:

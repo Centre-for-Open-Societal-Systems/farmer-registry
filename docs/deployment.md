@@ -28,7 +28,7 @@ Helm chart + base images from GitLab) plus a thin farmer layer on top:
 | staff-portal-ui (1.2.1 base + farmer bundle patches) | root `Dockerfile`, target `staff-ui` | same release |
 | farmer domain package (`farmer-extension/`), seed metadata, AWE policy, DCI templates | this repo, baked into the images | same release |
 | sanity e2e suite | `docker/sanity-tests/Dockerfile` | same release, post-upgrade hook Job |
-| analytics layer (reporting views, Superset dashboards, Insights maps content) | `helm/openg2p-farmer-registry/templates/` | same release, **disabled by CI** |
+| analytics layer (reporting views and their refresh CronJob, Superset dashboards, Insights maps content) | `helm/openg2p-farmer-registry/templates/` | same release, **disabled by CI**. Refresh outcomes are logged: see [reporting-refresh-log.md](reporting-refresh-log.md) |
 | IAM, Keycloak, AWE, Master Data, Partner Mgmt, Consent Mgr, audit manager, keymanager, (Superset off) | `openg2p-commons-services` chart | Helm release **`commons-services`** |
 | PostgreSQL (`commons-postgresql-0`), Redis (`commons-redis`), MinIO (`commons-minio`) | `openg2p-commons` base chart | Helm release **`commons`** |
 
