@@ -24,6 +24,10 @@ would rebuild them from the previous snapshot and quietly produce a half-updated
 set. A hand-maintained list would also have to be kept in step with
 reporting_views.sql by whoever next edits it, which is the kind of coupling that
 holds for exactly as long as the two files have the same author.
+
+Every outcome (refreshed, refreshed_blocking, failed, skipped) is written as a
+JSON line on stdout and as a row in reporting_refresh_log, so refresh health can
+be monitored. See docs/reporting-refresh-log.md.
 */}}
 {{- if and .Values.analytics.reportingViews.enabled .Values.analytics.reportingViews.refreshSchedule }}
 {{- $seedRepo := .Values.analytics.image.repository | default .Values.registry.dbSeed.image.repository }}
@@ -60,76 +64,20 @@ spec:
           containers:
             - name: refresh
               image: {{ $seedRepo }}:{{ $seedTag }}
+              # The script lives in files/ so it can be run and tested outside
+              # Kubernetes; see docs/reporting-refresh-log.md.
               command:
                 - sh
                 - -c
                 - |
-                  set -e
-
-                  # Dependency order, from pg_depend. Views nobody reads come
-                  # first (lvl 0); a view built on another follows it.
-                  ORDER=$(psql -tA <<'SQL'
-                  WITH RECURSIVE mv AS (
-                      SELECT c.oid, c.relname
-                      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-                      WHERE c.relkind = 'm' AND n.nspname = 'public'
-                        AND c.relname LIKE '{{ .Values.analytics.reportingViews.matchPrefix }}%'
-                  ), edge AS (
-                      SELECT DISTINCT r.ev_class AS child, d.refobjid AS parent
-                      FROM pg_depend d JOIN pg_rewrite r ON r.oid = d.objid
-                      WHERE d.classid = 'pg_rewrite'::regclass
-                        AND r.ev_class <> d.refobjid
-                        AND r.ev_class IN (SELECT oid FROM mv)
-                        AND d.refobjid IN (SELECT oid FROM mv)
-                  ), depth AS (
-                      SELECT oid, 0 AS lvl FROM mv WHERE oid NOT IN (SELECT child FROM edge)
-                      UNION ALL
-                      SELECT e.child, d.lvl + 1 FROM edge e JOIN depth d ON d.oid = e.parent
-                  )
-                  SELECT mv.relname
-                  FROM mv JOIN (SELECT oid, max(lvl) AS lvl FROM depth GROUP BY oid) t
-                    ON t.oid = mv.oid
-                  ORDER BY t.lvl, mv.relname;
-                  SQL
-                  )
-
-                  if [ -z "$ORDER" ]; then
-                    # Not an error worth failing on, but it must be visible: the
-                    # views are created by a post-install hook, so an early first
-                    # run legitimately finds none.
-                    echo "[refresh] no materialized views matching" \
-                         "'{{ .Values.analytics.reportingViews.matchPrefix }}%' — nothing to do"
-                    exit 0
-                  fi
-
-                  echo "[refresh] order: $(echo $ORDER | tr '\n' ' ')"
-                  rc=0
-                  for v in $ORDER; do
-                    # CONCURRENTLY so dashboards and the Ask tab keep reading the
-                    # old snapshot while this runs. It needs a unique index, which
-                    # reporting_views.sql creates.
-                    if psql -v ON_ERROR_STOP=1 \
-                         -c "REFRESH MATERIALIZED VIEW CONCURRENTLY $v" >/dev/null 2>/tmp/err; then
-                      echo "[refresh] $v"
-                    else
-                      # Fall back to a plain REFRESH rather than skipping. A view
-                      # added later without a unique index would otherwise never
-                      # refresh again and nothing but this log line would say so —
-                      # permanent silent staleness is worse than the brief lock.
-                      sed 's/^/[refresh]   /' /tmp/err
-                      echo "[refresh] $v: retrying WITHOUT concurrency (readers will block)"
-                      if psql -v ON_ERROR_STOP=1 \
-                           -c "REFRESH MATERIALIZED VIEW $v" >/dev/null 2>/tmp/err; then
-                        echo "[refresh] $v (non-concurrent)"
-                      else
-                        sed 's/^/[refresh]   /' /tmp/err
-                        echo "[refresh] $v FAILED — keeping the existing snapshot"
-                        rc=1
-                      fi
-                    fi
-                  done
-                  exit $rc
+{{ .Files.Get "files/reporting-views-refresh.sh" | indent 18 }}
               env:
+                - name: MATCH_PREFIX
+                  value: {{ .Values.analytics.reportingViews.matchPrefix | quote }}
+                - name: REFRESH_LOG_ENABLED
+                  value: {{ .Values.analytics.reportingViews.refreshLog.enabled | toString | quote }}
+                - name: REFRESH_LOG_RETENTION_DAYS
+                  value: {{ .Values.analytics.reportingViews.refreshLog.retentionDays | toString | quote }}
                 - name: PGHOST
                   value: {{ $pg | quote }}
                 - name: PGPORT
