@@ -102,16 +102,21 @@ pipeline {
                          args:"--label org.opencontainers.image.source=${DASHBOARD_API_REPO} --label org.opencontainers.image.revision=${env.DASHBOARD_API_SHA} --label org.opencontainers.image.ref.name=${env.DASHBOARD_API_REF_USED}"],
                     ]
 
+                    // Each environment branch also moves a tag of its own name, so
+                    // :develop, :staging and :main always hold that branch's latest
+                    // build. It used to be :develop for every branch, so a staging
+                    // build overwrote the develop image.
+                    def movingTag = (env.BRANCH_NAME in ['develop', 'staging', 'main']) ? env.BRANCH_NAME : null
                     components.each { c ->
                         def image  = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${c.tag ?: env.IMAGE_TAG}"
-                        def latest = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:develop"
+                        def latest = movingTag ? "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${movingTag}" : null
                         def target = c.target ? "--target ${c.target}" : ''
                         def context = c.context ?: '.'
                         sh """
                             docker build ${c.args} ${target} \
-                                -f ${c.dockerfile} -t ${image} -t ${latest} ${context}
+                                -f ${c.dockerfile} -t ${image} ${latest ? "-t ${latest}" : ''} ${context}
                             docker push ${image}
-                            docker push ${latest}
+                            ${latest ? "docker push ${latest}" : ''}
                         """
                     }
                 }

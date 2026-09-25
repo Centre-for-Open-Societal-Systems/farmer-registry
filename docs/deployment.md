@@ -149,7 +149,7 @@ Multibranch pipeline. Every branch builds and pushes; only `develop` and
 | Checkout | any | `checkout scm` |
 | Checkout dashboard-api | any | clones the dashboard-api repo (same-named branch, else `develop`; `DASHBOARD_API_REF` pins) into `.build/dashboard-api` |
 | ECR Login | any | `aws-ecr-creds` → `docker login` |
-| Build & Push | any | builds the 7 images above, pushes `<sha12>` and `develop` tags (dashboard-api: the API repository's `<sha12>`) |
+| Build & Push | any | builds the 7 images above, pushes `<sha12>` (dashboard-api: the API repository's `<sha12>`), and on `develop`, `staging` and `main` also moves the tag of that branch's name to the build |
 | Stash chart | any | stashes `helm/openg2p-farmer-registry/**` only |
 | Deploy (far namespace) | **`vpn-agent2`** | `when { branch develop \|\| staging }`, `beforeAgent true` so other branches never queue for the VPN node |
 | post/always | — | `docker image prune -f`, `docker logout` |
@@ -300,7 +300,7 @@ this pipeline builds and deploys it with the registry.
   farmer-registry build of the matching branch; re-run that job to ship it
   sooner.
 - **Image.** `openg2p/farmer-registry/dashboard-api`, tagged with the **API
-  repository's** `<sha12>` (the one the stage prints) and `develop`. Not this
+  repository's** `<sha12>` (the one the stage prints), plus the branch's moving tag. Not this
   repository's commit: a rebuild that only picks up new API code must change
   the deployed tag, or Helm sees no change and the nodes keep the image they
   already hold under that tag. The ECR repository has to exist (§7 step 6).
