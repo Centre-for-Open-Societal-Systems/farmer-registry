@@ -149,7 +149,7 @@ Multibranch pipeline. Every branch builds and pushes; only `develop` and
 | Checkout | any | `checkout scm` |
 | Checkout dashboard-api | any | clones the dashboard-api repo (same-named branch, else `develop`; `DASHBOARD_API_REF` pins) into `.build/dashboard-api` |
 | ECR Login | any | `aws-ecr-creds` → `docker login` |
-| Build & Push | any | builds the 7 images above, pushes `<sha12>` and `develop` tags |
+| Build & Push | any | builds the 7 images above, pushes `<sha12>` and `develop` tags (dashboard-api: the API repository's `<sha12>`) |
 | Stash chart | any | stashes `helm/openg2p-farmer-registry/**` only |
 | Deploy (far namespace) | **`vpn-agent2`** | `when { branch develop \|\| staging }`, `beforeAgent true` so other branches never queue for the VPN node |
 | post/always | — | `docker image prune -f`, `docker logout` |
@@ -162,7 +162,7 @@ Multibranch pipeline. Every branch builds and pushes; only `develop` and
 2. Writes `/tmp/values-far-cicd-<build>.yaml` — the **only** values CI owns:
    - `registry.{staffApi,staffUi,partnerApi,celeryWorker,celeryBeat,dbSeed,sanity}.image.{repository,tag}` → ECR + `<sha12>`
    - `registry.dbSeed.loadAttributes: false`
-   - `dashboardApi.enabled: true`, `dashboardApi.image.{repository,tag}` → ECR + `<sha12>`
+   - `dashboardApi.enabled: true`, `dashboardApi.image.{repository,tag}` → ECR + the API repository's `<sha12>`
    - `analytics.reportingViews.enabled: true` (the dashboard API reads `fr_rpt_*`); `analytics.{bulkSample,dashboards}.enabled: false`, `mapsContent.enabled: false`
 3. `helm get values farmer-registry -n far -o yaml` → `/tmp/far-values-current-<build>.yaml`.
    **This is what preserves the environment**: hostnames, Keycloak/IAM wiring,
@@ -299,8 +299,11 @@ this pipeline builds and deploys it with the registry.
 - **Not triggered by the service repo.** A push there deploys with the next
   farmer-registry build of the matching branch; re-run that job to ship it
   sooner.
-- **Image.** `openg2p/farmer-registry/dashboard-api`, tagged `<sha12>` and
-  `develop` like the others. The ECR repository has to exist (§7 step 6).
+- **Image.** `openg2p/farmer-registry/dashboard-api`, tagged with the **API
+  repository's** `<sha12>` (the one the stage prints) and `develop`. Not this
+  repository's commit: a rebuild that only picks up new API code must change
+  the deployed tag, or Helm sees no change and the nodes keep the image they
+  already hold under that tag. The ECR repository has to exist (§7 step 6).
 - **Deployment.** `templates/dashboard-api.yaml`, values `dashboardApi.*` (off
   by default; the CI overlay enables it). Deployment + ClusterIP Service
   `farmer-registry-dashboard-api`, port 80 → 8000, readiness on `/health`.

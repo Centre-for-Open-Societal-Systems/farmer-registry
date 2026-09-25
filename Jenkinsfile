@@ -94,12 +94,16 @@ pipeline {
                         // not deploy this image, so nothing downstream depends on it yet.
                         // [name: 'dashboard-ui',  dockerfile: 'docker/dashboard-ui/Dockerfile',  args: "--build-arg NEXT_PUBLIC_PORTAL_URL=${NEXT_PUBLIC_PORTAL_URL}"],
                         // Built from its own repository, cloned by 'Checkout dashboard-api'.
+                        // Tagged with the API repository's commit, not this one: a build
+                        // that only picks up new API code must still change the deployed
+                        // tag, or Helm sees no change and nodes keep the image they have.
                         [name: 'dashboard-api', dockerfile: '.build/dashboard-api/Dockerfile', context: '.build/dashboard-api',
-                         args: "--label org.opencontainers.image.source=${DASHBOARD_API_REPO} --label org.opencontainers.image.revision=${env.DASHBOARD_API_SHA} --label org.opencontainers.image.ref.name=${env.DASHBOARD_API_REF_USED}"],
+                         tag: env.DASHBOARD_API_SHA,
+                         args:"--label org.opencontainers.image.source=${DASHBOARD_API_REPO} --label org.opencontainers.image.revision=${env.DASHBOARD_API_SHA} --label org.opencontainers.image.ref.name=${env.DASHBOARD_API_REF_USED}"],
                     ]
 
                     components.each { c ->
-                        def image  = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${env.IMAGE_TAG}"
+                        def image  = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${c.tag ?: env.IMAGE_TAG}"
                         def latest = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:develop"
                         def target = c.target ? "--target ${c.target}" : ''
                         def context = c.context ?: '.'
@@ -197,7 +201,7 @@ dashboardApi:
   enabled: true
   image:
     repository: ${ECR_REGISTRY}/${ECR_PATH}/dashboard-api
-    tag: "${env.IMAGE_TAG}"
+    tag: "${env.DASHBOARD_API_SHA}"
   # Private hostname for developers and tools (host nginx allowlist + the
   # namespace's internal gateway). The BFF uses the ClusterIP Service.
   virtualService:
