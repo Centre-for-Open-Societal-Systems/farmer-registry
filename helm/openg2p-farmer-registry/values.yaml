@@ -400,3 +400,52 @@ publicStaffUi:
       memory: 192Mi
     limits:
       memory: 768Mi
+
+# ── Dashboard API ────────────────────────────────────────────────────────────
+# farmer-registry-dashboard-api: the read-only service the OAN dashboards BFF
+# calls for this registry's chart data, rendered by templates/dashboard-api.yaml.
+# Source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api
+# (built by the Jenkinsfile; see docs/deployment.md §3.5).
+#
+# It reads fr_rpt_farmer and fr_rpt_land, so it needs analytics.reportingViews.
+# The BFF (in the cluster) reaches the ClusterIP Service at
+# http://<release>-dashboard-api.<namespace>.
+#
+# Off by default, so an install that does not ship the image is unchanged. The
+# Jenkins deploy turns it on and sets the image.
+dashboardApi:
+  enabled: false
+  image:
+    repository: ""
+    tag: ""
+  replicas: 1
+  # gunicorn workers. Each holds its own database pool (below), so a replica
+  # uses up to workers x dbPool.maxSize connections on commons-postgresql.
+  workers: 2
+  # Connections per worker: minSize kept open, maxSize under load. The
+  # dashboards cache responses for 15 minutes, so a few are plenty.
+  dbPool:
+    minSize: 1
+    maxSize: 5
+  # National number of administrative units per level, for registryCoverage
+  # rates, e.g. {regions: 13, zones: 90, woredas: 1138, kebeles: 18000}. A level
+  # left out is reported as null.
+  geoLevelTotals: {}
+  # CORS origins. Browsers are not expected to call the service directly.
+  allowedOrigins: []
+  # Extra environment variables, as NAME: value. Values may use templates.
+  env: {}
+  # Optional hostname route for developers and tools, on a PRIVATE Istio gateway
+  # only (the service has no authentication), e.g.
+  #   host: dashboard-api.far.openg2p.test
+  #   gateway: internal
+  virtualService:
+    enabled: false
+    host: ""
+    gateway: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

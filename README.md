@@ -45,6 +45,7 @@ The Farmer Registry runs as a coordinated stack of microservices:
 | **`partner-api`** | `8000` | `8006` | Ingestion gateway accepting external partner payloads (`POST /partner/ingest_data`). |
 | **`celery-worker`** | N/A | N/A | Asynchronous processing engine for classification, Jinja2 rendering, and bulk intake creation. |
 | **`celery-beat`** | N/A | N/A | Periodic scheduler for background tasks and maintenance jobs. |
+| **`dashboard-api`** | `8000` | N/A | Read-only chart data for the OAN dashboards, from the `fr_rpt_*` reporting views. Source: [farmer-registry-dashboard-api](https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api); built and deployed by the Jenkinsfile, ClusterIP only. See [docs/deployment.md §3.5](docs/deployment.md#35-dashboard-api-farmer-registry-dashboard-api). |
 | **`master-data-api`** | `8000` | `8042` | Manages partners (`g2p_partners`), API keys, and partner authorization. |
 | **`postgres`** | `5432` | `5445` | Primary relational database (`farmer_registry_db` and `master_data`). |
 | **`redis`** | `6379` | `6387` | Message broker and caching layer for Celery. |
