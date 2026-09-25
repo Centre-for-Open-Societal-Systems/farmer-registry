@@ -400,3 +400,38 @@ publicStaffUi:
       memory: 192Mi
     limits:
       memory: 768Mi
+
+# ── Dashboard API ────────────────────────────────────────────────────────────
+# farmer-registry-dashboard-api: the read-only service the OAN dashboards BFF
+# calls for this registry's chart data, rendered by templates/dashboard-api.yaml.
+# Source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api
+# (built by the Jenkinsfile; see docs/deployment.md §3.5).
+#
+# It reads fr_rpt_farmer and fr_rpt_land, so it needs analytics.reportingViews.
+# ClusterIP only: the BFF reaches it at http://<release>-dashboard-api.<namespace>.
+#
+# Off by default, so an install that does not ship the image is unchanged. The
+# Jenkins deploy turns it on and sets the image.
+dashboardApi:
+  enabled: false
+  image:
+    repository: ""
+    tag: ""
+  replicas: 1
+  # gunicorn workers. Each holds a pool of 10 database connections, so a replica
+  # uses up to workers x 10 connections on commons-postgresql.
+  workers: 2
+  # National number of administrative units per level, for registryCoverage
+  # rates, e.g. {regions: 13, zones: 90, woredas: 1138, kebeles: 18000}. A level
+  # left out is reported as null.
+  geoLevelTotals: {}
+  # CORS origins. Browsers are not expected to call the service directly.
+  allowedOrigins: []
+  # Extra environment variables, as NAME: value. Values may use templates.
+  env: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

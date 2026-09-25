@@ -1,0 +1,129 @@
+{{- if .Values.dashboardApi.enabled }}
+{{/*
+The farmer registry dashboard service (farmer-registry-dashboard-api).
+
+A read-only FastAPI service that serves aggregate statistics to the OAN
+dashboards backend-for-frontend, one endpoint per chart. Its source lives in its
+own repository (Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api);
+the Jenkinsfile clones it and builds the image beside the registry's own.
+
+It lives in this chart rather than the openg2p-registry subchart for the same
+reason the analytics jobs do: it reads farmer's own reporting views
+(fr_rpt_farmer, fr_rpt_land), which templates/analytics-jobs.yaml creates and
+templates/reporting-views-refresh.yaml keeps current. Enable
+analytics.reportingViews with it, or every chart answers 500 with
+`relation "fr_rpt_farmer" does not exist`.
+
+ClusterIP only, and deliberately no Ingress or VirtualService: the service has
+no authentication, and its only client is the dashboards BFF inside the cluster,
+which reaches it at http://<release>-dashboard-api.<namespace>.
+
+Database access reuses the registry user and Secret the analytics jobs use.
+DATABASE_URL is assembled from the password by Kubernetes' $(VAR) expansion, so
+a password containing URL-reserved characters (@ : / ? #) would break the DSN;
+the postgres-init generated passwords are alphanumeric.
+*/}}
+{{- $image := .Values.dashboardApi.image }}
+{{- $pg := tpl .Values.global.postgresqlHost $ }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-dashboard-api
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: dashboard-api
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | trunc 63 | trimSuffix "-" }}
+spec:
+  replicas: {{ .Values.dashboardApi.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: dashboard-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registry
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: dashboard-api
+    spec:
+      containers:
+        - name: dashboard-api
+          image: "{{ required "dashboardApi.image.repository is required when dashboardApi.enabled" $image.repository }}:{{ required "dashboardApi.image.tag is required when dashboardApi.enabled" $image.tag }}"
+          imagePullPolicy: {{ $image.pullPolicy | default "IfNotPresent" }}
+          {{/* The image's own CMD, with the worker count made configurable.
+               Each worker holds its own asyncpg pool of 10 connections, so one
+               replica can use workers x 10 connections on commons-postgresql. */}}
+          command:
+            - gunicorn
+            - app.main:app
+            - --workers
+            - {{ .Values.dashboardApi.workers | quote }}
+            - --worker-class
+            - uvicorn.workers.UvicornWorker
+            - --bind
+            - 0.0.0.0:8000
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ tpl .Values.global.registryDBSecret $ | quote }}
+                  key: {{ tpl .Values.global.registryDBUserPasswordKey $ | quote }}
+            {{/* $(DB_PASSWORD) is expanded by Kubernetes from the entry above,
+                 which must stay declared first. */}}
+            - name: DATABASE_URL
+              value: {{ printf "postgresql://%s:$(DB_PASSWORD)@%s:%v/%s" (tpl .Values.global.registryDBUser $) $pg (.Values.global.registryDBPort | default 5432) (tpl .Values.global.registryDB $) | quote }}
+            - name: GEO_LEVEL_TOTALS
+              value: {{ .Values.dashboardApi.geoLevelTotals | default dict | toJson | quote }}
+            - name: ALLOWED_ORIGINS
+              value: {{ .Values.dashboardApi.allowedOrigins | default list | toJson | quote }}
+            {{- range $name, $value := .Values.dashboardApi.env }}
+            - name: {{ $name }}
+              value: {{ tpl (toString $value) $ | quote }}
+            {{- end }}
+          resources: {{- toYaml .Values.dashboardApi.resources | nindent 12 }}
+          {{/* /health runs SELECT 1, so readiness drops while the database is
+               unreachable. Liveness only checks the port: a database outage
+               should take the pod out of the Service, not restart it in a loop. */}}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-dashboard-api
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: dashboard-api
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: dashboard-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+{{- end }}
