@@ -418,9 +418,14 @@ dashboardApi:
     repository: ""
     tag: ""
   replicas: 1
-  # gunicorn workers. Each holds a pool of 10 database connections, so a replica
-  # uses up to workers x 10 connections on commons-postgresql.
+  # gunicorn workers. Each holds its own database pool (below), so a replica
+  # uses up to workers x dbPool.maxSize connections on commons-postgresql.
   workers: 2
+  # Connections per worker: minSize kept open, maxSize under load. The
+  # dashboards cache responses for 15 minutes, so a few are plenty.
+  dbPool:
+    minSize: 1
+    maxSize: 5
   # National number of administrative units per level, for registryCoverage
   # rates, e.g. {regions: 13, zones: 90, woredas: 1138, kebeles: 18000}. A level
   # left out is reported as null.

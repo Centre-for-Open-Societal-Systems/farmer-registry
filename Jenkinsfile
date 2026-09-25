@@ -263,6 +263,12 @@ EOF
                         kubectl rollout status deployment/${HELM_RELEASE}-celery-beat-producer -n ${HELM_NAMESPACE} --timeout=180s
                         kubectl rollout status deployment/${HELM_RELEASE}-dashboard-api -n ${HELM_NAMESPACE} --timeout=180s
 
+                        # Ready only means the database answers SELECT 1. Query real charts
+                        # through the Service, so a missing reporting view or a broken
+                        # Service fails this deploy instead of the dashboards.
+                        echo "=== dashboard-api smoke test ==="
+                        kubectl exec -n ${HELM_NAMESPACE} deploy/${HELM_RELEASE}-dashboard-api -- python -c "import json, urllib.request as u; base = 'http://${HELM_RELEASE}-dashboard-api.${HELM_NAMESPACE}'; [print(p, 'OK', len(json.load(u.urlopen(base + p, timeout=30)))) for p in ('/health', '/api/v1/charts/farmerKpis', '/api/v1/charts/farmersByRegion', '/api/v1/charts/landTenureSplit', '/api/v1/charts/registryTrendByMonth')]"
+
                         
                         # explicit log of that outcome
                         echo "=== db-seed Job outcome ==="

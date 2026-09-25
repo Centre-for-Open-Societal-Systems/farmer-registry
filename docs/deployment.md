@@ -183,6 +183,10 @@ Multibranch pipeline. Every branch builds and pushes; only `develop` and
    `dashboard-api`.
 8. Prints `succeeded/failed` counts of the `farmer-registry-db-seed`,
    `farmer-registry-sanity` and `farmer-registry-fr-reporting-views` Jobs.
+9. Smoke-tests the dashboard API through its Service: `/health` and four charts
+   (`farmerKpis`, `farmersByRegion`, `landTenureSplit`, `registryTrendByMonth`)
+   must answer 200. Readiness alone only proves the database answers `SELECT 1`;
+   this catches missing reporting views before the dashboards do.
 
 Values precedence (later wins): chart defaults (subchart) → wrapper chart
 `values.yaml` → live release values → CI values. So a key set in the wrapper
@@ -303,9 +307,10 @@ this pipeline builds and deploys it with the registry.
   Deliberately no Ingress: the service has no authentication. The BFF uses
   `FARMER_REGISTRY_DASHBOARD_API_URL=http://farmer-registry-dashboard-api.far`.
 - **Database.** Registry user and Secret (`farmer-registry` /
-  `farmer-registry-db-user`), the same as the analytics jobs; `DATABASE_URL` is
-  assembled in the pod. Each gunicorn worker (`dashboardApi.workers`, default 2)
-  holds 10 connections.
+  `farmer-registry-db-user`), the same as the analytics jobs. The password is
+  passed as `PGPASSWORD`, never inside `DATABASE_URL`. Each gunicorn worker
+  (`dashboardApi.workers`, default 2) holds a pool of `dashboardApi.dbPool`
+  connections (1 open, up to 5), so a replica uses at most 10.
 - **Reporting views.** The CI overlay enables `analytics.reportingViews`, so the
   views are (re)created by hook Job `farmer-registry-fr-reporting-views` on every
   deploy and refreshed hourly. A failure there fails the Helm upgrade; its logs
@@ -313,6 +318,10 @@ this pipeline builds and deploys it with the registry.
 - **Tunables** kept in the live release values: `dashboardApi.geoLevelTotals`
   (national unit counts for coverage rates), `allowedOrigins`, `replicas`,
   `workers`, `env`, `resources`.
+
+**Order of merges.** The *Checkout dashboard-api* stage clones the service's
+`develop` (or same-named) branch, so the service must be merged there before the
+first registry build that enables it, or that build stops at checkout.
 
 Quick check: `kubectl -n far port-forward svc/farmer-registry-dashboard-api 8005:80`,
 then `curl localhost:8005/health` and `localhost:8005/api/v1/charts/farmerKpis`.
