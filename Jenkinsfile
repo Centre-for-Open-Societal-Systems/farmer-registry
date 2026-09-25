@@ -198,6 +198,12 @@ dashboardApi:
   image:
     repository: ${ECR_REGISTRY}/${ECR_PATH}/dashboard-api
     tag: "${env.IMAGE_TAG}"
+  # Private hostname for developers and tools (host nginx allowlist + the
+  # namespace's internal gateway). The BFF uses the ClusterIP Service.
+  virtualService:
+    enabled: true
+    host: dashboard-api.${HELM_NAMESPACE}.openg2p.test
+    gateway: internal
 # Of the chart's analytics layer only the reporting views and their hourly
 # refresh are deployed: the dashboard API reads fr_rpt_farmer and fr_rpt_land.
 # The bulk sample-data generator, the Superset dashboard import and the Insights

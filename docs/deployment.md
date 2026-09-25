@@ -304,8 +304,15 @@ this pipeline builds and deploys it with the registry.
 - **Deployment.** `templates/dashboard-api.yaml`, values `dashboardApi.*` (off
   by default; the CI overlay enables it). Deployment + ClusterIP Service
   `farmer-registry-dashboard-api`, port 80 → 8000, readiness on `/health`.
-  Deliberately no Ingress: the service has no authentication. The BFF uses
+  The BFF runs in the cluster and uses
   `FARMER_REGISTRY_DASHBOARD_API_URL=http://farmer-registry-dashboard-api.far`.
+- **Private hostname.** The CI overlay also routes
+  `https://dashboard-api.far.openg2p.test` through the `far/internal` Istio
+  gateway (`dashboardApi.virtualService`), for developers and tools on the VPC,
+  WireGuard or allowlisted IPs, exactly like the other `*.far.openg2p.test`
+  apps: host nginx :443 with the `openg2p-private` allowlist, then Istio. No new
+  port and no security-group change. Never attach it to `public-oanstaging`:
+  the service has no authentication.
 - **Database.** Registry user and Secret (`farmer-registry` /
   `farmer-registry-db-user`), the same as the analytics jobs. The password is
   passed as `PGPASSWORD`, never inside `DATABASE_URL`. Each gunicorn worker
@@ -323,8 +330,10 @@ this pipeline builds and deploys it with the registry.
 `develop` (or same-named) branch, so the service must be merged there before the
 first registry build that enables it, or that build stops at checkout.
 
-Quick check: `kubectl -n far port-forward svc/farmer-registry-dashboard-api 8005:80`,
-then `curl localhost:8005/health` and `localhost:8005/api/v1/charts/farmerKpis`.
+Quick check: `curl https://dashboard-api.far.openg2p.test/health` (over WireGuard,
+or from the box with `--resolve dashboard-api.far.openg2p.test:443:127.0.0.1 -k`),
+or `kubectl -n far port-forward svc/farmer-registry-dashboard-api 8005:80`, then
+`curl localhost:8005/health` and `localhost:8005/api/v1/charts/farmerKpis`.
 
 ---
 

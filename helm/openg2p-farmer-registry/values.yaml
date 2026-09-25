@@ -408,7 +408,8 @@ publicStaffUi:
 # (built by the Jenkinsfile; see docs/deployment.md §3.5).
 #
 # It reads fr_rpt_farmer and fr_rpt_land, so it needs analytics.reportingViews.
-# ClusterIP only: the BFF reaches it at http://<release>-dashboard-api.<namespace>.
+# The BFF (in the cluster) reaches the ClusterIP Service at
+# http://<release>-dashboard-api.<namespace>.
 #
 # Off by default, so an install that does not ship the image is unchanged. The
 # Jenkins deploy turns it on and sets the image.
@@ -434,6 +435,14 @@ dashboardApi:
   allowedOrigins: []
   # Extra environment variables, as NAME: value. Values may use templates.
   env: {}
+  # Optional hostname route for developers and tools, on a PRIVATE Istio gateway
+  # only (the service has no authentication), e.g.
+  #   host: dashboard-api.far.openg2p.test
+  #   gateway: internal
+  virtualService:
+    enabled: false
+    host: ""
+    gateway: ""
   resources:
     requests:
       cpu: 100m

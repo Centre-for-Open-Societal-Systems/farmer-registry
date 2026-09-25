@@ -14,9 +14,12 @@ templates/reporting-views-refresh.yaml keeps current. Enable
 analytics.reportingViews with it, or every chart answers 500 with
 `relation "fr_rpt_farmer" does not exist`.
 
-ClusterIP only, and deliberately no Ingress or VirtualService: the service has
-no authentication, and its only client is the dashboards BFF inside the cluster,
-which reaches it at http://<release>-dashboard-api.<namespace>.
+The dashboards BFF runs in the cluster and calls the ClusterIP Service at
+http://<release>-dashboard-api.<namespace>. The service has no authentication,
+so it is never published publicly. dashboardApi.virtualService optionally routes
+a hostname on a PRIVATE Istio gateway (e.g. far/internal, fronted by the host's
+IP allowlist) for developers and tools, like the other *.openg2p.test apps. Do
+not attach it to a public gateway.
 
 Database access reuses the registry user and Secret the analytics jobs use.
 The password reaches the service as PGPASSWORD, never inside DATABASE_URL, so
@@ -128,4 +131,37 @@ spec:
       port: 80
       targetPort: http
       protocol: TCP
+{{- with .Values.dashboardApi.virtualService }}
+{{- if .enabled }}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ $.Release.Name }}-dashboard-api
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/component: dashboard-api
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  hosts:
+    - {{ required "dashboardApi.virtualService.host is required when it is enabled" .host | quote }}
+  gateways:
+    - {{ required "dashboardApi.virtualService.gateway is required when it is enabled" .gateway | quote }}
+  http:
+    - headers:
+        request:
+          set:
+            x-forwarded-host: {{ .host | quote }}
+            x-forwarded-proto: https
+      match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: {{ $.Release.Name }}-dashboard-api
+            port:
+              number: 80
+{{- end }}
+{{- end }}
 {{- end }}
