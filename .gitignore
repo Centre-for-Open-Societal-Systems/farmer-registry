@@ -200,3 +200,6 @@ helm/**/Chart.lock
 # Subchart tarballs downloaded by `helm dependency build` into <chart>/charts/.
 # Vendored uncompressed subcharts (charts/<name>/) remain tracked.
 helm/**/charts/*.tgz
+
+# ci/commons-services/migrate-far-geo.sh dumps the tables it rewrites here (record data).
+far-geo-backup-*.sql.gz
