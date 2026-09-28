@@ -48,6 +48,7 @@ This guide documents the complete end-to-end configuration for ingesting **ODK C
 | **`odk/templates/farmer_transform.j2`** | Jinja2 template uploaded to MinIO `templates` bucket for Celery Worker transformation. |
 | **`odk/setup_farmer_odk_connector.sql`** | Database seeds to register `farmer-partner` and `FARMER_ODK_MODEL`. |
 | **`odk/seed_connector_pipelines.sql`** | OpenG2P Connector Service pipeline definition to poll ODK Central and forward to Partner API. |
+| **`odk/connector-k8s-deployment.yaml`** | Complete Kubernetes Deployment manifest for Connector API, Celery Worker, and Management UI. |
 | **`odk/README.md`** | Detailed field mapping table from ODK questions to OpenG2P tables. |
 
 ---

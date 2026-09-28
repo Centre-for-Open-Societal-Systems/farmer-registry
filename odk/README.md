@@ -12,6 +12,7 @@ This directory contains the official **XLSForm** and reference datasets for the 
 | **`KebeleList.csv`** | Media Attachment | Preloaded Kebele lookup list (9,000+ Kebeles) used with ODK `select_one_from_file`. |
 | **`PrimaryCoopList.csv`** | Media Attachment | Preloaded Primary Cooperative lookup list used with ODK `select_one_from_file`. |
 | **`seed_connector_pipelines.sql`** | SQL Seed | OpenG2P Connector Service pipeline definition to poll ODK Central and forward to Partner API. |
+| **`connector-k8s-deployment.yaml`** | Kubernetes Manifest | Production Kubernetes Deployment, Service, ConfigMap, and Secret manifest for Connector API, Worker, and UI. |
 | **`setup_farmer_odk_connector.sql`** | SQL Seed | Database seeds to register `farmer-partner` and `FARMER_ODK_MODEL`. |
 | **`ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md`** | Technical Guide | Complete setup guide for OpenG2P Connector Service and ODK Central ingestion. |
 

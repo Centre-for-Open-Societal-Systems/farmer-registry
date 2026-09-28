@@ -45,7 +45,6 @@ The Farmer Registry runs as a coordinated stack of microservices:
 | **`partner-api`** | `8000` | `8006` | Ingestion gateway accepting external partner payloads (`POST /partner/ingest_data`). |
 | **`celery-worker`** | N/A | N/A | Asynchronous processing engine for classification, Jinja2 rendering, and bulk intake creation. |
 | **`celery-beat`** | N/A | N/A | Periodic scheduler for background tasks and maintenance jobs. |
-| **`dashboard-api`** | `8000` | N/A | Read-only chart data for the OAN dashboards, from the `fr_rpt_*` reporting views. Source: [farmer-registry-dashboard-api](https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api); built and deployed by the Jenkinsfile, ClusterIP only. See [docs/deployment.md §3.5](docs/deployment.md#35-dashboard-api-farmer-registry-dashboard-api). |
 | **`master-data-api`** | `8000` | `8042` | Manages partners (`g2p_partners`), API keys, and partner authorization. |
 | **`postgres`** | `5432` | `5445` | Primary relational database (`farmer_registry_db` and `master_data`). |
 | **`redis`** | `6379` | `6387` | Message broker and caching layer for Celery. |
@@ -204,48 +203,118 @@ ODK field collection connects to the Farmer Registry via two supported integrati
    * **URL**: `https://farmer-registry.yourdomain.org/api/v1/farmer-registry/odk/webhook`
 3. Whenever an enumerator submits a finalized form from an Android tablet, ODK Central directly fires an HTTPS POST to OpenG2P, which validates, transforms, and ingests the record automatically into the registry.
 
-#### Pattern B: Automated Scheduled Pull via OpenG2P Connector Service
-To run periodic batch synchronization from ODK Central with automatic schema mapping and zero custom scripts:
+#### Pattern B: Automated Scheduled Pull via OpenG2P Connector Service (DevOps Setup Guide)
+The OpenG2P Connector Service runs as an automated background bridge between ODK Central and the Farmer Registry. It periodically polls ODK Central via OData, automatically expands nested repeat groups (`land_info_repeat`, `crop_repeat`, `livestock_repeat`), packages submissions in the OpenG2P payload envelope, and forwards them to the Partner API (`/partner/ingest_data`).
 
-1. **Deploy OpenG2P Connector Service & Worker**:
-   The Connector Service (`openg2p-connector-service`) and Worker poll ODK Central via OData, automatically expand repeat groups (land parcels, crops, livestock), wrap payloads in the standard OpenG2P envelope, and forward them to the Partner API (`/partner/ingest_data`).
+##### 1. Database Initialization (PostgreSQL)
+Create the dedicated `connector` database in PostgreSQL:
+```bash
+# In PostgreSQL (via psql or kubectl exec):
+CREATE DATABASE connector;
+-- Grant access to your PostgreSQL user (e.g. postgres or connector_user)
+GRANT ALL PRIVILEGES ON DATABASE connector TO postgres;
+```
 
+##### 2. Deploy to Kubernetes Server (`far` or `openg2p` namespace)
+DevOps can apply the pre-packaged manifest [`odk/connector-k8s-deployment.yaml`](odk/connector-k8s-deployment.yaml):
+
+1. **Configure Environment Secrets**:
+   Edit `odk/connector-k8s-deployment.yaml` to specify your cluster's PostgreSQL password, Redis broker URL, and Partner API internal service name:
    ```yaml
-   # Docker Compose / Kubernetes deployment
-   connector-api:
-     image: openg2p/openg2p-connector-service:latest
-     environment:
-       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/connector
-     ports:
-       - "8050:8000"
-
-   connector-worker:
-     image: openg2p/openg2p-connector-service:latest
-     command: ["celery", "-A", "app.celery_app", "worker", "--beat", "-l", "info"]
-     environment:
-       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/connector
-
-   connector-ui:
-     image: openg2p/openg2p-connector-ui:latest
-     ports:
-       - "5173:80"
+   # Key settings in odk/connector-k8s-deployment.yaml:
+   CONNECTOR_PARTNER_INGEST_BASE_URL: "http://farmer-registry-partner-api:8000"
+   CONNECTOR_CELERY_BROKER_URL: "redis://farmer-registry-redis:6379/1"
+   CONNECTOR_DB_HOSTNAME: "farmer-registry-postgres"
    ```
 
-2. **Seed the Pipeline Definition (`odk/seed_connector_pipelines.sql`)**:
-   Run the seed script against the `connector` PostgreSQL database:
+2. **Apply Manifest**:
    ```bash
-   # Seed the ODK Central polling pipeline
-   docker exec -i farmer-registry-postgres psql -U postgres -d connector -f odk/seed_connector_pipelines.sql
+   kubectl apply -f odk/connector-k8s-deployment.yaml -n openg2p
    ```
-   This registers the pipeline `farmer-odk-pipeline-01`:
-   * **Source**: ODK Central OData endpoint (`resolve_nav_links: true` for automatic nested repeat expansion).
-   * **Target**: `http://farmer-registry-partner-api:8000/partner/ingest_data` with header `partner-id: farmer-partner`.
-   * **Authentication**: Authenticated session against ODK Central (`odk_session`).
+   This deploys three workloads:
+   * **`connector-api`**: FastAPI service managing pipeline metadata and REST API (:8050).
+   * **`connector-worker`**: Celery Beat scheduler + worker executing automated polling tasks every 5 minutes.
+   * **`connector-ui`**: React web dashboard (:80).
 
-3. **Monitor via Connector UI**:
-   Open `http://localhost:5173` (or your ingress URL) to inspect pipeline execution logs, status, and trigger manual syncs via the "Poll Now" action.
+3. **Verify Pod Status**:
+   ```bash
+   kubectl get pods -n openg2p -l app.kubernetes.io/name=connector
+   ```
 
-For full technical specifications and field mappings, see [`odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md`](odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md).
+##### 3. Alternative: Docker Compose Deployment (Local / VM)
+If running on a virtual machine or local dev stack, add the connector services to your `docker-compose.yml`:
+```yaml
+connector-api:
+  image: openg2p/openg2p-connector-service:latest
+  command: ["python3", "-m", "app.main"]
+  environment:
+    CONNECTOR_DB_HOSTNAME: postgres
+    CONNECTOR_DB_PORT: 5432
+    CONNECTOR_DB_DBNAME: connector
+    CONNECTOR_DB_USERNAME: postgres
+    CONNECTOR_DB_PASSWORD: YOUR_POSTGRES_PASSWORD
+    CONNECTOR_CELERY_BROKER_URL: redis://redis:6379/1
+    CONNECTOR_CELERY_RESULT_BACKEND: redis://redis:6379/1
+    CONNECTOR_PARTNER_INGEST_BASE_URL: http://farmer-registry-partner-api:8000
+    CONNECTOR_APP_HOST: 0.0.0.0
+    CONNECTOR_APP_PORT: 8050
+    CONNECTOR_CORS_ORIGINS: "*"
+  ports:
+    - "8050:8050"
+
+connector-worker:
+  image: openg2p/openg2p-connector-service:latest
+  command: ["celery", "-A", "app.celery_app", "worker", "--beat", "-l", "info"]
+  environment:
+    CONNECTOR_DB_HOSTNAME: postgres
+    CONNECTOR_DB_PORT: 5432
+    CONNECTOR_DB_DBNAME: connector
+    CONNECTOR_DB_USERNAME: postgres
+    CONNECTOR_DB_PASSWORD: YOUR_POSTGRES_PASSWORD
+    CONNECTOR_CELERY_BROKER_URL: redis://redis:6379/1
+    CONNECTOR_CELERY_RESULT_BACKEND: redis://redis:6379/1
+    CONNECTOR_PARTNER_INGEST_BASE_URL: http://farmer-registry-partner-api:8000
+
+connector-ui:
+  image: openg2p/openg2p-connector-ui:latest
+  ports:
+    - "5173:80"
+```
+
+##### 4. Seed the Pipeline Definition (`odk/seed_connector_pipelines.sql`)
+Run the seed script against the `connector` PostgreSQL database to configure the polling job:
+```bash
+# For Kubernetes:
+kubectl exec -i $(kubectl get pod -n openg2p -l app.kubernetes.io/name=postgres -o jsonpath='{.items[0].metadata.name}') -n openg2p -- psql -U postgres -d connector < odk/seed_connector_pipelines.sql
+
+# For Docker Compose:
+docker exec -i farmer-registry-postgres psql -U postgres -d connector -f odk/seed_connector_pipelines.sql
+```
+
+**Configurable fields in `odk/seed_connector_pipelines.sql`**:
+| Field | Value | Purpose |
+| :--- | :--- | :--- |
+| `base_url` | `https://odk.yourdomain.org` | Your ODK Central server URL |
+| `project_id` | `13` | ODK Central numeric project ID |
+| `form_id` | `farmer_profile` | ODK XLSForm XML form ID |
+| `resolve_nav_links`| `true` | Automatically fetches nested ODK repeat groups (lands, crops, livestock) |
+| `email` | `enumerator@domain.org` | ODK Central user with Project Viewer role |
+| `password` | `odksandbox` | ODK Central user password |
+| `target_url` | `http://farmer-registry-partner-api:8000/partner/ingest_data` | Partner API internal URL |
+| `target_headers` | `{"partner-id": "farmer-partner"}` | Required partner authentication header |
+
+##### 5. Operational Verification & Troubleshooting
+1. **Check Worker Logs**:
+   ```bash
+   kubectl logs -n openg2p -l app.kubernetes.io/component=worker -f
+   ```
+   You will see the Celery Beat worker trigger `poll_all` every 5 minutes, download new submissions, and forward them to Partner API.
+2. **Access Connector UI**:
+   Open `http://<CONNECTOR_UI_HOST>:5173` (or cluster ingress URL). The pipeline `Farmer Registry - ODK Central Ingestion` will show active status, last execution time, and a **"Poll Now"** button for immediate manual synchronization.
+3. **Verify Intake Submission**:
+   Log in to OpenG2P Staff Portal at `https://<YOUR_DOMAIN>/en/intake-form/farmer` to view the newly ingested drafts ready for staff review and approval.
+
+For complete technical specifications, see [`odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md`](odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md).
 
 ---
 
