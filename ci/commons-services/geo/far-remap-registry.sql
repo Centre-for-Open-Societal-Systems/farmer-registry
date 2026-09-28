@@ -1,5 +1,5 @@
 -- far, phase 2 of 3: point every farmer-registry record at the seed hierarchy.
--- Runs in the farmer_registry database inside the caller's transaction, after
+-- Runs in the registry database (farmer_registry; farmer_registry_far on staging) inside the caller's transaction, after
 -- seed-tables.sql and the seed rows (the registry has no geo tables; the seed is
 -- the reference). The caller COMMITs or, on a dry run, ROLLs BACK.
 --

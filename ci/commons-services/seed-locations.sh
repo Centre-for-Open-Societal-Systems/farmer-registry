@@ -33,7 +33,7 @@ echo "=== seed locations into $NAMESPACE/$MD_DB (DRY_RUN=$DRY_RUN) ==="
     seed_rows
     cat "$GEO/seed-apply.sql"
     end_tx
-} | pg "$MD_DB"
+} | pg md
 
 readings after
 [ "$DRY_RUN" = "false" ] || echo "=== DRY RUN: rolled back, nothing was changed ==="

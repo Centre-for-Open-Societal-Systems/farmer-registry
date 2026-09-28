@@ -10,9 +10,9 @@
 #
 # Three transactions, in this order so that every id the registry references
 # resolves at every moment:
-#   1. master_data      rename the old levels to legacy_*, load the seed next to them
-#   2. farmer_registry  remap every record to the seed (geo/far-remap-registry.sql)
-#   3. master_data      delete the legacy_* hierarchy, once the registry no longer
+#   1. master data      rename the old levels to legacy_*, load the seed next to them
+#   2. registry DB      remap every record to the seed (geo/far-remap-registry.sql)
+#   3. master data      delete the legacy_* hierarchy, once the registry no longer
 #                       references any of it
 # Each aborts as a whole on any guard. A failed run can be re-run: phases that
 # already committed are no-ops the second time.
@@ -30,21 +30,27 @@ set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/geo-common.sh"
 
-[ -n "$REGISTRY_DB" ] || { echo "no registry database for namespace $NAMESPACE; set REGISTRY_DB" >&2; exit 1; }
-
 lint_seed
 readings before
 
 if [ "$DRY_RUN" = "false" ]; then
+    # Written to a file before compressing: sh has no pipefail, and a failed
+    # dump must stop the run, not leave an empty backup behind.
     STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-    echo "=== backup: master_data geo tables ==="
-    kubectl exec -n "$NAMESPACE" "$PG_POD" -- sh -c \
-        'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump -U postgres -d "$1" -t public.g2p_geo_levels -t public.g2p_geo_level_values' \
-        _ "$MD_DB" | gzip > "far-geo-backup-$MD_DB-$STAMP.sql.gz"
+    echo "=== backup: $MD_DB geo tables ==="
+    pg_dump_tables md public.g2p_geo_levels public.g2p_geo_level_values \
+        > "far-geo-backup-$MD_DB-$STAMP.sql"
     echo "=== backup: $REGISTRY_DB register, history, intake-form and change-request tables ==="
-    kubectl exec -n "$NAMESPACE" "$PG_POD" -- sh -c \
-        'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump -U postgres -d "$1" -t "public.g2p_register_*" -t "public.g2p_intake_form_*"' \
-        _ "$REGISTRY_DB" | gzip > "far-geo-backup-$REGISTRY_DB-$STAMP.sql.gz"
+    pg_dump_tables registry 'public.g2p_register_*' 'public.g2p_intake_form_*' \
+        > "far-geo-backup-$REGISTRY_DB-$STAMP.sql"
+    for F in far-geo-backup-*"$STAMP".sql; do
+        # pg_dump writes this line last; a dump cut short does not have it.
+        grep -q '^-- PostgreSQL database dump complete' "$F" && grep -q '^COPY ' "$F" || {
+            echo "backup $F is incomplete or holds no table data; stopping" >&2
+            exit 1
+        }
+        gzip "$F"
+    done
     ls -l far-geo-backup-*"$STAMP".sql.gz
 fi
 
@@ -57,7 +63,7 @@ echo "=== phase 1/3: $MD_DB -- retire old level names, load the seed alongside (
     cat "$GEO/far-retire-levels.sql"
     cat "$GEO/seed-apply.sql"
     end_tx
-} | pg "$MD_DB"
+} | pg md
 
 echo "=== phase 2/3: $REGISTRY_DB -- remap every record to the seed (DRY_RUN=$DRY_RUN) ==="
 {
@@ -68,11 +74,11 @@ echo "=== phase 2/3: $REGISTRY_DB -- remap every record to the seed (DRY_RUN=$DR
     cat "$GEO/kamuntu-scan.sql"
     cat "$GEO/kamuntu-guard.sql"
     end_tx
-} | pg "$REGISTRY_DB"
+} | pg registry
 
 echo "=== phase 3/3: $MD_DB -- delete the legacy hierarchy (DRY_RUN=$DRY_RUN) ==="
 if [ "$DRY_RUN" = "false" ]; then
-    REFS=$({ echo "BEGIN;"; cat "$GEO/registry-refs.sql"; echo "ROLLBACK;"; } | pg "$REGISTRY_DB")
+    REFS=$({ echo "BEGIN;"; cat "$GEO/registry-refs.sql"; echo "ROLLBACK;"; } | pg registry)
     {
         echo "BEGIN;"
         echo "CREATE TEMP TABLE _refs (old_id varchar PRIMARY KEY) ON COMMIT DROP;"
@@ -83,7 +89,7 @@ if [ "$DRY_RUN" = "false" ]; then
         cat "$GEO/kamuntu-scan.sql"
         cat "$GEO/kamuntu-guard.sql"
         end_tx
-    } | pg "$MD_DB"
+    } | pg md
 else
     # Nothing to rehearse against: phase 2 did not commit, so the registry still
     # references the old ids and the guard would (correctly) refuse.
@@ -91,7 +97,7 @@ else
     echo "SELECT 'would drop', l.level_id, l.level_mnemonic, count(v.level_value_id)
             FROM g2p_geo_levels l LEFT JOIN g2p_geo_level_values v USING (level_id)
            WHERE l.level_id NOT IN ('level-region', 'level-zone', 'level-woreda', 'level-kebele')
-           GROUP BY 2, 3 ORDER BY 2;" | pg "$MD_DB"
+           GROUP BY 2, 3 ORDER BY 2;" | pg md
 fi
 
 readings after
@@ -101,8 +107,8 @@ if [ "$DRY_RUN" = "false" ]; then
   1. Re-run the farmer-registry db-seed hook (the registry pipeline's deploy), so
      syncGeoWidgets matches the intake form's Location widget to the new levels.
   2. Refresh the fr_rpt_* reporting views (docs/reporting-refresh-log.md).
-  3. Deploy commons-services with values-far.yaml (geoSeed.load.geo: false), or
-     the next upgrade's ETH-pack hook will fail on the level names.
+  3. Any later helm upgrade of commons-services here must carry values-far.yaml's
+     geoSeed.load.geo: false, or its ETH-pack hook fails on the level names.
 EOF
 else
     echo "=== DRY RUN: rolled back, nothing was changed ==="

@@ -152,10 +152,23 @@ why `values-far.yaml` sets `geoSeed.load.geo: false` (the hook still loads code
 lists) and `samples: false` (the pack's sample people carry pack ids), and
 pins `countryPack: ETH` (the subchart default is `XKM`, the fictitious Kamuntu).
 
-Both scripts run from the Jenkins job (`ACTION`) or by hand, inside the
-namespace's `commons-postgresql-0` as the superuser. That is the one place that
-reaches both `master_data` and the registry's own database. `DRY_RUN` defaults
-to true: every transaction runs to the end, guards included, and rolls back.
+Both scripts run from the Jenkins job (`ACTION`) or by hand. Each SQL batch runs
+in a throwaway `psql` pod in the registry's namespace (`kubectl run --rm`, image
+`openg2p/postgresql:16.4.0`, no Istio sidecar). It connects the way the registry
+does: host, database, user and password secret are read off
+`deploy/farmer-registry-staff-portal-api`, which carries both the registry's own
+connection (`*_DB_*`) and Master Data's (`*_MASTER_DATA_DB_*`). That is what
+makes one script work on both clusters:
+
+| | dev | staging |
+| --- | --- | --- |
+| Postgres | `commons-postgresql` in `far` | `commons-postgresql-0` in `commons` |
+| Registry DB | `farmer_registry` | `farmer_registry_far` |
+
+Jenkins' `far:farmer-ci` can create pods in `far` but has no exec in
+`commons`. Nothing runs as the superuser; every statement runs as the
+application user that owns the tables. `DRY_RUN` defaults to true: every
+transaction runs to the end, guards included, and rolls back.
 Readings (levels, counts per level, orphan parents, which id scheme the
 registry's records point at, and every trace of Kamuntu) are printed before
 and after.
