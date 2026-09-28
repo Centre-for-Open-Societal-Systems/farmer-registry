@@ -13,3 +13,6 @@ Dockerfile text eol=lf
 */Dockerfile text eol=lf
 docker/**/Dockerfile text eol=lf
 docker-entrypoint.sh text eol=lf
+
+# SQL is piped into psql inside Linux pods.
+ci/commons-services/**/*.sql text eol=lf
