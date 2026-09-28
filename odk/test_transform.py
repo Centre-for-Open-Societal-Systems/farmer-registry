@@ -58,8 +58,9 @@ SAMPLE_ODK_PAYLOAD = {
             "income_source": "CROP_PRODUCTION"
         },
         "national_id_section": {
-            "national_fan": "ET-FAN-987654",
-            "national_rid": "ET-RID-123456"
+            "national_id": "yes",
+            "national_uid": "1234 5678 9012 3456",
+            "national_rid": "10001100010000120230510123456"
         },
         "farmer_reference_id": {
             "farmer_reference_id": "ET-REF-LIVE-999"

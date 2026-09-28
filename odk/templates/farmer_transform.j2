@@ -65,8 +65,10 @@
 {%- set kebele_name = locale.get('kebele', '') -%}
 
 {# --- IDs --- #}
-{%- set fan_id = nat_id.get('national_fan', '') or nat_id.get('national_uid', '') or '' -%}
-{%- set rid_id = nat_id.get('national_rid', '') or '' -%}
+{%- set raw_fan = nat_id.get('national_fan', '') or nat_id.get('national_uid', '') or '' -%}
+{%- set fan_id = (raw_fan | string).strip().replace(' ', '') -%}
+{%- set raw_rid = nat_id.get('national_rid', '') or '' -%}
+{%- set rid_id = (raw_rid | string).strip().replace(' ', '') -%}
 {%- set ack_id = d.get('farmer_reference_id', {}).get('farmer_reference_id', '') or d.get('farmer_reference_id', '') or '' -%}
 {%- set reg_ids = [] -%}
 {%- if fan_id -%}
