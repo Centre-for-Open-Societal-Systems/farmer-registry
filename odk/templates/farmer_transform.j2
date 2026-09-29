@@ -42,12 +42,16 @@
 {# --- Phones --- #}
 {%- set phone_pri = personal.get('primary_phone_number', '') or personal.get('phone_number', '') or '' -%}
 {%- set phone_sec = personal.get('secondary_phone_number', '') or '' -%}
+{%- set phone_oth = personal.get('other_phone_number', '') or '' -%}
 {%- set phones_list = [] -%}
 {%- if phone_pri -%}
   {%- set _ = phones_list.append({"phone_number": phone_pri, "phone_type": "PRIMARY", "country_code": "ETH", "is_primary": true}) -%}
 {%- endif -%}
 {%- if phone_sec -%}
   {%- set _ = phones_list.append({"phone_number": phone_sec, "phone_type": "SECONDARY", "country_code": "ETH", "is_primary": false}) -%}
+{%- endif -%}
+{%- if phone_oth -%}
+  {%- set _ = phones_list.append({"phone_number": phone_oth, "phone_type": "OTHER", "country_code": "ETH", "is_primary": false}) -%}
 {%- endif -%}
 
 {# --- GPS Parsing --- #}

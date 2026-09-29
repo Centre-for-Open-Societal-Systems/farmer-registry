@@ -805,12 +805,13 @@ class Initializer(BaseInitializer):
                 "g2p_register_history_farmer_phones",
                 "g2p_intake_form_farmer_phones",
             ):
-                await conn.execute(
-                    text(
-                        f'ALTER TABLE "public"."{table_name}" '
-                        'ADD COLUMN IF NOT EXISTS "country_code" VARCHAR'
+                for column_name in ("country_code", "phone_e164"):
+                    await conn.execute(
+                        text(
+                            f'ALTER TABLE "public"."{table_name}" '
+                            f'ADD COLUMN IF NOT EXISTS "{column_name}" VARCHAR'
+                        )
                     )
-                )
             await conn.execute(
                 text(
                     """
@@ -930,6 +931,8 @@ class Initializer(BaseInitializer):
                 )
             )
 
+            await self._normalise_farmer_phones(conn)
+
             # Preserve known head-of-household information from existing
             # linked Household records without guessing for unlinked rows.
             await conn.execute(
@@ -998,6 +1001,93 @@ class Initializer(BaseInitializer):
         await G2PRegisterConsentReceipt.create_migrate()
         await G2PRegisterHistoryConsentReceipt.create_migrate()
         await G2PIntakeFormConsentReceipt.create_migrate()
+
+    async def _normalise_farmer_phones(self, conn):
+        """Reduce stored phones to the national number and fill phone_e164.
+
+        The SQL twin of validation_rules.normalize_phone(), for rows written
+        before normalisation existed: Gen1 migrations (E.164), trunk-0 local
+        numbers and legacy JSON expansions. Only rows whose separator-stripped
+        value matches PHONE_PATTERN are touched; each UPDATE skips rows already
+        in canonical form, so re-running is a no-op. Anything unrecognisable is
+        left exactly as stored and counted in the log for manual review.
+        """
+        from .register_domain.services.validation_rules import PHONE_PATTERN
+
+        cleaned = r"regexp_replace(phone_number, '[\s().-]', '', 'g')"
+        national = f"right(regexp_replace({cleaned}, '[^0-9]', '', 'g'), 9)"
+        for table_name in (
+            "g2p_register_farmer_phones",
+            "g2p_register_history_farmer_phones",
+            "g2p_intake_form_farmer_phones",
+        ):
+            await conn.execute(
+                text(
+                    f"""
+                    UPDATE public."{table_name}"
+                    SET phone_number = {national},
+                        phone_e164 = '+251' || {national},
+                        country_code = coalesce(nullif(btrim(country_code), ''), 'ETH')
+                    WHERE {cleaned} ~ :pattern
+                      AND (
+                          phone_number IS DISTINCT FROM {national}
+                          OR phone_e164 IS DISTINCT FROM '+251' || {national}
+                          OR nullif(btrim(country_code), '') IS NULL
+                      )
+                    """
+                ),
+                {"pattern": PHONE_PATTERN},
+            )
+            unrecognised = (
+                await conn.execute(
+                    text(
+                        f"""
+                        SELECT count(*) FROM public."{table_name}"
+                        WHERE nullif(btrim(phone_number), '') IS NOT NULL
+                          AND {cleaned} !~ :pattern
+                        """
+                    ),
+                    {"pattern": PHONE_PATTERN},
+                )
+            ).scalar_one()
+            if unrecognised:
+                _logger.warning(
+                    "%s: %s phone number(s) are not a recognisable Ethiopian "
+                    "number and were left unchanged",
+                    table_name,
+                    unrecognised,
+                )
+
+        # Refresh the Farmer.phone_numbers projection the phone service keeps
+        # (same shape and order as _sync_parent_phone_projection), so the
+        # numbers it carries match the rows just rewritten.
+        await conn.execute(
+            text(
+                """
+                UPDATE public.g2p_register_farmers AS f
+                SET phone_numbers = p.projection,
+                    has_personal_phone = TRUE
+                FROM (
+                    SELECT
+                        link_internal_record_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'type', lower(phone_type),
+                                'number', phone_number,
+                                'e164', phone_e164,
+                                'is_primary', coalesce(is_primary, FALSE)
+                            )
+                            ORDER BY is_primary DESC NULLS LAST, created_at ASC
+                        ) AS projection
+                    FROM public.g2p_register_farmer_phones
+                    WHERE record_status = 'ACTIVE'
+                    GROUP BY link_internal_record_id
+                ) AS p
+                WHERE f.internal_record_id = p.link_internal_record_id
+                  AND f.phone_numbers IS DISTINCT FROM p.projection
+                """
+            )
+        )
 
     def _register_deduplication_routes(self, app):
         from fastapi import APIRouter

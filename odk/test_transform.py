@@ -36,6 +36,7 @@ SAMPLE_ODK_PAYLOAD = {
                 "has_personal_phone": "yes",
                 "primary_phone_number": "0911234567",
                 "secondary_phone_number": "0922345678",
+                "other_phone_number": "+251933445566",
                 "farming_type": "MIXED",
                 "disability": "no"
             },
