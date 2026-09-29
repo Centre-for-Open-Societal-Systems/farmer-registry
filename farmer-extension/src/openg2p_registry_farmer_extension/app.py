@@ -45,7 +45,6 @@ class Initializer(BaseInitializer):
         CoreInitializer().initialize()
 
         self._patch_filter_builder()
-        self._patch_csrf_for_webhooks()
 
         # Intake reads return record_image_document_id but never the presigned
         # record_image_url the register-side reads add, so a photo captured at
@@ -57,22 +56,6 @@ class Initializer(BaseInitializer):
         G2PRegisterDomainFactory()
         G2PRegisterDomainServiceFarmer()
         G2PRegisterDomainServiceHousehold()
-
-    def _patch_csrf_for_webhooks(self):
-        try:
-            from iam_core.user_auth.middleware.csrf import CsrfMiddleware
-            orig_should_skip = CsrfMiddleware._should_skip
-
-            def patched_should_skip(this, request):
-                path = getattr(getattr(request, "url", None), "path", "")
-                if path.startswith("/api/v1/farmer-registry/deduplicate"):
-                    return True
-                return orig_should_skip(this, request)
-
-            CsrfMiddleware._should_skip = patched_should_skip
-            _logger.info("CsrfMiddleware patched for deduplication endpoints")
-        except Exception as e:
-            _logger.warning(f"Failed to patch CsrfMiddleware: {e}")
 
     def _patch_filter_builder(self):
         try:
@@ -1001,11 +984,20 @@ class Initializer(BaseInitializer):
 
     def _register_deduplication_routes(self, app):
         from fastapi import APIRouter
+        from iam_core.user_auth.decorators import require_permissions
+
         from .register_domain.services import G2PRegisterDomainServiceFarmer
 
         router = APIRouter(prefix="/api/v1/farmer-registry", tags=["Farmer Registry Deduplication"])
 
+        # ResolvePermissionMiddleware runs with allow_by_default=True, so a
+        # route without a marker skips token and permission checks entirely.
+        # Every route here must carry one. The scan and the reset rewrite
+        # is_duplicated across the whole register, so they need the same
+        # permission as other register-wide configuration changes; the summary
+        # only reads flags. CSRF applies as it does to every other POST.
         @router.post("/deduplicate")
+        @require_permissions({"registryConfiguration:edit"})
         async def trigger_deduplication(
             check_id_documents: bool = True,
             check_foundational_id: bool = True,
@@ -1023,11 +1015,13 @@ class Initializer(BaseInitializer):
             )
 
         @router.get("/deduplicate/summary")
+        @require_permissions({"register:view"})
         async def get_deduplication_summary():
             service = G2PRegisterDomainServiceFarmer()
             return await service.get_deduplication_summary()
 
         @router.post("/deduplicate/reset")
+        @require_permissions({"registryConfiguration:edit"})
         async def reset_deduplication():
             service = G2PRegisterDomainServiceFarmer()
             return await service.reset_deduplication()
