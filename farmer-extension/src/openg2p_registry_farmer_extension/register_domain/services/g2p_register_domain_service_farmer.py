@@ -469,6 +469,13 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             "foundational_id",
             "middle_name",
             "father_first_name",
+            # Local-script names, so the list search finds them (SRS FR-UI-02).
+            "first_name_amh",
+            "middle_name_amh",
+            "last_name_amh",
+            "first_name_om",
+            "middle_name_om",
+            "last_name_om",
             "given_name",
             "gender",
             "birth_date",
