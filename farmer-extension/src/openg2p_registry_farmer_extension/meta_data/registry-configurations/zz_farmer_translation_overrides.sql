@@ -123,7 +123,11 @@ SET "domain_translation" = (
         'expiry_date_ec', 'Expiry Date (EC)',
         'yyyy_mm_dd', 'YYYY-MM-DD (GC)',
         'yyyy_mm_dd_ec', 'YYYY-MM-DD (EC)',
-        'certificate_file_hint', 'PDF, JPG, PNG or WebP, up to 10 MB'
+        'certificate_file_hint', 'PDF, JPG, PNG or WebP, up to 10 MB',
+        -- Register list table headers (zz_farmer_list_view.sql). The table
+        -- labels a column by translating its field_name.
+        'record_name_local', 'Name (Local)',
+        'is_duplicated', 'Duplicate'
     )
 )::json
 WHERE "language_code" = 'en';
