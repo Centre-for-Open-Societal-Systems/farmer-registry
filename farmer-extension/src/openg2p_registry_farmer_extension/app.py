@@ -417,6 +417,46 @@ class Initializer(BaseInitializer):
                 )
             )
 
+            # construct_search_text now includes the Amharic and Afaan Oromo
+            # names, so the list search box finds a farmer by local script.
+            # Rows written before that only get it on their next approval;
+            # append the missing names now. Only names not already present
+            # are added, so re-running is a no-op. Register rows only: the
+            # list searches them, and intake rows are rewritten on every save.
+            for table_name in ("g2p_register_farmers",):
+                await conn.execute(
+                    text(
+                        f"""
+                        WITH local_names AS (
+                            SELECT
+                                internal_record_id,
+                                array_remove(ARRAY[
+                                    nullif(btrim(first_name_amh), ''),
+                                    nullif(btrim(middle_name_amh), ''),
+                                    nullif(btrim(last_name_amh), ''),
+                                    nullif(btrim(first_name_om), ''),
+                                    nullif(btrim(middle_name_om), ''),
+                                    nullif(btrim(last_name_om), '')
+                                ], NULL) AS parts,
+                                coalesce(search_text, '') AS current_text
+                            FROM public.{table_name}
+                        ),
+                        missing AS (
+                            SELECT
+                                internal_record_id,
+                                string_agg(DISTINCT part, ' ') AS names
+                            FROM local_names, unnest(parts) AS part
+                            WHERE position(part IN current_text) = 0
+                            GROUP BY internal_record_id
+                        )
+                        UPDATE public.{table_name} AS farmer
+                        SET search_text = btrim(concat_ws(' ', nullif(farmer.search_text, ''), missing.names))
+                        FROM missing
+                        WHERE farmer.internal_record_id = missing.internal_record_id
+                        """
+                    )
+                )
+
             # Until the father's name became its own first/middle/last
             # triple, the intake form's mandatory second name was "Middle
             # Name" -- and, Ethiopian naming having no middle name of its
