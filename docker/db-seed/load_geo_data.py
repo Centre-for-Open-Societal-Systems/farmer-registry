@@ -101,6 +101,40 @@ def insert_geo_level_values(cur, rows: list) -> int:
     return len(rows)
 
 
+def repair_missing_parents(cur, rows: list) -> int:
+    """Give a location the seed's parent where the database has none.
+
+    ON CONFLICT DO NOTHING keeps an existing row exactly as it was, which is
+    right for everything except a correction to the seed itself: the special
+    woredas (Kebena, Mareko, Tembaro) were snapshotted with no parent, so
+    their zone listed no woredas and the Location cascade stopped at Zone.
+    Only a NULL parent is filled -- a parent someone set is never
+    changed -- so this is a no-op on every row the seed already agreed with.
+    """
+    fixes = [
+        (r["level_value_id"], r["parent_level_value_id"])
+        for r in rows
+        if r.get("parent_level_value_id")
+    ]
+    if not fixes:
+        return 0
+    filled = execute_values(
+        cur,
+        """
+        UPDATE g2p_geo_level_values v
+           SET parent_level_value_id = s.parent
+          FROM (VALUES %s) AS s (id, parent)
+         WHERE v.level_value_id = s.id
+           AND v.parent_level_value_id IS NULL
+        RETURNING v.level_value_id
+        """,
+        fixes,
+        page_size=5000,
+        fetch=True,
+    )
+    return len(filled)
+
+
 def main() -> None:
     levels = _read_json(LEVELS_FILE)
     values = _read_json(VALUES_FILE)
@@ -119,6 +153,8 @@ def main() -> None:
                 print(f"[load-geo-data] g2p_geo_levels: {n} rows")
                 n = insert_geo_level_values(cur, values)
                 print(f"[load-geo-data] g2p_geo_level_values: {n} rows")
+                n = repair_missing_parents(cur, values)
+                print(f"[load-geo-data] parents filled in: {n}")
     finally:
         conn.close()
     print("[load-geo-data] Completed.")
