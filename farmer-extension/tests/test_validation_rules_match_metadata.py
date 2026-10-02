@@ -156,10 +156,25 @@ class TestRuleBehaviour(unittest.TestCase):
             self.assertFalse(rules.matches(rules.PHONE_PATTERN, bad), bad)
 
     def test_national_id_allows_the_fan_prefix(self):
-        for good in ("123456789012", "FAN-123456789012", "12345678901234567"):
+        for good in ("123456789012", "FAN-123456789012", "FAN-1234567890123456", "1" * 29):
             self.assertTrue(rules.matches(rules.NATIONAL_ID_PATTERN, good), good)
-        for bad in ("12345678901", "AB-2024-0091", "FAN123456789012"):
+        for bad in ("12345678901", "12345678901234567", "AB-2024-0091", "FAN123456789012", "ET-NID-100001"):
             self.assertFalse(rules.matches(rules.NATIONAL_ID_PATTERN, bad), bad)
+
+    def test_uid_and_rid_are_told_apart(self):
+        """The form's column pattern is the union; the per-type rules
+        are what keep a UID out of the RID slot and the reverse."""
+        uid, rid = rules.ID_TYPE_PATTERNS["UID"], rules.ID_TYPE_PATTERNS["RID"]
+        for fin_or_fan in ("123456789012", "1234567890123456", "FAN-1234567890123456"):
+            self.assertTrue(rules.matches(uid, fin_or_fan), fin_or_fan)
+            self.assertFalse(rules.matches(rid, fin_or_fan), fin_or_fan)
+        self.assertTrue(rules.matches(rid, "1" * 29))
+        self.assertFalse(rules.matches(uid, "1" * 29))
+
+    def test_every_per_type_rule_is_within_the_form_pattern(self):
+        """Anything a per-type rule accepts, the form must let through."""
+        for sample in ("123456789012", "1234567890123456", "FAN-1234567890123456", "1" * 29):
+            self.assertTrue(rules.matches(rules.NATIONAL_ID_PATTERN, sample), sample)
 
     def test_bulk_import_is_not_treated_as_interactive(self):
         """Required-checks must not fire on migrated records."""
