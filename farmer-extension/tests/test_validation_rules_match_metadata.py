@@ -171,6 +171,20 @@ class TestRuleBehaviour(unittest.TestCase):
         self.assertTrue(rules.matches(rid, "1" * 29))
         self.assertFalse(rules.matches(uid, "1" * 29))
 
+    def test_intake_rules_script_uses_the_same_id_patterns(self):
+        """farmer-intake-rules.js restates UID/RID to explain a refused row on
+        the spot; it must say exactly what the server will enforce."""
+        script = (
+            Path(__file__).resolve().parents[2] / "docker" / "staff-ui" / "assets" / "farmer-intake-rules.js"
+        )
+        if not script.exists():
+            self.skipTest("staff-ui assets not mounted (run with the whole repo)")
+        text = script.read_text(encoding="utf-8")
+        for name in ("UID_PATTERN", "RID_PATTERN"):
+            m = re.search(rf"var {name} = /(.+)/;", text)
+            self.assertIsNotNone(m, f"{name} not found in farmer-intake-rules.js")
+            self.assertEqual(m.group(1), getattr(rules, name), f"{name} drifted between JS and Python")
+
     def test_every_per_type_rule_is_within_the_form_pattern(self):
         """Anything a per-type rule accepts, the form must let through."""
         for sample in ("123456789012", "1234567890123456", "FAN-1234567890123456", "1" * 29):

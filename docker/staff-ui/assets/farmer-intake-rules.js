@@ -8,8 +8,9 @@
  * and their messages are the source of truth -- this script only tells the
  * enumerator the same thing while the cursor is still in the box:
  *
- *   1. Household: Family Size = males + females, filled in as they type and
- *      flagged inline if edited to something else; children <= family size.
+ *   1. Household: Family Size = males + females, filled in as soon as either
+ *      is typed (the other counting as 0) and flagged inline if edited to
+ *      something else; children <= family size.
  *   2. Dates: a Gregorian date fills its Ethiopic (EC) twin and vice versa,
  *      for the farmer's birth date and for any table column pair whose
  *      headers end in "(GC)" / "(EC)" (household members, crops, IDs).
@@ -43,6 +44,18 @@
  *      (the widget prints the stored value as-is); the id is looked up
  *      through the portal's own documents call and shown as the file's
  *      name, opening the pre-signed URL in a new tab.
+ *   8. Required fields: the widget library marks an empty required
+ *      field red from the start and says "This field is required" the moment
+ *      it loses focus. Both wait here until the enumerator has clicked the
+ *      section's Next / Save once; format errors still show as they type.
+ *   9. Table rows the library cannot check: a
+ *      Registrant ID's Value against its own ID Type (blank, UID vs RID
+ *      format) and an expired ID marked Valid; a crop row with no Commodity or
+ *      Season. The reason shows under the cell and the row's Save is held --
+ *      the library itself only greys Save out, without saying why.
+ *  10. A file re-picked for a dialog-table row shows its own name in
+ *      that row: the row keeps printing "[object Object]" for any file, so
+ *      React never redraws the cell and the first name stuck.
  *
  * Injected by the Dockerfile as a plain <script defer> from /public; it walks
  * the DOM (data-widget-id, table headers) rather than the minified React
@@ -107,6 +120,7 @@
 
   var HH = "farmer_household_information";
   var hhAutoFilled = false;
+  var hhAutoValue = null; // what we last wrote; our own input event echoes it back
 
   function familySizeRule(changed, section) {
     var male = widgetInput(section, "number_of_male_members");
@@ -116,18 +130,26 @@
     if (!size) return;
     var m = intValue(male), f = intValue(female), c = intValue(children), s = intValue(size);
 
-    if ((changed === male || changed === female) && m !== null && f !== null) {
+    // Children are counted inside the males and females, not on top of them,
+    // so they never add to the size. A count not entered yet counts as 0:
+    // waiting for both before filling anything read as "not calculated"
+    // (a household entered as five women and four children, say).
+    if ((changed === male || changed === female) && (m !== null || f !== null)) {
       // Fill Family Size while it is blank or still holds our own earlier
       // sum; never overwrite something the enumerator typed themselves.
       if (s === null || hhAutoFilled) {
-        setNativeValue(size, String(m + f));
+        s = (m || 0) + (f || 0);
+        hhAutoValue = s;
+        setNativeValue(size, String(s));
         hhAutoFilled = true;
-        s = m + f;
       }
     }
-    if (changed === size) hhAutoFilled = false;
+    // Typed by the enumerator, not the echo of our own fill: theirs to keep.
+    if (changed === size && s !== hhAutoValue) hhAutoFilled = false;
 
     var sizeError = "";
+    // Flagged only once both counts are in, as the server checks it: someone
+    // who types the size first is not wrong yet.
     if (s !== null && m !== null && f !== null && s !== m + f) {
       sizeError = "Family Size must equal Number Of Males + Number Of Females (" + m + " + " + f + " = " + (m + f) + ")";
     }
@@ -554,6 +576,7 @@
     var file = input.files && input.files[0];
     if (!file) return;
     if (id) pickedNames[id.replace(/-dlg-\d+-/, "-")] = file.name;
+    if (id && /-dlg-\d+-/.test(id)) dialogPick = file.name;
     pickedFiles[file.name] = file;
   }
 
@@ -641,11 +664,96 @@
       e.stopImmediatePropagation();
     }
   }
+  // Which row a dialog is editing, the file picked in it, and -- once its
+  // Save is clicked -- the name that row shows. The row's cell
+  // prints "[object Object]" for whatever file it holds, so React sees no
+  // change when a second file replaces the first and never redraws it: the
+  // name has to be tracked per row here, not read back from the cell.
+  var dialogTarget = null; // {table, tr} for Edit, {table, tr: null, rows} for Add Record
+  var dialogPick = null;
+  var pendingRowName = null;
+  var rowFileNames = []; // [{tr, name}]
+
+  function rowName(tr) {
+    for (var i = 0; i < rowFileNames.length; i++) if (rowFileNames[i].tr === tr) return rowFileNames[i].name;
+    return null;
+  }
+
+  function setRowName(tr, name) {
+    rowFileNames = rowFileNames.filter(function (r) { return r.tr !== tr && r.tr.isConnected; });
+    rowFileNames.push({ tr: tr, name: name });
+  }
+
+  function tableOf(button) {
+    var section = button.closest(".section");
+    return section && section.querySelector(".table-widget-container table");
+  }
+
+  function rowActionClick(e) {
+    var button = e.target instanceof Element && e.target.closest("button");
+    if (!button) return;
+    var text = button.textContent.trim();
+    var tr = button.closest(".table-widget-container tbody tr");
+    if (tr && text === "Edit") {
+      dialogTarget = { table: tr.closest("table"), tr: tr };
+      dialogPick = null;
+    } else if (tr && text === "Remove") {
+      // Rows shift up; a remembered name could land on the wrong one.
+      var table = tr.closest("table");
+      rowFileNames = rowFileNames.filter(function (r) { return r.tr.closest("table") !== table; });
+    } else if (text === "Add Record") {
+      var t = tableOf(button);
+      dialogTarget = t ? { table: t, tr: null, rows: t.querySelectorAll("tbody tr").length } : null;
+      dialogPick = null;
+    } else if (text === "Save" && dialogTarget && dialogPick && !button.closest(".table-cell-actions") &&
+               // only while a row dialog is open: its fields are "<table>-dlg-<n>-<column>"
+               document.querySelector('.widget-container[data-widget-id*="-dlg-"]')) {
+      pendingRowName = { target: dialogTarget, name: dialogPick };
+      dialogPick = null;
+    }
+  }
+
+  function applyPendingRowName() {
+    if (!pendingRowName) return;
+    var target = pendingRowName.target, tr = target.tr;
+    if (!tr) {
+      var rows = target.table.querySelectorAll("tbody tr");
+      if (rows.length <= target.rows) return; // the new row is not drawn yet
+      tr = rows[rows.length - 1];
+    }
+    setRowName(tr, pendingRowName.name);
+    pendingRowName = null;
+  }
+
+  // Rewrite the text node React owns rather than replacing it: when the row
+  // later holds the saved document id, React updates that same node and the
+  // id (then its link, see 5b) shows instead of a stale name.
+  function setCellText(td, text) {
+    var node = td.firstChild;
+    if (node && node.nodeType === 3 && td.childNodes.length === 1) {
+      if (node.nodeValue !== text) node.nodeValue = text;
+    } else {
+      td.textContent = text;
+    }
+  }
+
   function fileCellNames() {
+    applyPendingRowName();
     document.querySelectorAll(".table-widget-container td").forEach(function (td) {
-      if (td.textContent.trim() !== "[object Object]") return;
-      var names = Object.keys(pickedNames);
-      td.textContent = names.length ? pickedNames[names[names.length - 1]] : "Attached file";
+      var text = td.textContent.trim();
+      var named = td.dataset.farFileCell === "1";
+      if (text !== "[object Object]" && !named) return;
+      // A cell we named that React has since given a real value (the saved
+      // document id) is React's again.
+      if (named && text !== td.dataset.farFileName) { delete td.dataset.farFileCell; return; }
+      var name = rowName(td.parentElement);
+      if (!name) {
+        var names = Object.keys(pickedNames);
+        name = names.length ? pickedNames[names[names.length - 1]] : "Attached file";
+      }
+      td.dataset.farFileCell = "1";
+      td.dataset.farFileName = name;
+      setCellText(td, name);
     });
     // "Certificate Provided" is derived on save from the uploaded file; the
     // row shows the raw flag ("false") until then. Read it as Yes / No, and
@@ -768,6 +876,193 @@
     });
   }
 
+  /* ------------------------------------------- 8. required waits for Next */
+
+  // The library's own wording; it is not translated.
+  var REQUIRED_TEXT = "This field is required";
+  var triedSections = {};
+
+  function sectionKey(section) {
+    return section.getAttribute("data-section-id") || "";
+  }
+
+  // Tag what is "required and still empty" so CSS can keep it quiet until the
+  // section has been submitted once. data-far-* attributes are ours: React
+  // neither sets nor clears them, unlike class.
+  function tagRequired() {
+    clearFilledRequired();
+    document.querySelectorAll("p.owt-field-error").forEach(function (p) {
+      var required = p.textContent.trim() === REQUIRED_TEXT;
+      if (required !== (p.dataset.farRequired === "1")) {
+        if (required) p.dataset.farRequired = "1";
+        else delete p.dataset.farRequired;
+      }
+    });
+    document.querySelectorAll(".owt-field-input-error").forEach(function (el) {
+      var empty = !String(el.value == null ? "" : el.value).trim();
+      if (empty !== (el.dataset.farEmpty === "1")) {
+        if (empty) el.dataset.farEmpty = "1";
+        else delete el.dataset.farEmpty;
+      }
+    });
+    document.querySelectorAll(".section[data-section-id]").forEach(function (section) {
+      var tried = !!triedSections[sectionKey(section)];
+      if (tried !== section.hasAttribute("data-far-tried")) {
+        if (tried) section.setAttribute("data-far-tried", "");
+        else section.removeAttribute("data-far-tried");
+      }
+    });
+  }
+
+  // Required fields of a section that are still empty. The library draws a
+  // red asterisk (owt-field-required) in the label of each; table cells and
+  // file pickers have their own rules.
+  function emptyRequired(section) {
+    var out = [];
+    section.querySelectorAll(".widget-container").forEach(function (w) {
+      if (!w.querySelector("label .owt-field-required") || w.closest("td")) return;
+      var control = w.querySelector("input:not([type=file]):not([type=checkbox]):not([type=radio]), select, textarea");
+      if (control && !control.disabled && !String(control.value == null ? "" : control.value).trim()) out.push(control);
+    });
+    return out;
+  }
+
+  // Next / Save on a section saves it as a draft whatever is empty -- the
+  // platform only enforces required fields at final submission -- so a
+  // required field left blank was neither flagged nor stopped.
+  // Here Next is where they are checked: the click is held, and each blank
+  // required field is marked and says so.
+  function submitClick(e) {
+    var button = e.target instanceof Element && e.target.closest("button");
+    if (!button || button.closest(".table-cell-actions")) return;
+    var text = button.textContent.trim();
+    if (!/^(Next|Save|Submit)\b/.test(text)) return;
+    var section = button.closest(".section[data-section-id]");
+    if (!section) return; // a row dialog's Save, the page header, ...
+    triedSections[sectionKey(section)] = true;
+    var blank = emptyRequired(section);
+    blank.forEach(function (control) {
+      var w = control.closest(".widget-container");
+      // The library prints its own message once the field was touched.
+      var own = w && w.querySelector("p.owt-field-error");
+      showError(control, "required", own ? "" : REQUIRED_TEXT);
+    });
+    tagRequired();
+    if (blank.length) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      blank[0].focus();
+    }
+  }
+
+  // Our "required" note goes as soon as the field has a value.
+  function clearFilledRequired() {
+    document.querySelectorAll("." + ERR_CLASS + '[data-key="required"]').forEach(function (note) {
+      var w = note.closest(".widget-container");
+      var control = w && w.querySelector("input, select, textarea");
+      if (!control || String(control.value == null ? "" : control.value).trim() || w.querySelector("p.owt-field-error")) note.remove();
+    });
+  }
+
+  function injectStyles() {
+    if (document.getElementById("far-intake-rules-css")) return;
+    var style = document.createElement("style");
+    style.id = "far-intake-rules-css";
+    style.textContent =
+      ".section:not([data-far-tried]) p.owt-field-error[data-far-required]{display:none}" +
+      ".section:not([data-far-tried]) .owt-field-input-error[data-far-empty]{" +
+      "border-color:var(--owt-widget-input-border)!important;box-shadow:none!important}";
+    document.head.appendChild(style);
+  }
+
+  /* ----------------------------------------------- 9. table row checks */
+
+  // Byte-identical to validation_rules.py UID_PATTERN / RID_PATTERN
+  // (test_validation_rules_match_metadata.py reads them out of this file).
+  var UID_PATTERN = /^(FAN-)?([0-9]{12}|[0-9]{16})$/;
+  var RID_PATTERN = /^[0-9]{29}$/;
+  var ID_RULES = {
+    UID: { re: UID_PATTERN, message: "Not a valid UID: enter the 12-digit FIN or the 16-digit FAN (optionally FAN-...)" },
+    RID: { re: RID_PATTERN, message: "Not a valid RID: enter the 29-digit registration id from the Fayda enrolment slip" }
+  };
+
+  function rowCells(tr) {
+    var table = tr.closest("table");
+    var out = {};
+    if (!table) return out;
+    var heads = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) {
+      return (th.getAttribute("title") || th.textContent || "").trim().toLowerCase();
+    });
+    Array.prototype.forEach.call(tr.children, function (td, i) {
+      var control = td.querySelector("input,select");
+      if (heads[i] && control) out[heads[i]] = control;
+    });
+    return out;
+  }
+
+  function todayIso() {
+    var d = new Date();
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+
+  // Returns [control, message] pairs for one editable row; an empty list is
+  // a row the server will accept on these rules.
+  function rowProblems(sid, tr) {
+    var cells = rowCells(tr), problems = [];
+    if (sid === "farmer_reg_ids") {
+      var type = cells["id type"], value = cells["value"], status = cells["status"], expiry = cells["expiry date (gc)"];
+      var t = type ? String(type.value || "").toUpperCase() : "";
+      if (value) {
+        var v = String(value.value || "");
+        if (t && !v.trim()) problems.push([value, "ID Value is required"]);
+        else if (v.trim() && ID_RULES[t] && !ID_RULES[t].re.test(v.trim())) problems.push([value, ID_RULES[t].message]);
+      }
+      if (status && expiry && String(status.value || "").toUpperCase() === "VALID" &&
+          /^\d{4}-\d{2}-\d{2}$/.test(expiry.value || "") && expiry.value < todayIso()) {
+        problems.push([expiry, "This ID has expired, so its Status cannot be Valid"]);
+      }
+    } else if (sid === "farmer_crops") {
+      [["commodity", "Commodity is required"], ["season", "Season is required"]].forEach(function (rule) {
+        var c = cells[rule[0]];
+        if (c && !String(c.value || "").trim()) problems.push([c, rule[1]]);
+      });
+    }
+    return problems;
+  }
+
+  var ROW_RULE_SECTIONS = { farmer_reg_ids: 1, farmer_crops: 1 };
+
+  function showRowProblems(sid, tr, force) {
+    var problems = rowProblems(sid, tr);
+    Array.prototype.forEach.call(tr.querySelectorAll("input,select"), function (control) {
+      var hit = null;
+      problems.forEach(function (p) { if (p[0] === control) hit = p[1]; });
+      // Untouched blank cells stay quiet until Save is tried on the row.
+      if (hit && !force && !control.dataset.farTouched && !String(control.value || "").length) hit = "";
+      showError(control, "row-rule", hit || "");
+    });
+    return problems;
+  }
+
+  function rowSaveClick(e) {
+    var button = e.target instanceof Element && e.target.closest(".table-cell-actions button");
+    if (!button || button.textContent.trim() !== "Save") return;
+    var tr = button.closest("tr"), section = button.closest(".section[data-section-id]");
+    var sid = section ? sectionKind(section) : "";
+    if (!tr || !ROW_RULE_SECTIONS[sid]) return;
+    if (showRowProblems(sid, tr, true).length) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }
+
+  function rowEdit(t, sid) {
+    var tr = t.closest("tr");
+    if (!tr || !ROW_RULE_SECTIONS[sid]) return;
+    t.dataset.farTouched = "1";
+    showRowProblems(sid, tr, false);
+  }
+
   /* ------------------------------------------------------------- wiring */
 
   // Runs after React has handled the keystroke: these rules write into other
@@ -777,11 +1072,14 @@
   // puts the rule after React's root listener and its state flush.
   function onEdit(e) {
     var t = e.target;
-    if (!(t instanceof HTMLInputElement) || t.type === "file") return;
+    var isSelect = t instanceof HTMLSelectElement;
+    if (!(t instanceof HTMLInputElement || isSelect) || t.type === "file") return;
     setTimeout(function () {
       var container = t.closest(".widget-container");
       var section = t.closest(".section");
       var sid = section ? sectionKind(section) : "";
+      if (t.closest("td")) rowEdit(t, sid);
+      if (isSelect) return;
       if (sid === HH) familySizeRule(t, section);
       else if (sid === BIRTH && container) birthPair(t, section);
       else if (t.closest("td")) tablePair(t);
@@ -798,6 +1096,11 @@
     else fileCheck(e);
   }, true);
   document.addEventListener("click", previewClick, true);
+  // Capture phase, ahead of React's root listener: a row Save with a
+  // problem is stopped before the table commits the row.
+  document.addEventListener("click", rowSaveClick, true);
+  document.addEventListener("click", rowActionClick, true);
+  document.addEventListener("click", submitClick, true);
 
   var scheduled = false;
   function refresh() {
@@ -812,8 +1115,13 @@
     calendarTags();
     ecPickers();
   }
+  injectStyles();
   new MutationObserver(function () {
+    // Synchronously, before the browser paints: a required message the
+    // widget has just drawn is hidden in the same frame, never flashed.
+    tagRequired();
     if (!scheduled) { scheduled = true; requestAnimationFrame(refresh); }
-  }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["disabled"] });
+  }).observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ["disabled", "class", "value"] });
   refresh();
+  tagRequired();
 })();
