@@ -167,15 +167,46 @@ class Initializer(BaseInitializer):
         await G2PRegisterHistoryFarmerPhone.create_migrate()
         await G2PIntakeFormFarmerPhone.create_migrate()
 
-        # Land must exist before the land_extension_columns ALTER TABLE
-        # block below (it targets g2p_register_lands directly) — moved
-        # up from its previous spot alongside the other post-Land
-        # create_migrate() calls, which ran after this ALTER block and
-        # left it erroring "relation g2p_register_lands does not exist"
-        # on any fresh database.
+        # Every table must exist before the ALTER TABLE / UPDATE block below,
+        # which targets them directly (the Ethiopic *_ec columns on crops and
+        # reg_ids, re-pointing crops/livestock/farm inputs at their farmer,
+        # the land rollups). Those create_migrate() calls used to run after
+        # the block, which only worked on an existing database: a fresh one
+        # stopped with "relation g2p_register_lands does not exist", and
+        # later "relation g2p_register_crops does not exist". On a fresh
+        # database create_all() already builds the full current columns, so
+        # the ADD COLUMN IF NOT EXISTS statements are no-ops there.
         await G2PRegisterLand.create_migrate()
         await G2PRegisterHistoryLand.create_migrate()
         await G2PIntakeFormLand.create_migrate()
+
+        await G2PRegisterMembershipDetails.create_migrate()
+        await G2PRegisterHistoryMembershipDetails.create_migrate()
+        await G2PIntakeFormMembershipDetails.create_migrate()
+
+        await G2PRegisterFarmInputs.create_migrate()
+        await G2PRegisterHistoryFarmInputs.create_migrate()
+        await G2PIntakeFormFarmInputs.create_migrate()
+
+        await G2PRegisterCrop.create_migrate()
+        await G2PRegisterHistoryCrop.create_migrate()
+        await G2PIntakeFormCrop.create_migrate()
+
+        await G2PRegisterLivestock.create_migrate()
+        await G2PRegisterHistoryLivestock.create_migrate()
+        await G2PIntakeFormLivestock.create_migrate()
+
+        await G2PRegisterRegId.create_migrate()
+        await G2PRegisterHistoryRegId.create_migrate()
+        await G2PIntakeFormRegId.create_migrate()
+
+        await G2PRegisterConsentRequest.create_migrate()
+        await G2PRegisterHistoryConsentRequest.create_migrate()
+        await G2PIntakeFormConsentRequest.create_migrate()
+
+        await G2PRegisterConsentReceipt.create_migrate()
+        await G2PRegisterHistoryConsentReceipt.create_migrate()
+        await G2PIntakeFormConsentReceipt.create_migrate()
 
         # SQLAlchemy create_all() creates missing tables but intentionally
         # does not add columns to tables that already exist. Keep extension
@@ -970,34 +1001,6 @@ class Initializer(BaseInitializer):
                     """
                 )
             )
-
-        await G2PRegisterMembershipDetails.create_migrate()
-        await G2PRegisterHistoryMembershipDetails.create_migrate()
-        await G2PIntakeFormMembershipDetails.create_migrate()
-
-        await G2PRegisterFarmInputs.create_migrate()
-        await G2PRegisterHistoryFarmInputs.create_migrate()
-        await G2PIntakeFormFarmInputs.create_migrate()
-
-        await G2PRegisterCrop.create_migrate()
-        await G2PRegisterHistoryCrop.create_migrate()
-        await G2PIntakeFormCrop.create_migrate()
-
-        await G2PRegisterLivestock.create_migrate()
-        await G2PRegisterHistoryLivestock.create_migrate()
-        await G2PIntakeFormLivestock.create_migrate()
-
-        await G2PRegisterRegId.create_migrate()
-        await G2PRegisterHistoryRegId.create_migrate()
-        await G2PIntakeFormRegId.create_migrate()
-
-        await G2PRegisterConsentRequest.create_migrate()
-        await G2PRegisterHistoryConsentRequest.create_migrate()
-        await G2PIntakeFormConsentRequest.create_migrate()
-
-        await G2PRegisterConsentReceipt.create_migrate()
-        await G2PRegisterHistoryConsentReceipt.create_migrate()
-        await G2PIntakeFormConsentReceipt.create_migrate()
 
     def _register_deduplication_routes(self, app):
         from fastapi import APIRouter
