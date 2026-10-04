@@ -1,0 +1,51 @@
+{{- if .Values.worker.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openg2p-connector.fullname" . }}-worker
+  labels:
+    {{- include "openg2p-connector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "openg2p-connector.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "openg2p-connector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ include "openg2p-connector.serviceAccountName" . }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if .Values.postgresCheckerInit.enabled }}
+      initContainers:
+        - name: postgres-checker
+          image: {{ .Values.postgresCheckerInit.image }}
+          imagePullPolicy: IfNotPresent
+          command: ["sh"]
+          args:
+            - -c
+            - >-
+              until pg_isready -U ${CONNECTOR_DB_USERNAME} -h ${CONNECTOR_DB_HOSTNAME}
+              -p ${CONNECTOR_DB_PORT:-5432} -d ${CONNECTOR_DB_DBNAME};
+              do sleep 3; done
+          env:
+            {{- include "openg2p-connector.commonEnv" . | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: connector-worker
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy }}
+          args:
+            {{- toYaml .Values.worker.command | nindent 12 }}
+          env:
+            {{- include "openg2p-connector.commonEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+{{- end }}

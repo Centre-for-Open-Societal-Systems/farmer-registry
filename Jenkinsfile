@@ -100,6 +100,15 @@ pipeline {
                         [name: 'dashboard-api', dockerfile: '.build/dashboard-api/Dockerfile', context: '.build/dashboard-api',
                          tag: env.DASHBOARD_API_SHA,
                          args:"--label org.opencontainers.image.source=${DASHBOARD_API_REPO} --label org.opencontainers.image.revision=${env.DASHBOARD_API_SHA} --label org.opencontainers.image.ref.name=${env.DASHBOARD_API_REF_USED}"],
+                        // The ODK connector and its management UI, each built from its
+                        // own directory. One service image runs the chart's api, worker
+                        // and beat; see ci/connector/README.md. crop and live build
+                        // theirs the same way, so farmer's connector moves with farmer's
+                        // builds rather than another registry's.
+                        [name: 'connector-service', dockerfile: 'openg2p-connector-service/Dockerfile',
+                         context: 'openg2p-connector-service', args: ''],
+                        [name: 'connector-ui',      dockerfile: 'openg2p-connector-ui/Dockerfile',
+                         context: 'openg2p-connector-ui',      args: ''],
                     ]
 
                     // Each environment branch also moves a tag of its own name, so
