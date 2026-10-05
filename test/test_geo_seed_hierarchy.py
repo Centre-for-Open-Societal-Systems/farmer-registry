@@ -19,6 +19,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 GEO_DIR = ROOT / "docker" / "db-seed" / "seed-data" / "geo"
 SQL_GZ = ROOT / "docker" / "local-dev" / "geo-seed" / "ethiopia_geo_seed.sql.gz"
+REPAIR_SQL = (ROOT / "farmer-extension" / "src" / "openg2p_registry_farmer_extension" / "meta_data"
+              / "register-metadata" / "zz_farmer_special_woreda_names.sql")
 
 VALUE_ROW = re.compile(
     r"INSERT INTO public\.g2p_geo_level_values \([^)]*\) VALUES "
@@ -81,6 +83,22 @@ class GeoSeedHierarchy(unittest.TestCase):
             for woreda, zone in expected.items():
                 with self.subTest(source=source, woreda=woreda):
                     self.assertEqual(parents.get(woreda), zone)
+
+    def test_registry_name_repair_uses_the_seed_names(self):
+        """zz_farmer_special_woreda_names.sql hardcodes woreda / zone / region
+        names (the registry has no location tables to join); they must be the
+        seed's, or the repair silently matches nothing."""
+        sql = REPAIR_SQL.read_text(encoding="utf-8")
+        triples = re.findall(r"\(''([^']+)'',\s*''([^']+)'',\s*''([^']+)''\)", sql)
+        self.assertEqual(len(triples), 3, "expected one row per special woreda")
+        values = json.loads((GEO_DIR / "geo_level_values.json").read_text(encoding="utf-8"))
+        by_id = {v["level_value_id"]: v for v in values}
+        expected = set()
+        for woreda in ("woreda-ET070001", "woreda-ET072501", "woreda-ET072601"):
+            zone = by_id[by_id[woreda]["parent_level_value_id"]]
+            region = by_id[zone["parent_level_value_id"]]
+            expected.add((by_id[woreda]["display_name"].lower(), zone["display_name"], region["display_name"]))
+        self.assertEqual(set(triples), expected)
 
     def test_both_copies_agree(self):
         self.assertEqual(
