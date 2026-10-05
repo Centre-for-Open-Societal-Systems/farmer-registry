@@ -1,0 +1,65 @@
+# KIF sandbox cluster overrides (namespace: kif, release: connector)
+# Use with:
+#   helm dependency update deploy/charts/openg2p-connector
+#   helm upgrade --install connector deploy/charts/openg2p-connector -n kif -f deploy/charts/openg2p-connector/values-kif-cluster.yaml
+
+global:
+  hostname: connector.kif.openg2p.org
+  postgresqlHost: commons-postgresql
+  postgresqlPort: 5432
+  redisHost: registry-redis-master
+  redisPort: 6379
+  partnerApiService: registry-partner-api
+  connectorDB: kif_connector
+  connectorDBUser: kif_connector_user
+  connectorDBSecret: kif-connector
+  connectorDBUserPasswordKey: kif-connector-db-user
+
+commonEnv:
+  CONNECTOR_CORS_ORIGINS: https://connector.kif.openg2p.org
+
+api:
+  image:
+    repository: asierneb/openg2p-connector-service
+    tag: kif-20260605-1220
+    pullPolicy: Always
+
+worker:
+  image:
+    repository: asierneb/openg2p-connector-service
+    tag: kif-20260605-1220
+    pullPolicy: Always
+
+beat:
+  image:
+    repository: asierneb/openg2p-connector-service
+    tag: kif-20260605-1220
+    pullPolicy: Always
+
+ui:
+  image:
+    repository: asierneb/openg2p-connector-ui
+    tag: kif-20260605-1220
+    pullPolicy: Always
+
+istio:
+  enabled: true
+  gateway:
+    create: false
+    name: internal
+  virtualservice:
+    enabled: true
+    gateway: internal
+
+postgres-init:
+  enabled: true
+  postgresql:
+    host: commons-postgresql
+    port: 5432
+    existingSecret: commons-postgresql
+    existingSecretPostgresPasswordKey: postgres-password
+  databases:
+    - name: kif_connector
+      user: kif_connector_user
+      secret: kif-connector
+      secretUserPasswordKey: kif-connector-db-user
