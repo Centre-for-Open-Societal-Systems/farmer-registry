@@ -34,7 +34,7 @@ class G2PRegisterDomainServiceFarmerPhone(G2PRegisterDomainService):
             if is_blank(record.get("phone_number")):
                 validation_error("Phone Number is required")
             # phone_number holds the national significant number only and the
-            # country lives in country_code (G2R-26 Q2). Gen1's E.164 values
+            # country lives in country_code (the Gen2 storage model). Gen1's E.164 values
             # and the trunk-0 local form are both accepted and reduced to the
             # 9 digits, so one number is stored one way whichever form it
             # arrived in -- the batch dedup groups on it.

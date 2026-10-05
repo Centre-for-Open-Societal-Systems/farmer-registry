@@ -25,7 +25,7 @@ NAME_PATTERN = r"^[A-Za-z\u1200-\u137F][A-Za-z\u1200-\u137F\s'-]*$"
 NAME_MAX_LENGTH = 100
 
 # Gen2 splits the country out into its own column (ETH), so phone_number holds
-# the national significant number: 9 digits (G2R-26 Q2). Gen1 stored a single
+# the national significant number: 9 digits. Gen1 stored a single
 # E.164 string, and the SRS asks for +251, so input is accepted in every form
 # an operator or a Gen1 export will produce -- +2519..., 2519..., 09..., 9... --
 # and normalize_phone() reduces it to the 9 digits. [+] rather than \+ keeps the
