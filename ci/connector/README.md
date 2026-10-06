@@ -82,18 +82,33 @@ from g2p_intake_form_submissions order by first_created_at desc limit 5;
 Then open the staff portal, review the draft under Intake Forms, and approve it
 to commit the record to the register.
 
-## Known gap: the registry-side mapping
+## The registry side
 
-The connector wraps each submission as `{header: {...}, message: {payload: ...}}`.
-The registry's classification in `far` currently matches a DCI-shaped payload —
-`$.body.message.search_response[0].data.reg_record_type=>^Farmer$`, with the
-record at `search_response[0].data.reg_records[0]` — so a connector submission
-reaches `incoming_classified_data` but does not yet become a draft intake.
+The connector wraps each submission as
+`{header: {message_id, sender_id: "farmer-partner", ...}, message: {payload: <submission>}}`
+and posts it with `?data_model=FARMER_ODK_MODEL`. The registry turns that into an
+intake with nothing but seed data, all applied by db-seed:
 
-crop and live close this gap with an `odk_ingest_hooks.py` in their extension
-that patches the intake-form data service and the per-register services. The
-farmer extension has no equivalent yet, and `odk/templates/farmer_transform.j2`
-is not referenced by any database row (crop's `csr_odk_transform.j2` is not
-either). Closing it means either adding semantic patterns and a transform
-template for the connector's envelope, or porting the hook approach. That work
-belongs with whoever owns the farmer extension's ingestion pipeline.
+| Piece | Where |
+| --- | --- |
+| Data model, key paths, semantic pattern (Farmer Ingestion Intake form), template routing | `farmer-extension/.../meta_data/registry-inbound-message-rules/zz_farmer_odk_ingestion.sql` (the same rows, same ids, as `odk/setup_farmer_odk_connector.sql`, so a hand-seeded environment and a db-seeded one agree) |
+| The transform, ODK submission to intake sections | `odk/templates/farmer_transform.j2`, uploaded to the `templates` bucket (`LOAD_TEMPLATES`) |
+| Check of the transform against an OData-shaped submission | `python odk/test_transform.py` (needs `jinja2`) |
+
+Two fixes to the pinned platform make the path work at all (`docker/patches/patch_platform.py`):
+the celery worker now creates the services the intake save reaches through
+`get_component()` (and the fastapi-cache backend), and the Partner API can encode
+its response when a data model has no response template. Without the first,
+every ingest stopped at `ingestion_status=FAILED`; without the second, the
+connector saw a 500 for every submission and re-sent it on each poll.
+
+Notes on the mapping:
+- The form stores administrative **codes** without the leading zero (kebele
+  `40801101001`). The template pads them to Master Data's ids
+  (`kebele-ET040801101001`) and sends `geo_lowest_level_value_id`; the farmer
+  service fills region, zone, woreda and kebele names from it. A kebele picked
+  as "other" falls back to the woreda.
+- The form asks no crop season; crops default to `MEHER`.
+- The submission is validated like a staff entry. A draft that breaks a farmer
+  rule (say, digits in a name) stays at `ingestion_status=FAILED` with the rule's
+  message in `ingestion_latest_error_code`.

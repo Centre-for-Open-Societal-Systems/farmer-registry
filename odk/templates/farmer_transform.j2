@@ -86,19 +86,43 @@
   {%- set _ = phones_list.append({"phone_number": phone_oth, "phone_type": "OTHER", "country_code": "ETH", "is_primary": false}) -%}
 {%- endif -%}
 
-{# --- GPS Parsing --- #}
-{%- set loc_str = loc_obj.get('location', '') if loc_obj is mapping else loc_obj -%}
-{%- set loc_parts = (loc_str | string).strip().split() if loc_str else [] -%}
-{%- set lat = (loc_parts[0] | float) if loc_parts | length >= 1 else None -%}
-{%- set lon = (loc_parts[1] | float) if loc_parts | length >= 2 else None -%}
-{%- set alt = (loc_parts[2] | float) if loc_parts | length >= 3 else None -%}
-{%- set acc = (loc_parts[3] | float) if loc_parts | length >= 4 else None -%}
+{# --- GPS Parsing ---
+   ODK Central's OData returns a geopoint as GeoJSON -- {"type": "Point",
+   "coordinates": [lon, lat, alt], "properties": {"accuracy": m}} -- while a
+   form export gives the XForm string "lat lon alt accuracy". Both are read. #}
+{%- set loc_val = loc_obj.get('location', '') if loc_obj is mapping else loc_obj -%}
+{%- if loc_val is mapping -%}
+  {%- set coords = loc_val.get('coordinates', []) or [] -%}
+  {%- set lon = (coords[0] | float) if coords | length >= 1 else None -%}
+  {%- set lat = (coords[1] | float) if coords | length >= 2 else None -%}
+  {%- set alt = (coords[2] | float) if coords | length >= 3 else None -%}
+  {%- set acc = ((loc_val.get('properties', {}) or {}).get('accuracy')) -%}
+  {%- set acc = (acc | float) if acc is not none else None -%}
+{%- else -%}
+  {%- set loc_parts = (loc_val | string).strip().split() if loc_val else [] -%}
+  {%- set lat = (loc_parts[0] | float) if loc_parts | length >= 1 else None -%}
+  {%- set lon = (loc_parts[1] | float) if loc_parts | length >= 2 else None -%}
+  {%- set alt = (loc_parts[2] | float) if loc_parts | length >= 3 else None -%}
+  {%- set acc = (loc_parts[3] | float) if loc_parts | length >= 4 else None -%}
+{%- endif -%}
 
-{# --- Geographic Hierarchy Names --- #}
-{%- set reg_name = locale.get('region', '') -%}
-{%- set zone_name = locale.get('zone', '') -%}
-{%- set woreda_name = locale.get('woreda', '') -%}
-{%- set kebele_name = locale.get('kebele', '') -%}
+{# --- Location ---
+   The form stores administrative CODES, not names, and drops their leading
+   zero: region 4, woreda 40801, kebele 40801101001. Master Data keys the same
+   places as woreda-ET040801 and kebele-ET040801101001, so the codes are padded
+   (woreda to 6 digits, kebele to 12) and sent as geo_lowest_level_value_id; the
+   farmer service derives the hierarchy and the region/zone/woreda/kebele names
+   from it. A kebele picked as "other" falls back to its woreda. #}
+{%- set kebele_code = (locale.get('kebele', '') or '') | string -%}
+{%- set woreda_code = (locale.get('woreda', '') or '') | string -%}
+{%- if kebele_code.isdigit() -%}
+  {%- set geo_lowest = 'kebele-ET' ~ ('%012d' | format(kebele_code | int)) -%}
+{%- elif woreda_code.isdigit() -%}
+  {%- set geo_lowest = 'woreda-ET' ~ ('%06d' | format(woreda_code | int)) -%}
+{%- else -%}
+  {%- set geo_lowest = None -%}
+{%- endif -%}
+{%- set kebele_name = locale.get('other_kebele', '') or '' -%}
 
 {# --- IDs --- #}
 {%- set raw_fan = nat_id.get('national_fan', '') or nat_id.get('national_uid', '') or '' -%}
@@ -122,7 +146,8 @@
 {%- set lands_records = [] -%}
 {%- for l in (raw_lands if raw_lands is iterable and raw_lands is not mapping and raw_lands is not string else []) -%}
   {%- set raw_own = (l.get('land_ownership', '') or 'OWNER') | upper -%}
-  {%- set own_type = 'OWNER' if 'OWN' in raw_own else ('TENANT' if 'RENT' in raw_own else ('CROP_SHARE' if 'SHARE' in raw_own else 'FAMILY_GIFT')) -%}
+  {#- The form offers owner / tenant; RENT and SHARE cover older exports. -#}
+  {%- set own_type = 'OWNER' if 'OWN' in raw_own else ('TENANT' if ('TENANT' in raw_own or 'RENT' in raw_own) else ('CROP_SHARE' if 'SHARE' in raw_own else 'FAMILY_GIFT')) -%}
   {%- set raw_area = l.get('total_land_area') or l.get('land_area') -%}
   {%- set l_area = (raw_area | float) if (raw_area is not none and (raw_area | string | trim) != '') else none -%}
   {%- set land_dict = {
@@ -236,10 +261,7 @@
   ],
   "fr_farmer_location": [
     {
-      "region_name": {{ reg_name | tojson }},
-      "zone_name": {{ zone_name | tojson }},
-      "woreda_name": {{ woreda_name | tojson }},
-      "kebele_name": {{ kebele_name | tojson }},
+      "geo_lowest_level_value_id": {{ geo_lowest | tojson }},
       "latitude": {{ (lat | string) | tojson if lat is not none else 'null' }},
       "longitude": {{ (lon | string) | tojson if lon is not none else 'null' }},
       "altitude": {{ (alt | string) | tojson if alt is not none else 'null' }},

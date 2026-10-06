@@ -34,17 +34,19 @@ SAMPLE_ODK_PAYLOAD = {
                 "date_of_birth_ec": "1975-11-06",
                 "age": 43,
                 "has_personal_phone": "yes",
-                "primary_phone_number": "0911234567",
-                "secondary_phone_number": "0922345678",
+                "primary_phone_number": "251911234567",
+                "secondary_phone_number": "251922345678",
                 "other_phone_number": "+251933445566",
                 "farming_type": "MIXED",
                 "disability": "no"
             },
+            # The form stores codes, without their leading zero (Oromia / Arsi /
+            # Merti / Abomsa_01 in KebeleList.csv).
             "locale_info": {
-                "region": "Oromia",
-                "zone": "East Shewa",
-                "woreda": "Adaa",
-                "kebele": "Babogaya",
+                "region": "4",
+                "zone": "408",
+                "woreda": "40801",
+                "kebele": "40801101001",
                 "language": "Amharic",
                 "local_language": "Afaan Oromo"
             }
@@ -69,7 +71,7 @@ SAMPLE_ODK_PAYLOAD = {
         "land_info": {
             "land_info_repeat": [
                 {
-                    "land_ownership": "OWNED",
+                    "land_ownership": "tenant",
                     "total_land_area": 2.75,
                     "land_id": "LND-001",
                     "land_kebele": "Babogaya"
@@ -117,7 +119,9 @@ SAMPLE_ODK_PAYLOAD = {
             ]
         },
         "farmer_location": {
-            "location": "8.7850000 38.9100000 1890.00 2.20"
+            # OData returns a geopoint as GeoJSON: [lon, lat, alt].
+            "location": {"type": "Point", "coordinates": [38.91, 8.785, 1890.0],
+                         "properties": {"accuracy": 2.2}}
         },
         "survey_metadata": {
             "enumerator_name": "Field Officer Demo",
@@ -153,6 +157,21 @@ def main():
         print(f"[-] FAILED: Rendered output is not valid JSON! Error: {e}")
         print("\n--- Rendered Output ---")
         print(rendered_output)
+        sys.exit(1)
+
+    location = parsed_json["fr_farmer_location"][0]
+    land = parsed_json["intake_fr_farmer_land"][0]
+    expectations = [
+        ("location id", location.get("geo_lowest_level_value_id"), "kebele-ET040801101001"),
+        ("latitude", location.get("latitude"), "8.785"),
+        ("longitude", location.get("longitude"), "38.91"),
+        ("land ownership", land.get("land_ownership_type"), "TENANT"),
+        # The form only takes 251XXXXXXXXX; the registry gets the 9-digit national number.
+        ("primary phone", parsed_json["fr_farmer_phone_numbers"][0].get("phone_number"), "911234567"),
+    ]
+    wrong = [f"{name}: {got!r}, expected {want!r}" for name, got, want in expectations if got != want]
+    if wrong:
+        print("[-] FAILED: " + "; ".join(wrong))
         sys.exit(1)
 
     seasons = {"MEHER", "BELG", "IRRIGATED", "PERENNIAL"}

@@ -40,7 +40,7 @@ DEFAULT_FARMER_PIPELINE = {
 # record, and master_data must hold a partner with this id.
 PARTNER_ID = "farmer-partner"
 REGISTER_MNEMONIC = "Farmer"
-DATA_MODEL_MNEMONIC = "FARMER_DATA_MODEL"
+DATA_MODEL_MNEMONIC = "FARMER_ODK_MODEL"
 
 
 def _setting(name: str, *fallback_env: str) -> str:

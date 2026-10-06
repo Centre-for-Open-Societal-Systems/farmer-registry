@@ -281,27 +281,13 @@ connector-ui:
     - "5173:80"
 ```
 
-##### 4. Seed the Pipeline Definition (`odk/seed_connector_pipelines.sql`)
-Run the seed script against the `connector` PostgreSQL database to configure the polling job:
-```bash
-# For Kubernetes:
-kubectl exec -i $(kubectl get pod -n openg2p -l app.kubernetes.io/name=postgres -o jsonpath='{.items[0].metadata.name}') -n openg2p -- psql -U postgres -d connector < odk/seed_connector_pipelines.sql
-
-# For Docker Compose:
-docker exec -i farmer-registry-postgres psql -U postgres -d connector -f odk/seed_connector_pipelines.sql
-```
-
-**Configurable fields in `odk/seed_connector_pipelines.sql`**:
-| Field | Value | Purpose |
-| :--- | :--- | :--- |
-| `base_url` | `https://odk.yourdomain.org` | Your ODK Central server URL |
-| `project_id` | `13` | ODK Central numeric project ID |
-| `form_id` | `farmer_profile` | ODK XLSForm XML form ID |
-| `resolve_nav_links`| `true` | Automatically fetches nested ODK repeat groups (lands, crops, livestock) |
-| `email` | `enumerator@domain.org` | ODK Central user with Project Viewer role |
-| `password` | `odksandbox` | ODK Central user password |
-| `target_url` | `http://farmer-registry-partner-api:8000/partner/ingest_data` | Partner API internal URL |
-| `target_headers` | `{"partner-id": "farmer-partner"}` | Required partner authentication header |
+##### 4. Point the Pipeline at ODK Central
+The connector seeds its own pipeline on first start from `CONNECTOR_ODK_CENTRAL_BASE_URL`,
+`CONNECTOR_ODK_PROJECT_ID`, `CONNECTOR_ODK_FORM_ID`, `CONNECTOR_ODK_CENTRAL_EMAIL` and
+`CONNECTOR_ODK_CENTRAL_PASSWORD` (mount the password from a secret); nothing is seeded
+until all five are set. Or create it in the connector UI. The registry side (data model,
+routing, transform template) is applied by db-seed; the Master Data partner is the one
+manual step. See [`ci/connector/README.md`](ci/connector/README.md).
 
 ##### 5. Operational Verification & Troubleshooting
 1. **Check Worker Logs**:
