@@ -1,0 +1,11 @@
+apiVersion: v2
+name: openg2p-connector
+description: OpenG2P Connector workloads
+type: application
+version: 0.1.0
+appVersion: "kif"
+dependencies:
+  - name: postgres-init
+    version: 0.0.0-develop
+    repository: https://openg2p.github.io/openg2p-helm
+    condition: postgres-init.enabled

@@ -11,6 +11,10 @@ This directory contains the official **XLSForm** and reference datasets for the 
 | **`ATI_Farmers_Profile_ODK_Form_v2.xlsx`** | XLSForm Workbook | Complete ODK form with `survey`, `choices`, and `settings` sheets, fully translated into English, Amharic, and Afaan Oromo. |
 | **`KebeleList.csv`** | Media Attachment | Preloaded Kebele lookup list (9,000+ Kebeles) used with ODK `select_one_from_file`. |
 | **`PrimaryCoopList.csv`** | Media Attachment | Preloaded Primary Cooperative lookup list used with ODK `select_one_from_file`. |
+| **`seed_connector_pipelines.sql`** | SQL Seed | OpenG2P Connector Service pipeline definition to poll ODK Central and forward to Partner API. |
+| **`connector-k8s-deployment.yaml`** | Kubernetes Manifest | Production Kubernetes Deployment, Service, ConfigMap, and Secret manifest for Connector API, Worker, and UI. |
+| **`setup_farmer_odk_connector.sql`** | SQL Seed | Database seeds to register `farmer-partner` and `FARMER_ODK_MODEL`. |
+| **`ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md`** | Technical Guide | Complete setup guide for OpenG2P Connector Service and ODK Central ingestion. |
 
 ---
 
@@ -86,8 +90,8 @@ The form is tri-lingual with native script rendering:
 | `date_of_birth_ec` | `g2p_register_farmers` | `birth_date_ec` | Ethiopian Calendar Date |
 | `household_head` | `g2p_register_farmers` | `is_household_head` | Boolean |
 | `is_psnp_user` | `g2p_register_farmers` | `is_psnp_user` | Boolean |
-| `national_uid` | `g2p_register_farmer_id_documents` | `value` (`id_type='UID'`) | Fayda National ID |
-| `national_rid` | `g2p_register_farmer_id_documents` | `value` (`id_type='RID'`) | Fayda Registration ID |
+| `national_uid` | `g2p_register_farmer_id_documents` | `value` (`id_type='UID'`) | Fayda National ID (16 digits: `xxxx xxxx xxxx xxxx`; spaces stripped during ingestion to match OpenG2P `[0-9]{12,17}`) |
+| `national_rid` | `g2p_register_farmer_id_documents` | `value` (`id_type='RID'`) | Fayda Registration ID (29 digits) |
 | `farmer_reference_id` | `g2p_register_farmer_id_documents` | `value` (`id_type='FARMER_ODK_ACK_ID'`) | ODK Acknowledgement ID |
 | `primary_phone_number`| `g2p_register_farmer_phones` | `phone_number` (`phone_type='PRIMARY'`) | Primary Phone |
 | `secondary_phone_number`| `g2p_register_farmer_phones`| `phone_number` (`phone_type='SECONDARY'`) | Secondary Phone |

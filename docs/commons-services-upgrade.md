@@ -17,6 +17,9 @@ chart's post-upgrade hooks (geo seed, iam-register) re-run on every
 | `values-far.yaml` | Values overlay layered on the release's live values. Only what the farmer registry needs from the platform. |
 | `master-data-schema-topup.sql` | Idempotent `ADD COLUMN IF NOT EXISTS` set for Master Data, generated from the target image's models. Run inside the master-data-api pod before the upgrade. |
 | `apply-sql-in-pod.py` | Runs SQL from stdin inside the master-data-api pod, using the DB settings from the pod environment (either prefix). |
+| `seed-locations.sh` | Loads the Ethiopia location hierarchy into a namespace's Master Data, additively. See [Location hierarchy](#location-hierarchy). |
+| `migrate-far-geo.sh` | One-time: moves `far` off the chart's ETH pack and the Kamuntu sample country onto that hierarchy, remapping farmer records. |
+| `geo-common.sh`, `geo/*.sql` | The SQL and helpers both scripts run, each file headed with what it does and why. |
 
 ## Before you run this against staging — two blockers found 2026-09-23
 
@@ -134,6 +137,83 @@ kubectl -n far rollout restart deploy/commons-services-awe
 `helm -n far rollback commons-services <revision printed in step 1>`. The
 schema top-up is additive and harmless to the previous build, so it needs no
 undo.
+
+## Location hierarchy
+
+The staff portal's Location section cascades Region → Zone → Woreda → Kebele
+out of Master Data. `far` carries the same Ethiopia hierarchy the local stack
+and the cropsown registry use: `docker/local-dev/geo-seed/ethiopia_geo_seed.sql.gz`,
+21,053 locations (14 / 125 / 1,379 / 19,535), ids `<level>-<P-code>`
+(`region-ET01`, `zone-ET0101`, `woreda-ET010101`, `kebele-…`), parents linked by
+id. It is **not** the chart's ETH country pack. The pack stops at woreda, uses
+bare P-codes as ids (`ET01`), and names its levels region/zone/woreda. Those
+names are UNIQUE in `g2p_geo_levels`, so the two cannot share a database. That is
+why `values-far.yaml` sets `geoSeed.load.geo: false` (the hook still loads code
+lists) and `samples: false` (the pack's sample people carry pack ids), and
+pins `countryPack: ETH` (the subchart default is `XKM`, the fictitious Kamuntu).
+
+Both scripts run from the Jenkins job (`ACTION`) or by hand. Each SQL batch runs
+in a throwaway `psql` pod in the registry's namespace (`kubectl run --rm`, image
+`openg2p/postgresql:16.4.0`, no Istio sidecar). It connects the way the registry
+does: host, database, user and password secret are read off
+`deploy/farmer-registry-staff-portal-api`, which carries both the registry's own
+connection (`*_DB_*`) and Master Data's (`*_MASTER_DATA_DB_*`). That is what
+makes one script work on both clusters:
+
+| | dev | staging |
+| --- | --- | --- |
+| Postgres | `commons-postgresql` in `far` | `commons-postgresql-0` in `commons` |
+| Registry DB | `farmer_registry` | `farmer_registry_far` |
+
+Jenkins' `far:farmer-ci` can create pods in `far` but has no exec in
+`commons`. Nothing runs as the superuser; every statement runs as the
+application user that owns the tables. `DRY_RUN` defaults to true: every
+transaction runs to the end, guards included, and rolls back.
+Readings (levels, counts per level, orphan parents, which id scheme the
+registry's records point at, and every trace of Kamuntu) are printed before
+and after.
+
+**`seed-locations.sh`** — additive only. `DO NOTHING` on every conflict; an
+existing location keeps its id and every column. It runs the schema top-up in
+the same transaction, since older Master Data builds lack `display_name` & co.,
+and it aborts, changing nothing, when the namespace holds a hierarchy it cannot
+sit next to:
+
+- **`far` before migration.** The pack's level names collide. Run `migrate-far-geo.sh`, which runs this step itself.
+- **`live`.** The livestock registry's own db-seed loads a *variant* of this file into `live` on every run. That variant links each parent by **name**, keeps names unique (dropping the ~2,080 locations whose name repeats), and adds a unique index on `level_value_mnemonic`. This is deliberate: livestock's Location widget cascades by name, and its records store names, not ids (see the header of `livestock-registry/docker/db-seed/geo/ethiopia_geo_seed.sql.gz`). Loading id-linked rows there would empty its Zone/Woreda/Kebele dropdowns. Moving livestock onto ids is a change to its widget config and records, in that repository, not here.
+
+**`migrate-far-geo.sh`** — one-time, three transactions. They run in an order
+that keeps every id the registry references resolvable at every moment:
+
+1. `master_data`: rename every level the seed does not define to `legacy_*`,
+   then load the seed next to it.
+2. `farmer_registry`: remap every record. Every table with
+   `geo_lowest_level_value_id` is found through `information_schema`: register,
+   history and intake-form tables. `geo_code_hierarchy_json`,
+   `woreda_level_value_id` and `region/zone/woreda/kebele_name` are rewritten
+   together, and change-request payloads get the same rewrite per snapshot.
+   Mapping rules:
+   - pack id → `<level>-<P-code>` (the pack's id *is* the P-code).
+   - Kamuntu id → a real kebele, picked from `md5(old id)`, so every table
+     sharing an old id lands on the same kebele and a re-run picks the same one.
+   - Anything else aborts.
+   - Kamuntu's country code `KM` becomes `ET` everywhere.
+
+   The full old → new list is printed; it is the audit trail.
+3. `master_data`: delete the `legacy_*` levels and their locations, but only
+   after checking that the registry references none of them. This is the only
+   DELETE, scoped by level and never by "not in the seed".
+
+Phases 2 and 3 end with a scan for Kamuntu across every text/json column of the
+database, and any hit aborts. A real run first dumps the affected tables of both
+databases to `far-geo-backup-*.sql.gz`, which the job archives: that is the
+rollback. Afterwards, re-run the farmer db-seed hook (`syncGeoWidgets` matches
+the intake form's widget to the new levels) and refresh the `fr_rpt_*` views.
+
+Order: dev first, `DRY_RUN` then real, then staging the same way. On staging
+compare the dry run's readings with dev's before unticking: real records there
+may reference ids the mapping rules do not cover, and the run aborts on those
+by design.
 
 ## Regenerating the schema top-up
 

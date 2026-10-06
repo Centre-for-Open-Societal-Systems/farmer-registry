@@ -45,7 +45,6 @@ class Initializer(BaseInitializer):
         CoreInitializer().initialize()
 
         self._patch_filter_builder()
-        self._patch_csrf_for_webhooks()
 
         # Intake reads return record_image_document_id but never the presigned
         # record_image_url the register-side reads add, so a photo captured at
@@ -57,22 +56,6 @@ class Initializer(BaseInitializer):
         G2PRegisterDomainFactory()
         G2PRegisterDomainServiceFarmer()
         G2PRegisterDomainServiceHousehold()
-
-    def _patch_csrf_for_webhooks(self):
-        try:
-            from iam_core.user_auth.middleware.csrf import CsrfMiddleware
-            orig_should_skip = CsrfMiddleware._should_skip
-
-            def patched_should_skip(this, request):
-                path = getattr(getattr(request, "url", None), "path", "")
-                if path.startswith("/api/v1/farmer-registry/deduplicate"):
-                    return True
-                return orig_should_skip(this, request)
-
-            CsrfMiddleware._should_skip = patched_should_skip
-            _logger.info("CsrfMiddleware patched for deduplication endpoints")
-        except Exception as e:
-            _logger.warning(f"Failed to patch CsrfMiddleware: {e}")
 
     def _patch_filter_builder(self):
         try:
@@ -167,15 +150,46 @@ class Initializer(BaseInitializer):
         await G2PRegisterHistoryFarmerPhone.create_migrate()
         await G2PIntakeFormFarmerPhone.create_migrate()
 
-        # Land must exist before the land_extension_columns ALTER TABLE
-        # block below (it targets g2p_register_lands directly) — moved
-        # up from its previous spot alongside the other post-Land
-        # create_migrate() calls, which ran after this ALTER block and
-        # left it erroring "relation g2p_register_lands does not exist"
-        # on any fresh database.
+        # Every table must exist before the ALTER TABLE / UPDATE block below,
+        # which targets them directly (the Ethiopic *_ec columns on crops and
+        # reg_ids, re-pointing crops/livestock/farm inputs at their farmer,
+        # the land rollups). Those create_migrate() calls used to run after
+        # the block, which only worked on an existing database: a fresh one
+        # stopped with "relation g2p_register_lands does not exist", and
+        # later "relation g2p_register_crops does not exist". On a fresh
+        # database create_all() already builds the full current columns, so
+        # the ADD COLUMN IF NOT EXISTS statements are no-ops there.
         await G2PRegisterLand.create_migrate()
         await G2PRegisterHistoryLand.create_migrate()
         await G2PIntakeFormLand.create_migrate()
+
+        await G2PRegisterMembershipDetails.create_migrate()
+        await G2PRegisterHistoryMembershipDetails.create_migrate()
+        await G2PIntakeFormMembershipDetails.create_migrate()
+
+        await G2PRegisterFarmInputs.create_migrate()
+        await G2PRegisterHistoryFarmInputs.create_migrate()
+        await G2PIntakeFormFarmInputs.create_migrate()
+
+        await G2PRegisterCrop.create_migrate()
+        await G2PRegisterHistoryCrop.create_migrate()
+        await G2PIntakeFormCrop.create_migrate()
+
+        await G2PRegisterLivestock.create_migrate()
+        await G2PRegisterHistoryLivestock.create_migrate()
+        await G2PIntakeFormLivestock.create_migrate()
+
+        await G2PRegisterRegId.create_migrate()
+        await G2PRegisterHistoryRegId.create_migrate()
+        await G2PIntakeFormRegId.create_migrate()
+
+        await G2PRegisterConsentRequest.create_migrate()
+        await G2PRegisterHistoryConsentRequest.create_migrate()
+        await G2PIntakeFormConsentRequest.create_migrate()
+
+        await G2PRegisterConsentReceipt.create_migrate()
+        await G2PRegisterHistoryConsentReceipt.create_migrate()
+        await G2PIntakeFormConsentReceipt.create_migrate()
 
         # SQLAlchemy create_all() creates missing tables but intentionally
         # does not add columns to tables that already exist. Keep extension
@@ -416,6 +430,46 @@ class Initializer(BaseInitializer):
                     """
                 )
             )
+
+            # construct_search_text now includes the Amharic and Afaan Oromo
+            # names, so the list search box finds a farmer by local script.
+            # Rows written before that only get it on their next approval;
+            # append the missing names now. Only names not already present
+            # are added, so re-running is a no-op. Register rows only: the
+            # list searches them, and intake rows are rewritten on every save.
+            for table_name in ("g2p_register_farmers",):
+                await conn.execute(
+                    text(
+                        f"""
+                        WITH local_names AS (
+                            SELECT
+                                internal_record_id,
+                                array_remove(ARRAY[
+                                    nullif(btrim(first_name_amh), ''),
+                                    nullif(btrim(middle_name_amh), ''),
+                                    nullif(btrim(last_name_amh), ''),
+                                    nullif(btrim(first_name_om), ''),
+                                    nullif(btrim(middle_name_om), ''),
+                                    nullif(btrim(last_name_om), '')
+                                ], NULL) AS parts,
+                                coalesce(search_text, '') AS current_text
+                            FROM public.{table_name}
+                        ),
+                        missing AS (
+                            SELECT
+                                internal_record_id,
+                                string_agg(DISTINCT part, ' ') AS names
+                            FROM local_names, unnest(parts) AS part
+                            WHERE position(part IN current_text) = 0
+                            GROUP BY internal_record_id
+                        )
+                        UPDATE public.{table_name} AS farmer
+                        SET search_text = btrim(concat_ws(' ', nullif(farmer.search_text, ''), missing.names))
+                        FROM missing
+                        WHERE farmer.internal_record_id = missing.internal_record_id
+                        """
+                    )
+                )
 
             # Until the father's name became its own first/middle/last
             # triple, the intake form's mandatory second name was "Middle
@@ -805,12 +859,13 @@ class Initializer(BaseInitializer):
                 "g2p_register_history_farmer_phones",
                 "g2p_intake_form_farmer_phones",
             ):
-                await conn.execute(
-                    text(
-                        f'ALTER TABLE "public"."{table_name}" '
-                        'ADD COLUMN IF NOT EXISTS "country_code" VARCHAR'
+                for column_name in ("country_code", "phone_e164"):
+                    await conn.execute(
+                        text(
+                            f'ALTER TABLE "public"."{table_name}" '
+                            f'ADD COLUMN IF NOT EXISTS "{column_name}" VARCHAR'
+                        )
                     )
-                )
             await conn.execute(
                 text(
                     """
@@ -930,6 +985,8 @@ class Initializer(BaseInitializer):
                 )
             )
 
+            await self._normalise_farmer_phones(conn)
+
             # Preserve known head-of-household information from existing
             # linked Household records without guessing for unlinked rows.
             await conn.execute(
@@ -971,41 +1028,109 @@ class Initializer(BaseInitializer):
                 )
             )
 
-        await G2PRegisterMembershipDetails.create_migrate()
-        await G2PRegisterHistoryMembershipDetails.create_migrate()
-        await G2PIntakeFormMembershipDetails.create_migrate()
+    async def _normalise_farmer_phones(self, conn):
+        """Reduce stored phones to the national number and fill phone_e164.
 
-        await G2PRegisterFarmInputs.create_migrate()
-        await G2PRegisterHistoryFarmInputs.create_migrate()
-        await G2PIntakeFormFarmInputs.create_migrate()
+        The SQL twin of validation_rules.normalize_phone(), for rows written
+        before normalisation existed: Gen1 migrations (E.164), trunk-0 local
+        numbers and legacy JSON expansions. Only rows whose separator-stripped
+        value matches PHONE_PATTERN are touched; each UPDATE skips rows already
+        in canonical form, so re-running is a no-op. Anything unrecognisable is
+        left exactly as stored and counted in the log for manual review.
+        """
+        from .register_domain.services.validation_rules import PHONE_PATTERN
 
-        await G2PRegisterCrop.create_migrate()
-        await G2PRegisterHistoryCrop.create_migrate()
-        await G2PIntakeFormCrop.create_migrate()
+        cleaned = r"regexp_replace(phone_number, '[\s().-]', '', 'g')"
+        national = f"right(regexp_replace({cleaned}, '[^0-9]', '', 'g'), 9)"
+        for table_name in (
+            "g2p_register_farmer_phones",
+            "g2p_register_history_farmer_phones",
+            "g2p_intake_form_farmer_phones",
+        ):
+            await conn.execute(
+                text(
+                    f"""
+                    UPDATE public."{table_name}"
+                    SET phone_number = {national},
+                        phone_e164 = '+251' || {national},
+                        country_code = coalesce(nullif(btrim(country_code), ''), 'ETH')
+                    WHERE {cleaned} ~ :pattern
+                      AND (
+                          phone_number IS DISTINCT FROM {national}
+                          OR phone_e164 IS DISTINCT FROM '+251' || {national}
+                          OR nullif(btrim(country_code), '') IS NULL
+                      )
+                    """
+                ),
+                {"pattern": PHONE_PATTERN},
+            )
+            unrecognised = (
+                await conn.execute(
+                    text(
+                        f"""
+                        SELECT count(*) FROM public."{table_name}"
+                        WHERE nullif(btrim(phone_number), '') IS NOT NULL
+                          AND {cleaned} !~ :pattern
+                        """
+                    ),
+                    {"pattern": PHONE_PATTERN},
+                )
+            ).scalar_one()
+            if unrecognised:
+                _logger.warning(
+                    "%s: %s phone number(s) are not a recognisable Ethiopian "
+                    "number and were left unchanged",
+                    table_name,
+                    unrecognised,
+                )
 
-        await G2PRegisterLivestock.create_migrate()
-        await G2PRegisterHistoryLivestock.create_migrate()
-        await G2PIntakeFormLivestock.create_migrate()
-
-        await G2PRegisterRegId.create_migrate()
-        await G2PRegisterHistoryRegId.create_migrate()
-        await G2PIntakeFormRegId.create_migrate()
-
-        await G2PRegisterConsentRequest.create_migrate()
-        await G2PRegisterHistoryConsentRequest.create_migrate()
-        await G2PIntakeFormConsentRequest.create_migrate()
-
-        await G2PRegisterConsentReceipt.create_migrate()
-        await G2PRegisterHistoryConsentReceipt.create_migrate()
-        await G2PIntakeFormConsentReceipt.create_migrate()
+        # Refresh the Farmer.phone_numbers projection the phone service keeps
+        # (same shape and order as _sync_parent_phone_projection), so the
+        # numbers it carries match the rows just rewritten.
+        await conn.execute(
+            text(
+                """
+                UPDATE public.g2p_register_farmers AS f
+                SET phone_numbers = p.projection,
+                    has_personal_phone = TRUE
+                FROM (
+                    SELECT
+                        link_internal_record_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'type', lower(phone_type),
+                                'number', phone_number,
+                                'e164', phone_e164,
+                                'is_primary', coalesce(is_primary, FALSE)
+                            )
+                            ORDER BY is_primary DESC NULLS LAST, created_at ASC
+                        ) AS projection
+                    FROM public.g2p_register_farmer_phones
+                    WHERE record_status = 'ACTIVE'
+                    GROUP BY link_internal_record_id
+                ) AS p
+                WHERE f.internal_record_id = p.link_internal_record_id
+                  AND f.phone_numbers IS DISTINCT FROM p.projection
+                """
+            )
+        )
 
     def _register_deduplication_routes(self, app):
         from fastapi import APIRouter
+        from iam_core.user_auth.decorators import require_permissions
+
         from .register_domain.services import G2PRegisterDomainServiceFarmer
 
         router = APIRouter(prefix="/api/v1/farmer-registry", tags=["Farmer Registry Deduplication"])
 
+        # ResolvePermissionMiddleware runs with allow_by_default=True, so a
+        # route without a marker skips token and permission checks entirely.
+        # Every route here must carry one. The scan and the reset rewrite
+        # is_duplicated across the whole register, so they need the same
+        # permission as other register-wide configuration changes; the summary
+        # only reads flags. CSRF applies as it does to every other POST.
         @router.post("/deduplicate")
+        @require_permissions({"registryConfiguration:edit"})
         async def trigger_deduplication(
             check_id_documents: bool = True,
             check_foundational_id: bool = True,
@@ -1023,11 +1148,13 @@ class Initializer(BaseInitializer):
             )
 
         @router.get("/deduplicate/summary")
+        @require_permissions({"register:view"})
         async def get_deduplication_summary():
             service = G2PRegisterDomainServiceFarmer()
             return await service.get_deduplication_summary()
 
         @router.post("/deduplicate/reset")
+        @require_permissions({"registryConfiguration:edit"})
         async def reset_deduplication():
             service = G2PRegisterDomainServiceFarmer()
             return await service.reset_deduplication()

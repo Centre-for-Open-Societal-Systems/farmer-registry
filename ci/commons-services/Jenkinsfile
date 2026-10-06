@@ -8,6 +8,8 @@
 // no triggers, so it only runs from "Build with Parameters". What it applies is
 // ci/commons-services/upgrade.sh from the branch it is built from, so a change
 // to the platform pin or the overlay still goes through a pull request first.
+// ACTION picks the script: upgrade.sh, seed-locations.sh or migrate-far-geo.sh
+// (the location hierarchy; DRY_RUN, ticked by default, rolls everything back).
 //
 // Same kubeconfig credentials as the registry deploy: each is a kubeconfig for
 // the far:farmer-ci service account on that cluster (ci/k8s/farmer-deploy-rbac.yaml).
@@ -22,6 +24,10 @@ pipeline {
     parameters {
         choice(name: 'ENVIRONMENT', choices: ['dev', 'staging'],
             description: 'Cluster to upgrade: dev (gen2-dev-kubeconfig) or staging (staging-farmer-kubeconfig).')
+        choice(name: 'ACTION', choices: ['upgrade', 'seed-locations', 'migrate-far-geo'],
+            description: 'upgrade: the chart upgrade (upgrade.sh). seed-locations: load the Ethiopia location hierarchy into Master Data (seed-locations.sh). migrate-far-geo: one-time move of far off the ETH pack and Kamuntu onto that hierarchy, remapping farmer records (migrate-far-geo.sh). See docs/commons-services-upgrade.md, "Location hierarchy".')
+        booleanParam(name: 'DRY_RUN', defaultValue: true,
+            description: 'seed-locations / migrate-far-geo only: run every transaction and its guards, then roll back. Untick to commit. Ignored by upgrade.')
         string(name: 'CHART_VERSION', defaultValue: '',
             description: 'openg2p-commons-services chart version. Leave empty for the pin in upgrade.sh; only set it to try a newer chart, and pin that in upgrade.sh afterwards.')
         booleanParam(name: 'CONFIRM', defaultValue: false,
@@ -40,7 +46,7 @@ pipeline {
 
         stage('Upgrade commons-services') {
             when {
-                expression { return params.CONFIRM }
+                expression { return params.CONFIRM && params.ACTION == 'upgrade' }
             }
             steps {
                 withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
@@ -52,6 +58,23 @@ pipeline {
                 }
                 // The live values the script saved before upgrading, for rollback.
                 archiveArtifacts artifacts: 'commons-services-values-rev*.yaml', allowEmptyArchive: true
+            }
+        }
+
+        stage('Location hierarchy') {
+            when {
+                expression { return params.CONFIRM && params.ACTION != 'upgrade' }
+            }
+            steps {
+                withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                    sh """
+                        export NAMESPACE='${NAMESPACE}'
+                        export DRY_RUN='${params.DRY_RUN}'
+                        sh ci/commons-services/${params.ACTION}.sh
+                    """
+                }
+                // migrate-far-geo.sh dumps the tables it rewrites before a real run.
+                archiveArtifacts artifacts: 'far-geo-backup-*.sql.gz', allowEmptyArchive: true
             }
         }
     }

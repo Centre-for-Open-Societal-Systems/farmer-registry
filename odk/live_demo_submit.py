@@ -64,8 +64,8 @@ def main():
         land_area = p["land_area"]
         phone_pri = f"0911{random_suffix:04d}"
         phone_sec = f"0922{random_suffix:04d}"
-        fayda_uid = f"ET-FAN-{random_suffix:06d}"
-        fayda_rid = f"ET-RID-{random_suffix:06d}"
+        fayda_uid = f"{random.randint(1000, 9999)} {random.randint(1000, 9999)} {random.randint(1000, 9999)} {random.randint(1000, 9999)}"
+        fayda_rid = f"100011000100001{random.randint(10000000000000, 99999999999999)}"
         voter_id = f"ET-VOTER-{random_suffix:05d}"
     else:
         first_en = input("First Name (English): ").strip() or "Abebe"
@@ -84,8 +84,8 @@ def main():
         land_area = 3.5
         phone_pri = f"0911{random.randint(1000, 9999):04d}"
         phone_sec = f"0922{random.randint(1000, 9999):04d}"
-        fayda_uid = f"ET-FAN-{random.randint(100000, 999999)}"
-        fayda_rid = f"ET-RID-{random.randint(100000, 999999)}"
+        fayda_uid = f"{random.randint(1000, 9999)} {random.randint(1000, 9999)} {random.randint(1000, 9999)} {random.randint(1000, 9999)}"
+        fayda_rid = f"100011000100001{random.randint(10000000000000, 99999999999999)}"
         voter_id = f"ET-VOTER-{random.randint(10000, 99999)}"
 
     payload = {
@@ -130,6 +130,7 @@ def main():
             },
             "national_id_section": {
                 "national_fan": fayda_uid,
+                "national_uid": fayda_uid,
                 "national_rid": fayda_rid,
                 "other_id": voter_id
             },

@@ -89,7 +89,7 @@ LIVESTOCK_TYPE = [("Cattle", 0.34), ("Goat", 0.24), ("Sheep", 0.20),
                   ("Poultry", 0.14), ("Donkey", 0.05), ("Camel", 0.03)]
 WATER_SOURCE = [("Rainfed", 0.66), ("River", 0.14), ("Borehole", 0.10),
                 ("Irrigation Canal", 0.07), ("Pond", 0.03)]
-SEASON = [("Meher", 0.62), ("Belg", 0.30), ("Irrigated", 0.08)]
+SEASON = [("MEHER", 0.62), ("BELG", 0.30), ("IRRIGATED", 0.08)]
 SOIL = [("high", 0.24), ("medium", 0.51), ("low", 0.25)]
 
 FIRST_M = ["Abebe", "Bekele", "Chala", "Dawit", "Eyob", "Fikru", "Getachew", "Hailu",

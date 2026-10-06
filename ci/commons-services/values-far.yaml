@@ -89,7 +89,23 @@ masterData:
     image:
       # Same path move for the seed the post-upgrade hook runs.
       repository: registry.gitlab.com/openg2p/platform-services/master-data-service/master-data-db-seed
-    # countryPack is ETH in this chart version's defaults; not repeated here.
+    # Explicit rather than inherited: the subchart's own default is XKM, the
+    # fictitious Kamuntu pack, and none of it may come back into this namespace.
+    countryPack: ETH
+    # The location hierarchy is NOT the pack's. far carries the same Ethiopia
+    # hierarchy as the crop and live registries (ids <level>-<P-code>, down to
+    # kebele), loaded by ci/commons-services/seed-locations.sh from
+    # docker/local-dev/geo-seed/ethiopia_geo_seed.sql.gz. The pack's geo uses
+    # bare P-codes as ids under levels named region/zone/woreda, and those names
+    # are UNIQUE in g2p_geo_levels: left on, this post-upgrade hook would fail on
+    # its first INSERT and take the helm upgrade down with it.
+    #
+    # Code lists stay on: the staff portal's dropdowns read them from here.
+    # Samples are off: the pack's sample people carry pack ids.
+    load:
+      geo: false
+      codelists: true
+      samples: false
     objectStore:
       # Boundary geometry (the map layer) is uploaded to MinIO when an endpoint
       # is set, and the seed aborts if that upload fails or the referenced

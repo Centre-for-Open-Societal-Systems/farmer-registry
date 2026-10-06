@@ -1,0 +1,222 @@
+# ==============================================================================
+# OpenG2P Connector Service — Kubernetes Production Deployment Manifest
+# Deploys Connector API, Celery Worker+Beat, and Management UI
+# Target Namespace: openg2p (or far)
+# ==============================================================================
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: connector-config
+  labels:
+    app.kubernetes.io/name: connector
+    app.kubernetes.io/component: config
+data:
+  CONNECTOR_APP_HOST: "0.0.0.0"
+  CONNECTOR_APP_PORT: "8050"
+  CONNECTOR_DB_DRIVER: "postgresql+asyncpg"
+  CONNECTOR_DB_PORT: "5432"
+  CONNECTOR_DB_DBNAME: "connector"
+  CONNECTOR_DB_USERNAME: "postgres"
+  CONNECTOR_LOG_LEVEL: "INFO"
+  CONNECTOR_STORE_RUN_PAYLOADS: "true"
+  CONNECTOR_STRICT_INCREMENTAL: "false"
+  CONNECTOR_FULL_SCAN_ON_INCREMENTAL_UNSUPPORTED: "true"
+  CONNECTOR_METRICS_ENABLED: "true"
+  CONNECTOR_CORS_ORIGINS: "*"
+  # Points to internal Kubernetes Service for Farmer Registry Partner API
+  CONNECTOR_PARTNER_INGEST_BASE_URL: "http://farmer-registry-partner-api:8000"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: connector-secret
+  labels:
+    app.kubernetes.io/name: connector
+type: Opaque
+stringData:
+  # Configure your PostgreSQL password & Redis connection string
+  CONNECTOR_DB_PASSWORD: "YOUR_POSTGRES_PASSWORD"
+  CONNECTOR_CELERY_BROKER_URL: "redis://farmer-registry-redis:6379/1"
+  CONNECTOR_CELERY_RESULT_BACKEND: "redis://farmer-registry-redis:6379/1"
+  CONNECTOR_CELERY_BACKEND_URL: "redis://farmer-registry-redis:6379/1"
+
+---
+# ------------------------------------------------------------------------------
+# 1. Connector API Deployment & Service
+# ------------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: connector-api
+  labels:
+    app.kubernetes.io/name: connector
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: connector
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: connector
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+        - name: connector-api
+          image: openg2p/openg2p-connector-service:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "-m", "app.main"]
+          ports:
+            - containerPort: 8050
+              name: http
+          envFrom:
+            - configMapRef:
+                name: connector-config
+            - secretRef:
+                name: connector-secret
+          env:
+            - name: CONNECTOR_DB_HOSTNAME
+              value: "farmer-registry-postgres"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8050
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8050
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: connector-api
+  labels:
+    app.kubernetes.io/name: connector
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8050
+      targetPort: 8050
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: connector
+    app.kubernetes.io/component: api
+
+---
+# ------------------------------------------------------------------------------
+# 2. Connector Celery Worker + Beat Scheduler (Polls ODK Central)
+# ------------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: connector-worker
+  labels:
+    app.kubernetes.io/name: connector
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: connector
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: connector
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: connector-worker
+          image: openg2p/openg2p-connector-service:latest
+          imagePullPolicy: IfNotPresent
+          command: ["celery", "-A", "app.celery_app", "worker", "--beat", "-l", "info"]
+          envFrom:
+            - configMapRef:
+                name: connector-config
+            - secretRef:
+                name: connector-secret
+          env:
+            - name: CONNECTOR_DB_HOSTNAME
+              value: "farmer-registry-postgres"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+---
+# ------------------------------------------------------------------------------
+# 3. Connector Web UI Deployment & Service
+# ------------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: connector-ui
+  labels:
+    app.kubernetes.io/name: connector
+    app.kubernetes.io/component: ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: connector
+      app.kubernetes.io/component: ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: connector
+        app.kubernetes.io/component: ui
+    spec:
+      containers:
+        - name: connector-ui
+          image: openg2p/openg2p-connector-ui:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: connector-ui
+  labels:
+    app.kubernetes.io/name: connector
+    app.kubernetes.io/component: ui
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: connector
+    app.kubernetes.io/component: ui

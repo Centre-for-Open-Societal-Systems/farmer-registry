@@ -6,3 +6,6 @@
 **/.venv
 **/__pycache__
 .git
+
+# The dashboard-api clone the Jenkinsfile makes. It has its own build context.
+.build

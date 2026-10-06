@@ -335,15 +335,16 @@ class TestEffectiveLayer(unittest.TestCase):
                 self.assertEqual(condition["field"], f"{FARMER_REGISTER}.disabled")
                 self.assertIs(condition["value"], True)
 
-    def test_phone_is_optional_and_local_format(self):
-        """Gen1 fill is 13%, so parity means optional -- but when supplied it is
-        the national part only, because Gen2 holds the country in its own column."""
+    def test_phone_is_optional_and_accepts_local_or_e164(self):
+        """Gen1 fill is 13%, so parity means optional. Gen1 stored E.164 and the
+        local trunk-0 form is what staff type, so both are accepted; the server
+        reduces either to the national number (Gen2 keeps the country apart)."""
         phone = effective_widgets(PHONE)["phone_number"]
         self.assertFalse(phone.get("widget-required", False))
         matcher = re.compile(phone["widget-data-validation"]["pattern"])
-        for good in ("0912345678", "912345678", "0111234567"):
+        for good in ("0912345678", "912345678", "0111234567", "+251912345678", "251912345678"):
             self.assertTrue(matcher.match(good), f"rejected {good!r}")
-        for bad in ("+251912345678", "251912345678", "091234567", "abcdefghij"):
+        for bad in ("091234567", "+1912345678", "abcdefghij"):
             self.assertFalse(matcher.match(bad), f"accepted {bad!r}")
 
     def test_id_type_offers_exactly_gen1s_four_types(self):

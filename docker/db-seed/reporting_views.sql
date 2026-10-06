@@ -167,8 +167,8 @@ SELECT
     l.unit                                     AS land_size_unit,
     (CASE
         WHEN l.land_size IS NULL THEN NULL
-        WHEN btrim(l.land_size) !~ '^[0-9]+(\.[0-9]+)?$' THEN NULL
-        ELSE btrim(l.land_size)::numeric * CASE l.unit
+        WHEN btrim(l.land_size::text) !~ '^[0-9]+(\.[0-9]+)?$' THEN NULL
+        ELSE btrim(l.land_size::text)::numeric * CASE l.unit
             WHEN 'HECTARE'      THEN 1
             WHEN 'ACRE'         THEN 0.404686
             WHEN 'SQUARE_METER' THEN 0.0001

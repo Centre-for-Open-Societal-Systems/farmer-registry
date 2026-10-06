@@ -42,12 +42,16 @@
 {# --- Phones --- #}
 {%- set phone_pri = personal.get('primary_phone_number', '') or personal.get('phone_number', '') or '' -%}
 {%- set phone_sec = personal.get('secondary_phone_number', '') or '' -%}
+{%- set phone_oth = personal.get('other_phone_number', '') or '' -%}
 {%- set phones_list = [] -%}
 {%- if phone_pri -%}
   {%- set _ = phones_list.append({"phone_number": phone_pri, "phone_type": "PRIMARY", "country_code": "ETH", "is_primary": true}) -%}
 {%- endif -%}
 {%- if phone_sec -%}
   {%- set _ = phones_list.append({"phone_number": phone_sec, "phone_type": "SECONDARY", "country_code": "ETH", "is_primary": false}) -%}
+{%- endif -%}
+{%- if phone_oth -%}
+  {%- set _ = phones_list.append({"phone_number": phone_oth, "phone_type": "OTHER", "country_code": "ETH", "is_primary": false}) -%}
 {%- endif -%}
 
 {# --- GPS Parsing --- #}
@@ -65,8 +69,10 @@
 {%- set kebele_name = locale.get('kebele', '') -%}
 
 {# --- IDs --- #}
-{%- set fan_id = nat_id.get('national_fan', '') or nat_id.get('national_uid', '') or '' -%}
-{%- set rid_id = nat_id.get('national_rid', '') or '' -%}
+{%- set raw_fan = nat_id.get('national_fan', '') or nat_id.get('national_uid', '') or '' -%}
+{%- set fan_id = (raw_fan | string).strip().replace(' ', '') -%}
+{%- set raw_rid = nat_id.get('national_rid', '') or '' -%}
+{%- set rid_id = (raw_rid | string).strip().replace(' ', '') -%}
 {%- set ack_id = d.get('farmer_reference_id', {}).get('farmer_reference_id', '') or d.get('farmer_reference_id', '') or '' -%}
 {%- set reg_ids = [] -%}
 {%- if fan_id -%}
@@ -93,14 +99,16 @@
   }) -%}
 {%- endfor -%}
 
-{# --- Crop Repeats --- #}
+{# --- Crop Repeats ---
+   The form asks no season, so a crop defaults to MEHER, the main rains: the
+   seasons the register offers are MEHER / BELG / IRRIGATED / PERENNIAL. #}
 {%- set raw_crops = d.get('crop_information', {}).get('crop_repeat', []) or d.get('crop_repeat', []) or [] -%}
 {%- set crops_records = [] -%}
 {%- for c in (raw_crops if raw_crops is iterable and raw_crops is not mapping and raw_crops is not string else []) -%}
   {%- set _ = crops_records.append({
       "commodity": (c.get('crop_name_rep', '') or c.get('crop_name', '') or '') | upper,
       "planted_date": (c.get('crop_date', '') or '').split('T')[0],
-      "season": (c.get('crop_season', '') or 'KHARIF') | upper,
+      "season": (c.get('crop_season', '') or 'MEHER') | upper,
       "end_use": "FOOD_HUMAN_CONSUMPTION"
   }) -%}
 {%- endfor -%}
