@@ -167,6 +167,15 @@ class TestDuplicatePhone(_Case):
             "same Phone Number",
         )
 
+    async def test_international_form_is_the_same_number(self):
+        await self.rejects(
+            [
+                {"phone_type": "PRIMARY", "phone_number": "+251912345678"},
+                {"phone_type": "SECONDARY", "phone_number": "0912345678"},
+            ],
+            "same Phone Number",
+        )
+
     async def test_two_different_numbers_are_accepted(self):
         await self.accepts(
             [

@@ -1,6 +1,6 @@
 from openg2p_registry_core.models.g2p_intake_form import G2PIntakeForm
-from sqlalchemy import Boolean, Date, Integer, Numeric, String, select
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, Date, Integer, Numeric, String, func, select
+from sqlalchemy.orm import Mapped, column_property, declared_attr, mapped_column
 from openg2p_registry_core.models import (
     G2PRegister, G2PRegisterHistory, G2PGeo, G2PPerson,
     G2PPersonHistory, G2PGeoHistory
@@ -56,6 +56,28 @@ class G2PFarmer:
     father_first_name: Mapped[str] = mapped_column(String, nullable=True)
     father_middle_name: Mapped[str] = mapped_column(String, nullable=True)
     father_last_name: Mapped[str] = mapped_column(String, nullable=True)
+
+    @declared_attr
+    def record_name_local(cls) -> Mapped[str]:
+        """The farmer's name in local script: Amharic, else Afaan Oromo.
+
+        Read-only and computed in SQL, so there is no column to migrate or keep
+        in sync; the register list reads it with getattr like any column and
+        can sort on it. Blank parts are skipped (concat_ws ignores NULL, and
+        nullif turns '' into NULL); a farmer with neither script gets NULL.
+        """
+        def full(first, middle, last):
+            return func.nullif(
+                func.concat_ws(" ", func.nullif(first, ""), func.nullif(middle, ""), func.nullif(last, "")),
+                "",
+            )
+
+        return column_property(
+            func.coalesce(
+                full(cls.first_name_amh, cls.middle_name_amh, cls.last_name_amh),
+                full(cls.first_name_om, cls.middle_name_om, cls.last_name_om),
+            )
+        )
 
     # Enumerator / data-collection provenance
     enumerator_name: Mapped[str] = mapped_column(String, nullable=True)

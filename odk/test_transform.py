@@ -36,6 +36,7 @@ SAMPLE_ODK_PAYLOAD = {
                 "has_personal_phone": "yes",
                 "primary_phone_number": "0911234567",
                 "secondary_phone_number": "0922345678",
+                "other_phone_number": "+251933445566",
                 "farming_type": "MIXED",
                 "disability": "no"
             },
@@ -152,6 +153,13 @@ def main():
         print(f"[-] FAILED: Rendered output is not valid JSON! Error: {e}")
         print("\n--- Rendered Output ---")
         print(rendered_output)
+        sys.exit(1)
+
+    seasons = {"MEHER", "BELG", "IRRIGATED", "PERENNIAL"}
+    bad = [c.get("season") for c in parsed_json.get("intake_fr_farmer_crops", [])
+           if c.get("season") not in seasons]
+    if bad:
+        print(f"[-] FAILED: crop season(s) {bad} are not among {sorted(seasons)}")
         sys.exit(1)
 
     print("[+] SUCCESS! Valid JSON produced.\n")

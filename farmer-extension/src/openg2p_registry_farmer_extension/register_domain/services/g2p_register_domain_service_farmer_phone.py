@@ -8,7 +8,7 @@ from openg2p_registry_core.services import G2PRegisterDomainService
 from sqlalchemy import select, update
 
 from .domain_validation_utils import is_blank, reject_duplicates, validation_error
-from .validation_rules import PHONE_MAX_LENGTH, PHONE_PATTERN, matches
+from .validation_rules import PHONE_COUNTRY_CODE, normalize_phone, phone_e164
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
@@ -33,31 +33,32 @@ class G2PRegisterDomainServiceFarmerPhone(G2PRegisterDomainService):
                 validation_error("Phone Type is required for every phone number")
             if is_blank(record.get("phone_number")):
                 validation_error("Phone Number is required")
-            record["phone_number"] = str(record["phone_number"]).strip()
-
-            # This column holds the national significant number only; the
-            # country lives in country_code, defaulting to ETH. Gen1 stored a
-            # single E.164 string, so a migrated value pasted in whole would
-            # otherwise be accepted here and be wrong (G2R-26 Q2).
-            if not matches(PHONE_PATTERN, record["phone_number"]):
+            # phone_number holds the national significant number only and the
+            # country lives in country_code (the Gen2 storage model). Gen1's E.164 values
+            # and the trunk-0 local form are both accepted and reduced to the
+            # 9 digits, so one number is stored one way whichever form it
+            # arrived in -- the batch dedup groups on it.
+            national = normalize_phone(record["phone_number"])
+            if national is None:
                 validation_error(
-                    "Phone Number must be the Ethiopian number without the "
-                    "country code, e.g. 0912345678"
+                    "Phone Number must be an Ethiopian number, e.g. 0912345678 "
+                    "or +251912345678"
                 )
-            if len(record["phone_number"]) > PHONE_MAX_LENGTH:
-                validation_error(
-                    f"Phone Number must be {PHONE_MAX_LENGTH} digits or fewer"
-                )
+            record["phone_number"] = national
+            record["phone_e164"] = phone_e164(national)
+            if is_blank(record.get("country_code")):
+                record["country_code"] = PHONE_COUNTRY_CODE
 
         if sum(bool(record.get("is_primary")) for record in active_records) > 1:
             validation_error("Only one phone number can be the primary phone")
 
         # One number, one row: the same handset filed as Primary and
-        # as Secondary is a data-entry slip, not two contact points. 0912345678
-        # and 912345678 are the same number -- the trunk 0 is optional.
+        # as Secondary is a data-entry slip, not two contact points. Every
+        # number was reduced to its 9 digits above, so 0912345678, 912345678
+        # and +251912345678 all compare equal here.
         reject_duplicates(
             active_records,
-            lambda record: str(record.get("phone_number") or "").strip().lstrip("0") or None,
+            lambda record: record.get("phone_number") or None,
             "The same Phone Number is listed more than once; each number can be "
             "recorded only once, under one Phone Type",
         )
@@ -92,6 +93,16 @@ class G2PRegisterDomainServiceFarmerPhone(G2PRegisterDomainService):
         """Apply the same projection after an approved intake is ingested."""
         if register_id != FARMER_PHONE_REGISTER_ID:
             return
+        # Ingest does not always pass through validate_domain_attributes
+        # (partner and ODK payloads), so normalise the row that landed. A
+        # value that is not a recognisable Ethiopian number is left as sent
+        # rather than failing an approved intake; the boot migration logs it.
+        national = normalize_phone(register_row.phone_number)
+        if national:
+            register_row.phone_number = national
+            register_row.phone_e164 = phone_e164(national)
+            if is_blank(register_row.country_code):
+                register_row.country_code = PHONE_COUNTRY_CODE
         farmer_internal_record_id = register_row.link_internal_record_id
         if not farmer_internal_record_id:
             return
@@ -145,6 +156,7 @@ class G2PRegisterDomainServiceFarmerPhone(G2PRegisterDomainService):
             {
                 "type": str(item.phone_type).lower(),
                 "number": item.phone_number,
+                "e164": item.phone_e164 or phone_e164(normalize_phone(item.phone_number)),
                 "is_primary": bool(item.is_primary),
             }
             for item in phones
