@@ -1,6 +1,7 @@
 from openg2p_registry_core.models.g2p_intake_form import G2PIntakeForm
 from sqlalchemy import Boolean, Date, Integer, Numeric, String, func, select
-from sqlalchemy.orm import Mapped, column_property, declared_attr, mapped_column
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import Mapped, mapped_column
 from openg2p_registry_core.models import (
     G2PRegister, G2PRegisterHistory, G2PGeo, G2PPerson,
     G2PPersonHistory, G2PGeoHistory
@@ -57,26 +58,39 @@ class G2PFarmer:
     father_middle_name: Mapped[str] = mapped_column(String, nullable=True)
     father_last_name: Mapped[str] = mapped_column(String, nullable=True)
 
-    @declared_attr
-    def record_name_local(cls) -> Mapped[str]:
-        """The farmer's name in local script: Amharic, else Afaan Oromo.
+    # The farmer's name in local script: Amharic, else Afaan Oromo. Read-only
+    # and derived from the name columns, so there is nothing to migrate or keep
+    # in sync. A hybrid rather than a column_property: a SQL-expression
+    # column_property shows up in mapper.columns under an anonymous name, and
+    # the platform reads every mapper column with getattr(row, column.name)
+    # when it serialises a record -- which broke every intake section save. A
+    # hybrid is not a mapper column, yet the register list still reads it with
+    # getattr on the row and sorts on it with getattr on the class.
+    @hybrid_property
+    def record_name_local(self) -> str | None:
+        for parts in (
+            (self.first_name_amh, self.middle_name_amh, self.last_name_amh),
+            (self.first_name_om, self.middle_name_om, self.last_name_om),
+        ):
+            name = " ".join(part for part in parts if part)
+            if name:
+                return name
+        return None
 
-        Read-only and computed in SQL, so there is no column to migrate or keep
-        in sync; the register list reads it with getattr like any column and
-        can sort on it. Blank parts are skipped (concat_ws ignores NULL, and
-        nullif turns '' into NULL); a farmer with neither script gets NULL.
-        """
+    @record_name_local.inplace.expression
+    @classmethod
+    def _record_name_local_expression(cls):
+        # Same rule in SQL: blank parts are skipped (concat_ws ignores NULL,
+        # nullif turns '' into NULL); a farmer with neither script gets NULL.
         def full(first, middle, last):
             return func.nullif(
                 func.concat_ws(" ", func.nullif(first, ""), func.nullif(middle, ""), func.nullif(last, "")),
                 "",
             )
 
-        return column_property(
-            func.coalesce(
-                full(cls.first_name_amh, cls.middle_name_amh, cls.last_name_amh),
-                full(cls.first_name_om, cls.middle_name_om, cls.last_name_om),
-            )
+        return func.coalesce(
+            full(cls.first_name_amh, cls.middle_name_amh, cls.last_name_amh),
+            full(cls.first_name_om, cls.middle_name_om, cls.last_name_om),
         )
 
     # Enumerator / data-collection provenance

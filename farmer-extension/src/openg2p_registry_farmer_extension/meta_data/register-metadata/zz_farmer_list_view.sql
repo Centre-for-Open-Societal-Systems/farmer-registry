@@ -6,7 +6,7 @@
 -- below are the table columns and the card view shows all of them. Column
 -- headers come from the translation catalog keyed by field_name (display_label
 -- is not read by the table), see zz_farmer_translation_overrides.sql.
--- record_name_local is a read-only column_property on the Farmer model
+-- record_name_local is a read-only hybrid property on the Farmer model
 -- (Amharic name, falling back to Afaan Oromo).
 --
 -- The staff search endpoint reads only fields on the register row, so the
