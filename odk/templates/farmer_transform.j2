@@ -4,7 +4,8 @@
 {# Used by Registry Celery Worker when ingesting via OpenG2P Connector Service   #}
 {# ============================================================================== #}
 
-{%- set d = expanded if expanded is defined else (data if data is defined else (submission if submission is defined else {})) -%}
+{%- set raw_d = expanded if expanded is defined else (data if data is defined else (submission if submission is defined else {})) -%}
+{%- set d = raw_d.get('payload', raw_d) if (raw_d is mapping and 'payload' in raw_d and raw_d.get('payload') is mapping) else raw_d -%}
 
 {# --- Basic / Personal Info --- #}
 {%- set basic = d.get('basic_info', {}) or {} -%}
@@ -40,9 +41,40 @@
 {%- set age = personal.get('age', None) -%}
 
 {# --- Phones --- #}
-{%- set phone_pri = personal.get('primary_phone_number', '') or personal.get('phone_number', '') or '' -%}
-{%- set phone_sec = personal.get('secondary_phone_number', '') or '' -%}
-{%- set phone_oth = personal.get('other_phone_number', '') or '' -%}
+{%- set raw_phone_pri = personal.get('primary_phone_number', '') or '' -%}
+{%- if not raw_phone_pri and personal.get('phone_number', '') not in ['yes', 'no'] -%}
+  {%- set raw_phone_pri = personal.get('phone_number', '') -%}
+{%- endif -%}
+{%- set raw_phone_sec = personal.get('secondary_phone_number', '') or '' -%}
+{%- set raw_phone_oth = personal.get('other_phone_number', '') or '' -%}
+
+{%- set clean_pri = (raw_phone_pri | string | trim | replace(' ', '') | replace('-', '')) -%}
+{%- if clean_pri.startswith('+251') -%}
+  {%- set phone_pri = clean_pri[4:] -%}
+{%- elif clean_pri.startswith('251') and clean_pri | length > 9 -%}
+  {%- set phone_pri = clean_pri[3:] -%}
+{%- else -%}
+  {%- set phone_pri = clean_pri -%}
+{%- endif -%}
+
+{%- set clean_sec = (raw_phone_sec | string | trim | replace(' ', '') | replace('-', '')) -%}
+{%- if clean_sec.startswith('+251') -%}
+  {%- set phone_sec = clean_sec[4:] -%}
+{%- elif clean_sec.startswith('251') and clean_sec | length > 9 -%}
+  {%- set phone_sec = clean_sec[3:] -%}
+{%- else -%}
+  {%- set phone_sec = clean_sec -%}
+{%- endif -%}
+
+{%- set clean_oth = (raw_phone_oth | string | trim | replace(' ', '') | replace('-', '')) -%}
+{%- if clean_oth.startswith('+251') -%}
+  {%- set phone_oth = clean_oth[4:] -%}
+{%- elif clean_oth.startswith('251') and clean_oth | length > 9 -%}
+  {%- set phone_oth = clean_oth[3:] -%}
+{%- else -%}
+  {%- set phone_oth = clean_oth -%}
+{%- endif -%}
+
 {%- set phones_list = [] -%}
 {%- if phone_pri -%}
   {%- set _ = phones_list.append({"phone_number": phone_pri, "phone_type": "PRIMARY", "country_code": "ETH", "is_primary": true}) -%}
@@ -91,12 +123,17 @@
 {%- for l in (raw_lands if raw_lands is iterable and raw_lands is not mapping and raw_lands is not string else []) -%}
   {%- set raw_own = (l.get('land_ownership', '') or 'OWNER') | upper -%}
   {%- set own_type = 'OWNER' if 'OWN' in raw_own else ('TENANT' if 'RENT' in raw_own else ('CROP_SHARE' if 'SHARE' in raw_own else 'FAMILY_GIFT')) -%}
-  {%- set _ = lands_records.append({
+  {%- set raw_area = l.get('total_land_area') or l.get('land_area') -%}
+  {%- set l_area = (raw_area | float) if (raw_area is not none and (raw_area | string | trim) != '') else none -%}
+  {%- set land_dict = {
       "land_id": l.get('land_id', '') or ("LND-" ~ loop.index),
-      "area_in_hectare": (l.get('total_land_area', 0.0) or 0.0) | float,
       "land_ownership_type": own_type,
       "land_kebele": l.get('land_kebele', kebele_name) or kebele_name
-  }) -%}
+  } -%}
+  {%- if l_area is not none and l_area > 0 -%}
+    {%- set _ = land_dict.update({"area_in_hectare": l_area}) -%}
+  {%- endif -%}
+  {%- set _ = lands_records.append(land_dict) -%}
 {%- endfor -%}
 
 {# --- Crop Repeats ---
