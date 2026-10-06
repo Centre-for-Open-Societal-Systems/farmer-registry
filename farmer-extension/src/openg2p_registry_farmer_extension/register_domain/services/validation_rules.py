@@ -37,7 +37,23 @@ PHONE_MAX_LENGTH = 10
 # farmers are named 'steve', 'test' and 'demo' -- so they read as junk rather
 # than as a shorter legitimate format. If a production Gen1 database turns out
 # to hold short values too, this bound is what has to move.
-NATIONAL_ID_PATTERN = r"^(FAN-)?[0-9]{12,17}$"
+#
+# UID is the Fayda number: the 12-digit FIN or the 16-digit FAN, the latter
+# optionally written with the FAN- prefix Gen1 stored. RID is the MOSIP
+# registration id printed on the enrolment slip, 29 digits. They used to share
+# one 12-17 digit rule, which let a UID be filed as an RID.
+UID_PATTERN = r"^(FAN-)?([0-9]{12}|[0-9]{16})$"
+RID_PATTERN = r"^[0-9]{29}$"
+
+# The form's value column takes a single pattern for every row whatever its
+# type, so it carries the union; the per-type rule below is what tells the
+# two apart, server-side.
+NATIONAL_ID_PATTERN = r"^((FAN-)?([0-9]{12}|[0-9]{16})|[0-9]{29})$"
+
+ID_TYPE_MESSAGES = {
+    "UID": "expected the 12-digit FIN or the 16-digit FAN (optionally prefixed with FAN-)",
+    "RID": "expected the 29-digit registration id from the Fayda enrolment slip",
+}
 
 # Per-ID-type value rules, keyed by IdTypeEnum member. This mapping exists
 # because the client cannot express one: WidgetValidation declares `custom` and
@@ -54,8 +70,8 @@ NATIONAL_ID_PATTERN = r"^(FAN-)?[0-9]{12,17}$"
 # FAN is not a type. Every FAN- value in the Gen1 dump is filed under UID, which
 # is why the prefix belongs in the pattern rather than the type list.
 ID_TYPE_PATTERNS = {
-    "UID": NATIONAL_ID_PATTERN,
-    "RID": NATIONAL_ID_PATTERN,
+    "UID": UID_PATTERN,
+    "RID": RID_PATTERN,
 }
 
 # Gen1 parity: the farmer's first name (94% fill) and the father's first name.
