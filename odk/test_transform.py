@@ -155,6 +155,13 @@ def main():
         print(rendered_output)
         sys.exit(1)
 
+    seasons = {"MEHER", "BELG", "IRRIGATED", "PERENNIAL"}
+    bad = [c.get("season") for c in parsed_json.get("intake_fr_farmer_crops", [])
+           if c.get("season") not in seasons]
+    if bad:
+        print(f"[-] FAILED: crop season(s) {bad} are not among {sorted(seasons)}")
+        sys.exit(1)
+
     print("[+] SUCCESS! Valid JSON produced.\n")
     print("=" * 60)
     print("Generated Intake Sections Summary:")
