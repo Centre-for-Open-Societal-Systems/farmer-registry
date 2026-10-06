@@ -213,6 +213,10 @@ dashboardApi:
     enabled: true
     host: dashboard-api.${HELM_NAMESPACE}.openg2p.test
     gateway: internal
+  # Chart requests need the dashboards' client-credentials token; the trusted
+  # Keycloak realms are read from the namespace's IAM.
+  env:
+    AUTH_IAM_URL: http://commons-services-iam-staff-portal-api-pub
 # Of the chart's analytics layer only the reporting views and their hourly
 # refresh are deployed: the dashboard API reads fr_rpt_farmer and fr_rpt_land.
 # The bulk sample-data generator, the Superset dashboard import and the Insights
