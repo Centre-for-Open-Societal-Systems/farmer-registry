@@ -6,7 +6,10 @@ name: Checks
 #   * the platform overlay patches must still apply to the pinned sources and
 #     behave as documented (test/test_patch_platform_iam_permissions.py);
 #   * every location in the Ethiopia geo seed hangs off a parent, so the
-#     Location cascade can reach it (test/test_geo_seed_hierarchy.py).
+#     Location cascade can reach it (test/test_geo_seed_hierarchy.py);
+#   * ODK submissions still become draft intakes: the platform patches the
+#     ingestion path needs (test/test_patch_platform_ingestion.py) and the
+#     ODK transform's mapping (odk/test_transform.py).
 # Runs in parallel with build-publish.yml; a split pin or a patch that no longer
 # matches shows red in seconds instead of surfacing as a broken image later.
 
@@ -30,3 +33,7 @@ jobs:
         run: python -m pytest test/test_patch_platform_iam_permissions.py -q
       - name: location seed is one connected tree
         run: python -m pytest test/test_geo_seed_hierarchy.py -q
+      - name: platform patches for partner ingestion still apply
+        run: python -m pytest test/test_patch_platform_ingestion.py -q
+      - name: ODK transform renders an OData-shaped submission
+        run: pip install --quiet jinja2 && python odk/test_transform.py

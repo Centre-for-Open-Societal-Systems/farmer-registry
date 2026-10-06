@@ -107,6 +107,27 @@ registry:
     image:
       repository: registry.gitlab.com/openg2p/registry/farmer-registry/celery
       tag: 0.0.0-develop
+    # Ingested (partner / ODK) submissions start their AWE approval workflow
+    # here, like a staff Submit does in the staff-portal-api: same AWE, same
+    # callback, so decisions come back to the staff-portal-api as usual. The
+    # subchart gives the worker no AWE settings, and the worker has no user, so
+    # it logs in with a client-credentials token of the release's client (the
+    # one the partner-api's keymanager auth already uses). That client needs
+    # "Service accounts" enabled; without a token, ingests fail with
+    # AWE_BEARER_TOKEN_REQUIRED instead of reaching approvers.
+    envVars:
+      REGISTRY_CORE_AWE_ENABLED: '{{ .Values.global.aweEnabled }}'
+      REGISTRY_CORE_AWE_BASE_URL: '{{ tpl .Values.global.aweBaseUrl $ }}'
+      REGISTRY_CORE_AWE_HTTP_TIMEOUT_SECONDS: '{{ .Values.global.aweHttpTimeoutSeconds }}'
+      REGISTRY_CORE_AWE_DEFAULT_CALLBACK_URL: '{{ tpl .Values.global.aweDefaultCallbackUrl $ }}'
+      REGISTRY_CORE_AWE_CALLBACK_SECRET_ID: '{{ tpl .Values.global.aweCallbackSecretId $ }}'
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: "{{ tpl .Values.global.keycloakIssuerUrl $ }}/protocol/openid-connect/token"
+      REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID: '{{ tpl .Values.global.authClientId $ }}'
+    envVarsFrom:
+      REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET:
+        secretKeyRef:
+          name: '{{ tpl .Values.global.authClientSecret $ }}'
+          key: '{{ tpl .Values.global.authClientSecretKey $ }}'
   celeryBeat:
     image:
       repository: registry.gitlab.com/openg2p/registry/farmer-registry/celery
