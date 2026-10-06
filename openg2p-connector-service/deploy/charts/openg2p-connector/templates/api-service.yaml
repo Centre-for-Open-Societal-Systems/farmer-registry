@@ -1,0 +1,19 @@
+{{- if .Values.api.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openg2p-connector.fullname" . }}-api
+  labels:
+    {{- include "openg2p-connector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.api.service.port }}
+      targetPort: {{ .Values.api.service.targetPort }}
+      protocol: TCP
+  selector:
+    {{- include "openg2p-connector.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+{{- end }}

@@ -142,6 +142,43 @@ def is_blank(value) -> bool:
     return False
 
 
+def active_records(records: list[dict]) -> list[dict]:
+    """The rows a table section is keeping. A row the enumerator removed still
+    arrives, flagged edit_action=DELETE, and must not count towards a
+    duplicate or required check -- otherwise re-adding a row after deleting it
+    would be refused."""
+    return [
+        record
+        for record in records
+        if str(record.get("edit_action") or "").upper() != "DELETE"
+    ]
+
+
+def reject_duplicates(records: list[dict], key, message: str) -> None:
+    """Refuse the save when two kept rows share key(record).
+
+    key returns None for a row that has nothing to compare (blank value):
+    emptiness is a required-check concern, and two empty rows are not
+    "the same ID". Only rows within the submitted section are compared --
+    the intake and change-request paths both send the whole table.
+    """
+    seen = set()
+    for record in active_records(records):
+        value = key(record)
+        if value is None:
+            continue
+        if value in seen:
+            validation_error(message)
+        seen.add(value)
+
+
+def normalized_text(value) -> str | None:
+    """Trimmed, case-folded text for comparisons; None when blank."""
+    if is_blank(value):
+        return None
+    return " ".join(str(value).split()).casefold()
+
+
 # Coordinates. The platform stores latitude/longitude as VARCHAR (G2PGeo), but
 # the number widget submits a float, and asyncpg refuses to bind a float to a
 # VARCHAR parameter ("expected str, got float"). Every intake save of a

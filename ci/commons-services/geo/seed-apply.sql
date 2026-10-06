@@ -7,6 +7,27 @@
 --
 -- Every guard aborts the whole transaction: nothing is half-applied.
 
+-- 0. Seed corrections. The special woredas (Kebena, Mareko, Tembaro) were
+-- first seeded with no parent, so their zone listed no woredas and the
+-- Location cascade stopped at Zone. A Master Data loaded before the
+-- seed was corrected still holds those NULLs, and the parent guard below
+-- would then refuse every later run. Fill a NULL parent from the seed -- only
+-- a NULL, and only with a parent row that exists here under the seed's id, so
+-- a name-keyed hierarchy (livestock's) is not touched and still trips the
+-- guard as before.
+UPDATE g2p_geo_level_values v
+   SET parent_level_value_id = s.parent_level_value_id
+  FROM _seed_values s
+ WHERE v.level_value_id = s.level_value_id
+   AND v.parent_level_value_id IS NULL
+   AND s.parent_level_value_id IS NOT NULL
+   AND EXISTS (SELECT 1
+                 FROM g2p_geo_level_values p
+                 JOIN _seed_values sp ON sp.level_value_id = p.level_value_id
+                WHERE p.level_value_id = s.parent_level_value_id
+                  -- the parent is linked the seed's way too (by id, not name)
+                  AND p.parent_level_value_id IS NOT DISTINCT FROM sp.parent_level_value_id);
+
 -- 1. Preconditions.
 DO $$
 DECLARE

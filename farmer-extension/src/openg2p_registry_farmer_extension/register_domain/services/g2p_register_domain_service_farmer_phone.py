@@ -7,7 +7,7 @@ from openg2p_registry_core.models import (
 from openg2p_registry_core.services import G2PRegisterDomainService
 from sqlalchemy import select, update
 
-from .domain_validation_utils import is_blank, validation_error
+from .domain_validation_utils import is_blank, reject_duplicates, validation_error
 from .validation_rules import PHONE_COUNTRY_CODE, normalize_phone, phone_e164
 
 _logger = logging.getLogger("g2p-register-domain-service")
@@ -51,6 +51,17 @@ class G2PRegisterDomainServiceFarmerPhone(G2PRegisterDomainService):
 
         if sum(bool(record.get("is_primary")) for record in active_records) > 1:
             validation_error("Only one phone number can be the primary phone")
+
+        # One number, one row: the same handset filed as Primary and
+        # as Secondary is a data-entry slip, not two contact points. Every
+        # number was reduced to its 9 digits above, so 0912345678, 912345678
+        # and +251912345678 all compare equal here.
+        reject_duplicates(
+            active_records,
+            lambda record: record.get("phone_number") or None,
+            "The same Phone Number is listed more than once; each number can be "
+            "recorded only once, under one Phone Type",
+        )
 
     async def post_approve(self, change_request: G2PRegisterChangeRequest, session):
         if change_request.section_register_id != FARMER_PHONE_REGISTER_ID:

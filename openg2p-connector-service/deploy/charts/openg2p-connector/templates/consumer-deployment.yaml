@@ -1,0 +1,51 @@
+{{- if .Values.consumer.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openg2p-connector.fullname" . }}-consumer
+  labels:
+    {{- include "openg2p-connector.labels" . | nindent 4 }}
+    app.kubernetes.io/component: consumer
+spec:
+  replicas: {{ .Values.consumer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "openg2p-connector.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: consumer
+  template:
+    metadata:
+      labels:
+        {{- include "openg2p-connector.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: consumer
+    spec:
+      serviceAccountName: {{ include "openg2p-connector.serviceAccountName" . }}
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      {{- if .Values.postgresCheckerInit.enabled }}
+      initContainers:
+        - name: postgres-checker
+          image: {{ .Values.postgresCheckerInit.image }}
+          imagePullPolicy: IfNotPresent
+          command: ["sh"]
+          args:
+            - -c
+            - >-
+              until pg_isready -U ${CONNECTOR_DB_USERNAME} -h ${CONNECTOR_DB_HOSTNAME}
+              -p ${CONNECTOR_DB_PORT:-5432} -d ${CONNECTOR_DB_DBNAME};
+              do sleep 3; done
+          env:
+            {{- include "openg2p-connector.commonEnv" . | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: connector-consumer
+          image: "{{ .Values.consumer.image.repository }}:{{ .Values.consumer.image.tag }}"
+          imagePullPolicy: {{ .Values.consumer.image.pullPolicy }}
+          args:
+            {{- toYaml .Values.consumer.command | nindent 12 }}
+          env:
+            {{- include "openg2p-connector.commonEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.consumer.resources | nindent 12 }}
+{{- end }}
