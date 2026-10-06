@@ -169,6 +169,7 @@ PATCHES = [
             "        from openg2p_registry_core.helpers.awe_helper import AweHelper\n"
             "        from openg2p_registry_core.services.g2p_attribute_value_validator import G2PAttributeValueValidator\n"
             "        from openg2p_registry_core.services.g2p_awe_integration_service import G2PAweIntegrationService\n"
+            "        from openg2p_registry_core.services.g2p_awe_policy_configuration_service import G2PAwePolicyConfigurationService\n"
             "        from openg2p_registry_core.services.g2p_completion_score_service import G2PCompletionScoreService\n"
             "        from openg2p_registry_core.services.g2p_document_service import G2PDocumentService\n"
             "        from openg2p_registry_core.services.g2p_register_history_service import G2PRegisterHistoryService\n"
@@ -179,6 +180,7 @@ PATCHES = [
             "        AweHelper()\n"
             "        G2PAttributeValueValidator()\n"
             "        G2PAweIntegrationService()\n"
+            "        G2PAwePolicyConfigurationService()\n"
             "        G2PCompletionScoreService()\n"
             "        G2PDocumentService()\n"
             "        G2PRegisterHistoryService()\n"
@@ -189,11 +191,76 @@ PATCHES = [
         ),
         why=(
             "The celery worker never creates the attribute validator, document, "
-            "history, verification, score and AWE services, nor the fastapi-cache "
+            "history, verification, score, AWE and AWE policy services, nor the "
+            "fastapi-cache "
             "backend. Saving an ingested submission as a draft intake (the ODK "
             "and DCI paths) needs all of them, so every ingest failed with "
             "\"'NoneType' object has no attribute ...\" or \"You must call init "
             "first!\" and never reached staff."
+        ),
+    ),
+    Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        old=(
+            "async def _finalize_submission_async(submission_id: str, session) -> None:\n"
+            "    await G2PIntakeFormDataService.get_component().finalize_submission_with_session(\n"
+            "        submission_id,\n"
+            "        session,\n"
+            "    )\n"
+        ),
+        new=(
+            "async def _finalize_submission_async(submission_id: str, session) -> None:\n"
+            "    await G2PIntakeFormDataService.get_component().finalize_submission_with_session(\n"
+            "        submission_id,\n"
+            "        session,\n"
+            "        bearer_token=await _awe_service_token(),\n"
+            "    )\n"
+            "\n"
+            "\n"
+            "_awe_token_cache: dict = {}\n"
+            "\n"
+            "\n"
+            "async def _awe_service_token() -> str | None:\n"
+            '    """Token the intake\'s approval workflow is started with.\n'
+            "\n"
+            "    Finalizing starts the AWE workflow, and AWE needs a token of the realm.\n"
+            "    A worker has no user's, so it takes a client-credentials token of\n"
+            "    REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID. With those settings unset this is\n"
+            "    None and AWE, when enabled, refuses with AWE_BEARER_TOKEN_REQUIRED, which\n"
+            "    marks the ingest FAILED with that reason.\n"
+            '    """\n'
+            "    import os\n"
+            "    import time\n"
+            "\n"
+            "    import httpx\n"
+            "\n"
+            '    token_url = os.environ.get("REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL")\n'
+            '    client_id = os.environ.get("REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID")\n'
+            '    client_secret = os.environ.get("REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET")\n'
+            "    if not (token_url and client_id and client_secret):\n"
+            "        return None\n"
+            '    if _awe_token_cache.get("expires_at", 0) > time.time() + 30:\n'
+            '        return _awe_token_cache["token"]\n'
+            "    async with httpx.AsyncClient(timeout=30) as client:\n"
+            "        response = await client.post(\n"
+            "            token_url,\n"
+            "            data={\n"
+            '                "grant_type": "client_credentials",\n'
+            '                "client_id": client_id,\n'
+            '                "client_secret": client_secret,\n'
+            "            },\n"
+            "        )\n"
+            "        response.raise_for_status()\n"
+            "        body = response.json()\n"
+            '    _awe_token_cache["token"] = body["access_token"]\n'
+            '    _awe_token_cache["expires_at"] = time.time() + int(body.get("expires_in", 60))\n'
+            '    return body["access_token"]\n'
+        ),
+        why=(
+            "The worker finalized ingested submissions without a token, so no AWE "
+            "approval workflow started (or, with AWE enabled, finalize failed): the "
+            "submission sat FINAL with no task for any approver. It now starts the "
+            "workflow as a staff Submit does, with a service client's token."
         ),
     ),
     Patch(

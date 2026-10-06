@@ -102,6 +102,15 @@ its response when a data model has no response template. Without the first,
 every ingest stopped at `ingestion_status=FAILED`; without the second, the
 connector saw a 500 for every submission and re-sent it on each poll.
 
+Approval: the worker finalizes each draft as a staff Submit does, which starts
+the intake's AWE approval workflow, so approvers get a task (status PENDING with
+an AWE request). The worker has no user, so it logs in with a client-credentials
+token: `REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL` / `_CLIENT_ID` / `_CLIENT_SECRET`,
+plus the `REGISTRY_CORE_AWE_*` settings the staff-portal-api uses. The chart
+points these at the release's own client (`global.authClientId`), which needs
+**Service accounts** enabled in Keycloak; check that on each environment. A
+missing token fails the ingest with `AWE_BEARER_TOKEN_REQUIRED`.
+
 Notes on the mapping:
 - The form stores administrative **codes** without the leading zero (kebele
   `40801101001`). The template pads them to Master Data's ids
