@@ -41,11 +41,13 @@
 {%- set age = personal.get('age', None) -%}
 
 {# --- Phones --- #}
-{%- set raw_phone_pri = personal.get('primary_phone_number', '') or personal.get('other_phone_number', '') or '' -%}
+{%- set raw_phone_pri = personal.get('primary_phone_number', '') or '' -%}
 {%- if not raw_phone_pri and personal.get('phone_number', '') not in ['yes', 'no'] -%}
   {%- set raw_phone_pri = personal.get('phone_number', '') -%}
 {%- endif -%}
 {%- set raw_phone_sec = personal.get('secondary_phone_number', '') or '' -%}
+{%- set raw_phone_oth = personal.get('other_phone_number', '') or '' -%}
+
 {%- set clean_pri = (raw_phone_pri | string | trim | replace(' ', '') | replace('-', '')) -%}
 {%- if clean_pri.startswith('+251') -%}
   {%- set phone_pri = clean_pri[4:] -%}
@@ -54,6 +56,7 @@
 {%- else -%}
   {%- set phone_pri = clean_pri -%}
 {%- endif -%}
+
 {%- set clean_sec = (raw_phone_sec | string | trim | replace(' ', '') | replace('-', '')) -%}
 {%- if clean_sec.startswith('+251') -%}
   {%- set phone_sec = clean_sec[4:] -%}
@@ -62,12 +65,25 @@
 {%- else -%}
   {%- set phone_sec = clean_sec -%}
 {%- endif -%}
+
+{%- set clean_oth = (raw_phone_oth | string | trim | replace(' ', '') | replace('-', '')) -%}
+{%- if clean_oth.startswith('+251') -%}
+  {%- set phone_oth = clean_oth[4:] -%}
+{%- elif clean_oth.startswith('251') and clean_oth | length > 9 -%}
+  {%- set phone_oth = clean_oth[3:] -%}
+{%- else -%}
+  {%- set phone_oth = clean_oth -%}
+{%- endif -%}
+
 {%- set phones_list = [] -%}
 {%- if phone_pri -%}
   {%- set _ = phones_list.append({"phone_number": phone_pri, "phone_type": "PRIMARY", "country_code": "ETH", "is_primary": true}) -%}
 {%- endif -%}
 {%- if phone_sec -%}
   {%- set _ = phones_list.append({"phone_number": phone_sec, "phone_type": "SECONDARY", "country_code": "ETH", "is_primary": false}) -%}
+{%- endif -%}
+{%- if phone_oth -%}
+  {%- set _ = phones_list.append({"phone_number": phone_oth, "phone_type": "OTHER", "country_code": "ETH", "is_primary": false}) -%}
 {%- endif -%}
 
 {# --- GPS Parsing --- #}
@@ -120,14 +136,16 @@
   {%- set _ = lands_records.append(land_dict) -%}
 {%- endfor -%}
 
-{# --- Crop Repeats --- #}
+{# --- Crop Repeats ---
+   The form asks no season, so a crop defaults to MEHER, the main rains: the
+   seasons the register offers are MEHER / BELG / IRRIGATED / PERENNIAL. #}
 {%- set raw_crops = d.get('crop_information', {}).get('crop_repeat', []) or d.get('crop_repeat', []) or [] -%}
 {%- set crops_records = [] -%}
 {%- for c in (raw_crops if raw_crops is iterable and raw_crops is not mapping and raw_crops is not string else []) -%}
   {%- set _ = crops_records.append({
       "commodity": (c.get('crop_name_rep', '') or c.get('crop_name', '') or '') | upper,
       "planted_date": (c.get('crop_date', '') or '').split('T')[0],
-      "season": (c.get('crop_season', '') or 'KHARIF') | upper,
+      "season": (c.get('crop_season', '') or 'MEHER') | upper,
       "end_use": "FOOD_HUMAN_CONSUMPTION"
   }) -%}
 {%- endfor -%}

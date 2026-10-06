@@ -4,7 +4,9 @@ name: Checks
 #   * the openg2p-registry pin must stay in lockstep across the Dockerfiles and
 #     the Helm chart dependency (test/test_rp_pin_lockstep.py);
 #   * the platform overlay patches must still apply to the pinned sources and
-#     behave as documented (test/test_patch_platform_iam_permissions.py).
+#     behave as documented (test/test_patch_platform_iam_permissions.py);
+#   * every location in the Ethiopia geo seed hangs off a parent, so the
+#     Location cascade can reach it (test/test_geo_seed_hierarchy.py).
 # Runs in parallel with build-publish.yml; a split pin or a patch that no longer
 # matches shows red in seconds instead of surfacing as a broken image later.
 
@@ -26,3 +28,5 @@ jobs:
         run: python -m pytest test/test_rp_pin_lockstep.py -q
       - name: platform overlay patches still apply
         run: python -m pytest test/test_patch_platform_iam_permissions.py -q
+      - name: location seed is one connected tree
+        run: python -m pytest test/test_geo_seed_hierarchy.py -q

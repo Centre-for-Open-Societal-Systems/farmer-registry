@@ -38,6 +38,11 @@ pipeline {
         }
 
         stage('Checkout dashboard-api') {
+            // TEMPORARY: farmer-registry-dashboard-api has not been merged to its
+            // staging branch yet, so staging builds skip it: no dashboard-api image
+            // is built, and the staging deploy leaves dashboard-api out. Drop this
+            // `when` once it is merged.
+            when { not { branch 'staging' } }
             steps {
                 script {
                     // A PR build (BRANCH_NAME PR-<n>) matches on its source branch.
@@ -94,20 +99,42 @@ pipeline {
                         // not deploy this image, so nothing downstream depends on it yet.
                         // [name: 'dashboard-ui',  dockerfile: 'docker/dashboard-ui/Dockerfile',  args: "--build-arg NEXT_PUBLIC_PORTAL_URL=${NEXT_PUBLIC_PORTAL_URL}"],
                         // Built from its own repository, cloned by 'Checkout dashboard-api'.
+                        // Tagged with the API repository's commit, not this one: a build
+                        // that only picks up new API code must still change the deployed
+                        // tag, or Helm sees no change and nodes keep the image they have.
                         [name: 'dashboard-api', dockerfile: '.build/dashboard-api/Dockerfile', context: '.build/dashboard-api',
-                         args: "--label org.opencontainers.image.source=${DASHBOARD_API_REPO} --label org.opencontainers.image.revision=${env.DASHBOARD_API_SHA} --label org.opencontainers.image.ref.name=${env.DASHBOARD_API_REF_USED}"],
+                         tag: env.DASHBOARD_API_SHA,
+                         args:"--label org.opencontainers.image.source=${DASHBOARD_API_REPO} --label org.opencontainers.image.revision=${env.DASHBOARD_API_SHA} --label org.opencontainers.image.ref.name=${env.DASHBOARD_API_REF_USED}"],
+                        // The ODK connector and its management UI, each built from its
+                        // own directory. One service image runs the chart's api, worker
+                        // and beat; see ci/connector/README.md. crop and live build
+                        // theirs the same way, so farmer's connector moves with farmer's
+                        // builds rather than another registry's.
+                        [name: 'connector-service', dockerfile: 'openg2p-connector-service/Dockerfile',
+                         context: 'openg2p-connector-service', args: ''],
+                        [name: 'connector-ui',      dockerfile: 'openg2p-connector-ui/Dockerfile',
+                         context: 'openg2p-connector-ui',      args: ''],
                     ]
+                    // Skipped when 'Checkout dashboard-api' did not run (staging).
+                    if (!env.DASHBOARD_API_SHA) {
+                        components = components.findAll { it.name != 'dashboard-api' }
+                    }
 
+                    // Each environment branch also moves a tag of its own name, so
+                    // :develop, :staging and :main always hold that branch's latest
+                    // build. It used to be :develop for every branch, so a staging
+                    // build overwrote the develop image.
+                    def movingTag = (env.BRANCH_NAME in ['develop', 'staging', 'main']) ? env.BRANCH_NAME : null
                     components.each { c ->
-                        def image  = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${env.IMAGE_TAG}"
-                        def latest = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:develop"
+                        def image  = "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${c.tag ?: env.IMAGE_TAG}"
+                        def latest = movingTag ? "${ECR_REGISTRY}/${ECR_PATH}/${c.name}:${movingTag}" : null
                         def target = c.target ? "--target ${c.target}" : ''
                         def context = c.context ?: '.'
                         sh """
                             docker build ${c.args} ${target} \
-                                -f ${c.dockerfile} -t ${image} -t ${latest} ${context}
+                                -f ${c.dockerfile} -t ${image} ${latest ? "-t ${latest}" : ''} ${context}
                             docker push ${image}
-                            docker push ${latest}
+                            ${latest ? "docker push ${latest}" : ''}
                         """
                     }
                 }
@@ -192,18 +219,6 @@ registry:
     image:
       repository: ${ECR_REGISTRY}/${ECR_PATH}/sanity-tests
       tag: "${env.IMAGE_TAG}"
-# The dashboard service for the OAN dashboards (ClusterIP only).
-dashboardApi:
-  enabled: true
-  image:
-    repository: ${ECR_REGISTRY}/${ECR_PATH}/dashboard-api
-    tag: "${env.IMAGE_TAG}"
-  # Private hostname for developers and tools (host nginx allowlist + the
-  # namespace's internal gateway). The BFF uses the ClusterIP Service.
-  virtualService:
-    enabled: true
-    host: dashboard-api.${HELM_NAMESPACE}.openg2p.test
-    gateway: internal
 # Of the chart's analytics layer only the reporting views and their hourly
 # refresh are deployed: the dashboard API reads fr_rpt_farmer and fr_rpt_land.
 # The bulk sample-data generator, the Superset dashboard import and the Insights
@@ -218,6 +233,23 @@ analytics:
 mapsContent:
   enabled: false
 EOF
+                        # dashboard-api only when this build made its image (not on staging).
+                        if [ -n "${env.DASHBOARD_API_SHA ?: ''}" ]; then
+                            cat >> /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml <<EOF
+# The dashboard service for the OAN dashboards (ClusterIP only).
+dashboardApi:
+  enabled: true
+  image:
+    repository: ${ECR_REGISTRY}/${ECR_PATH}/dashboard-api
+    tag: "${env.DASHBOARD_API_SHA}"
+  # Private hostname for developers and tools (host nginx allowlist + the
+  # namespace's internal gateway). The BFF uses the ClusterIP Service.
+  virtualService:
+    enabled: true
+    host: dashboard-api.${HELM_NAMESPACE}.openg2p.test
+    gateway: internal
+EOF
+                        fi
 
                         # Keep the release's own values (hostnames, Keycloak and IAM
                         # wiring, cookie domain) and change only what this build owns.
@@ -267,13 +299,15 @@ EOF
                         kubectl rollout status deployment/${HELM_RELEASE}-partner-api -n ${HELM_NAMESPACE} --timeout=180s
                         kubectl rollout status deployment/${HELM_RELEASE}-celery-worker -n ${HELM_NAMESPACE} --timeout=180s
                         kubectl rollout status deployment/${HELM_RELEASE}-celery-beat-producer -n ${HELM_NAMESPACE} --timeout=180s
-                        kubectl rollout status deployment/${HELM_RELEASE}-dashboard-api -n ${HELM_NAMESPACE} --timeout=180s
+                        if [ -n "${env.DASHBOARD_API_SHA ?: ''}" ]; then
+                            kubectl rollout status deployment/${HELM_RELEASE}-dashboard-api -n ${HELM_NAMESPACE} --timeout=180s
 
-                        # Ready only means the database answers SELECT 1. Query real charts
-                        # through the Service, so a missing reporting view or a broken
-                        # Service fails this deploy instead of the dashboards.
-                        echo "=== dashboard-api smoke test ==="
-                        kubectl exec -n ${HELM_NAMESPACE} deploy/${HELM_RELEASE}-dashboard-api -- python -c "import json, urllib.request as u; base = 'http://${HELM_RELEASE}-dashboard-api.${HELM_NAMESPACE}'; [print(p, 'OK', len(json.load(u.urlopen(base + p, timeout=30)))) for p in ('/health', '/api/v1/charts/farmerKpis', '/api/v1/charts/farmersByRegion', '/api/v1/charts/landTenureSplit', '/api/v1/charts/registryTrendByMonth')]"
+                            # Ready only means the database answers SELECT 1. Query real charts
+                            # through the Service, so a missing reporting view or a broken
+                            # Service fails this deploy instead of the dashboards.
+                            echo "=== dashboard-api smoke test ==="
+                            kubectl exec -n ${HELM_NAMESPACE} deploy/${HELM_RELEASE}-dashboard-api -- python -c "import json, urllib.request as u; base = 'http://${HELM_RELEASE}-dashboard-api.${HELM_NAMESPACE}'; [print(p, 'OK', len(json.load(u.urlopen(base + p, timeout=30)))) for p in ('/health', '/api/v1/charts/farmerKpis', '/api/v1/charts/farmersByRegion', '/api/v1/charts/landTenureSplit', '/api/v1/charts/registryTrendByMonth')]"
+                        fi
 
                         
                         # explicit log of that outcome
