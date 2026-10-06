@@ -47,8 +47,6 @@ This guide documents the complete end-to-end configuration for ingesting **ODK C
 | **`odk/PrimaryCoopList.csv`** | Preloaded lookup dataset for Primary Cooperatives attached as media. |
 | **`odk/templates/farmer_transform.j2`** | Jinja2 template uploaded to MinIO `templates` bucket for Celery Worker transformation. |
 | **`odk/setup_farmer_odk_connector.sql`** | Database seeds to register `farmer-partner` and `FARMER_ODK_MODEL`. |
-| **`odk/seed_connector_pipelines.sql`** | OpenG2P Connector Service pipeline definition to poll ODK Central and forward to Partner API. |
-| **`odk/connector-k8s-deployment.yaml`** | Complete Kubernetes Deployment manifest for Connector API, Celery Worker, and Management UI. |
 | **`odk/README.md`** | Detailed field mapping table from ODK questions to OpenG2P tables. |
 
 ---
@@ -77,12 +75,16 @@ Run the queries in `odk/setup_farmer_odk_connector.sql`:
 2. **In `farmer` registry database**:
    ```sql
    INSERT INTO public.data_models (data_model_id, data_model_mnemonic, pattern_for_data_model, response_template_document_id, is_active)
-   VALUES ('FARMER_ODK_MODEL', 'FARMER_ODK_MODEL', '$.body.header.sender_id=>^.*$', NULL, true)
-   ON CONFLICT (data_model_id) DO NOTHING;
+   VALUES ('FARMER_ODK_MODEL', 'FARMER_ODK_MODEL', '$.body.header.sender_id=>^.*$', '1f0953d4-f0fb-4336-a126-4d0519a74ffc', true)
+   ON CONFLICT (data_model_id) DO UPDATE SET response_template_document_id = EXCLUDED.response_template_document_id, is_active = true;
 
    INSERT INTO public.incoming_model_key_paths (key_path_id, data_model_id, key_path_for_message_id, key_path_for_sender, key_path_for_signature, key_path_for_signature_payload, is_list, key_path_for_list_elements)
-   VALUES ('farmer_key_path', 'FARMER_ODK_MODEL', '$.body.header.message_id', '$.body.header.sender_id', '$.body.header.signature', '$.body.message', false, NULL)
-   ON CONFLICT (key_path_id) DO NOTHING;
+   VALUES ('farmer_key_path', 'FARMER_ODK_MODEL', '$.body.header.message_id', '$.body.header.sender_id', '$.body.header.signature', '$.body.message', false, '')
+   ON CONFLICT (key_path_id) DO UPDATE SET key_path_for_list_elements = EXCLUDED.key_path_for_list_elements;
+
+   INSERT INTO public.incoming_model_semantic_patterns (semantic_pattern_id, data_model_id, register_id, intake_form_id, section_id, pattern_for_register, pattern_for_intake_form, pattern_for_section, key_path_for_business_payload, raw_payload_enricher_class)
+   VALUES ('farmer_odk_semantic_pattern', 'FARMER_ODK_MODEL', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'a1a4d25a-1cd4-4356-abac-8782382649', NULL, NULL, '$.body.header.sender_id=>^.*$', NULL, '$.body.message.payload', 'G2PDciFarmerCreateEnricherService')
+   ON CONFLICT (semantic_pattern_id) DO UPDATE SET key_path_for_business_payload = EXCLUDED.key_path_for_business_payload;
    ```
 
 ### Step 3: Upload Jinja2 Template to MinIO
