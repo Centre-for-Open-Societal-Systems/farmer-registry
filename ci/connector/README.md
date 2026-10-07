@@ -106,7 +106,9 @@ Approval: the worker finalizes each draft as a staff Submit does, which starts
 the intake's AWE approval workflow, so approvers get a task (status PENDING with
 an AWE request). The worker has no user, so it logs in with a client-credentials
 token: `REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL` / `_CLIENT_ID` / `_CLIENT_SECRET`,
-plus the `REGISTRY_CORE_AWE_*` settings the staff-portal-api uses. The chart
+plus the AWE settings the staff-portal-api uses, as `REGISTRY_CELERY_WORKERS_AWE_*`
+(the worker reads the platform settings under its own prefix; `REGISTRY_CORE_AWE_*`
+is ignored there and AWE silently stays off). The chart
 points these at the release's own client (`global.authClientId`), which needs
 **Service accounts** enabled in Keycloak; check that on each environment. A
 missing token fails the ingest with `AWE_BEARER_TOKEN_REQUIRED`.

@@ -17,6 +17,7 @@ patcher on them fails loudly if the platform moved.
 """
 
 import pathlib
+import re
 import runpy
 import shutil
 
@@ -102,3 +103,14 @@ def test_rerun_is_a_no_op(patched, tmp_path, monkeypatch, capsys):
     out = capsys.readouterr()
     assert exit_info.value.code == 0, out.err
     assert "0 patch(es) applied" in out.out
+
+
+def test_worker_awe_settings_use_the_worker_prefix():
+    """In the celery worker the platform reads its settings through the worker's
+    own config class (prefix registry_celery_workers_), so AWE settings under
+    REGISTRY_CORE_ are ignored there: AWE stays off and ingested intakes get no
+    approval request, with no error anywhere."""
+    for path in ("helm/openg2p-farmer-registry/values.yaml", "docker-compose.yml"):
+        text = (REPO / path).read_text(encoding="utf-8")
+        assert not re.search(r"^\s*REGISTRY_CORE_AWE_\w+:", text, re.M), path
+        assert "REGISTRY_CELERY_WORKERS_AWE_ENABLED" in text, path
