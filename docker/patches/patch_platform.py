@@ -241,9 +241,26 @@ PATCHES = [
             "        return None\n"
             '    if _awe_token_cache.get("expires_at", 0) > time.time() + 30:\n'
             '        return _awe_token_cache["token"]\n'
+            "    # The token URL is usually Keycloak's in-cluster address, and Keycloak\n"
+            "    # stamps the issuer from the host it is called on, which AWE does not\n"
+            "    # accept. REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL (the public\n"
+            "    # Keycloak base) is presented as X-Forwarded-* so the token carries the\n"
+            "    # issuer AWE trusts, while the call itself stays in-cluster.\n"
+            "    headers = {}\n"
+            '    issuer_base = os.environ.get("REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL")\n'
+            "    if issuer_base:\n"
+            "        from urllib.parse import urlsplit\n"
+            "\n"
+            "        public = urlsplit(issuer_base)\n"
+            "        headers = {\n"
+            '            "X-Forwarded-Host": public.hostname or "",\n'
+            '            "X-Forwarded-Proto": public.scheme or "https",\n'
+            '            "X-Forwarded-Port": str(public.port or (443 if public.scheme != "http" else 80)),\n'
+            "        }\n"
             "    async with httpx.AsyncClient(timeout=30) as client:\n"
             "        response = await client.post(\n"
             "            token_url,\n"
+            "            headers=headers,\n"
             "            data={\n"
             '                "grant_type": "client_credentials",\n'
             '                "client_id": client_id,\n'

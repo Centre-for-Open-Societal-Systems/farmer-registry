@@ -514,6 +514,8 @@ services:
       REGISTRY_CELERY_WORKERS_AWE_DEFAULT_CALLBACK_URL: "http://farmer-registry-staff-api:8000/awe/webhooks/decision"
       REGISTRY_CELERY_WORKERS_AWE_CALLBACK_SECRET_ID: ${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}
       REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: "http://keycloak:8080/realms/staff/protocol/openid-connect/token"
+      # AWE trusts the browser-facing issuer (localhost), not keycloak:8080.
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL: "http://localhost:${KEYCLOAK_PORT:-8080}"
       REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID: farmer-registry-ingestion
       REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET: ${KEYCLOAK_INGESTION_CLIENT_SECRET:-dev-registry-ingestion-secret}
       REGISTRY_CELERY_WORKERS_WORKER_MAX_ATTEMPTS: 5
