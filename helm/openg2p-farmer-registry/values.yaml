@@ -120,11 +120,16 @@ registry:
     # prefix; REGISTRY_CORE_AWE_* is silently ignored there and AWE stays off.
     envVars:
       REGISTRY_CELERY_WORKERS_AWE_ENABLED: '{{ .Values.global.aweEnabled }}'
-      REGISTRY_CELERY_WORKERS_AWE_BASE_URL: '{{ tpl .Values.global.aweBaseUrl $ }}'
+      # In-cluster, like db-seed's AWE wait: the ingress URL (global.aweBaseUrl)
+      # is signed by a private CA on far that the worker does not carry.
+      REGISTRY_CELERY_WORKERS_AWE_BASE_URL: 'http://{{ tpl .Values.global.aweReleaseName $ }}-awe'
       REGISTRY_CELERY_WORKERS_AWE_HTTP_TIMEOUT_SECONDS: '{{ .Values.global.aweHttpTimeoutSeconds }}'
       REGISTRY_CELERY_WORKERS_AWE_DEFAULT_CALLBACK_URL: '{{ tpl .Values.global.aweDefaultCallbackUrl $ }}'
       REGISTRY_CELERY_WORKERS_AWE_CALLBACK_SECRET_ID: '{{ tpl .Values.global.aweCallbackSecretId $ }}'
       REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: "{{ tpl .Values.global.keycloakIssuerUrl $ }}/protocol/openid-connect/token"
+      # keycloakIssuerUrl may be Keycloak's in-cluster address; the token must
+      # still carry the public issuer AWE trusts, which this host provides.
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
       REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID: '{{ tpl .Values.global.authClientId $ }}'
     envVarsFrom:
       REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET:
