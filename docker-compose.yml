@@ -509,10 +509,10 @@ services:
       REGISTRY_CELERY_WORKERS_BATCH_SIZE: 2000
       # Ingested (partner / ODK) submissions start their AWE approval workflow
       # like a staff Submit, logged in as the farmer-registry-ingestion client.
-      REGISTRY_CORE_AWE_ENABLED: "true"
-      REGISTRY_CORE_AWE_BASE_URL: "http://awe:8000"
-      REGISTRY_CORE_AWE_DEFAULT_CALLBACK_URL: "http://farmer-registry-staff-api:8000/awe/webhooks/decision"
-      REGISTRY_CORE_AWE_CALLBACK_SECRET_ID: ${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}
+      REGISTRY_CELERY_WORKERS_AWE_ENABLED: "true"
+      REGISTRY_CELERY_WORKERS_AWE_BASE_URL: "http://awe:8000"
+      REGISTRY_CELERY_WORKERS_AWE_DEFAULT_CALLBACK_URL: "http://farmer-registry-staff-api:8000/awe/webhooks/decision"
+      REGISTRY_CELERY_WORKERS_AWE_CALLBACK_SECRET_ID: ${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}
       REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: "http://keycloak:8080/realms/staff/protocol/openid-connect/token"
       REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID: farmer-registry-ingestion
       REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET: ${KEYCLOAK_INGESTION_CLIENT_SECRET:-dev-registry-ingestion-secret}
