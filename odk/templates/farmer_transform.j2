@@ -158,6 +158,14 @@
   {%- if l_area is not none and l_area > 0 -%}
     {%- set _ = land_dict.update({"area_in_hectare": l_area}) -%}
   {%- endif -%}
+  {#- The connector inlines the certificate photo (embed_attachments) as
+      {"__type": "File", ...}; the land service uploads it and stores the
+      document id. A bare file name means the image did not come along, so it
+      is left out rather than stored as text. -#}
+  {%- set cert = l.get('land_certificate') -%}
+  {%- if cert is mapping and cert.get('__type') == 'File' -%}
+    {%- set _ = land_dict.update({"certificate_storage_id": cert, "certificate_provided": true}) -%}
+  {%- endif -%}
   {%- set _ = lands_records.append(land_dict) -%}
 {%- endfor -%}
 

@@ -104,6 +104,9 @@ async def seed_default_pipelines(conn: AsyncConnection) -> None:
         "form_id": odk_form_id,
         # Expands ODK repeat groups (land, crops, livestock) into the payload.
         "resolve_nav_links": True,
+        # Land certificates (and any other ODK attachment) travel inline so
+        # the registry stores them as documents; OData alone has the name only.
+        "embed_attachments": True,
         "strict_incremental": False,
         "target_url": f"{partner_base}/partner/ingest_data",
         "target_headers": {

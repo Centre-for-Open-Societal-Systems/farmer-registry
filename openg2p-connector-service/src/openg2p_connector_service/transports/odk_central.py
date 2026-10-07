@@ -39,8 +39,11 @@ Configuration knobs (``source_config_json``)
 """
 
 import asyncio
+import base64
 import logging
+import mimetypes
 from typing import Any, AsyncIterator
+from urllib.parse import quote
 
 import httpx
 
@@ -160,6 +163,14 @@ class OdkCentralTransport(BaseTransport):
         resolve_nav_links = _cfg_bool(cfg, "resolve_nav_links", default=False)
         nav_link_filter = _cfg_nav_link_filter(cfg)
         nav_link_max_depth = int(cfg.get("nav_link_max_depth", 4))
+        # OData carries only an attachment's file name (a photo, a scanned
+        # certificate); the bytes are a separate download. With
+        # embed_attachments set, each submission's attachments are fetched
+        # and inlined where their name appears, as the
+        # {"__type": "File", "name", "type", "data": <base64>} value the
+        # registry's file fields accept.
+        embed_attachments = _cfg_bool(cfg, "embed_attachments", default=False)
+        attachment_max_bytes = int(cfg.get("attachment_max_bytes", 10 * 1024 * 1024))
 
         mode_str = str(cfg.get("incremental_mode") or "timestamp").strip().lower()
         if mode_str not in ("timestamp", "updated_at", "sequence", "full_scan"):
@@ -334,6 +345,19 @@ class OdkCentralTransport(BaseTransport):
                             transport="odk_central",
                         ).inc()
                         continue
+
+                    if embed_attachments and instance_id:
+                        await self._embed_attachments(
+                            client=client,
+                            base=base,
+                            project_id=project_id,
+                            form_id=form_id,
+                            instance_id=instance_id,
+                            headers=headers,
+                            entry=entry,
+                            use_draft=use_draft_effective,
+                            max_bytes=attachment_max_bytes,
+                        )
 
                     yield SourceRecord(
                         source_event_id=f"{form_id}:{instance_id}",
@@ -557,6 +581,90 @@ class OdkCentralTransport(BaseTransport):
                 f"{base}/v1/projects/{project_id}/forms/{form_id}/draft.svc/Submissions"
             )
         return f"{base}/v1/projects/{project_id}/forms/{form_id}.svc/Submissions"
+
+    @classmethod
+    async def _embed_attachments(
+        cls,
+        *,
+        client: httpx.AsyncClient,
+        base: str,
+        project_id: Any,
+        form_id: str,
+        instance_id: str,
+        headers: dict,
+        entry: dict,
+        use_draft: bool,
+        max_bytes: int,
+    ) -> None:
+        """Replace each attachment's file name in *entry* with its content.
+
+        Lists the submission's attachments, downloads the ones Central holds
+        (``exists``), and swaps every string equal to an attachment's name,
+        at any depth (repeat groups included), for the inline file value. An
+        attachment that is missing, larger than *max_bytes* or fails to
+        download keeps its file name, with a warning: the record is still
+        sent, without that file.
+        """
+        root = f"{base}/v1/projects/{project_id}/forms/{quote(str(form_id), safe='')}"
+        if use_draft:
+            root += "/draft"
+        listing_url = f"{root}/submissions/{quote(instance_id, safe='')}/attachments"
+        try:
+            resp = await cls._request_with_backoff(client, listing_url, headers, {})
+            attachments = resp.json() or []
+        except (httpx.HTTPError, ValueError) as exc:
+            _logger.warning("ODK attachments listing failed for %s: %s", instance_id, exc)
+            return
+
+        files: dict[str, dict] = {}
+        for attachment in attachments:
+            name = attachment.get("name")
+            if not name or not attachment.get("exists", True):
+                continue
+            url = f"{listing_url}/{quote(name, safe='')}"
+            try:
+                download = await cls._request_with_backoff(client, url, headers, {})
+            except httpx.HTTPError as exc:
+                _logger.warning("ODK attachment %s of %s not downloaded: %s", name, instance_id, exc)
+                continue
+            content = download.content
+            if len(content) > max_bytes:
+                _logger.warning(
+                    "ODK attachment %s of %s is %d bytes, over attachment_max_bytes=%d; "
+                    "sent without it",
+                    name, instance_id, len(content), max_bytes,
+                )
+                continue
+            content_type = (
+                (download.headers.get("content-type") or "").split(";")[0].strip()
+                or mimetypes.guess_type(name)[0]
+                or "application/octet-stream"
+            )
+            files[name] = {
+                "__type": "File",
+                "name": name,
+                "type": content_type,
+                "data": base64.b64encode(content).decode("ascii"),
+            }
+
+        if files:
+            cls._replace_file_names(entry, files)
+
+    @classmethod
+    def _replace_file_names(cls, obj: Any, files: dict[str, dict]) -> Any:
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if isinstance(value, str) and value in files:
+                    obj[key] = dict(files[value])
+                else:
+                    cls._replace_file_names(value, files)
+        elif isinstance(obj, list):
+            for index, value in enumerate(obj):
+                if isinstance(value, str) and value in files:
+                    obj[index] = dict(files[value])
+                else:
+                    cls._replace_file_names(value, files)
+        return obj
 
     @staticmethod
     async def _request_with_backoff(

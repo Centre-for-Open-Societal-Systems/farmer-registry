@@ -72,6 +72,9 @@ SAMPLE_ODK_PAYLOAD = {
             "land_info_repeat": [
                 {
                     "land_ownership": "tenant",
+                    # The connector inlines the photo (embed_attachments).
+                    "land_certificate": {"__type": "File", "name": "deed.jpg",
+                                         "type": "image/jpeg", "data": "/9j/4AAQ"},
                     "total_land_area": 2.75,
                     "land_id": "LND-001",
                     "land_kebele": "Babogaya"
@@ -166,6 +169,8 @@ def main():
         ("latitude", location.get("latitude"), "8.785"),
         ("longitude", location.get("longitude"), "38.91"),
         ("land ownership", land.get("land_ownership_type"), "TENANT"),
+        ("land certificate", (land.get("certificate_storage_id") or {}).get("name"), "deed.jpg"),
+        ("certificate provided", land.get("certificate_provided"), True),
         # The form only takes 251XXXXXXXXX; the registry gets the 9-digit national number.
         ("primary phone", parsed_json["fr_farmer_phone_numbers"][0].get("phone_number"), "911234567"),
     ]
