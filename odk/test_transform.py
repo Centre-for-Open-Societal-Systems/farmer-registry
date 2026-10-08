@@ -194,6 +194,32 @@ def main():
         print("[-] FAILED: bare photo file name produced an fr_farmer_photo section")
         sys.exit(1)
 
+    # Household members collected as full farmers carry their own land
+    # certificate, nested in their land repeat.
+    base = {k: v for k, v in SAMPLE_ODK_PAYLOAD["expanded"].items() if k != "other_hh_members"}
+    cert = {"__type": "File", "name": "member_deed.jpg", "type": "image/jpeg", "data": "/9j/4AAQ"}
+    member = lambda first, land_cert: {
+        "hh_member_basic_info": {"hh_member_personal_info": {
+            "hh_member_first_name_english": first, "hh_member_father_name_english": "Tadesse",
+            "hh_member_grandfather_name_english": "Bekele", "hh_member_gender": "male",
+            "hh_member_date_of_birth": "1990-01-02"}},
+        "hh_member_land_info": {"hh_member_land_info_repeat": [{"hh_member_land_certificate": land_cert}]},
+    }
+    with_members = json.loads(template.render(expanded={**base, "other_farmers_in_hh": {
+        "other_farmers_repeat": [member("Abel", cert), member("Birtukan", "bare_name.jpg")]}}))
+    abel, birtukan = with_members["fr_household_members"]
+    member_checks = [
+        ("member name", abel.get("first_name"), "Abel"),
+        ("member birth date", abel.get("birth_date"), "1990-01-02"),
+        ("member certificate", (abel.get("certificate_storage_id") or {}).get("name"), "member_deed.jpg"),
+        ("member certificate provided", abel.get("certificate_provided"), True),
+        ("member bare file name left out", "certificate_storage_id" in birtukan, False),
+    ]
+    wrong = [f"{n}: {g!r}, expected {w!r}" for n, g, w in member_checks if g != w]
+    if wrong:
+        print("[-] FAILED: " + "; ".join(wrong))
+        sys.exit(1)
+
     seasons = {"MEHER", "BELG", "IRRIGATED", "PERENNIAL"}
     bad = [c.get("season") for c in parsed_json.get("intake_fr_farmer_crops", [])
            if c.get("season") not in seasons]
