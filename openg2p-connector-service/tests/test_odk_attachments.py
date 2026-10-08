@@ -159,3 +159,56 @@ async def test_attachments_are_embedded_by_default(monkeypatch):
 
     cert = records[0].data["land_info"]["land_info_repeat"][0]["land_certificate"]
     assert cert["__type"] == "File" and cert["name"] == "deed.jpg"
+
+
+def _events(caplog, name="odk.ingest"):
+    return [r.ingest for r in caplog.records if r.name == name and hasattr(r, "ingest")]
+
+
+@pytest.mark.asyncio
+async def test_every_attachment_outcome_is_logged(monkeypatch, caplog):
+    import copy
+    import logging
+
+    caplog.set_level(logging.INFO, logger="odk.ingest")
+    await _fetch(monkeypatch, {**CONFIG, "attachment_max_bytes": 1000}, {
+        "/Submissions": _json({"value": [copy.deepcopy(SUBMISSION)]}),
+        "/submissions/uuid%3Aabc/attachments": _json([
+            {"name": "deed.jpg", "exists": True},
+            {"name": "missing.jpg", "exists": False},
+            {"name": "huge.jpg", "exists": True},
+        ]),
+        "/attachments/deed.jpg": _bytes(JPEG),
+        "/attachments/huge.jpg": _bytes(b"x" * 2000),
+    })
+
+    events = {e["event"]: e for e in _events(caplog)}
+    assert events["attachment_embedded"]["file_name"] == "deed.jpg"
+    assert events["attachment_embedded"]["size_bytes"] == len(JPEG)
+    assert events["attachment_not_uploaded"]["file_name"] == "missing.jpg"
+    assert events["attachment_too_large"]["size_bytes"] == 2000
+    assert events["attachment_too_large"]["limit_bytes"] == 1000
+    summary = events["attachments_summary"]
+    assert (summary["listed"], summary["embedded"], summary["not_uploaded"], summary["too_large"]) == (3, 1, 1, 1)
+    assert summary["severity"] == "WARNING"
+    # Every event can be traced to the submission.
+    assert {e["source_event_id"] for e in _events(caplog)} == {"farmer_profile:uuid:abc"}
+    # No file contents in the log.
+    assert base64.b64encode(JPEG).decode("ascii") not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_listing_failure_is_logged(monkeypatch, caplog):
+    import copy
+    import logging
+
+    caplog.set_level(logging.INFO, logger="odk.ingest")
+    await _fetch(monkeypatch, CONFIG, {
+        "/Submissions": _json({"value": [copy.deepcopy(SUBMISSION)]}),
+        "/submissions/uuid%3Aabc/attachments": _json({"message": "forbidden"}, status=403),
+    })
+
+    failed = [e for e in _events(caplog) if e["event"] == "attachment_listing_failed"]
+    assert len(failed) == 1
+    assert failed[0]["http_status"] == 403
+    assert failed[0]["outcome"] == "sent_without_attachments"

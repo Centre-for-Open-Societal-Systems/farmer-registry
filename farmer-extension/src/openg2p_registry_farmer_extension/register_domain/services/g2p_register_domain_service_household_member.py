@@ -41,7 +41,7 @@ class G2PRegisterDomainServiceHouseholdMember(G2PRegisterDomainService):
         if not is_embedded_file(value):
             return
         record["certificate_storage_id"] = await upload_embedded_file(
-            value, record.get("created_by")
+            value, record.get("created_by"), purpose="member_certificate"
         )
 
     @staticmethod

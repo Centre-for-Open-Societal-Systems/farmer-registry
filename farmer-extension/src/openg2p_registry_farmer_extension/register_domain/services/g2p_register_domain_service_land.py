@@ -71,7 +71,7 @@ class G2PRegisterDomainServiceLand(G2PRegisterDomainService):
         if not is_embedded_file(value):
             return
         record["certificate_storage_id"] = await upload_embedded_file(
-            value, record.get("created_by")
+            value, record.get("created_by"), purpose="land_certificate"
         )
 
     def _synchronize_area_in_hectare(self, record: dict) -> None:

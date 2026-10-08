@@ -573,6 +573,54 @@ ORDER BY created_at DESC LIMIT 3;
 | **`All connection attempts failed` in Connector Worker** | Network bridge cannot reach `https://odk.13.207.43.8.nip.io` or DNS resolution failed. | Check outbound internet access from Docker container: `docker exec -it farmer-registry-connector-worker curl -k -I https://odk.13.207.43.8.nip.io`. |
 | **Fayda UID validation error during ingestion** | ODK Central stored UID with spaces (`1234 5678 ...`), violating OpenG2P 16-digit regex. | Handled automatically by `farmer_transform.j2` (`replace(' ', '')`). Ensure the latest template is uploaded. |
 
+### 9.1 The ingestion log: "did my submission arrive?"
+
+Every stage after the poll writes one JSON line per event to the `odk.ingest` log. The connector
+(API and worker) writes `logs/odk-ingest.jsonl` under `/app` (setting `CONNECTOR_INGEST_LOG_FILE`;
+empty = stdout only). The registry celery worker and the farmer extension write the same format to
+`logs/odk-ingest.jsonl` in their working directory (`REGISTRY_EXTENSIONS_ODK_INGEST_LOG_FILE`).
+Both also print to stdout, so `kubectl logs` shows them, and the file rotates at 20 MB (10 files).
+A pod's file is lost when the pod is replaced; use the stdout copy in the cluster log stack for history.
+
+Follow one submission by the ODK instance id (`source_event_id` is `<form_id>:<instance_id>` in the
+connector, `instance_id` is the `uuid:...` part in the registry):
+
+```sh
+jq 'select(.source_event_id == "farmer_profile:uuid:1234" or .instance_id == "uuid:1234")' odk-ingest.jsonl
+jq 'select(.severity != "INFO")' odk-ingest.jsonl      # everything that needs a look
+```
+
+Common fields: `ts`, `severity` (INFO / WARNING / ERROR), `stage`, `event`, `connector_id`,
+`source_event_id`, `run_id`, `ingest_id`. Files appear by name, size and mime type only; the
+submission, file contents and credentials are never logged.
+
+| Stage | Event | Severity | Meaning / what to do |
+| :--- | :--- | :--- | :--- |
+| poll | `poll_started`, `poll_finished` | INFO (WARNING if some failed) | Counts per poll: `fetched`, `success`, `failed`. |
+| poll | `poll_failed` | ERROR | The poll stopped (ODK unreachable, bad login, bad config). `error` has the reason. Submissions already processed are kept. |
+| attachments | `attachment_embedded` | INFO | File downloaded and sent inline (`file_name`, `size_bytes`, `mime_type`). |
+| attachments | `attachment_not_uploaded` | WARNING | ODK lists the file but the phone never uploaded it. The record goes without it. Ask the enumerator to sync. |
+| attachments | `attachment_too_large` | WARNING | Over `attachment_max_bytes` (`size_bytes` vs `limit_bytes`). Raise the limit or retake smaller. |
+| attachments | `attachment_download_failed` | WARNING | Central refused or timed out (`http_status`). A 403 means the connector's ODK user cannot read attachments. |
+| attachments | `attachment_listing_failed` | WARNING | No attachment from this submission was fetched. Same checks as above. |
+| attachments | `attachments_summary` | INFO / WARNING | Counts for the submission: listed, embedded, not_uploaded, too_large, download_failed. |
+| attachments | `attachments_not_embedded` | INFO | `embed_attachments` is off for this pipeline. |
+| map / validate / envelope / send | `map_failed`, `validate_failed`, `envelope_failed`, `send_failed` | ERROR | The run is FAILED and dead-lettered (`outcome`, `retryable`). `error` says why. Fix and replay from the connector DLQ. |
+| result | `duplicate_ignored` | INFO | ODK sent a submission already ingested; nothing new was created. |
+| send | `sent` | INFO | The Partner API accepted it (`correlation_id`). |
+| enrich | `submission_received` | INFO / WARNING | Registry saw the submission: `files_embedded` and `files_name_only`. |
+| enrich | `file_received` | INFO | A file arrived inline. |
+| enrich | `file_missing` | WARNING | Only a file name arrived, so the file is saved without it. Match it with the connector's `attachment_*` events for the reason. |
+| files | `file_stored` / `file_rejected` | INFO / ERROR | The photo or certificate (`purpose`: farmer_photo, land_certificate, member_certificate) was saved, or refused by the document profile (`error`: type or size). A refused file refuses the save. |
+| ingest | `ingest_retry_scheduled` | WARNING | A worker attempt failed; it will try again (`attempt` of `max_attempts`). |
+| ingest | `ingest_failed` | ERROR | Out of attempts. The row stays `FAILED` in `incoming_classified_data` with the reason in `ingestion_latest_error_code`. After the fix, set `ingestion_status` back to `PENDING`. |
+| ingest | `ingest_succeeded` | INFO | The draft intake was created (`submission_id`). |
+
+A submission with no `sent` and no `*_failed` event never left the connector: check `poll_failed`
+and the checkpoint. One with `sent` but no `ingest_succeeded` or `ingest_failed` is still queued in
+the registry worker, or failed before the ingest task (classify or transform): check the celery log
+and `incoming_classified_data.transformation_status`.
+
 ---
 
 ## 10. Summary & Sign-off

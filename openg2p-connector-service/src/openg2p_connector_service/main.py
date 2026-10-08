@@ -16,7 +16,7 @@ from .controllers import (
     webhook_router,
 )
 from .database import get_engine
-from . import db_migrations
+from . import db_migrations, ingest_log
 from .default_pipelines import seed_default_pipelines
 from . import metrics as connector_metrics
 from .models import Base
@@ -42,6 +42,12 @@ def create_app() -> FastAPI:
     logging.basicConfig(
         level=getattr(logging, settings.log_level.upper(), logging.INFO),
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
+    ingest_log.configure(
+        settings.ingest_log_file,
+        service="connector-api",
+        max_bytes=settings.ingest_log_max_bytes,
+        backups=settings.ingest_log_backups,
     )
 
     app = FastAPI(

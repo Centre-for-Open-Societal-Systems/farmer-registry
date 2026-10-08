@@ -112,7 +112,7 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         if not is_embedded_file(value):
             return
         record["record_image_document_id"] = await upload_embedded_file(
-            value, record.get("created_by")
+            value, record.get("created_by"), purpose="farmer_photo"
         )
 
     async def _sync_flattened_geo_names(self, record: dict) -> None:

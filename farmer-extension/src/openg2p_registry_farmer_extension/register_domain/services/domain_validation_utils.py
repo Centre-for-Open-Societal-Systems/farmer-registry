@@ -14,6 +14,7 @@ from openg2p_registry_core.helpers.file_validation_profiles import get_upload_va
 from openg2p_registry_core.models import G2PRegistryDocument
 from openg2p_registry_core.models.enum import DocumentBucket
 
+from ...ingest_log import log_event
 from .ethiopian_calendar import (
     ethiopic_to_gregorian,
     format_ethiopic,
@@ -91,17 +92,46 @@ def is_embedded_file(value) -> bool:
     return isinstance(value, dict) and value.get("__type") == "File"
 
 
-async def upload_embedded_file(value: dict, created_by) -> str:
+async def upload_embedded_file(value: dict, created_by, purpose: str = "file") -> str:
     """Upload an embedded-file value's bytes through the same path
     G2PDocumentService.upload_documents uses, and return the resulting
-    document_id. Raises via validation_error() on undecodable content."""
+    document_id. Raises via validation_error() on undecodable content.
+
+    *purpose* (farmer_photo, land_certificate, member_certificate) only labels
+    the ingestion log: every upload, and every refusal with its reason, is
+    written there, so a file that did not make it can be found afterwards."""
+    filename = value.get("name") or "upload"
+    try:
+        document_id = await _upload_embedded_file(value, created_by, filename)
+    except Exception as error:
+        log_event(
+            "files", "file_rejected", "ERROR",
+            purpose=purpose, file_name=filename, mime_type=value.get("type"),
+            size_bytes=_encoded_size(value), error_type=type(error).__name__,
+            error=str(error), outcome="save_refused",
+        )
+        raise
+    log_event(
+        "files", "file_stored", purpose=purpose, file_name=filename,
+        mime_type=value.get("type"), size_bytes=_encoded_size(value),
+        document_id=document_id,
+    )
+    return document_id
+
+
+def _encoded_size(value: dict) -> int:
+    """Decoded size from the base64 length, without decoding again."""
+    data = value.get("data") or ""
+    return max(0, len(data) * 3 // 4 - data[-2:].count("="))
+
+
+async def _upload_embedded_file(value: dict, created_by, filename: str) -> str:
     try:
         content = base64.b64decode(value.get("data") or "", validate=True)
     except Exception:
         validation_error("uploaded file could not be decoded")
         return ""
 
-    filename = value.get("name") or "upload"
     content_type = value.get("type") or "application/octet-stream"
 
     config = Settings.get_config(strict=False)

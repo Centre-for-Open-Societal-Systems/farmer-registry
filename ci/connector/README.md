@@ -126,6 +126,14 @@ Notes on the mapping:
   the connector signs in as needs read access to the project's submissions.
   After changing `farmer_transform.j2`, re-run db-seed or re-upload it to MinIO
   (`mc cp odk/templates/farmer_transform.j2 myminio/templates/`).
+- Every stage writes a JSON-lines **ingestion log** (`odk.ingest`): polls, each attachment
+  (embedded, not uploaded, too large, download failed), map/validate/send failures, what the
+  registry received, files stored or refused, and each ingest attempt. The connector writes
+  `/app/logs/odk-ingest.jsonl` (`CONNECTOR_INGEST_LOG_FILE`, empty for stdout only) and the
+  registry worker `logs/odk-ingest.jsonl` (`REGISTRY_EXTENSIONS_ODK_INGEST_LOG_FILE`); both
+  also go to stdout. Find a submission with
+  `jq 'select(.source_event_id == "<form>:<uuid:...>" or .instance_id == "<uuid:...>")'`.
+  The event table is in `odk/FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`, section 9.1.
 - The form asks no crop season; crops default to `MEHER`.
 - The submission is validated like a staff entry. A draft that breaks a farmer
   rule (say, digits in a name) stays at `ingestion_status=FAILED` with the rule's

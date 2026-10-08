@@ -102,3 +102,77 @@ def test_rerun_is_a_no_op(patched, tmp_path, monkeypatch, capsys):
     out = capsys.readouterr()
     assert exit_info.value.code == 0, out.err
     assert "0 patch(es) applied" in out.out
+
+
+def _log_helpers(worker_source, monkeypatch):
+    """Run the patched worker's two log helpers against a recording log_event."""
+    import sys
+    import types
+
+    events = []
+    log_module = types.ModuleType("openg2p_registry_farmer_extension.ingest_log")
+    log_module.log_event = lambda stage, event, severity="INFO", **fields: events.append(
+        {"stage": stage, "event": event, "severity": severity, **fields}
+    )
+    package = types.ModuleType("openg2p_registry_farmer_extension")
+    package.ingest_log = log_module
+    monkeypatch.setitem(sys.modules, "openg2p_registry_farmer_extension", package)
+    monkeypatch.setitem(sys.modules, "openg2p_registry_farmer_extension.ingest_log", log_module)
+
+    start = worker_source.index("def _logged_ingest_error")
+    end = worker_source.index("async def _process_ingestion_async")
+    namespace = {
+        "ProcessStatusEnum": types.SimpleNamespace(
+            FAILED=types.SimpleNamespace(value="FAILED"),
+            PENDING=types.SimpleNamespace(value="PENDING"),
+        ),
+        "_config": types.SimpleNamespace(worker_max_attempts=5),
+    }
+    exec(worker_source[start:end], namespace)
+    return namespace, events
+
+
+def _row(status, attempts):
+    import types
+
+    return types.SimpleNamespace(
+        ingest_id="ing-1", ingestion_status=status, ingestion_number_of_attempts=attempts,
+        intake_form_id="form", register_id="reg", partner_id="farmer-partner",
+        intake_form_submission_id="sub-1",
+    )
+
+
+def test_failed_ingest_attempts_are_logged(patched, monkeypatch):
+    _, _, worker = patched
+    compile(worker, "ingest_data_worker.py", "exec")
+    assert "ingestion_latest_error_code = _logged_ingest_error(incoming_classified_data, error_message)" in worker
+    assert "ingestion_latest_error_code = _logged_ingest_success(incoming_classified_data)" in worker
+
+    ns, events = _log_helpers(worker, monkeypatch)
+    # Retry still pending: a warning that says the worker will try again.
+    assert ns["_logged_ingest_error"](_row("PENDING", 2), "boom") == "boom"
+    # Out of attempts: an error that says how to recover.
+    assert ns["_logged_ingest_error"](_row("FAILED", 5), "gave up") == "gave up"
+    retry, final = events
+    assert (retry["event"], retry["severity"], retry["will_retry"]) == ("ingest_retry_scheduled", "WARNING", True)
+    assert (final["event"], final["severity"], final["will_retry"]) == ("ingest_failed", "ERROR", False)
+    assert final["ingest_id"] == "ing-1" and final["error"] == "gave up" and final["attempt"] == 5
+    assert "PENDING" in final["next_step"]
+
+
+def test_finished_ingest_is_logged(patched, monkeypatch):
+    _, _, worker = patched
+    ns, events = _log_helpers(worker, monkeypatch)
+    assert ns["_logged_ingest_success"](_row("PROCESSED", 1)) is None
+    assert events[0]["event"] == "ingest_succeeded"
+    assert events[0]["submission_id"] == "sub-1"
+
+
+def test_a_broken_log_never_changes_the_ingest_outcome(patched, monkeypatch):
+    _, _, worker = patched
+    ns, events = _log_helpers(worker, monkeypatch)
+    import sys
+
+    sys.modules["openg2p_registry_farmer_extension.ingest_log"].log_event = lambda *a, **k: 1 / 0
+    assert ns["_logged_ingest_error"](_row("FAILED", 5), "msg") == "msg"
+    assert ns["_logged_ingest_success"](_row("PROCESSED", 1)) is None

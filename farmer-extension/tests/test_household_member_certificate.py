@@ -31,7 +31,7 @@ class TestMemberCertificate(unittest.TestCase):
     def test_embedded_file_is_uploaded_and_replaced_by_its_document_id(self):
         record = {"first_name": "Abebe", "certificate_storage_id": dict(EMBEDDED), "created_by": "staff"}
         upload = self._validate(record)
-        upload.assert_awaited_once_with(EMBEDDED, "staff")
+        upload.assert_awaited_once_with(EMBEDDED, "staff", purpose="member_certificate")
         self.assertEqual(record["certificate_storage_id"], "doc-123")
         self.assertTrue(record["certificate_provided"])
 

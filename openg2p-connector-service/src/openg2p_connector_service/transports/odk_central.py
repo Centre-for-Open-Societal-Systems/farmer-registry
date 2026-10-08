@@ -50,6 +50,7 @@ import httpx
 from ..auth import get_auth_strategy
 from ..config import get_settings
 from .. import metrics as connector_metrics
+from ..ingest_log import log_event
 from ..models import ConnectorDefinition
 from .base import BaseTransport, SourceRecord
 from .checkpoints import (
@@ -360,6 +361,12 @@ class OdkCentralTransport(BaseTransport):
                             use_draft=use_draft_effective,
                             max_bytes=attachment_max_bytes,
                         )
+                    elif instance_id:
+                        log_event(
+                            "attachments", "attachments_not_embedded",
+                            source_event_id=f"{form_id}:{instance_id}",
+                            reason="embed_attachments is off; files go as names only",
+                        )
 
                     yield SourceRecord(
                         source_event_id=f"{form_id}:{instance_id}",
@@ -611,23 +618,50 @@ class OdkCentralTransport(BaseTransport):
         if use_draft:
             root += "/draft"
         listing_url = f"{root}/submissions/{quote(instance_id, safe='')}/attachments"
+        # source_event_id is the id the connector run and the registry ingest use,
+        # so these events join with theirs.
+        ids = {"source_event_id": f"{form_id}:{instance_id}", "form_id": form_id}
         try:
             resp = await cls._request_with_backoff(client, listing_url, headers, {})
             attachments = resp.json() or []
         except (httpx.HTTPError, ValueError) as exc:
             _logger.warning("ODK attachments listing failed for %s: %s", instance_id, exc)
+            log_event(
+                "attachments", "attachment_listing_failed", "WARNING", **ids,
+                error=f"{type(exc).__name__}: {exc}",
+                http_status=getattr(getattr(exc, "response", None), "status_code", None),
+                outcome="sent_without_attachments",
+            )
             return
 
         files: dict[str, dict] = {}
+        counts = {"listed": len(attachments), "embedded": 0, "not_uploaded": 0,
+                  "too_large": 0, "download_failed": 0}
         for attachment in attachments:
             name = attachment.get("name")
-            if not name or not attachment.get("exists", True):
+            if not name:
+                continue
+            if not attachment.get("exists", True):
+                counts["not_uploaded"] += 1
+                log_event(
+                    "attachments", "attachment_not_uploaded", "WARNING", **ids,
+                    file_name=name,
+                    reason="listed by ODK Central but the file was never uploaded",
+                    outcome="sent_with_file_name_only",
+                )
                 continue
             url = f"{listing_url}/{quote(name, safe='')}"
             try:
                 download = await cls._request_with_backoff(client, url, headers, {})
             except httpx.HTTPError as exc:
                 _logger.warning("ODK attachment %s of %s not downloaded: %s", name, instance_id, exc)
+                counts["download_failed"] += 1
+                log_event(
+                    "attachments", "attachment_download_failed", "WARNING", **ids,
+                    file_name=name, error=f"{type(exc).__name__}: {exc}",
+                    http_status=getattr(getattr(exc, "response", None), "status_code", None),
+                    outcome="sent_with_file_name_only",
+                )
                 continue
             content = download.content
             if len(content) > max_bytes:
@@ -635,6 +669,12 @@ class OdkCentralTransport(BaseTransport):
                     "ODK attachment %s of %s is %d bytes, over attachment_max_bytes=%d; "
                     "sent without it",
                     name, instance_id, len(content), max_bytes,
+                )
+                counts["too_large"] += 1
+                log_event(
+                    "attachments", "attachment_too_large", "WARNING", **ids,
+                    file_name=name, size_bytes=len(content), limit_bytes=max_bytes,
+                    outcome="sent_with_file_name_only",
                 )
                 continue
             content_type = (
@@ -648,9 +688,20 @@ class OdkCentralTransport(BaseTransport):
                 "type": content_type,
                 "data": base64.b64encode(content).decode("ascii"),
             }
+            counts["embedded"] += 1
+            log_event(
+                "attachments", "attachment_embedded", **ids,
+                file_name=name, size_bytes=len(content), mime_type=content_type,
+            )
 
         if files:
             cls._replace_file_names(entry, files)
+
+        problems = counts["not_uploaded"] + counts["too_large"] + counts["download_failed"]
+        log_event(
+            "attachments", "attachments_summary", "WARNING" if problems else "INFO",
+            **ids, **counts,
+        )
 
     @classmethod
     def _replace_file_names(cls, obj: Any, files: dict[str, dict]) -> Any:
