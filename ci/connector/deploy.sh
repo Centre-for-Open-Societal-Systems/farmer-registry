@@ -120,8 +120,8 @@ done
 note "Health"
 kubectl run "connector-check-$$" --rm -i --restart=Never -n "$NAMESPACE" \
     --image=curlimages/curl:8.11.1 --command -- \
-    curl -sS -o /dev/null -w 'connector api /healthz: HTTP %{http_code}\n' \
-    --max-time 10 "http://$RELEASE-api/healthz" || true
+    curl -sS -o /dev/null -w 'connector api /health: HTTP %{http_code}\n' \
+    --max-time 10 "http://$RELEASE-api/health" || true
 
 cat <<EOF
 
