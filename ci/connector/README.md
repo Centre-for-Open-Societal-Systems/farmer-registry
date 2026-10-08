@@ -133,6 +133,23 @@ Notes on the mapping:
   (`kebele-ET040801101001`) and sends `geo_lowest_level_value_id`; the farmer
   service fills region, zone, woreda and kebele names from it. A kebele picked
   as "other" falls back to the woreda.
+- Photos (the farmer photo and each parcel's land certificate) arrive from ODK
+  Central as file names only. The connector downloads them and inlines them as
+  `{"__type": "File", ...}` when the pipeline's `source_config.embed_attachments`
+  is true (the default; set `false` to turn it off). Files over
+  `attachment_max_bytes` (default 10 MiB) are skipped and the record is sent
+  without them. Each file is held in memory while it is encoded. The web user
+  the connector signs in as needs read access to the project's submissions.
+  After changing `farmer_transform.j2`, re-run db-seed or re-upload it to MinIO
+  (`mc cp odk/templates/farmer_transform.j2 myminio/templates/`).
+- Every stage writes a JSON-lines **ingestion log** (`odk.ingest`): polls, each attachment
+  (embedded, not uploaded, too large, download failed), map/validate/send failures, what the
+  registry received, files stored or refused, and each ingest attempt. The connector writes
+  `/app/logs/odk-ingest.jsonl` (`CONNECTOR_INGEST_LOG_FILE`, empty for stdout only) and the
+  registry worker `logs/odk-ingest.jsonl` (`REGISTRY_EXTENSIONS_ODK_INGEST_LOG_FILE`); both
+  also go to stdout. Find a submission with
+  `jq 'select(.source_event_id == "<form>:<uuid:...>" or .instance_id == "<uuid:...>")'`.
+  The event table is in `odk/FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`, section 9.1.
 - The form asks no crop season; crops default to `MEHER`.
 - The submission is validated like a staff entry. A draft that breaks a farmer
   rule (say, digits in a name) stays at `ingestion_status=FAILED` with the rule's

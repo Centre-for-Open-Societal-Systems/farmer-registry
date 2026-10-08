@@ -281,6 +281,84 @@ PATCHES = [
         ),
     ),
     Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        old="async def _process_ingestion_async(ingest_id: str) -> None:\n",
+        new=(
+            "def _logged_ingest_error(row, error_message):\n"
+            '    """Write the failed ingest to the ODK ingestion log; returns the message."""\n'
+            "    try:\n"
+            "        from openg2p_registry_farmer_extension.ingest_log import log_event\n"
+            "\n"
+            "        final = row.ingestion_status == ProcessStatusEnum.FAILED.value\n"
+            "        log_event(\n"
+            '            "ingest", "ingest_failed" if final else "ingest_retry_scheduled",\n'
+            '            "ERROR" if final else "WARNING",\n'
+            "            ingest_id=row.ingest_id,\n"
+            '            message_id=getattr(row, "message_id", None),\n'
+            "            intake_form_id=row.intake_form_id,\n"
+            "            register_id=row.register_id,\n"
+            "            partner_id=row.partner_id,\n"
+            "            attempt=row.ingestion_number_of_attempts,\n"
+            "            max_attempts=_config.worker_max_attempts,\n"
+            "            will_retry=not final,\n"
+            "            error=error_message,\n"
+            "            next_step=(\n"
+            '                "gave up after the last attempt; fix the cause, then set "\n'
+            '                "incoming_classified_data.ingestion_status back to PENDING"\n'
+            "                if final else \"the worker retries this ingest\"\n"
+            "            ),\n"
+            "        )\n"
+            "    except Exception:  # a log must never change the ingest outcome\n"
+            "        pass\n"
+            "    return error_message\n"
+            "\n"
+            "\n"
+            "def _logged_ingest_success(row):\n"
+            '    """Write the finished ingest to the ODK ingestion log; returns None."""\n'
+            "    try:\n"
+            "        from openg2p_registry_farmer_extension.ingest_log import log_event\n"
+            "\n"
+            "        log_event(\n"
+            '            "ingest", "ingest_succeeded",\n'
+            "            ingest_id=row.ingest_id,\n"
+            '            message_id=getattr(row, "message_id", None),\n'
+            "            submission_id=row.intake_form_submission_id,\n"
+            "            intake_form_id=row.intake_form_id,\n"
+            "            register_id=row.register_id,\n"
+            "            attempt=row.ingestion_number_of_attempts,\n"
+            "        )\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "    return None\n"
+            "\n"
+            "\n"
+            "async def _process_ingestion_async(ingest_id: str, /) -> None:\n"
+        ),
+        why=(
+            "The worker logs a failed ingest only as one ERROR line and keeps the "
+            "reason in incoming_classified_data. Adds the helpers that write every "
+            "attempt, retry and final failure to the ODK ingestion log."
+        ),
+    ),
+    Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        old="        incoming_classified_data.ingestion_latest_error_code = error_message\n",
+        new=(
+            "        incoming_classified_data.ingestion_latest_error_code = "
+            "_logged_ingest_error(incoming_classified_data, error_message)\n"
+        ),
+        why="Logs each failed attempt (and whether the worker will retry) to the ODK ingestion log.",
+    ),
+    Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        old="            incoming_classified_data.ingestion_latest_error_code = None\n",
+        new=(
+            "            incoming_classified_data.ingestion_latest_error_code = "
+            "_logged_ingest_success(incoming_classified_data)\n"
+        ),
+        why="Logs a finished ingest, with the draft intake it created, to the ODK ingestion log.",
+    ),
+    Patch(
         "openg2p_registry_partner_api/ingestion/helpers/request_response_helper.py",
         old="            return JSONResponse(content=response.model_dump())\n",
         new="            return JSONResponse(content=response.model_dump(mode=\"json\"))\n",

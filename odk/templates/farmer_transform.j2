@@ -158,6 +158,14 @@
   {%- if l_area is not none and l_area > 0 -%}
     {%- set _ = land_dict.update({"area_in_hectare": l_area}) -%}
   {%- endif -%}
+  {#- The connector inlines the certificate photo (embed_attachments) as
+      {"__type": "File", ...}; the land service uploads it and stores the
+      document id. A bare file name means the image did not come along, so it
+      is left out rather than stored as text. -#}
+  {%- set cert = l.get('land_certificate') -%}
+  {%- if cert is mapping and cert.get('__type') == 'File' -%}
+    {%- set _ = land_dict.update({"certificate_storage_id": cert, "certificate_provided": true}) -%}
+  {%- endif -%}
   {%- set _ = lands_records.append(land_dict) -%}
 {%- endfor -%}
 
@@ -187,18 +195,35 @@
 {%- endfor -%}
 
 {# --- Household Member Repeats --- #}
-{%- set raw_members = d.get('other_hh_members', {}).get('other_hh_members_repeat', []) or d.get('other_farmers_repeat', []) or [] -%}
+{#- Members come from the "other household members" repeat or, when the form
+    collects them as full farmers, from the other_farmers repeat (its answers
+    are hh_member_*, nested in hh_member_basic_info/hh_member_personal_info). -#}
+{%- set raw_members = d.get('other_hh_members', {}).get('other_hh_members_repeat', []) or d.get('other_farmers_in_hh', {}).get('other_farmers_repeat', []) or d.get('other_farmers_repeat', []) or [] -%}
 {%- set members_records = [] -%}
 {%- for m in (raw_members if raw_members is iterable and raw_members is not mapping and raw_members is not string else []) -%}
-  {%- set m_name = m.get('other_member_name_english', '') or m.get('name', '') or '' -%}
+  {%- set m_personal = (m.get('hh_member_basic_info', {}) or {}).get('hh_member_personal_info', {}) or {} -%}
+  {%- set m_name = m.get('other_member_name_english', '') or m.get('name', '') or ((m_personal.get('hh_member_first_name_english', '') ~ ' ' ~ m_personal.get('hh_member_father_name_english', '') ~ ' ' ~ m_personal.get('hh_member_grandfather_name_english', '')) | trim) or '' -%}
   {%- set m_parts = m_name.split() if m_name else [] -%}
-  {%- set _ = members_records.append({
+  {%- set m_dict = {
       "first_name": m_parts[0] if m_parts | length >= 1 else 'Member',
       "middle_name": m_parts[1] if m_parts | length >= 2 else (middle_name or ''),
       "last_name": m_parts[2] if m_parts | length >= 3 else (last_name or ''),
-      "gender": (m.get('member_gender', '') or 'UNKNOWN') | upper,
-      "birth_date": (m.get('member_dob', '') or '').split('T')[0]
-  }) -%}
+      "gender": (m.get('member_gender', '') or m_personal.get('hh_member_gender', '') or 'UNKNOWN') | upper,
+      "birth_date": (m.get('member_dob', '') or m_personal.get('hh_member_date_of_birth', '') or '').split('T')[0]
+  } -%}
+  {#- The member's land certificate photo, inlined by the connector like the
+      farmer's own (embed_attachments). Taken from the member's first land
+      with a real file; a bare file name (image not downloaded) is left out. -#}
+  {%- set m_certs = [m.get('hh_member_land_certificate')] -%}
+  {%- for ml in ((m.get('hh_member_land_info', {}) or {}).get('hh_member_land_info_repeat', []) or []) -%}
+    {%- if ml is mapping -%}{%- set _ = m_certs.append(ml.get('hh_member_land_certificate')) -%}{%- endif -%}
+  {%- endfor -%}
+  {%- for c in m_certs -%}
+    {%- if c is mapping and c.get('__type') == 'File' and not m_dict.get('certificate_storage_id') -%}
+      {%- set _ = m_dict.update({"certificate_storage_id": c, "certificate_provided": true}) -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- set _ = members_records.append(m_dict) -%}
 {%- endfor -%}
 
 {# --- Farm Input Details --- #}
@@ -230,6 +255,15 @@
 {%- set enum_id = meta.get('enumerator_id', '') or sys.get('submitterId', '') -%}
 {%- set collection_date = (meta.get('survey_start', '') or sys.get('submissionDate', '') or '').split('T')[0] -%}
 
+{# --- Farmer Photo (own section on the intake form: fr_farmer_photo) --- #}
+{#- The connector inlines the photo (embed_attachments) as {"__type": "File", ...}; the registry uploads it on save and stores record_image_document_id. A bare file name means the image did not come along, so the section is left out. -#}
+{%- set photo_form = d.get('farmer_photo_section', {}) or {} -%}
+{%- set photo = photo_form.get('farmer_photo') or personal.get('farmer_photo') or d.get('farmer_photo') -%}
+{%- set photo_records = [] -%}
+{%- if photo is mapping and photo.get('__type') == 'File' -%}
+  {%- set _ = photo_records.append({"record_image_document_id": photo}) -%}
+{%- endif -%}
+
 {# ==================== FINAL TARGET INTAKE FORM JSON ==================== #}
 {
   "fr_farmer_personal_info": [
@@ -251,6 +285,9 @@
       "import_source": "PARTNER"
     }
   ],
+  {%- if photo_records | length > 0 %}
+  "fr_farmer_photo": {{ photo_records | tojson }},
+  {%- endif %}
   "fr_farmer_phone_numbers": {{ phones_list | tojson }},
   "fr_farmer_birth_information": [
     {

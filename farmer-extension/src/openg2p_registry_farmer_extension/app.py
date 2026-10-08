@@ -677,6 +677,23 @@ class Initializer(BaseInitializer):
                 )
             )
 
+            # A household member's own land certificate (see G2PHouseholdMember).
+            for column_name, column_type in {
+                "certificate_provided": "BOOLEAN",
+                "certificate_storage_id": "TEXT",
+            }.items():
+                for table_name in (
+                    "g2p_register_household_members",
+                    "g2p_register_history_household_members",
+                    "g2p_intake_form_household_members",
+                ):
+                    await conn.execute(
+                        text(
+                            f'ALTER TABLE "public"."{table_name}" '
+                            f'ADD COLUMN IF NOT EXISTS "{column_name}" {column_type}'
+                        )
+                    )
+
             land_extension_columns = {
                 "area_in_hectare": "NUMERIC(16, 6)",
                 "land_kebele": "VARCHAR",

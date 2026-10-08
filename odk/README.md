@@ -56,6 +56,8 @@ The form is tri-lingual with native script rendering:
    - `marital_status`, `education_level`, `income_source`, family demographics
 6. **`membership`**:
    - `primary_cooperative`, `name_of_primary_cooperative` (from `PrimaryCoopList.csv`), `coop_union`, `farmer_cluster`, `primary_commodity`, `farmer_role`
+6a. **`farmer_photo_section`**:
+   - `farmer_photo` (image). Its own section, like the Farmer Photo section on the web intake form; maps to `fr_farmer_photo` → `record_image_document_id`
 7. **`land_info` (`land_info_repeat`)**:
    - Repeat group for parcels: `land_ownership` (`OWNED`, `RENTED`, `CROP_SHARING`), `total_land_area`, `land_id`, `land_certificate` (photo/image upload)
 8. **`crop_information` (`crop_repeat`)**:
@@ -108,7 +110,9 @@ The form is tri-lingual with native script rendering:
 | `location` (acc) | `g2p_register_farmers` | `enumerator_accuracy` | GPS Accuracy (meters) |
 | `username` | `g2p_register_farmers` | `enumerator_user_id` | Enumerator User ID |
 | `submission_time` | `g2p_register_farmers` | `data_collection_date` | Collection Date |
+| `farmer_photo` | `g2p_register_farmers` | `record_image_document_id` | Farmer profile photo (needs `embed_attachments`) |
 | `land_info_repeat` | `g2p_register_lands` | Multiple rows | `ownership_type`, `land_size`, `land_id`, `land_certificate` |
+| `hh_member_land_certificate` | `g2p_register_household_members` | `certificate_storage_id` | A household member's land certificate (first one with a file; needs `embed_attachments`) |
 | `crop_repeat` | `g2p_register_crops` | Multiple rows | `commodity`, `season`, `planted_date` |
 | `livestock_repeat` | `g2p_register_livestocks` | Multiple rows | `livestock_type`, `head_count` |
 | `other_farmers_repeat` | `g2p_register_household_members` | Multiple rows | Registered household members |
