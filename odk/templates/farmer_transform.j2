@@ -4,7 +4,8 @@
 {# Used by Registry Celery Worker when ingesting via OpenG2P Connector Service   #}
 {# ============================================================================== #}
 
-{%- set d = expanded if expanded is defined else (data if data is defined else (submission if submission is defined else {})) -%}
+{%- set raw_d = expanded if expanded is defined else (data if data is defined else (submission if submission is defined else {})) -%}
+{%- set d = raw_d.get('payload', raw_d) if (raw_d is mapping and 'payload' in raw_d and raw_d.get('payload') is mapping) else raw_d -%}
 
 {# --- Basic / Personal Info --- #}
 {%- set basic = d.get('basic_info', {}) or {} -%}
@@ -40,9 +41,40 @@
 {%- set age = personal.get('age', None) -%}
 
 {# --- Phones --- #}
-{%- set phone_pri = personal.get('primary_phone_number', '') or personal.get('phone_number', '') or '' -%}
-{%- set phone_sec = personal.get('secondary_phone_number', '') or '' -%}
-{%- set phone_oth = personal.get('other_phone_number', '') or '' -%}
+{%- set raw_phone_pri = personal.get('primary_phone_number', '') or '' -%}
+{%- if not raw_phone_pri and personal.get('phone_number', '') not in ['yes', 'no'] -%}
+  {%- set raw_phone_pri = personal.get('phone_number', '') -%}
+{%- endif -%}
+{%- set raw_phone_sec = personal.get('secondary_phone_number', '') or '' -%}
+{%- set raw_phone_oth = personal.get('other_phone_number', '') or '' -%}
+
+{%- set clean_pri = (raw_phone_pri | string | trim | replace(' ', '') | replace('-', '')) -%}
+{%- if clean_pri.startswith('+251') -%}
+  {%- set phone_pri = clean_pri[4:] -%}
+{%- elif clean_pri.startswith('251') and clean_pri | length > 9 -%}
+  {%- set phone_pri = clean_pri[3:] -%}
+{%- else -%}
+  {%- set phone_pri = clean_pri -%}
+{%- endif -%}
+
+{%- set clean_sec = (raw_phone_sec | string | trim | replace(' ', '') | replace('-', '')) -%}
+{%- if clean_sec.startswith('+251') -%}
+  {%- set phone_sec = clean_sec[4:] -%}
+{%- elif clean_sec.startswith('251') and clean_sec | length > 9 -%}
+  {%- set phone_sec = clean_sec[3:] -%}
+{%- else -%}
+  {%- set phone_sec = clean_sec -%}
+{%- endif -%}
+
+{%- set clean_oth = (raw_phone_oth | string | trim | replace(' ', '') | replace('-', '')) -%}
+{%- if clean_oth.startswith('+251') -%}
+  {%- set phone_oth = clean_oth[4:] -%}
+{%- elif clean_oth.startswith('251') and clean_oth | length > 9 -%}
+  {%- set phone_oth = clean_oth[3:] -%}
+{%- else -%}
+  {%- set phone_oth = clean_oth -%}
+{%- endif -%}
+
 {%- set phones_list = [] -%}
 {%- if phone_pri -%}
   {%- set _ = phones_list.append({"phone_number": phone_pri, "phone_type": "PRIMARY", "country_code": "ETH", "is_primary": true}) -%}
@@ -54,19 +86,43 @@
   {%- set _ = phones_list.append({"phone_number": phone_oth, "phone_type": "OTHER", "country_code": "ETH", "is_primary": false}) -%}
 {%- endif -%}
 
-{# --- GPS Parsing --- #}
-{%- set loc_str = loc_obj.get('location', '') if loc_obj is mapping else loc_obj -%}
-{%- set loc_parts = (loc_str | string).strip().split() if loc_str else [] -%}
-{%- set lat = (loc_parts[0] | float) if loc_parts | length >= 1 else None -%}
-{%- set lon = (loc_parts[1] | float) if loc_parts | length >= 2 else None -%}
-{%- set alt = (loc_parts[2] | float) if loc_parts | length >= 3 else None -%}
-{%- set acc = (loc_parts[3] | float) if loc_parts | length >= 4 else None -%}
+{# --- GPS Parsing ---
+   ODK Central's OData returns a geopoint as GeoJSON -- {"type": "Point",
+   "coordinates": [lon, lat, alt], "properties": {"accuracy": m}} -- while a
+   form export gives the XForm string "lat lon alt accuracy". Both are read. #}
+{%- set loc_val = loc_obj.get('location', '') if loc_obj is mapping else loc_obj -%}
+{%- if loc_val is mapping -%}
+  {%- set coords = loc_val.get('coordinates', []) or [] -%}
+  {%- set lon = (coords[0] | float) if coords | length >= 1 else None -%}
+  {%- set lat = (coords[1] | float) if coords | length >= 2 else None -%}
+  {%- set alt = (coords[2] | float) if coords | length >= 3 else None -%}
+  {%- set acc = ((loc_val.get('properties', {}) or {}).get('accuracy')) -%}
+  {%- set acc = (acc | float) if acc is not none else None -%}
+{%- else -%}
+  {%- set loc_parts = (loc_val | string).strip().split() if loc_val else [] -%}
+  {%- set lat = (loc_parts[0] | float) if loc_parts | length >= 1 else None -%}
+  {%- set lon = (loc_parts[1] | float) if loc_parts | length >= 2 else None -%}
+  {%- set alt = (loc_parts[2] | float) if loc_parts | length >= 3 else None -%}
+  {%- set acc = (loc_parts[3] | float) if loc_parts | length >= 4 else None -%}
+{%- endif -%}
 
-{# --- Geographic Hierarchy Names --- #}
-{%- set reg_name = locale.get('region', '') -%}
-{%- set zone_name = locale.get('zone', '') -%}
-{%- set woreda_name = locale.get('woreda', '') -%}
-{%- set kebele_name = locale.get('kebele', '') -%}
+{# --- Location ---
+   The form stores administrative CODES, not names, and drops their leading
+   zero: region 4, woreda 40801, kebele 40801101001. Master Data keys the same
+   places as woreda-ET040801 and kebele-ET040801101001, so the codes are padded
+   (woreda to 6 digits, kebele to 12) and sent as geo_lowest_level_value_id; the
+   farmer service derives the hierarchy and the region/zone/woreda/kebele names
+   from it. A kebele picked as "other" falls back to its woreda. #}
+{%- set kebele_code = (locale.get('kebele', '') or '') | string -%}
+{%- set woreda_code = (locale.get('woreda', '') or '') | string -%}
+{%- if kebele_code.isdigit() -%}
+  {%- set geo_lowest = 'kebele-ET' ~ ('%012d' | format(kebele_code | int)) -%}
+{%- elif woreda_code.isdigit() -%}
+  {%- set geo_lowest = 'woreda-ET' ~ ('%06d' | format(woreda_code | int)) -%}
+{%- else -%}
+  {%- set geo_lowest = None -%}
+{%- endif -%}
+{%- set kebele_name = locale.get('other_kebele', '') or '' -%}
 
 {# --- IDs --- #}
 {%- set raw_fan = nat_id.get('national_fan', '') or nat_id.get('national_uid', '') or '' -%}
@@ -90,13 +146,27 @@
 {%- set lands_records = [] -%}
 {%- for l in (raw_lands if raw_lands is iterable and raw_lands is not mapping and raw_lands is not string else []) -%}
   {%- set raw_own = (l.get('land_ownership', '') or 'OWNER') | upper -%}
-  {%- set own_type = 'OWNER' if 'OWN' in raw_own else ('TENANT' if 'RENT' in raw_own else ('CROP_SHARE' if 'SHARE' in raw_own else 'FAMILY_GIFT')) -%}
-  {%- set _ = lands_records.append({
+  {#- The form offers owner / tenant; RENT and SHARE cover older exports. -#}
+  {%- set own_type = 'OWNER' if 'OWN' in raw_own else ('TENANT' if ('TENANT' in raw_own or 'RENT' in raw_own) else ('CROP_SHARE' if 'SHARE' in raw_own else 'FAMILY_GIFT')) -%}
+  {%- set raw_area = l.get('total_land_area') or l.get('land_area') -%}
+  {%- set l_area = (raw_area | float) if (raw_area is not none and (raw_area | string | trim) != '') else none -%}
+  {%- set land_dict = {
       "land_id": l.get('land_id', '') or ("LND-" ~ loop.index),
-      "area_in_hectare": (l.get('total_land_area', 0.0) or 0.0) | float,
       "land_ownership_type": own_type,
       "land_kebele": l.get('land_kebele', kebele_name) or kebele_name
-  }) -%}
+  } -%}
+  {%- if l_area is not none and l_area > 0 -%}
+    {%- set _ = land_dict.update({"area_in_hectare": l_area}) -%}
+  {%- endif -%}
+  {#- The connector inlines the certificate photo (embed_attachments) as
+      {"__type": "File", ...}; the land service uploads it and stores the
+      document id. A bare file name means the image did not come along, so it
+      is left out rather than stored as text. -#}
+  {%- set cert = l.get('land_certificate') -%}
+  {%- if cert is mapping and cert.get('__type') == 'File' -%}
+    {%- set _ = land_dict.update({"certificate_storage_id": cert, "certificate_provided": true}) -%}
+  {%- endif -%}
+  {%- set _ = lands_records.append(land_dict) -%}
 {%- endfor -%}
 
 {# --- Crop Repeats ---
@@ -125,18 +195,35 @@
 {%- endfor -%}
 
 {# --- Household Member Repeats --- #}
-{%- set raw_members = d.get('other_hh_members', {}).get('other_hh_members_repeat', []) or d.get('other_farmers_repeat', []) or [] -%}
+{#- Members come from the "other household members" repeat or, when the form
+    collects them as full farmers, from the other_farmers repeat (its answers
+    are hh_member_*, nested in hh_member_basic_info/hh_member_personal_info). -#}
+{%- set raw_members = d.get('other_hh_members', {}).get('other_hh_members_repeat', []) or d.get('other_farmers_in_hh', {}).get('other_farmers_repeat', []) or d.get('other_farmers_repeat', []) or [] -%}
 {%- set members_records = [] -%}
 {%- for m in (raw_members if raw_members is iterable and raw_members is not mapping and raw_members is not string else []) -%}
-  {%- set m_name = m.get('other_member_name_english', '') or m.get('name', '') or '' -%}
+  {%- set m_personal = (m.get('hh_member_basic_info', {}) or {}).get('hh_member_personal_info', {}) or {} -%}
+  {%- set m_name = m.get('other_member_name_english', '') or m.get('name', '') or ((m_personal.get('hh_member_first_name_english', '') ~ ' ' ~ m_personal.get('hh_member_father_name_english', '') ~ ' ' ~ m_personal.get('hh_member_grandfather_name_english', '')) | trim) or '' -%}
   {%- set m_parts = m_name.split() if m_name else [] -%}
-  {%- set _ = members_records.append({
+  {%- set m_dict = {
       "first_name": m_parts[0] if m_parts | length >= 1 else 'Member',
       "middle_name": m_parts[1] if m_parts | length >= 2 else (middle_name or ''),
       "last_name": m_parts[2] if m_parts | length >= 3 else (last_name or ''),
-      "gender": (m.get('member_gender', '') or 'UNKNOWN') | upper,
-      "birth_date": (m.get('member_dob', '') or '').split('T')[0]
-  }) -%}
+      "gender": (m.get('member_gender', '') or m_personal.get('hh_member_gender', '') or 'UNKNOWN') | upper,
+      "birth_date": (m.get('member_dob', '') or m_personal.get('hh_member_date_of_birth', '') or '').split('T')[0]
+  } -%}
+  {#- The member's land certificate photo, inlined by the connector like the
+      farmer's own (embed_attachments). Taken from the member's first land
+      with a real file; a bare file name (image not downloaded) is left out. -#}
+  {%- set m_certs = [m.get('hh_member_land_certificate')] -%}
+  {%- for ml in ((m.get('hh_member_land_info', {}) or {}).get('hh_member_land_info_repeat', []) or []) -%}
+    {%- if ml is mapping -%}{%- set _ = m_certs.append(ml.get('hh_member_land_certificate')) -%}{%- endif -%}
+  {%- endfor -%}
+  {%- for c in m_certs -%}
+    {%- if c is mapping and c.get('__type') == 'File' and not m_dict.get('certificate_storage_id') -%}
+      {%- set _ = m_dict.update({"certificate_storage_id": c, "certificate_provided": true}) -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- set _ = members_records.append(m_dict) -%}
 {%- endfor -%}
 
 {# --- Farm Input Details --- #}
@@ -168,6 +255,15 @@
 {%- set enum_id = meta.get('enumerator_id', '') or sys.get('submitterId', '') -%}
 {%- set collection_date = (meta.get('survey_start', '') or sys.get('submissionDate', '') or '').split('T')[0] -%}
 
+{# --- Farmer Photo (own section on the intake form: fr_farmer_photo) --- #}
+{#- The connector inlines the photo (embed_attachments) as {"__type": "File", ...}; the registry uploads it on save and stores record_image_document_id. A bare file name means the image did not come along, so the section is left out. -#}
+{%- set photo_form = d.get('farmer_photo_section', {}) or {} -%}
+{%- set photo = photo_form.get('farmer_photo') or personal.get('farmer_photo') or d.get('farmer_photo') -%}
+{%- set photo_records = [] -%}
+{%- if photo is mapping and photo.get('__type') == 'File' -%}
+  {%- set _ = photo_records.append({"record_image_document_id": photo}) -%}
+{%- endif -%}
+
 {# ==================== FINAL TARGET INTAKE FORM JSON ==================== #}
 {
   "fr_farmer_personal_info": [
@@ -189,6 +285,9 @@
       "import_source": "PARTNER"
     }
   ],
+  {%- if photo_records | length > 0 %}
+  "fr_farmer_photo": {{ photo_records | tojson }},
+  {%- endif %}
   "fr_farmer_phone_numbers": {{ phones_list | tojson }},
   "fr_farmer_birth_information": [
     {
@@ -199,10 +298,7 @@
   ],
   "fr_farmer_location": [
     {
-      "region_name": {{ reg_name | tojson }},
-      "zone_name": {{ zone_name | tojson }},
-      "woreda_name": {{ woreda_name | tojson }},
-      "kebele_name": {{ kebele_name | tojson }},
+      "geo_lowest_level_value_id": {{ geo_lowest | tojson }},
       "latitude": {{ (lat | string) | tojson if lat is not none else 'null' }},
       "longitude": {{ (lon | string) | tojson if lon is not none else 'null' }},
       "altitude": {{ (alt | string) | tojson if alt is not none else 'null' }},

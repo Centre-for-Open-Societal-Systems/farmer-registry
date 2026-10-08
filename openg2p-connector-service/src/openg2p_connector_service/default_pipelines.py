@@ -40,7 +40,7 @@ DEFAULT_FARMER_PIPELINE = {
 # record, and master_data must hold a partner with this id.
 PARTNER_ID = "farmer-partner"
 REGISTER_MNEMONIC = "Farmer"
-DATA_MODEL_MNEMONIC = "FARMER_DATA_MODEL"
+DATA_MODEL_MNEMONIC = "FARMER_ODK_MODEL"
 
 
 def _setting(name: str, *fallback_env: str) -> str:
@@ -104,6 +104,9 @@ async def seed_default_pipelines(conn: AsyncConnection) -> None:
         "form_id": odk_form_id,
         # Expands ODK repeat groups (land, crops, livestock) into the payload.
         "resolve_nav_links": True,
+        # Land certificates (and any other ODK attachment) travel inline so
+        # the registry stores them as documents; OData alone has the name only.
+        "embed_attachments": True,
         "strict_incremental": False,
         "target_url": f"{partner_base}/partner/ingest_data",
         "target_headers": {

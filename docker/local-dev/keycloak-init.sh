@@ -17,6 +17,7 @@ FARMER_REGISTRY_UI_PORT="${FARMER_REGISTRY_UI_PORT:-3001}"
 AWE_UI_PORT="${AWE_UI_PORT:-8031}"
 KEYCLOAK_IAM_CLIENT_SECRET="${KEYCLOAK_IAM_CLIENT_SECRET:-dev-iam-staff-secret}"
 KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET="${KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET:-dev-awe-resolver-secret}"
+KEYCLOAK_INGESTION_CLIENT_SECRET="${KEYCLOAK_INGESTION_CLIENT_SECRET:-dev-registry-ingestion-secret}"
 KEYCLOAK_DEV_USER="${KEYCLOAK_DEV_USER:-staff}"
 KEYCLOAK_DEV_PASSWORD="${KEYCLOAK_DEV_PASSWORD:-staff}"
 # AWE demo approvers (Stage 1 / Stage 2) — matches awe_meta_data/30_approver_rule.sql.
@@ -268,6 +269,17 @@ ensure_awe_clients() {
   for role in view-users view-clients query-groups; do
     assign_realm_management_role "service-account-awe-admin-resolver" "${role}"
   done
+
+  # The celery worker's own login: ingested (partner / ODK) submissions start
+  # their approval workflow with a client-credentials token of this client, the
+  # way a staff Submit does with the user's. AWE needs no role, only the realm.
+  ensure_client "farmer-registry-ingestion" \
+    -s enabled=true \
+    -s publicClient=false \
+    -s secret="${KEYCLOAK_INGESTION_CLIENT_SECRET}" \
+    -s serviceAccountsEnabled=true \
+    -s standardFlowEnabled=false \
+    -s directAccessGrantsEnabled=false
 }
 
 echo "[keycloak-init] Waiting for Keycloak at ${KEYCLOAK_URL} ..."

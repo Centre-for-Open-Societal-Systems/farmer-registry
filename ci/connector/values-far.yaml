@@ -37,9 +37,14 @@ commonEnv:
   CONNECTOR_FULL_SCAN_ON_INCREMENTAL_UNSUPPORTED: "false"
   CONNECTOR_METRICS_ENABLED: "true"
   CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry.far.openg2p.test
-  # ODK Central lives in this namespace, so the connector reaches it by service
-  # name rather than through istio and the self-signed .test certificate.
-  CONNECTOR_ODK_CENTRAL_BASE_URL: http://commons-services-odk-central-frontend
+# CONNECTOR_ODK_CENTRAL_BASE_URL used to sit in commonEnv above, pointing at the
+# in-cluster commons-services-odk-central-frontend. It never had any effect: the
+# commonEnv helper renders a fixed allowlist and drops everything else, so the
+# key reached no container. It is removed rather than moved, because dev's live
+# pipeline does not use the in-cluster ODK at all -- it polls the external
+# server, configured in the connector UI, and that is the truth for this
+# environment. Set it under extraEnv (see values-staging.yaml) only if you also
+# intend default_pipelines.py to seed the pipeline from values.
 
 # Creates the farmer_connector database and its user. The chart already
 # templates the database, user and secret from the global.* values above, and

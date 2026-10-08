@@ -29,8 +29,16 @@ them. Take that build's tag.
 **2. Deploy the release.**
 
 ```sh
-KUBECONFIG=<cluster> ./ci/connector/deploy.sh <image tag>
+ENVIRONMENT=far     KUBECONFIG=<dev cluster>     ./ci/connector/deploy.sh <image tag>
+ENVIRONMENT=staging KUBECONFIG=<staging cluster> ./ci/connector/deploy.sh <image tag>
 ```
+
+`ENVIRONMENT` picks `ci/connector/values-<environment>.yaml` and is required.
+It used to be derived from the namespace, which is wrong here: dev and staging
+are different clusters that both run the registry in a namespace called `far`,
+so a staging deploy quietly used dev's values — dev's hostname, dev's database
+and pull-secret names, dev's ODK URL — and came up looking healthy while
+pointed at the wrong ODK server.
 
 The chart creates the `farmer_connector` database and its user through its
 `postgres-init` subchart, then starts the API, the worker, the beat scheduler
@@ -56,13 +64,19 @@ the release so the connector seeds the pipeline itself on first start:
 
 | Setting | Example |
 | --- | --- |
-| `CONNECTOR_ODK_CENTRAL_BASE_URL` | `http://commons-services-odk-central-frontend` |
+| `CONNECTOR_ODK_CENTRAL_BASE_URL` | `https://odk-central.oanstaging.com` |
 | `CONNECTOR_ODK_PROJECT_ID` | the project holding the form |
 | `CONNECTOR_ODK_FORM_ID` | the published form id |
 | `CONNECTOR_ODK_CENTRAL_EMAIL` | an ODK Central account with access to it |
 | `CONNECTOR_ODK_CENTRAL_PASSWORD` | mount from a secret, never in values |
 
 Nothing is seeded until all five are set, and no credentials are built in.
+
+These go under **`extraEnv`**, not `commonEnv` — see `values-staging.yaml`. The
+`commonEnv` helper renders a fixed allowlist and silently drops anything it does
+not name, so until `extraEnv` existed none of these could reach a container and
+this seeding path could not work at all; every environment had to be configured
+by hand in the UI. Put the password in `extraEnvFrom`, pointing at a secret.
 
 ## Checking it works
 
@@ -82,18 +96,61 @@ from g2p_intake_form_submissions order by first_created_at desc limit 5;
 Then open the staff portal, review the draft under Intake Forms, and approve it
 to commit the record to the register.
 
-## Known gap: the registry-side mapping
+## The registry side
 
-The connector wraps each submission as `{header: {...}, message: {payload: ...}}`.
-The registry's classification in `far` currently matches a DCI-shaped payload —
-`$.body.message.search_response[0].data.reg_record_type=>^Farmer$`, with the
-record at `search_response[0].data.reg_records[0]` — so a connector submission
-reaches `incoming_classified_data` but does not yet become a draft intake.
+The connector wraps each submission as
+`{header: {message_id, sender_id: "farmer-partner", ...}, message: {payload: <submission>}}`
+and posts it with `?data_model=FARMER_ODK_MODEL`. The registry turns that into an
+intake with nothing but seed data, all applied by db-seed:
 
-crop and live close this gap with an `odk_ingest_hooks.py` in their extension
-that patches the intake-form data service and the per-register services. The
-farmer extension has no equivalent yet, and `odk/templates/farmer_transform.j2`
-is not referenced by any database row (crop's `csr_odk_transform.j2` is not
-either). Closing it means either adding semantic patterns and a transform
-template for the connector's envelope, or porting the hook approach. That work
-belongs with whoever owns the farmer extension's ingestion pipeline.
+| Piece | Where |
+| --- | --- |
+| Data model, key paths, semantic pattern (Farmer Ingestion Intake form), template routing | `farmer-extension/.../meta_data/registry-inbound-message-rules/zz_farmer_odk_ingestion.sql` (the same rows, same ids, as `odk/setup_farmer_odk_connector.sql`, so a hand-seeded environment and a db-seeded one agree) |
+| The transform, ODK submission to intake sections | `odk/templates/farmer_transform.j2`, uploaded to the `templates` bucket (`LOAD_TEMPLATES`) |
+| Check of the transform against an OData-shaped submission | `python odk/test_transform.py` (needs `jinja2`) |
+
+Two fixes to the pinned platform make the path work at all (`docker/patches/patch_platform.py`):
+the celery worker now creates the services the intake save reaches through
+`get_component()` (and the fastapi-cache backend), and the Partner API can encode
+its response when a data model has no response template. Without the first,
+every ingest stopped at `ingestion_status=FAILED`; without the second, the
+connector saw a 500 for every submission and re-sent it on each poll.
+
+Approval: the worker finalizes each draft as a staff Submit does, which starts
+the intake's AWE approval workflow, so approvers get a task (status PENDING with
+an AWE request). The worker has no user, so it logs in with a client-credentials
+token: `REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL` / `_CLIENT_ID` / `_CLIENT_SECRET`,
+plus the AWE settings the staff-portal-api uses, as `REGISTRY_CELERY_WORKERS_AWE_*`
+(the worker reads the platform settings under its own prefix; `REGISTRY_CORE_AWE_*`
+is ignored there and AWE silently stays off). The chart
+points these at the release's own client (`global.authClientId`), which needs
+**Service accounts** enabled in Keycloak; check that on each environment. A
+missing token fails the ingest with `AWE_BEARER_TOKEN_REQUIRED`.
+
+Notes on the mapping:
+- The form stores administrative **codes** without the leading zero (kebele
+  `40801101001`). The template pads them to Master Data's ids
+  (`kebele-ET040801101001`) and sends `geo_lowest_level_value_id`; the farmer
+  service fills region, zone, woreda and kebele names from it. A kebele picked
+  as "other" falls back to the woreda.
+- Photos (the farmer photo and each parcel's land certificate) arrive from ODK
+  Central as file names only. The connector downloads them and inlines them as
+  `{"__type": "File", ...}` when the pipeline's `source_config.embed_attachments`
+  is true (the default; set `false` to turn it off). Files over
+  `attachment_max_bytes` (default 10 MiB) are skipped and the record is sent
+  without them. Each file is held in memory while it is encoded. The web user
+  the connector signs in as needs read access to the project's submissions.
+  After changing `farmer_transform.j2`, re-run db-seed or re-upload it to MinIO
+  (`mc cp odk/templates/farmer_transform.j2 myminio/templates/`).
+- Every stage writes a JSON-lines **ingestion log** (`odk.ingest`): polls, each attachment
+  (embedded, not uploaded, too large, download failed), map/validate/send failures, what the
+  registry received, files stored or refused, and each ingest attempt. The connector writes
+  `/app/logs/odk-ingest.jsonl` (`CONNECTOR_INGEST_LOG_FILE`, empty for stdout only) and the
+  registry worker `logs/odk-ingest.jsonl` (`REGISTRY_EXTENSIONS_ODK_INGEST_LOG_FILE`); both
+  also go to stdout. Find a submission with
+  `jq 'select(.source_event_id == "<form>:<uuid:...>" or .instance_id == "<uuid:...>")'`.
+  The event table is in `odk/FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`, section 9.1.
+- The form asks no crop season; crops default to `MEHER`.
+- The submission is validated like a staff entry. A draft that breaks a farmer
+  rule (say, digits in a name) stays at `ingestion_status=FAILED` with the rule's
+  message in `ingestion_latest_error_code`.

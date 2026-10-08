@@ -34,17 +34,19 @@ SAMPLE_ODK_PAYLOAD = {
                 "date_of_birth_ec": "1975-11-06",
                 "age": 43,
                 "has_personal_phone": "yes",
-                "primary_phone_number": "0911234567",
-                "secondary_phone_number": "0922345678",
+                "primary_phone_number": "251911234567",
+                "secondary_phone_number": "251922345678",
                 "other_phone_number": "+251933445566",
                 "farming_type": "MIXED",
                 "disability": "no"
             },
+            # The form stores codes, without their leading zero (Oromia / Arsi /
+            # Merti / Abomsa_01 in KebeleList.csv).
             "locale_info": {
-                "region": "Oromia",
-                "zone": "East Shewa",
-                "woreda": "Adaa",
-                "kebele": "Babogaya",
+                "region": "4",
+                "zone": "408",
+                "woreda": "40801",
+                "kebele": "40801101001",
                 "language": "Amharic",
                 "local_language": "Afaan Oromo"
             }
@@ -66,10 +68,18 @@ SAMPLE_ODK_PAYLOAD = {
         "farmer_reference_id": {
             "farmer_reference_id": "ET-REF-LIVE-999"
         },
+        # Its own ODK group, like the farmer photo section on the intake form.
+        "farmer_photo_section": {
+            "farmer_photo": {"__type": "File", "name": "desta_profile.jpg",
+                             "type": "image/jpeg", "data": "/9j/4AAQ"}
+        },
         "land_info": {
             "land_info_repeat": [
                 {
-                    "land_ownership": "OWNED",
+                    "land_ownership": "tenant",
+                    # The connector inlines the photo (embed_attachments).
+                    "land_certificate": {"__type": "File", "name": "deed.jpg",
+                                         "type": "image/jpeg", "data": "/9j/4AAQ"},
                     "total_land_area": 2.75,
                     "land_id": "LND-001",
                     "land_kebele": "Babogaya"
@@ -117,7 +127,9 @@ SAMPLE_ODK_PAYLOAD = {
             ]
         },
         "farmer_location": {
-            "location": "8.7850000 38.9100000 1890.00 2.20"
+            # OData returns a geopoint as GeoJSON: [lon, lat, alt].
+            "location": {"type": "Point", "coordinates": [38.91, 8.785, 1890.0],
+                         "properties": {"accuracy": 2.2}}
         },
         "survey_metadata": {
             "enumerator_name": "Field Officer Demo",
@@ -153,6 +165,59 @@ def main():
         print(f"[-] FAILED: Rendered output is not valid JSON! Error: {e}")
         print("\n--- Rendered Output ---")
         print(rendered_output)
+        sys.exit(1)
+
+    location = parsed_json["fr_farmer_location"][0]
+    land = parsed_json["intake_fr_farmer_land"][0]
+    expectations = [
+        ("location id", location.get("geo_lowest_level_value_id"), "kebele-ET040801101001"),
+        ("latitude", location.get("latitude"), "8.785"),
+        ("longitude", location.get("longitude"), "38.91"),
+        ("land ownership", land.get("land_ownership_type"), "TENANT"),
+        ("land certificate", (land.get("certificate_storage_id") or {}).get("name"), "deed.jpg"),
+        ("certificate provided", land.get("certificate_provided"), True),
+        ("farmer photo", ((parsed_json.get("fr_farmer_photo") or [{}])[0]
+                          .get("record_image_document_id") or {}).get("name"), "desta_profile.jpg"),
+        # The form only takes 251XXXXXXXXX; the registry gets the 9-digit national number.
+        ("primary phone", parsed_json["fr_farmer_phone_numbers"][0].get("phone_number"), "911234567"),
+    ]
+    wrong = [f"{name}: {got!r}, expected {want!r}" for name, got, want in expectations if got != want]
+    if wrong:
+        print("[-] FAILED: " + "; ".join(wrong))
+        sys.exit(1)
+
+    # A bare file name (image not downloaded) must not produce a photo section.
+    bare = json.loads(template.render(expanded={
+        **SAMPLE_ODK_PAYLOAD["expanded"],
+        "farmer_photo_section": {"farmer_photo": "desta_profile.jpg"}}))
+    if "fr_farmer_photo" in bare:
+        print("[-] FAILED: bare photo file name produced an fr_farmer_photo section")
+        sys.exit(1)
+
+    # Household members collected as full farmers carry their own land
+    # certificate, nested in their land repeat.
+    base = {k: v for k, v in SAMPLE_ODK_PAYLOAD["expanded"].items() if k != "other_hh_members"}
+    cert = {"__type": "File", "name": "member_deed.jpg", "type": "image/jpeg", "data": "/9j/4AAQ"}
+    member = lambda first, land_cert: {
+        "hh_member_basic_info": {"hh_member_personal_info": {
+            "hh_member_first_name_english": first, "hh_member_father_name_english": "Tadesse",
+            "hh_member_grandfather_name_english": "Bekele", "hh_member_gender": "male",
+            "hh_member_date_of_birth": "1990-01-02"}},
+        "hh_member_land_info": {"hh_member_land_info_repeat": [{"hh_member_land_certificate": land_cert}]},
+    }
+    with_members = json.loads(template.render(expanded={**base, "other_farmers_in_hh": {
+        "other_farmers_repeat": [member("Abel", cert), member("Birtukan", "bare_name.jpg")]}}))
+    abel, birtukan = with_members["fr_household_members"]
+    member_checks = [
+        ("member name", abel.get("first_name"), "Abel"),
+        ("member birth date", abel.get("birth_date"), "1990-01-02"),
+        ("member certificate", (abel.get("certificate_storage_id") or {}).get("name"), "member_deed.jpg"),
+        ("member certificate provided", abel.get("certificate_provided"), True),
+        ("member bare file name left out", "certificate_storage_id" in birtukan, False),
+    ]
+    wrong = [f"{n}: {g!r}, expected {w!r}" for n, g, w in member_checks if g != w]
+    if wrong:
+        print("[-] FAILED: " + "; ".join(wrong))
         sys.exit(1)
 
     seasons = {"MEHER", "BELG", "IRRIGATED", "PERENNIAL"}

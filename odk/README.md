@@ -11,10 +11,13 @@ This directory contains the official **XLSForm** and reference datasets for the 
 | **`ATI_Farmers_Profile_ODK_Form_v2.xlsx`** | XLSForm Workbook | Complete ODK form with `survey`, `choices`, and `settings` sheets, fully translated into English, Amharic, and Afaan Oromo. |
 | **`KebeleList.csv`** | Media Attachment | Preloaded Kebele lookup list (9,000+ Kebeles) used with ODK `select_one_from_file`. |
 | **`PrimaryCoopList.csv`** | Media Attachment | Preloaded Primary Cooperative lookup list used with ODK `select_one_from_file`. |
+| **`setup_farmer_odk_connector.sql`** | SQL Seed | Database seeds to register `farmer-partner`, `FARMER_ODK_MODEL`, and semantic patterns with DevOps fixes. |
 | **`seed_connector_pipelines.sql`** | SQL Seed | OpenG2P Connector Service pipeline definition to poll ODK Central and forward to Partner API. |
 | **`connector-k8s-deployment.yaml`** | Kubernetes Manifest | Production Kubernetes Deployment, Service, ConfigMap, and Secret manifest for Connector API, Worker, and UI. |
-| **`setup_farmer_odk_connector.sql`** | SQL Seed | Database seeds to register `farmer-partner` and `FARMER_ODK_MODEL`. |
-| **`ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md`** | Technical Guide | Complete setup guide for OpenG2P Connector Service and ODK Central ingestion. |
+| **`FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`** | Technical Reference | Complete 10-chapter technical specification, architecture diagrams, and operational guide. |
+| **`OpenG2P_Farmer_Registry_ODK_Complete_Guide.pdf`** | Executive Guide | Production PDF reference manual compiled with full architecture details. |
+| **`test_odk_central_submission.py`** | Test Script | Automated 1-click test script posting survey instance to ODK Central and triggering connector poll. |
+| **`ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md`** | Quickstart Guide | Setup guide for OpenG2P Connector Service and ODK Central ingestion. |
 
 ---
 
@@ -53,6 +56,8 @@ The form is tri-lingual with native script rendering:
    - `marital_status`, `education_level`, `income_source`, family demographics
 6. **`membership`**:
    - `primary_cooperative`, `name_of_primary_cooperative` (from `PrimaryCoopList.csv`), `coop_union`, `farmer_cluster`, `primary_commodity`, `farmer_role`
+6a. **`farmer_photo_section`**:
+   - `farmer_photo` (image). Its own section, like the Farmer Photo section on the web intake form; maps to `fr_farmer_photo` → `record_image_document_id`
 7. **`land_info` (`land_info_repeat`)**:
    - Repeat group for parcels: `land_ownership` (`OWNED`, `RENTED`, `CROP_SHARING`), `total_land_area`, `land_id`, `land_certificate` (photo/image upload)
 8. **`crop_information` (`crop_repeat`)**:
@@ -105,7 +110,9 @@ The form is tri-lingual with native script rendering:
 | `location` (acc) | `g2p_register_farmers` | `enumerator_accuracy` | GPS Accuracy (meters) |
 | `username` | `g2p_register_farmers` | `enumerator_user_id` | Enumerator User ID |
 | `submission_time` | `g2p_register_farmers` | `data_collection_date` | Collection Date |
+| `farmer_photo` | `g2p_register_farmers` | `record_image_document_id` | Farmer profile photo (needs `embed_attachments`) |
 | `land_info_repeat` | `g2p_register_lands` | Multiple rows | `ownership_type`, `land_size`, `land_id`, `land_certificate` |
+| `hh_member_land_certificate` | `g2p_register_household_members` | `certificate_storage_id` | A household member's land certificate (first one with a file; needs `embed_attachments`) |
 | `crop_repeat` | `g2p_register_crops` | Multiple rows | `commodity`, `season`, `planted_date` |
 | `livestock_repeat` | `g2p_register_livestocks` | Multiple rows | `livestock_type`, `head_count` |
 | `other_farmers_repeat` | `g2p_register_household_members` | Multiple rows | Registered household members |

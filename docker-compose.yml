@@ -151,6 +151,7 @@ services:
       KEYCLOAK_REALM: staff
       KEYCLOAK_IAM_CLIENT_SECRET: ${KEYCLOAK_IAM_CLIENT_SECRET:-dev-iam-staff-secret}
       KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET: ${KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET:-dev-awe-resolver-secret}
+      KEYCLOAK_INGESTION_CLIENT_SECRET: ${KEYCLOAK_INGESTION_CLIENT_SECRET:-dev-registry-ingestion-secret}
       KEYCLOAK_DEV_USER: ${KEYCLOAK_DEV_USER:-staff}
       KEYCLOAK_DEV_PASSWORD: ${KEYCLOAK_DEV_PASSWORD:-staff}
       KEYCLOAK_STAFF_ADMIN_USER: ${KEYCLOAK_STAFF_ADMIN_USER:-admin}
@@ -506,6 +507,17 @@ services:
       REGISTRY_CELERY_WORKERS_CELERY_BACKEND_URL: "redis://redis:6379/0"
       REGISTRY_CELERY_WORKERS_WORKER_QUEUE: farmer_registry_worker_queue
       REGISTRY_CELERY_WORKERS_BATCH_SIZE: 2000
+      # Ingested (partner / ODK) submissions start their AWE approval workflow
+      # like a staff Submit, logged in as the farmer-registry-ingestion client.
+      REGISTRY_CELERY_WORKERS_AWE_ENABLED: "true"
+      REGISTRY_CELERY_WORKERS_AWE_BASE_URL: "http://awe:8000"
+      REGISTRY_CELERY_WORKERS_AWE_DEFAULT_CALLBACK_URL: "http://farmer-registry-staff-api:8000/awe/webhooks/decision"
+      REGISTRY_CELERY_WORKERS_AWE_CALLBACK_SECRET_ID: ${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: "http://keycloak:8080/realms/staff/protocol/openid-connect/token"
+      # AWE trusts the browser-facing issuer (localhost), not keycloak:8080.
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL: "http://localhost:${KEYCLOAK_PORT:-8080}"
+      REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID: farmer-registry-ingestion
+      REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET: ${KEYCLOAK_INGESTION_CLIENT_SECRET:-dev-registry-ingestion-secret}
       REGISTRY_CELERY_WORKERS_WORKER_MAX_ATTEMPTS: 5
       REGISTRY_CELERY_WORKERS_MINIO_ENDPOINT: "minio:9000"
       REGISTRY_CELERY_WORKERS_MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}

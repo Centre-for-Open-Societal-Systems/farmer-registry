@@ -204,6 +204,10 @@ RUN rm -rf /seed/meta_data/* /seed/awe_meta_data/* /seed/templates/* /seed/seed-
 COPY farmer-extension/src/openg2p_registry_farmer_extension/meta_data/     /seed/meta_data/
 COPY farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data/ /seed/awe_meta_data/
 COPY farmer-extension/src/openg2p_registry_farmer_extension/templates/     /seed/templates/
+# The ODK transform template (catalogue row and routing in
+# registry-inbound-message-rules/zz_farmer_odk_ingestion.sql). It stays next to
+# the form in odk/; LOAD_TEMPLATES uploads it like the DCI ones.
+COPY odk/templates/farmer_transform.j2                                    /seed/templates/farmer_transform.j2
 COPY docker/db-seed/seed-data/                                             /seed/seed-data/
 
 COPY docker/db-seed/load_sample_data.py /seed/load_sample_data.py
