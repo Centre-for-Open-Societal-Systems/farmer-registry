@@ -6,14 +6,23 @@
 # not part of the per-build pipeline: it changes on its own cadence, and its
 # chart's hooks create a database. crop and live run the same chart the same way.
 #
-#   ./ci/connector/deploy.sh <image tag>
-#   DRY_RUN=1 ./ci/connector/deploy.sh <image tag>    render only, change nothing
+#   ENVIRONMENT=far     ./ci/connector/deploy.sh <image tag>
+#   ENVIRONMENT=staging ./ci/connector/deploy.sh <image tag>
+#   DRY_RUN=1 ENVIRONMENT=far ./ci/connector/deploy.sh <tag>   render only
 #
 # Env:
 #   KUBECONFIG      the cluster to deploy to (required)
+#   ENVIRONMENT     which values file to use (required, no default)
 #   NAMESPACE       default far
 #   RELEASE         default farmer-connector
-#   VALUES          default ci/connector/values-<namespace>.yaml
+#   VALUES          overrides ci/connector/values-<environment>.yaml
+#
+# ENVIRONMENT is required and deliberately has no default. It used to select the
+# values file by NAMESPACE, which is unsafe here: dev and staging are different
+# clusters that both run the registry in a namespace called `far`, so a staging
+# deploy silently picked up dev's values -- dev's connector hostname, dev's ODK
+# Central URL, dev's database and pull-secret names. It would have come up
+# looking healthy while polling the wrong ODK server.
 #
 # The release keeps its own values; only the image tags change, so an ODK
 # password or pipeline edited in the UI survives a redeploy.
@@ -26,7 +35,8 @@ TAG="${1:-${TAG:-}}"
 NAMESPACE="${NAMESPACE:-far}"
 RELEASE="${RELEASE:-farmer-connector}"
 CHART="${CHART:-openg2p-connector-service/deploy/charts/openg2p-connector}"
-VALUES="${VALUES:-ci/connector/values-${NAMESPACE}.yaml}"
+ENVIRONMENT="${ENVIRONMENT:-}"
+VALUES="${VALUES:-${ENVIRONMENT:+ci/connector/values-${ENVIRONMENT}.yaml}}"
 DRY_RUN="${DRY_RUN:-}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
@@ -34,6 +44,9 @@ note() { echo "=== $* ==="; }
 
 [ -n "$TAG" ] || { echo "usage: $0 <image tag>" >&2; exit 2; }
 [ -n "${KUBECONFIG:-}" ] || die "set KUBECONFIG to the target cluster"
+[ -n "$VALUES" ] || die "set ENVIRONMENT (far | staging), or VALUES to a values file.
+  There is no default: dev and staging both deploy into a namespace called 'far'
+  on different clusters, so guessing from the namespace picks the wrong one."
 [ -f "$CHART/Chart.yaml" ] || die "no chart at $CHART"
 [ -f "$VALUES" ] || die "no values file at $VALUES"
 
@@ -43,6 +56,9 @@ trap 'rm -rf "$WORK"' EXIT
 note "Target"
 echo "server:   $(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')"
 echo "release:  $RELEASE in $NAMESPACE"
+# Printed next to the server on purpose: both clusters use the namespace 'far',
+# so the values file is the only thing that says which environment this is.
+echo "values:   $VALUES"
 echo "chart:    $CHART ($(grep -m1 '^version:' "$CHART/Chart.yaml" | awk '{print $2}'))"
 echo "images:   */connector-{service,ui}:$TAG"
 
