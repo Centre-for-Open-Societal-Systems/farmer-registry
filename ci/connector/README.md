@@ -29,8 +29,16 @@ them. Take that build's tag.
 **2. Deploy the release.**
 
 ```sh
-KUBECONFIG=<cluster> ./ci/connector/deploy.sh <image tag>
+ENVIRONMENT=far     KUBECONFIG=<dev cluster>     ./ci/connector/deploy.sh <image tag>
+ENVIRONMENT=staging KUBECONFIG=<staging cluster> ./ci/connector/deploy.sh <image tag>
 ```
+
+`ENVIRONMENT` picks `ci/connector/values-<environment>.yaml` and is required.
+It used to be derived from the namespace, which is wrong here: dev and staging
+are different clusters that both run the registry in a namespace called `far`,
+so a staging deploy quietly used dev's values — dev's hostname, dev's database
+and pull-secret names, dev's ODK URL — and came up looking healthy while
+pointed at the wrong ODK server.
 
 The chart creates the `farmer_connector` database and its user through its
 `postgres-init` subchart, then starts the API, the worker, the beat scheduler
@@ -56,13 +64,19 @@ the release so the connector seeds the pipeline itself on first start:
 
 | Setting | Example |
 | --- | --- |
-| `CONNECTOR_ODK_CENTRAL_BASE_URL` | `http://commons-services-odk-central-frontend` |
+| `CONNECTOR_ODK_CENTRAL_BASE_URL` | `https://odk-central.oanstaging.com` |
 | `CONNECTOR_ODK_PROJECT_ID` | the project holding the form |
 | `CONNECTOR_ODK_FORM_ID` | the published form id |
 | `CONNECTOR_ODK_CENTRAL_EMAIL` | an ODK Central account with access to it |
 | `CONNECTOR_ODK_CENTRAL_PASSWORD` | mount from a secret, never in values |
 
 Nothing is seeded until all five are set, and no credentials are built in.
+
+These go under **`extraEnv`**, not `commonEnv` — see `values-staging.yaml`. The
+`commonEnv` helper renders a fixed allowlist and silently drops anything it does
+not name, so until `extraEnv` existed none of these could reach a container and
+this seeding path could not work at all; every environment had to be configured
+by hand in the UI. Put the password in `extraEnvFrom`, pointing at a secret.
 
 ## Checking it works
 
