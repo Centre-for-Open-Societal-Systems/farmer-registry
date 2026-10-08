@@ -53,21 +53,20 @@ commonEnv:
 # so egress and TLS both work and only credentials are missing.
 extraEnv:
   CONNECTOR_ODK_CENTRAL_BASE_URL: https://odk-central.oanstaging.com
-  # Fill these in once the form is published on the staging ODK Central and the
-  # connector has an account; with all five set, default_pipelines.py seeds the
-  # pipeline on first start instead of someone building it in the UI.
-  # CONNECTOR_ODK_PROJECT_ID: ""
-  # CONNECTOR_ODK_FORM_ID: farmer_profile
-  # CONNECTOR_ODK_CENTRAL_EMAIL: ""
+  CONNECTOR_ODK_PROJECT_ID: "1"
+  CONNECTOR_ODK_FORM_ID: farmer_profile
+  # The ODK Central account the connector polls as. Not a secret, but still
+  # environment-specific; the password is the only part that must not be here.
+  CONNECTOR_ODK_CENTRAL_EMAIL: asmitanandsingh@gmail.com
 
-# The password never goes in values. Create the secret out of band:
+# The password never goes in values. The secret is created out of band:
 #   kubectl -n far create secret generic farmer-connector-odk \
-#     --from-literal=password='...'
-# extraEnvFrom:
-#   CONNECTOR_ODK_CENTRAL_PASSWORD:
-#     secretKeyRef:
-#       name: farmer-connector-odk
-#       key: password
+#     --from-file=password=<file>
+extraEnvFrom:
+  CONNECTOR_ODK_CENTRAL_PASSWORD:
+    secretKeyRef:
+      name: farmer-connector-odk
+      key: password
 
 # Creates farmer_connector_far and its user. The chart reads the shared
 # postgres' superuser password from the commons-postgresql secret, which is
