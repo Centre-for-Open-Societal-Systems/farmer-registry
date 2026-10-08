@@ -11,9 +11,17 @@ crops, livestock, household members) use numbered columns (``land_1_*``).
 
 import csv
 import io
+import math
+import re
 from dataclasses import dataclass, field
+from datetime import date, datetime
+from zipfile import BadZipFile
+from xml.etree.ElementTree import ParseError
+
+from ..register_domain.services.ethiopian_calendar import ethiopic_to_gregorian
 
 MAX_ROWS = 1000
+MAX_FILE_BYTES = 10 * 1024 * 1024
 N_PHONES, N_LANDS, N_CROPS, N_LIVESTOCK, N_MEMBERS = 2, 3, 3, 3, 5
 
 GENDERS = ["MALE", "FEMALE", "UNKNOWN"]
@@ -100,7 +108,7 @@ def _build_columns():
         _c("amount_insecticide_utilized", "Farm inputs", "Insecticide amount", ""),
         _c("improved_seed_use", "Farm inputs", "Uses improved seed", "yes", YES_NO),
         _c("amount_improved_seed_utilized", "Farm inputs", "Improved seed amount (kg)", "50"),
-        _c("water_source", "Farm inputs", "Water source", "RAIN_FED"),
+        _c("water_source", "Farm inputs", "Water source", "RAINFED"),
         _c("access_to_machinery", "Farm inputs", "Has access to machinery", "no", YES_NO),
         _c("access_to_finance", "Farm inputs", "Has access to finance", "no", YES_NO),
     ]
@@ -118,7 +126,7 @@ def _build_columns():
         cols += [
             _c(f"crop_{i}_name", f"Crop {i}", "Crop / commodity", "WHEAT" if ex else ""),
             _c(f"crop_{i}_planted_date", f"Crop {i}", "Planted date YYYY-MM-DD", "2026-06-15" if ex else ""),
-            _c(f"crop_{i}_season", f"Crop {i}", "Season", "MEHER" if ex else ""),
+            _c(f"crop_{i}_season", f"Crop {i}", "Season code from configured master data", "SUMMER" if ex else ""),
             _c(f"crop_{i}_end_use", f"Crop {i}", "End use", "FOOD_HUMAN_CONSUMPTION" if ex else "", END_USE),
         ]
     for i in range(1, N_LIVESTOCK + 1):
@@ -154,6 +162,14 @@ class RowError(ValueError):
     pass
 
 
+class ParsedRow(dict):
+    """A row with its original worksheet/CSV record number."""
+
+    def __init__(self, values, number):
+        super().__init__(values)
+        self.number = number
+
+
 def _s(row, key):
     v = row.get(key)
     return "" if v is None else str(v).strip()
@@ -175,9 +191,14 @@ def _num(row, key, kind=float):
     if not v:
         return None
     try:
-        return kind(float(v)) if kind is int else kind(v)
-    except ValueError:
-        raise RowError(f"{key}: '{v}' is not a number")
+        number = float(v)
+        if not math.isfinite(number) or number < 0:
+            raise ValueError()
+        if kind is int and not number.is_integer():
+            raise ValueError()
+        return kind(number)
+    except (ValueError, OverflowError):
+        raise RowError(f"{key}: '{v}' must be a finite non-negative {'whole number' if kind is int else 'number'}")
 
 
 def _enum(row, key, allowed, default=""):
@@ -190,11 +211,22 @@ def _enum(row, key, allowed, default=""):
 
 
 def _date(row, key):
-    v = _s(row, key).split("T")[0].split(" ")[0]
+    raw = row.get(key)
+    if isinstance(raw, (date, datetime)):
+        if key.endswith('_ec'):
+            raise RowError(f"{key}: enter an Ethiopian date as YYYY-MM-DD text")
+        return raw.date().isoformat() if isinstance(raw, datetime) else raw.isoformat()
+    v = _s(row, key)
     if v:
-        parts = v.split("-")
-        if len(parts) != 3 or not all(p.isdigit() for p in parts):
-            raise RowError(f"{key}: '{v}' must be YYYY-MM-DD")
+        try:
+            if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", v):
+                raise ValueError()
+            if key.endswith('_ec'):
+                ethiopic_to_gregorian(*map(int, v.split('-')))
+            else:
+                date.fromisoformat(v)
+        except (ValueError, OverflowError):
+            raise RowError(f"{key}: '{v}' must be a valid {'Ethiopian' if key.endswith('_ec') else 'Gregorian'} date (YYYY-MM-DD)")
     return v
 
 
@@ -238,7 +270,7 @@ def row_to_submission(row):
         if _s(row, f"livestock_{i}_type"):
             livestock.append({
                 "livestock_type": _s(row, f"livestock_{i}_type").upper(),
-                "head_count": _num(row, f"livestock_{i}_head_count", int) or 1,
+                "head_count": _num(row, f"livestock_{i}_head_count", int) if _s(row, f"livestock_{i}_head_count") else 1,
                 "livestock_system": _enum(row, f"livestock_{i}_system", LS_SYSTEM, "MIXED"),
             })
     for i in range(1, N_MEMBERS + 1):
@@ -328,40 +360,70 @@ def row_to_submission(row):
         out["intake_fr_farmer_crops"] = crops
     if livestock:
         out["fr_farmer_livestocks"] = livestock
-    if any(farm_in[k] for k in ("fertilizer_use", "pesticide_use", "insecticide_use", "improved_seed_use")):
+    if any(_s(row, k) for k in farm_in):
         out["fr_farmer_farm_input"] = [farm_in]
     return out
 
 
 def read_rows(filename, content):
     """Parse CSV/XLSX bytes into a list of header->value dicts (1 per data row)."""
+    if len(content) > MAX_FILE_BYTES:
+        raise RowError("File exceeds the 10 MB limit")
     name = (filename or "").lower()
-    if name.endswith(".csv"):
-        text = content.decode("utf-8-sig")
-        rows = list(csv.DictReader(io.StringIO(text)))
-        rows = [{(k or "").strip(): v for k, v in r.items()} for r in rows]
-    elif name.endswith(".xlsx"):
-        from openpyxl import load_workbook
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        ws = wb["Data"] if "Data" in wb.sheetnames else wb.worksheets[0]
-        it = ws.iter_rows(values_only=True)
-        header = [str(h).strip() if h is not None else "" for h in next(it, [])]
-        rows = [dict(zip(header, r)) for r in it]
-    else:
-        raise RowError("Unsupported file type; upload a .csv or .xlsx file")
-    rows = [r for r in rows if any(v not in (None, "") for v in r.values())]
-    unknown = [h for h in (rows[0] if rows else {}) if h and h not in HEADERS]
-    if unknown:
-        raise RowError("Unknown column(s): " + ", ".join(unknown))
-    if len(rows) > MAX_ROWS:
-        raise RowError(f"Too many rows ({len(rows)}); the limit is {MAX_ROWS}")
-    return rows
+    workbook = None
+    try:
+        if name.endswith(".csv"):
+            values = csv.reader(io.StringIO(content.decode("utf-8-sig")), strict=True)
+        elif name.endswith(".xlsx"):
+            from openpyxl import load_workbook
+            # Check expanded size before openpyxl loads shared strings/styles.
+            from zipfile import ZipFile
+            with ZipFile(io.BytesIO(content)) as archive:
+                if sum(item.file_size for item in archive.infolist()) > 50 * 1024 * 1024:
+                    raise RowError("Expanded workbook exceeds the 50 MB limit")
+            workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=False)
+            sheet = workbook["Data"] if "Data" in workbook.sheetnames else workbook.worksheets[0]
+            values = sheet.iter_rows(values_only=True)
+        else:
+            raise RowError("Unsupported file type; upload a .csv or .xlsx file")
+        header = [str(h).strip() if h is not None else "" for h in next(values, [])]
+        # Excel can retain formatting in otherwise empty trailing columns.
+        while header and not header[-1]:
+            header.pop()
+        if not header or any(not h for h in header):
+            raise RowError("A non-empty header is required for every column")
+        if len(header) != len(set(header)):
+            raise RowError("Duplicate column headers are not allowed")
+        unknown = [h for h in header if h not in HEADERS]
+        if unknown:
+            raise RowError("Unknown column(s): " + ", ".join(unknown))
+        missing = [c.name for c in COLUMNS if c.required and c.name not in header]
+        if missing:
+            raise RowError("Missing required column(s): " + ", ".join(missing))
+        rows = []
+        for number, cells in enumerate(values, 2):
+            if not any(v is not None and str(v).strip() for v in cells):
+                continue
+            if any(v is not None and str(v).strip() for v in cells[len(header):]):
+                raise RowError(f"Row {number}: more values than column headers")
+            rows.append(ParsedRow(dict(zip(header, cells)), number))
+            if len(rows) > MAX_ROWS:
+                raise RowError(f"Too many rows; the limit is {MAX_ROWS}")
+        if not rows:
+            raise RowError("File contains no farmer rows")
+        return rows
+    except (UnicodeDecodeError, csv.Error, BadZipFile, KeyError, IndexError, ParseError, OSError) as error:
+        raise RowError("Unreadable file; use a UTF-8 CSV or valid XLSX workbook") from error
+    finally:
+        if workbook is not None:
+            workbook.close()
 
 
 def rows_to_submissions(rows):
     """Return [{row, ok, submission|errors}] without aborting on a bad row."""
     results = []
     for n, row in enumerate(rows, start=2):  # row 1 is the header
+        n = getattr(row, "number", n)
         try:
             results.append({"row": n, "ok": True, "submission": row_to_submission(row)})
         except RowError as e:
@@ -375,7 +437,7 @@ def example_rows():
 
 def build_csv():
     buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=HEADERS)
+    w = csv.DictWriter(buf, fieldnames=HEADERS, lineterminator="\n")
     w.writeheader()
     w.writerows(example_rows())
     return ("﻿" + buf.getvalue()).encode("utf-8")

@@ -144,6 +144,8 @@ class Initializer(BaseInitializer):
         # cross-loop reuse.
         await self._migrate_extension_tables()
         self._register_deduplication_routes(app)
+        from .bulk_import.controller import register_bulk_import_routes
+        register_bulk_import_routes(app)
 
     def migrate_database(self, args):
         asyncio.run(self._migrate_extension_tables())
@@ -1033,5 +1035,4 @@ class Initializer(BaseInitializer):
             return await service.reset_deduplication()
 
         app.include_router(router)
-
 

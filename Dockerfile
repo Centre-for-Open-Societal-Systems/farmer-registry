@@ -169,6 +169,11 @@ RUN node /tmp/patch-intake-list-layout.js &&     find /app/.next/static/css -typ
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-intake-rules.js /app/public/farmer-intake-rules.js
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-import-template.csv /app/public/farmer-import-template.csv
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-import-template.xlsx /app/public/farmer-import-template.xlsx
+COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-bulk-upload.js /app/public/farmer-bulk-upload.js
+COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-bulk-upload.css /app/public/farmer-bulk-upload.css
+COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-bulk-proxy.cjs /app/farmer-bulk-proxy.cjs
+COPY docker/staff-ui/assets/patch-farmer-bulk-upload.js /tmp/patch-farmer-bulk-upload.js
+RUN node /tmp/patch-farmer-bulk-upload.js
 COPY docker/staff-ui/assets/patch-intake-rules-script.js /tmp/patch-intake-rules-script.js
 COPY docker/staff-ui/assets/patch-intake-photo-document.js /tmp/patch-intake-photo-document.js
 COPY docker/staff-ui/assets/patch-api-error-messages.js /tmp/patch-api-error-messages.js
