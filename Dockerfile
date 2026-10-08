@@ -167,6 +167,8 @@ RUN node /tmp/patch-intake-list-layout.js &&     find /app/.next/static/css -typ
 # photo picked during intake is also listed with the submission's attached
 # documents, next to the certificate uploads.
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-intake-rules.js /app/public/farmer-intake-rules.js
+COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-import-template.csv /app/public/farmer-import-template.csv
+COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-import-template.xlsx /app/public/farmer-import-template.xlsx
 COPY docker/staff-ui/assets/patch-intake-rules-script.js /tmp/patch-intake-rules-script.js
 COPY docker/staff-ui/assets/patch-intake-photo-document.js /tmp/patch-intake-photo-document.js
 COPY docker/staff-ui/assets/patch-api-error-messages.js /tmp/patch-api-error-messages.js
