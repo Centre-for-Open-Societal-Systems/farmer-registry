@@ -96,6 +96,21 @@ fi
 note "helm upgrade"
 helm upgrade --install "$RELEASE" "$CHART" -n "$NAMESPACE" "$@" --timeout 10m
 
+# The UI image proxies to a fixed upstream named connector-api, while the chart
+# names its service after the release. nginx resolves upstreams at startup, so
+# without this alias the UI pod dies with
+#   [emerg] host not found in upstream "connector-api"
+# and the rollout times out. The file has been in git without anything applying
+# it, so both dev and staging hit this and were fixed by hand. The namespace is
+# taken from $NAMESPACE rather than the file, which pins its own.
+ALIAS="$(dirname "${BASH_SOURCE[0]}")/connector-api-alias.yaml"
+if [ -f "$ALIAS" ]; then
+    note "connector-api alias"
+    kubectl apply -n "$NAMESPACE" -f "$ALIAS"
+else
+    echo "WARNING: $ALIAS is missing; the UI will crash-loop on a fresh install" >&2
+fi
+
 note "Rollout"
 for d in api worker beat ui; do
     kubectl get deploy "$RELEASE-$d" -n "$NAMESPACE" >/dev/null 2>&1 || continue
