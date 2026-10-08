@@ -238,6 +238,15 @@
 {%- set enum_id = meta.get('enumerator_id', '') or sys.get('submitterId', '') -%}
 {%- set collection_date = (meta.get('survey_start', '') or sys.get('submissionDate', '') or '').split('T')[0] -%}
 
+{# --- Farmer Photo (own section on the intake form: fr_farmer_photo) --- #}
+{#- The connector inlines the photo (embed_attachments) as {"__type": "File", ...}; the registry uploads it on save and stores record_image_document_id. A bare file name means the image did not come along, so the section is left out. -#}
+{%- set photo_form = d.get('farmer_photo_section', {}) or {} -%}
+{%- set photo = photo_form.get('farmer_photo') or personal.get('farmer_photo') or d.get('farmer_photo') -%}
+{%- set photo_records = [] -%}
+{%- if photo is mapping and photo.get('__type') == 'File' -%}
+  {%- set _ = photo_records.append({"record_image_document_id": photo}) -%}
+{%- endif -%}
+
 {# ==================== FINAL TARGET INTAKE FORM JSON ==================== #}
 {
   "fr_farmer_personal_info": [
@@ -259,6 +268,9 @@
       "import_source": "PARTNER"
     }
   ],
+  {%- if photo_records | length > 0 %}
+  "fr_farmer_photo": {{ photo_records | tojson }},
+  {%- endif %}
   "fr_farmer_phone_numbers": {{ phones_list | tojson }},
   "fr_farmer_birth_information": [
     {

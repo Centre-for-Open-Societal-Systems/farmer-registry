@@ -68,6 +68,11 @@ SAMPLE_ODK_PAYLOAD = {
         "farmer_reference_id": {
             "farmer_reference_id": "ET-REF-LIVE-999"
         },
+        # Its own ODK group, like the farmer photo section on the intake form.
+        "farmer_photo_section": {
+            "farmer_photo": {"__type": "File", "name": "desta_profile.jpg",
+                             "type": "image/jpeg", "data": "/9j/4AAQ"}
+        },
         "land_info": {
             "land_info_repeat": [
                 {
@@ -171,12 +176,22 @@ def main():
         ("land ownership", land.get("land_ownership_type"), "TENANT"),
         ("land certificate", (land.get("certificate_storage_id") or {}).get("name"), "deed.jpg"),
         ("certificate provided", land.get("certificate_provided"), True),
+        ("farmer photo", ((parsed_json.get("fr_farmer_photo") or [{}])[0]
+                          .get("record_image_document_id") or {}).get("name"), "desta_profile.jpg"),
         # The form only takes 251XXXXXXXXX; the registry gets the 9-digit national number.
         ("primary phone", parsed_json["fr_farmer_phone_numbers"][0].get("phone_number"), "911234567"),
     ]
     wrong = [f"{name}: {got!r}, expected {want!r}" for name, got, want in expectations if got != want]
     if wrong:
         print("[-] FAILED: " + "; ".join(wrong))
+        sys.exit(1)
+
+    # A bare file name (image not downloaded) must not produce a photo section.
+    bare = json.loads(template.render(expanded={
+        **SAMPLE_ODK_PAYLOAD["expanded"],
+        "farmer_photo_section": {"farmer_photo": "desta_profile.jpg"}}))
+    if "fr_farmer_photo" in bare:
+        print("[-] FAILED: bare photo file name produced an fr_farmer_photo section")
         sys.exit(1)
 
     seasons = {"MEHER", "BELG", "IRRIGATED", "PERENNIAL"}

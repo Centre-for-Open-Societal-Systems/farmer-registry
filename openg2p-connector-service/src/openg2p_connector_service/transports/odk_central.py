@@ -168,8 +168,10 @@ class OdkCentralTransport(BaseTransport):
         # embed_attachments set, each submission's attachments are fetched
         # and inlined where their name appears, as the
         # {"__type": "File", "name", "type", "data": <base64>} value the
-        # registry's file fields accept.
-        embed_attachments = _cfg_bool(cfg, "embed_attachments", default=False)
+        # registry's file fields accept. On by default so existing pipelines
+        # pick it up without a config change; set false to skip the extra
+        # calls (each file is held in memory, capped by attachment_max_bytes).
+        embed_attachments = _cfg_bool(cfg, "embed_attachments", default=True)
         attachment_max_bytes = int(cfg.get("attachment_max_bytes", 10 * 1024 * 1024))
 
         mode_str = str(cfg.get("incremental_mode") or "timestamp").strip().lower()

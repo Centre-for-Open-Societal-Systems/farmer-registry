@@ -143,3 +143,19 @@ async def test_attachments_are_not_fetched_unless_enabled(monkeypatch):
 
     assert records[0].data["land_info"]["land_info_repeat"][0]["land_certificate"] == "deed.jpg"
     assert all("/attachments" not in url for url in calls)
+
+
+@pytest.mark.asyncio
+async def test_attachments_are_embedded_by_default(monkeypatch):
+    import copy
+
+    # Pipelines created before the option existed carry no embed_attachments key.
+    config = {k: v for k, v in CONFIG.items() if k != "embed_attachments"}
+    records, _ = await _fetch(monkeypatch, config, {
+        "/Submissions": _json({"value": [copy.deepcopy(SUBMISSION)]}),
+        "/submissions/uuid%3Aabc/attachments": _json([{"name": "deed.jpg", "exists": True}]),
+        "/attachments/deed.jpg": _bytes(JPEG),
+    })
+
+    cert = records[0].data["land_info"]["land_info_repeat"][0]["land_certificate"]
+    assert cert["__type"] == "File" and cert["name"] == "deed.jpg"
