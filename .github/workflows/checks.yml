@@ -37,3 +37,16 @@ jobs:
         run: python -m pytest test/test_patch_platform_ingestion.py -q
       - name: ODK transform renders an OData-shaped submission
         run: pip install --quiet jinja2 && python odk/test_transform.py
+      - name: Bulk import parser, controller and transaction checks
+        run: |
+          pip install --quiet openpyxl fastapi python-multipart httpx
+          python -m unittest discover -s farmer-extension/tests -p 'test_bulk_import*.py'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Bulk upload UI, proxy and bundle patch checks
+        run: node --test test/staff-ui/test-bulk-proxy.cjs test/staff-ui/test-bulk-ui.cjs test/staff-ui/test-bulk-patch.cjs
+      - name: Intake document and spreadsheet validation coexist
+        run: |
+          npm install --prefix .cache/ui-tests jsdom
+          NODE_PATH="$PWD/.cache/ui-tests/node_modules" node --test test/staff-ui/intake-rules.test.js

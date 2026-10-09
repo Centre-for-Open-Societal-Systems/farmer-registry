@@ -41,13 +41,16 @@ function listJs(dir) {
 
 const version = crypto.createHash("md5").update(fs.readFileSync(SCRIPT)).digest("hex").slice(0, 10);
 const src = JSON.stringify(`/farmer-intake-rules.js?v=${version}`);
+const bulkScript = process.env.STAFF_UI_BULK_SCRIPT || "/app/public/farmer-bulk-upload.js";
+const bulkVersion = crypto.createHash("md5").update(fs.readFileSync(bulkScript)).digest("hex").slice(0, 10);
+const bulkSrc = JSON.stringify(`/farmer-bulk-upload.js?v=${bulkVersion}`);
 
 let patched = 0;
 for (const file of listJs(path.join(ROOT, "server"))) {
   const before = fs.readFileSync(file, "utf8");
   if (!before.includes('"branding-css-variables"')) continue;
   const after = before.replace(HEAD, (_m, jsx, style) =>
-    `(0,${jsx}.jsxs)("head",{children:[${style},(0,${jsx}.jsx)("script",{src:${src},defer:!0})]})`
+    `(0,${jsx}.jsxs)("head",{children:[${style},(0,${jsx}.jsx)("script",{src:${src},defer:!0}),(0,${jsx}.jsx)("script",{src:${bulkSrc},defer:!0})]})`
   );
   if (after === before) continue;
   fs.writeFileSync(file, after);

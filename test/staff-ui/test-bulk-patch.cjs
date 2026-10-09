@@ -1,0 +1,31 @@
+const {test} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+
+test('patch delegates bulk requests and preserves original document uploads', async () => {
+  const root = path.resolve('.cache/bulk-patch-test');
+  fs.mkdirSync(path.join(root,'server/app/api/documents/upload_documents'),{recursive:true});
+  fs.writeFileSync(path.join(root,'server/app-paths-manifest.json'),JSON.stringify({'/api/documents/upload_documents/route':'app/api/documents/upload_documents/route.js'}));
+  const route=path.join(root,'server/app/api/documents/upload_documents/route.js');
+  fs.writeFileSync(route, 'const original={POST:async()=>"original"};const AppRouteRouteModule=class{constructor(config){this.userland=config.userland;}};module.exports=new AppRouteRouteModule({userland:original});');
+  const script=path.join(root,'bulk.js'); fs.writeFileSync(script,'const API="__FARMER_BULK_UPLOAD_ROUTE__";');
+  const menu = 'const marker={viewStorageKey:"intakeFormView"};function menu(p,config,e){let ignored,b=p?.register_id,{importFileOptions:S,isLoadingImportFiles:k}=config;switch(e.mechanism_type){case"IMPORT_FILE":if(k)return (0,a.jsx)("div",{children:"Loading"});return S.map(x=>x);case"VERIFIABLE_CREDENTIAL":return null;}}';
+  for (const name of ['client-menu.js','server-menu.js']) fs.writeFileSync(path.join(root,name),menu);
+  const env={STAFF_UI_NEXT_ROOT:root,STAFF_UI_BULK_SCRIPT:script,STAFF_UI_BULK_PROXY:'/app/farmer-bulk-proxy.cjs'};
+  vm.runInNewContext(fs.readFileSync('docker/staff-ui/assets/patch-farmer-bulk-upload.js','utf8'),{require,process:{env},console});
+  const exports={};
+  vm.runInNewContext(fs.readFileSync(route,'utf8'), {module:exports,URL,require:()=>({POST:async()=> 'bulk'})});
+  assert.equal(await exports.exports.userland.POST(new Request('http://portal/api/documents/upload_documents')), 'original');
+  assert.equal(await exports.exports.userland.POST(new Request('http://portal/api/documents/upload_documents?farmer_bulk_import=import')), 'bulk');
+  assert.equal(fs.readFileSync(script,'utf8'),'const API="/api/documents/upload_documents";');
+  const patchedMenu = fs.readFileSync(path.join(root,'client-menu.js'),'utf8');
+  const calls=[];
+  const context={a:{jsx:(tag,props)=>({tag,...props}),jsxs:(tag,props)=>({tag,...props})},window:{dispatchEvent:event=>calls.push(event.type)},Event};
+  vm.runInNewContext(patchedMenu,context);
+  const result=context.menu({register_id:'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd'},{importFileOptions:[],isLoadingImportFiles:false},{mechanism_type:'IMPORT_FILE'});
+  assert.equal(result.children[0].id,'farmer-bulk-open');
+  result.children[0].onClick(); assert.deepEqual(calls,['farmer-bulk-upload']);
+  assert.equal(context.menu({register_id:'other'},{importFileOptions:['existing']},{mechanism_type:'IMPORT_FILE'})[0],'existing');
+});

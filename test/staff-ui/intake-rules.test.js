@@ -59,6 +59,20 @@ const cell = (control) => `<td><div class="table-cell-field w-full">${control}</
 
 /* ------------------------------------------------------ family size */
 
+test("spreadsheet picker is not cleared by document upload validation", () => {
+  const dom = page('<dialog class="farmer-bulk-dialog"><input type="file" accept=".csv,.xlsx"></dialog>');
+  const input = dom.window.document.querySelector('input');
+  for (const extension of ['csv', 'xlsx']) {
+    Object.defineProperty(input, 'files', {configurable:true, value:[new dom.window.File(['data'], `farmers.${extension}`)]});
+    let cleared = false, delivered = false;
+    Object.defineProperty(input, 'value', {configurable:true, set() { cleared = true; }});
+    input.addEventListener('change', () => { delivered = true; }, {once:true});
+    input.dispatchEvent(new dom.window.Event('change', {bubbles:true}));
+    assert.equal(cleared, false);
+    assert.equal(delivered, true);
+  }
+});
+
 test("Family Size fills from Females alone; children are not added", async () => {
   const dom = page(`<div class="section" data-section-id="farmer_household_information">
     ${widget("number_of_male_members")}${widget("number_of_female_members")}
