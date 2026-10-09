@@ -65,8 +65,8 @@ on conflict (partner_id) do nothing;
 ```
 
 **4. Publish the form.** In ODK Central, create the project, upload
-`odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`, attach `odk/KebeleList.csv` and
-`odk/PrimaryCoopList.csv` as media, and publish. Note the project id and form id.
+`odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`, attach `odk/media/KebeleList.csv` and
+`odk/media/PrimaryCoopList.csv` as media, and publish. Note the project id and form id.
 
 **5. Point the pipeline at it.** Either in the connector UI
 (`https://connector-farmer-registry.far.openg2p.test`), or by setting these on
@@ -162,7 +162,7 @@ Notes on the mapping:
   registry worker `logs/odk-ingest.jsonl` (`REGISTRY_EXTENSIONS_ODK_INGEST_LOG_FILE`); both
   also go to stdout. Find a submission with
   `jq 'select(.source_event_id == "<form>:<uuid:...>" or .instance_id == "<uuid:...>")'`.
-  The event table is in `odk/FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`, section 9.1.
+  The event table is in `docs/odk/FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`, section 9.1.
 - The form asks no crop season; crops default to `MEHER`.
 - The submission is validated like a staff entry. A draft that breaks a farmer
   rule (say, digits in a name) stays at `ingestion_status=FAILED` with the rule's

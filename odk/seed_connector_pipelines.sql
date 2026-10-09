@@ -2,6 +2,10 @@
 -- OpenG2P Connector Service — Pipeline Definitions Seed
 -- Connects ODK Central (Form: farmer_profile) to Farmer Registry Partner API
 -- Target DB: connector
+--
+-- Replace <odk-account-email> / <odk-account-password> with an ODK Central
+-- account that can read the project's submissions before running this; no
+-- login is committed. (Or create the pipeline in the connector UI.)
 -- ==============================================================================
 
 INSERT INTO connector_definitions (
@@ -42,8 +46,8 @@ INSERT INTO connector_definitions (
     }',
     'odk_session',
     '{
-        "email": "meghakinassery@gmail.com",
-        "password": "odksandbox"
+        "email": "<odk-account-email>",
+        "password": "<odk-account-password>"
     }',
     'hmac_sha256'
 )
