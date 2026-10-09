@@ -8,3 +8,11 @@
 .farmer-bulk-dialog button:disabled { opacity: .5; }
 .farmer-bulk-dialog table { width: 100%; text-align: left; border-collapse: collapse; }
 .farmer-bulk-dialog td, .farmer-bulk-dialog th { padding: .5rem; border-bottom: 1px solid #ddd; overflow-wrap: anywhere; }
+.farmer-bulk-picker { margin-top: .5rem; padding: 1rem; border: 2px dashed #9daf9f; border-radius: .5rem; background: #f5f8f3; }
+.farmer-bulk-picker input { display: block; width: 100%; font: inherit; }
+.farmer-bulk-picker input::file-selector-button { padding: .65rem 1rem; margin-right: .75rem; border: 1px solid #166534; border-radius: .35rem; background: white; color: #166534; font: inherit; font-weight: 600; cursor: pointer; }
+.farmer-bulk-dialog #farmer-bulk-file-summary { margin-bottom: 0; font-weight: 600; overflow-wrap: anywhere; }
+.farmer-bulk-dialog .farmer-bulk-hint { color: #4b584f; font-size: .9rem; }
+.farmer-bulk-dialog .farmer-bulk-primary { background: #166534; color: white; border-color: #166534; font-weight: 600; }
+.farmer-bulk-dialog progress { width: 100%; height: .75rem; accent-color: #166534; }
+.farmer-bulk-dialog progress[hidden] { display: none; }

@@ -62,29 +62,59 @@
     }
     const formLabel = element('label', 'Intake form ', dialog);
     const forms = element('select', '', formLabel); forms.disabled = true;
-    const fileLabel = element('label', 'Spreadsheet ', dialog);
-    const file = element('input', '', fileLabel); file.type = 'file'; file.accept = '.csv,.xlsx';
+    const fileLabel = element('label', 'Spreadsheet', dialog);
+    const picker = element('div', '', fileLabel); picker.className = 'farmer-bulk-picker';
+    const file = element('input', '', picker); file.type = 'file'; file.accept = '.csv,.xlsx';
+    file.setAttribute('aria-describedby', 'farmer-bulk-file-summary');
+    const fileSummary = element('p', 'No spreadsheet selected. Choose a CSV or XLSX file.', picker);
+    fileSummary.id = 'farmer-bulk-file-summary';
+    const hint = element('p', 'Selecting a file does not upload it. Choose a file, then click Import and submit.', dialog);
+    hint.className = 'farmer-bulk-hint';
     const status = element('p', 'Loading intake forms…', dialog); status.setAttribute('role', 'status');
+    const progress = element('progress', '', dialog); progress.hidden = true;
+    progress.setAttribute('aria-label', 'Uploading spreadsheet and processing farmer rows');
     const results = element('div', '', dialog);
     const actions = element('div', '', dialog);
     const upload = element('button', 'Import and submit', actions); upload.disabled = true;
+    upload.className = 'farmer-bulk-primary';
     const close = element('button', 'Close', actions);
+    let formsReady = false;
+    let selectedFile = null;
+    function selectFile() {
+      selectedFile = null;
+      const candidate = file.files[0];
+      upload.disabled = true;
+      results.replaceChildren();
+      if (!candidate) {
+        fileSummary.textContent = 'No spreadsheet selected. Choose a CSV or XLSX file.';
+        status.textContent = 'Choose a file to begin.';
+        return;
+      }
+      fileSummary.textContent = `${candidate.name} (${Math.max(1, Math.ceil(candidate.size / 1024))} KB)`;
+      if (!/\.(csv|xlsx)$/i.test(candidate.name)) { status.textContent = 'Unsupported file. Choose a CSV or XLSX spreadsheet.'; return; }
+      if (candidate.size > 10 * 1024 * 1024) { status.textContent = 'File exceeds the 10 MB limit. Choose a smaller spreadsheet.'; return; }
+      selectedFile = candidate;
+      upload.disabled = !formsReady;
+      status.textContent = formsReady ? 'File ready. Click Import and submit to upload.' : 'File selected. Waiting for intake forms…';
+    }
+    file.addEventListener('change', selectFile);
     close.onclick = () => { if (!busy) dialog.close(); };
     dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
     dialog.addEventListener('close', () => { dialog.remove(); lastFocus?.focus(); });
     dialog.showModal();
     upload.onclick = async () => {
-      if (busy) return;
-      const selected = file.files[0];
-      if (!selected || !/\.(csv|xlsx)$/i.test(selected.name)) { status.textContent = 'Choose a CSV or XLSX file.'; return; }
-      if (selected.size > 10 * 1024 * 1024) { status.textContent = 'File exceeds the 10 MB limit.'; return; }
+      if (busy || !formsReady || !selectedFile) return;
+      const selected = selectedFile;
       busy = true; upload.disabled = close.disabled = file.disabled = forms.disabled = true;
-      results.replaceChildren(); status.textContent = 'Importing and submitting rows… Keep this page open.';
+      upload.textContent = 'Importing…';
+      progress.hidden = false; dialog.setAttribute('aria-busy', 'true');
+      results.replaceChildren(); status.textContent = `Uploading and processing ${selected.name}… Keep this page open. Results appear after all rows are processed.`;
       try {
         const body = new FormData(); body.append('file', selected); body.append('form_id', forms.value);
         const result = await call('import', body);
         if (!Array.isArray(result.results)) throw new Error('The result is incomplete. Check intake submissions before retrying.');
         status.textContent = `${result.successful} submitted for approval; ${result.failed} failed out of ${result.total}.`;
+        fileSummary.textContent = `Processed: ${selected.name}. Select another file to start a new import.`;
         const table = element('table', '', results);
         const head = element('tr', '', element('thead', '', table));
         ['Row', 'Result'].forEach(label => element('th', label, head));
@@ -107,14 +137,22 @@
         file.value = '';
       } catch (error) {
         status.textContent = error.message || 'Connection lost. Check intake submissions before retrying; some rows may have completed.';
+        fileSummary.textContent = `Last attempt: ${selected.name}. Review the message below before selecting a file again.`;
         file.value = '';
-      } finally { busy = false; upload.disabled = close.disabled = file.disabled = forms.disabled = false; }
+      } finally {
+        busy = false; selectedFile = null;
+        progress.hidden = true; dialog.setAttribute('aria-busy', 'false');
+        upload.textContent = 'Import and submit'; upload.disabled = true;
+        close.disabled = file.disabled = forms.disabled = false;
+      }
     };
     try {
       const available = await call('forms');
       for (const form of available) { const option = element('option', form.label, forms); option.value = form.form_id; }
-      forms.disabled = upload.disabled = !available.length;
-      status.textContent = available.length ? 'Choose a file to begin.' : 'No farmer intake form is configured.';
+      formsReady = available.length > 0;
+      forms.disabled = !formsReady;
+      if (formsReady) selectFile();
+      else status.textContent = 'No farmer intake form is configured.';
     } catch (error) { status.textContent = error.message; }
   }
   const css = element('link', '', document.head); css.rel = 'stylesheet'; css.href = '/farmer-bulk-upload.css';

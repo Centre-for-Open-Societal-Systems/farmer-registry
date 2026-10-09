@@ -8,7 +8,7 @@ const vm = require('node:vm');
 function fixture(fetch, pathname = '/intake-form/farmer') {
   const nodes = [];
   class Node {
-    constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; nodes.push(this); }
+    constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; this.files = []; nodes.push(this); }
     appendChild(child) { this.children.push(child); child.parent = this; }
     prepend(child) { this.children.unshift(child); child.parent = this; }
     setAttribute(key, value) { this[key] = value; }
@@ -54,16 +54,23 @@ test('templates, mixed results and double-click prevention', async () => {
   assert.equal(nodes.filter(n => n.tag === 'a' && n.href?.includes('farmer-import-template')).length, 2);
   const input = nodes.find(n => n.type === 'file');
   input.files = [new Blob(['first_name,father_first_name\nA,B'])]; input.files[0].name='farmers.csv';
+  input.listeners.change();
+  assert(nodes.some(n => n.textContent === 'farmers.csv (1 KB)'));
+  assert.equal(importCalls, 0, 'selection must not silently start importing');
   nodes.find(n => n.tag === 'select').value='form';
   const button = nodes.find(n => n.textContent === 'Import and submit');
   const pending = button.click(); await button.click();
   assert.equal(importCalls, 1); assert.equal(button.disabled, true);
+  assert.equal(nodes.find(n => n.tag === 'progress').hidden, false);
+  assert.equal(button.textContent, 'Importing…');
   release(); await pending;
   assert(nodes.some(n => n.textContent === '1 submitted for approval; 1 failed out of 2.'));
   assert(nodes.some(n => n.textContent === 'Bad date'));
   assert(nodes.some(n => n.href === '/tasks/intake-form/farmer/id'));
   assert(nodes.some(n => n.textContent === 'Download error report'));
-  assert.equal(input.value, ''); assert.equal(button.disabled, false);
+  assert.equal(input.value, ''); assert.equal(button.disabled, true);
+  assert.equal(nodes.find(n => n.tag === 'progress').hidden, true);
+  assert(nodes.some(n => n.textContent?.startsWith('Processed: farmers.csv')));
 });
 
 test('network failure clears selection and tells staff to check existing submissions', async () => {
@@ -73,7 +80,27 @@ test('network failure clears selection and tells staff to check existing submiss
   });
   await open();
   const input=nodes.find(n=>n.type==='file'); input.files=[new Blob(['x'])]; input.files[0].name='a.csv';
+  input.listeners.change();
   await nodes.find(n=>n.textContent==='Import and submit').click();
   assert.equal(input.value,'');
   assert.match(nodes.find(n=>n.role==='status').textContent,/Check intake submissions/);
+  assert.equal(nodes.find(n=>n.tag==='progress').hidden,true);
+  assert(nodes.some(n=>n.textContent?.startsWith('Last attempt: a.csv')));
+});
+
+test('import remains disabled until a supported file within the size limit is selected', async () => {
+  const {nodes, open} = fixture(async () => payload([{form_id:'form',label:'Farmer'}]));
+  await open();
+  const input = nodes.find(n => n.type === 'file');
+  const button = nodes.find(n => n.textContent === 'Import and submit');
+  assert.equal(button.disabled, true);
+  for (const file of [{name:'photo.png',size:100}, {name:'large.csv',size:11*1024*1024}]) {
+    input.files=[file]; input.listeners.change();
+    assert.equal(button.disabled,true);
+  }
+  input.files=[{name:'farmers.xlsx',size:1024}]; input.listeners.change();
+  assert.equal(button.disabled,false);
+  assert.match(nodes.find(n=>n.role==='status').textContent,/File ready/);
+  input.files=[]; input.listeners.change();
+  assert.equal(button.disabled,true);
 });
