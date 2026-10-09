@@ -55,8 +55,8 @@ on conflict (partner_id) do nothing;
 ```
 
 **4. Publish the form.** In ODK Central, create the project, upload
-`docs/odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`, attach `docs/odk/media/KebeleList.csv` and
-`docs/odk/media/PrimaryCoopList.csv` as media, and publish. Note the project id and form id.
+`odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`, attach `odk/media/KebeleList.csv` and
+`odk/media/PrimaryCoopList.csv` as media, and publish. Note the project id and form id.
 
 **5. Point the pipeline at it.** Either in the connector UI
 (`https://connector-farmer-registry.far.openg2p.test`), or by setting these on

@@ -14,12 +14,12 @@ ODK Collect / web form → ODK Central → farmer connector (poll, photos inline
 
 | | |
 | --- | --- |
-| Form file | `ATI_Farmers_Profile_ODK_Form_v2.xlsx` |
+| Form file | `odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx` |
 | Form id / title | `farmer_profile` / "Farmer Profiling Data Collection Form" |
 | Version | **1.0.4** in this file (location lists from the shared hierarchy). On ODK Central dev: 1.0.3 until 1.0.4 is published |
 | ODK Central (dev) | `https://odk-central-development.oanstaging.com`, project **13** |
-| Media | `media/KebeleList.csv` (19,535 kebeles), `media/PrimaryCoopList.csv` (cooperatives) |
-| Location lists | generated from the shared hierarchy: `build_location_media.py` |
+| Media | `odk/media/KebeleList.csv` (19,535 kebeles), `odk/media/PrimaryCoopList.csv` (cooperatives) |
+| Location lists | generated from the shared hierarchy: `odk/build_location_media.py` |
 | Transform | `odk/templates/farmer_transform.j2` (uploaded to the MinIO `templates` bucket by db-seed) |
 | Connector | `ci/connector/` (release `farmer-connector`, namespace `far`), pipeline data model `FARMER_ODK_MODEL`, partner `farmer-partner` |
 | Languages | English (default), Amharic, Afaan Oromoo |
@@ -28,9 +28,9 @@ ODK Collect / web form → ODK Central → farmer connector (poll, photos inline
 
 | Path | |
 | --- | --- |
-| `docs/odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx` | the XLSForm (survey, choices, settings) |
-| `docs/odk/media/` | the CSVs the form reads (`select_one_from_file`) |
-| `docs/odk/build_location_media.py` | rebuilds the location lists from the shared hierarchy |
+| `odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx` | the XLSForm (survey, choices, settings) |
+| `odk/media/` | the CSVs the form reads (`select_one_from_file`) |
+| `odk/build_location_media.py` | rebuilds the location lists from the shared hierarchy |
 | `docs/odk/FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`, `.html`, `.pdf` | the long-form guide (architecture, event table in 9.1) |
 | `docs/odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md` | connector quick start |
 | `odk/templates/farmer_transform.j2` | ODK submission → intake sections |
@@ -61,7 +61,7 @@ ODK Collect / web form → ODK Central → farmer connector (poll, photos inline
 ## Location lists
 
 Region, zone and woreda are choice lists inside the XLSForm (`choices_region`,
-`choices_zone`, `choices_woreda`); the kebele comes from `media/KebeleList.csv`,
+`choices_zone`, `choices_woreda`); the kebele comes from `odk/media/KebeleList.csv`,
 filtered by the woreda. All four are generated from
 `docker/db-seed/seed-data/geo/geo_level_values.json`: the Ethiopia hierarchy
 (14 regions, 125 zones, 1,379 woredas, 19,535 kebeles) that the registry's
@@ -102,8 +102,8 @@ Version 1.0.4 moved the lists onto the hierarchy. Before it:
 **When the hierarchy changes:**
 
 ```sh
-python docs/odk/build_location_media.py          # rewrites the XLSX choice lists and media/KebeleList.csv
-python docs/odk/build_location_media.py --check  # what CI runs (test/test_odk_location_media.py)
+python odk/build_location_media.py          # rewrites the XLSX choice lists and odk/media/KebeleList.csv
+python odk/build_location_media.py --check  # what CI runs (test/test_odk_location_media.py)
 ```
 
 Then bump the version and publish (below). Needs `openpyxl`.
@@ -151,8 +151,8 @@ change only the version.
    has seen (Central refuses a repeat).
 2. In ODK Central: project 13 → *Farmer Profiling Data Collection Form* →
    **Edit / Upload new definition** → this XLSX (accept the media-column
-   warnings), then **Media Files**: upload `media/KebeleList.csv` and
-   `media/PrimaryCoopList.csv`. Test the draft (Collect QR or the draft link),
+   warnings), then **Media Files**: upload `odk/media/KebeleList.csv` and
+   `odk/media/PrimaryCoopList.csv`. Test the draft (Collect QR or the draft link),
    then **Publish**.
 
    Or with the API (an account that manages project 13):
@@ -162,10 +162,10 @@ change only the version.
    T=$(curl -s $C/v1/sessions -H 'Content-Type: application/json' -d '{"email":"…","password":"…"}' | jq -r .token)
    curl -s -X POST "$C/v1/projects/$P/forms/$F/draft?ignoreWarnings=true" -H "Authorization: Bearer $T" \
      -H 'Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' \
-     -H "X-XlsForm-FormId-Fallback: $F" --data-binary @docs/odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx
+     -H "X-XlsForm-FormId-Fallback: $F" --data-binary @odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx
    for m in KebeleList.csv PrimaryCoopList.csv; do
      curl -s -X POST "$C/v1/projects/$P/forms/$F/draft/attachments/$m" -H "Authorization: Bearer $T" \
-       -H 'Content-Type: text/csv' --data-binary @docs/odk/media/$m; done
+       -H 'Content-Type: text/csv' --data-binary @odk/media/$m; done
    curl -s -X POST "$C/v1/projects/$P/forms/$F/draft/publish" -H "Authorization: Bearer $T"
    ```
 

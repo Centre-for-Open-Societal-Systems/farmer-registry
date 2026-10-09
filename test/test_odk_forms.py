@@ -1,6 +1,6 @@
 """The committed ODK form agrees with the pipeline and the transform.
 
-docs/odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx is the XLSForm published on ODK
+odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx is the XLSForm published on ODK
 Central. If it drifts from the connector pipeline's form id, the connector
 polls a form nobody fills; if it gains a photo question the transform does not
 map, that photo never reaches the intake.
@@ -14,7 +14,7 @@ import pytest
 openpyxl = pytest.importorskip("openpyxl")
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-ODK = REPO / "docs" / "odk"
+ODK = REPO / "odk"
 FORM = ODK / "ATI_Farmers_Profile_ODK_Form_v2.xlsx"
 PIPELINE_SEED = REPO / "odk" / "seed_connector_pipelines.sql"
 TRANSFORM = REPO / "odk" / "templates" / "farmer_transform.j2"
@@ -42,7 +42,7 @@ def test_every_media_file_the_form_reads_is_committed():
         referenced.update(f"{name}.csv" for name in re.findall(r"(?:search|pulldata)\(\s*'([\w.-]+)'", text))
     assert referenced, "expected the form to read its kebele and cooperative lists"
     missing = sorted(name for name in referenced if not (ODK / "media" / name).exists())
-    assert not missing, f"media the form reads but docs/odk/media lacks: {missing}"
+    assert not missing, f"media the form reads but odk/media lacks: {missing}"
 
 
 def test_every_photo_question_is_mapped_by_the_transform():

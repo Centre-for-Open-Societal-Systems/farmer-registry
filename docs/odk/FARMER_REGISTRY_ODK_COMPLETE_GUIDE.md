@@ -216,7 +216,7 @@ To allow submissions to complete processing on the server, the DevOps team must 
 
 ## 4. ODK Form Design & XLSForm Specifications
 
-The data collection form (`docs/odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`) contains 14 structured sections with full tri-lingual localization and preloaded CSV lookups.
+The data collection form (`odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`) contains 14 structured sections with full tri-lingual localization and preloaded CSV lookups.
 
 ### 4.1 Languages Supported
 1. **English (`en`)** — Default reference language.

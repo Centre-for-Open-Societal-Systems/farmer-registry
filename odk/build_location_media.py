@@ -21,8 +21,8 @@ Region labels keep their Amharic and Afaan Oromoo translations; zone, woreda
 and kebele names have none in the hierarchy, so all three label columns carry
 the Master Data name, as before.
 
-    python docs/odk/build_location_media.py          # rewrite the lists
-    python docs/odk/build_location_media.py --check  # exit 1 if they are stale
+    python odk/build_location_media.py          # rewrite the lists
+    python odk/build_location_media.py --check  # exit 1 if they are stale
 
 test/test_odk_location_media.py runs the check. Publishing the result is a new
 form version (README.md, "Publishing").
@@ -37,7 +37,7 @@ import pathlib
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-REPO = HERE.parent.parent
+REPO = HERE.parent
 SOURCE = REPO / "docker/db-seed/seed-data/geo/geo_level_values.json"
 FORM = HERE / "ATI_Farmers_Profile_ODK_Form_v2.xlsx"
 KEBELES = HERE / "media" / "KebeleList.csv"
@@ -156,7 +156,7 @@ def main(argv: list[str]) -> int:
         stale.append(KEBELES.name)
     if "--check" in argv:
         if stale:
-            print(f"stale, rerun docs/odk/build_location_media.py: {stale}", file=sys.stderr)
+            print(f"stale, rerun odk/build_location_media.py: {stale}", file=sys.stderr)
             return 1
         print("location lists match the shared hierarchy")
         return 0

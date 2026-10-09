@@ -1,6 +1,6 @@
 """The farmer form's location lists are the shared location hierarchy.
 
-docs/odk/build_location_media.py generates the form's region / zone / woreda
+odk/build_location_media.py generates the form's region / zone / woreda
 choice lists and media/KebeleList.csv from
 docker/db-seed/seed-data/geo/geo_level_values.json, the hierarchy Master Data
 is seeded with. If they drift, an agent can pick a kebele Master Data does not
@@ -16,7 +16,7 @@ import pytest
 openpyxl = pytest.importorskip("openpyxl")
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-ODK = REPO / "docs" / "odk"
+ODK = REPO / "odk"
 
 spec = importlib.util.spec_from_file_location("build_location_media", ODK / "build_location_media.py")
 build_location_media = importlib.util.module_from_spec(spec)
@@ -33,10 +33,10 @@ def workbook():
 def test_choice_lists_and_kebele_list_are_what_the_generator_builds(workbook):
     current, translations = build_location_media.current_choice_rows(workbook)
     assert current == build_location_media.choice_rows(LEVELS, translations), (
-        "location choice lists are stale: run python docs/odk/build_location_media.py"
+        "location choice lists are stale: run python odk/build_location_media.py"
     )
     assert build_location_media.KEBELES.read_bytes().decode("utf-8") == build_location_media.kebele_csv(LEVELS), (
-        "KebeleList.csv is stale: run python docs/odk/build_location_media.py"
+        "KebeleList.csv is stale: run python odk/build_location_media.py"
     )
 
 
