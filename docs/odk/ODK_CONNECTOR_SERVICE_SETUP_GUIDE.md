@@ -43,11 +43,11 @@ This guide documents the complete end-to-end configuration for ingesting **ODK C
 | File / Folder | Purpose |
 | :--- | :--- |
 | **`odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`** | Official XLSForm workbook with trilingual support (Amharic, Afaan Oromo, English), Ethiopian calendar, repeat groups, and GPS. |
-| **`odk/KebeleList.csv`** | Preloaded lookup dataset (~9,000+ Kebeles) attached as media in ODK Central. |
-| **`odk/PrimaryCoopList.csv`** | Preloaded lookup dataset for Primary Cooperatives attached as media. |
+| **`odk/media/KebeleList.csv`** | Preloaded lookup dataset (19,535 kebeles) attached as media in ODK Central. |
+| **`odk/media/PrimaryCoopList.csv`** | Preloaded lookup dataset for Primary Cooperatives attached as media. |
 | **`odk/templates/farmer_transform.j2`** | Jinja2 template uploaded to MinIO `templates` bucket for Celery Worker transformation. |
 | **`odk/setup_farmer_odk_connector.sql`** | Database seeds to register `farmer-partner` and `FARMER_ODK_MODEL`. |
-| **`odk/README.md`** | Detailed field mapping table from ODK questions to OpenG2P tables. |
+| **`docs/odk/README.md`** | Detailed field mapping table from ODK questions to OpenG2P tables. |
 
 ---
 

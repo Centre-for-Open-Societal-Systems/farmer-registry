@@ -249,3 +249,86 @@ def test_service_token_request_presents_the_public_issuer(patched, monkeypatch):
     assert sent["headers"] == {"X-Forwarded-Host": "keycloak.commons.openg2p.test",
                                "X-Forwarded-Proto": "https", "X-Forwarded-Port": "443"}
     assert sent["data"]["grant_type"] == "client_credentials"
+
+
+def _patched_helpers(worker, names):
+    import ast
+
+    tree = ast.parse(worker)
+    wanted = [
+        node for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in names
+    ]
+    namespace: dict = {"_INGESTION_CREATED_BY": "system"}
+    exec(compile(ast.Module(body=wanted, type_ignores=[]), "patched", "exec"), namespace)
+    return namespace
+
+
+def test_intake_is_created_by_the_odk_submitter(patched):
+    """Partner intakes showed Created By: system; an ODK one shows who sent it."""
+    import types
+
+    _, _, worker = patched
+    ns = _patched_helpers(worker, {"_odk_submitter", "_ingestion_created_by"})
+    enriched = types.SimpleNamespace(enriched_data_json={"__system": {"submitterName": "Field_Officer_1"}})
+    row = types.SimpleNamespace(_odk_submitter=ns["_odk_submitter"](enriched))
+    assert ns["_ingestion_created_by"](row) == "Field_Officer_1 (ODK)"
+    # Not ODK (no __system), or no submitter recorded: the platform default.
+    assert ns["_odk_submitter"](types.SimpleNamespace(enriched_data_json={"reg_records": []})) is None
+    assert ns["_ingestion_created_by"](types.SimpleNamespace()) == "system"
+    # The worker uses it for the submission and for every section save.
+    assert worker.count("created_by=_ingestion_created_by(incoming_classified_data)") == 2
+    assert "created_by=_INGESTION_CREATED_BY" not in worker
+
+
+def test_inline_files_are_uploaded_once_and_attached_to_their_section(patched, monkeypatch):
+    """The header's Attached Documents lists a section's documents; the worker
+    saved none, so ODK photos never appeared there or reached the record."""
+    import asyncio
+    import sys
+    import types
+
+    _, _, worker = patched
+    ns = _patched_helpers(worker, {"_attach_embedded_files"})
+
+    uploads = []
+
+    async def upload_embedded_file(value, created_by, purpose="file"):
+        uploads.append((value["name"], created_by, purpose))
+        return f"doc-{len(uploads)}"
+
+    class DocumentAttachment:
+        def __init__(self, document_id, label):
+            self.document_id, self.label = document_id, label
+
+    utils = types.SimpleNamespace(
+        is_embedded_file=lambda v: isinstance(v, dict) and v.get("__type") == "File",
+        upload_embedded_file=upload_embedded_file,
+    )
+    monkeypatch.setitem(sys.modules, "openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils", utils)
+    monkeypatch.setitem(sys.modules, "openg2p_registry_core.schemas.file_payload", types.SimpleNamespace(DocumentAttachment=DocumentAttachment))
+
+    photo = {"__type": "File", "name": "me.jpg", "type": "image/jpeg", "data": "aGk="}
+    cert = {"__type": "File", "name": "deed.png", "type": "image/png", "data": "ZGVlZA=="}
+    uploaded: dict = {}
+
+    photo_section = types.SimpleNamespace(section_mnemonic="farmer_photo_section")
+    incoming = [{"record_image_document_id": photo}]
+    merged = [{"first_name": "Desta", "record_image_document_id": dict(photo)}]
+    docs = asyncio.run(ns["_attach_embedded_files"](photo_section, incoming, merged, "Field_Officer_1 (ODK)", uploaded))
+    assert [(d.document_id, d.label) for d in docs] == [("doc-1", "farmer_photo")]
+    assert incoming[0]["record_image_document_id"] == merged[0]["record_image_document_id"] == "doc-1"
+
+    land_section = types.SimpleNamespace(section_mnemonic="land_details")
+    incoming = [{"land_id": "02", "certificate_storage_id": cert}, {"land_id": "03", "certificate_storage_id": None}]
+    docs = asyncio.run(ns["_attach_embedded_files"](land_section, incoming, list(incoming), "Field_Officer_1 (ODK)", uploaded))
+    assert [(d.document_id, d.label) for d in docs] == [("doc-2", "certificate_storage_id")]
+    assert incoming[0]["certificate_storage_id"] == "doc-2"
+
+    # A later section of the same register carrying the same photo does not upload it again.
+    later = [{"record_image_document_id": dict(photo)}]
+    asyncio.run(ns["_attach_embedded_files"](photo_section, later, later, "Field_Officer_1 (ODK)", uploaded))
+    assert [u[0] for u in uploads] == ["me.jpg", "deed.png"]
+    assert uploads[0][1:] == ("Field_Officer_1 (ODK)", "farmer_photo_section.record_image_document_id")
+
+    assert "documents=section_documents or None," in worker

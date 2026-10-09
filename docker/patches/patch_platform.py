@@ -352,6 +352,176 @@ PATCHES = [
         why="Logs a finished ingest, with the draft intake it created, to the ODK ingestion log.",
     ),
     Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        # Anchored on the line after it, which the logging patch above puts
+        # there, so a re-run finds the helpers in between and skips.
+        old='_INGESTION_CREATED_BY = "system"\n\n\ndef _logged_ingest_error(',
+        new=(
+            '_INGESTION_CREATED_BY = "system"\n'
+            "\n"
+            "\n"
+            "def _odk_submitter(incoming_enriched_transformed_data):\n"
+            '    """The ODK Central user who sent the submission (__system.submitterName)."""\n'
+            "    data = incoming_enriched_transformed_data.enriched_data_json\n"
+            "    if isinstance(data, str):\n"
+            "        try:\n"
+            "            import json\n"
+            "\n"
+            "            data = json.loads(data)\n"
+            "        except ValueError:\n"
+            "            return None\n"
+            "    for _ in range(4):\n"
+            "        if not isinstance(data, dict):\n"
+            "            return None\n"
+            '        system = data.get("__system")\n'
+            "        if isinstance(system, dict):\n"
+            '            name = (system.get("submitterName") or "").strip()\n'
+            "            return name or None\n"
+            '        data = data.get("body") or data.get("message") or data.get("payload")\n'
+            "    return None\n"
+            "\n"
+            "\n"
+            "def _ingestion_created_by(incoming_classified_data):\n"
+            '    """Who the intake shows as its creator: the ODK user, else the platform default."""\n'
+            '    submitter = getattr(incoming_classified_data, "_odk_submitter", None)\n'
+            '    return f"{submitter} (ODK)" if submitter else _INGESTION_CREATED_BY\n'
+            "\n"
+            "\n"
+            "async def _attach_embedded_files(section, incoming_records, merged_records, created_by, uploaded):\n"
+            '    """Upload the files a section\'s records carry inline and attach them to the section.\n'
+            "\n"
+            "    The connector sends ODK photos as {\"__type\": \"File\", ...}. Each one is\n"
+            "    uploaded once (uploaded caches it for the whole submission), replaced by\n"
+            "    its document id wherever the records hold it, and returned as the\n"
+            "    section's documents, labelled as the staff UI labels its own uploads (the\n"
+            "    field name, farmer_photo for the profile photo). The intake header lists\n"
+            '    them under Attached Documents and approval carries them to the record."""\n'
+            "    import hashlib\n"
+            "\n"
+            "    from openg2p_registry_core.schemas.file_payload import DocumentAttachment\n"
+            "    from openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils import (\n"
+            "        is_embedded_file,\n"
+            "        upload_embedded_file,\n"
+            "    )\n"
+            "\n"
+            "    def key(value):\n"
+            '        return (value.get("name"), hashlib.sha256((value.get("data") or "").encode()).hexdigest())\n'
+            "\n"
+            "    documents = []\n"
+            "    for record in incoming_records:\n"
+            "        for field, value in list(record.items()):\n"
+            "            if not is_embedded_file(value):\n"
+            "                continue\n"
+            "            if key(value) not in uploaded:\n"
+            "                uploaded[key(value)] = await upload_embedded_file(\n"
+            '                    value, created_by, purpose=f"{section.section_mnemonic}.{field}"\n'
+            "                )\n"
+            '            label = "farmer_photo" if field == "record_image_document_id" else field\n'
+            "            documents.append(DocumentAttachment(document_id=uploaded[key(value)], label=label))\n"
+            "    for record in list(incoming_records) + list(merged_records):\n"
+            "        for field, value in list(record.items()):\n"
+            "            if is_embedded_file(value) and key(value) in uploaded:\n"
+            "                record[field] = uploaded[key(value)]\n"
+            "    return documents\n"
+            "\n"
+            "\n"
+            "def _logged_ingest_error("
+        ),
+        why=(
+            "Helpers for the two patches below: the ODK submitter as the intake's "
+            "creator, and inline ODK files attached to their section."
+        ),
+    ),
+    Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        old=(
+            "            if incoming_enriched_transformed_data is None:\n"
+            "                raise ValueError(f\"Incoming transformed data not found for ingest_id '{ingest_id}'\")\n"
+            "\n"
+            "            ordered_sections"
+        ),
+        new=(
+            "            if incoming_enriched_transformed_data is None:\n"
+            "                raise ValueError(f\"Incoming transformed data not found for ingest_id '{ingest_id}'\")\n"
+            "            incoming_classified_data._odk_submitter = _odk_submitter(incoming_enriched_transformed_data)\n"
+            "\n"
+            "            ordered_sections"
+        ),
+        why="Remembers who sent the ODK submission, for the intake's Created By.",
+    ),
+    Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        old=(
+            "        section_payloads=None,\n"
+            "        created_by=_INGESTION_CREATED_BY,\n"
+        ),
+        new=(
+            "        section_payloads=None,\n"
+            "        created_by=_ingestion_created_by(incoming_classified_data),\n"
+        ),
+        why=(
+            "Every partner intake showed Created By: system. An ODK submission now "
+            "shows the ODK user who sent it."
+        ),
+    ),
+    Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        old=(
+            "    ids_by_section_register_id: dict[str, list[str]] = {}\n"
+            "\n"
+            "    for section in ordered_sections:\n"
+        ),
+        new=(
+            "    ids_by_section_register_id: dict[str, list[str]] = {}\n"
+            "    uploaded_files: dict = {}\n"
+            "\n"
+            "    for section in ordered_sections:\n"
+        ),
+        why="A per-submission cache, so a file is uploaded once however many sections carry it.",
+    ),
+    Patch(
+        "openg2p_registry_celery_worker/tasks/ingest_data_worker.py",
+        old=(
+            "        await G2PIntakeFormDataService().get_component().save_intake_form_submission_with_session(\n"
+            "            submission_id=submission_id,\n"
+            "            section_id=section.section_id,\n"
+            "            section_payload=deepcopy(merged_records),\n"
+            "            section_register_id=section.section_register_id,\n"
+            "            form_id=incoming_classified_data.intake_form_id,\n"
+            "            register_id=incoming_classified_data.register_id,\n"
+            "            created_by=_INGESTION_CREATED_BY,\n"
+            "            session=session,\n"
+            "        )\n"
+        ),
+        new=(
+            "        section_documents = await _attach_embedded_files(\n"
+            "            section,\n"
+            "            incoming_records,\n"
+            "            merged_records,\n"
+            "            _ingestion_created_by(incoming_classified_data),\n"
+            "            uploaded_files,\n"
+            "        )\n"
+            "        await G2PIntakeFormDataService().get_component().save_intake_form_submission_with_session(\n"
+            "            submission_id=submission_id,\n"
+            "            section_id=section.section_id,\n"
+            "            section_payload=deepcopy(merged_records),\n"
+            "            section_register_id=section.section_register_id,\n"
+            "            form_id=incoming_classified_data.intake_form_id,\n"
+            "            register_id=incoming_classified_data.register_id,\n"
+            "            created_by=_ingestion_created_by(incoming_classified_data),\n"
+            "            documents=section_documents or None,\n"
+            "            session=session,\n"
+            "        )\n"
+        ),
+        why=(
+            "The worker saved sections without documents, so an ODK photo or land "
+            "certificate was stored on its record but the intake header's Attached "
+            "Documents stayed empty and approval did not carry the file to the "
+            "record. Inline files are now uploaded and attached to their section, "
+            "the way a staff upload is."
+        ),
+    ),
+    Patch(
         "openg2p_registry_partner_api/ingestion/helpers/request_response_helper.py",
         old="            return JSONResponse(content=response.model_dump())\n",
         new="            return JSONResponse(content=response.model_dump(mode=\"json\"))\n",

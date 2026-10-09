@@ -300,7 +300,7 @@ manual step. See [`ci/connector/README.md`](ci/connector/README.md).
 3. **Verify Intake Submission**:
    Log in to OpenG2P Staff Portal at `https://<YOUR_DOMAIN>/en/intake-form/farmer` to view the newly ingested drafts ready for staff review and approval.
 
-For complete technical specifications, see [`odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md`](odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md).
+For complete technical specifications, see [`docs/odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md`](docs/odk/ODK_CONNECTOR_SERVICE_SETUP_GUIDE.md).
 
 ---
 

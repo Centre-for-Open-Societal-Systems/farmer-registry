@@ -17,7 +17,7 @@ with its own images built by this repository's pipeline.
 | Connector service and UI | `openg2p-connector-service/`, `openg2p-connector-ui/` |
 | Helm chart | `openg2p-connector-service/deploy/charts/openg2p-connector` |
 | Values for `far` | `ci/connector/values-far.yaml` |
-| Deploy | `ci/connector/deploy.sh` |
+| Deploy | Jenkins job from `ci/connector/Jenkinsfile`, which runs `ci/connector/deploy.sh` |
 | The form, its media, and the field mapping | `odk/` |
 
 ## Activating it in an environment
@@ -26,7 +26,17 @@ with its own images built by this repository's pipeline.
 `connector-ui` alongside the registry images, so any develop build produces
 them. Take that build's tag.
 
-**2. Deploy the release.**
+**2. Deploy the release.** The registry pipeline builds the connector images
+but never deploys them, so a merged connector change is not live until this
+step runs for a build that contains it. Check the running tag with
+`kubectl -n far get deploy farmer-connector-worker -o jsonpath='{..image}'`.
+
+Run the standalone Jenkins job set up from `ci/connector/Jenkinsfile` ("Pipeline
+script from SCM", no triggers): **Build with Parameters**, ENVIRONMENT `dev` or
+`staging`, TAG the build's tag, CONFIRM ticked. DRY_RUN (ticked by default)
+renders the release and lists its images; untick it to apply.
+
+The job runs `deploy.sh`, which can also be run by hand with a kubeconfig:
 
 ```sh
 ENVIRONMENT=far     KUBECONFIG=<dev cluster>     ./ci/connector/deploy.sh <image tag>
@@ -55,8 +65,8 @@ on conflict (partner_id) do nothing;
 ```
 
 **4. Publish the form.** In ODK Central, create the project, upload
-`odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`, attach `odk/KebeleList.csv` and
-`odk/PrimaryCoopList.csv` as media, and publish. Note the project id and form id.
+`odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx`, attach `odk/media/KebeleList.csv` and
+`odk/media/PrimaryCoopList.csv` as media, and publish. Note the project id and form id.
 
 **5. Point the pipeline at it.** Either in the connector UI
 (`https://connector-farmer-registry.far.openg2p.test`), or by setting these on
@@ -136,7 +146,10 @@ Notes on the mapping:
 - Photos (the farmer photo and each parcel's land certificate) arrive from ODK
   Central as file names only. The connector downloads them and inlines them as
   `{"__type": "File", ...}` when the pipeline's `source_config.embed_attachments`
-  is true (the default; set `false` to turn it off). Files over
+  is true (the default; set `false` to turn it off). The embedding is done by the
+  connector, so it needs a connector build that has it actually deployed (step 2):
+  the registry deploy refreshes the template, not the connector, and an older
+  connector sends file names that the template drops. Files over
   `attachment_max_bytes` (default 10 MiB) are skipped and the record is sent
   without them. Each file is held in memory while it is encoded. The web user
   the connector signs in as needs read access to the project's submissions.
@@ -149,7 +162,7 @@ Notes on the mapping:
   registry worker `logs/odk-ingest.jsonl` (`REGISTRY_EXTENSIONS_ODK_INGEST_LOG_FILE`); both
   also go to stdout. Find a submission with
   `jq 'select(.source_event_id == "<form>:<uuid:...>" or .instance_id == "<uuid:...>")'`.
-  The event table is in `odk/FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`, section 9.1.
+  The event table is in `docs/odk/FARMER_REGISTRY_ODK_COMPLETE_GUIDE.md`, section 9.1.
 - The form asks no crop season; crops default to `MEHER`.
 - The submission is validated like a staff entry. A draft that breaks a farmer
   rule (say, digits in a name) stays at `ingestion_status=FAILED` with the rule's
