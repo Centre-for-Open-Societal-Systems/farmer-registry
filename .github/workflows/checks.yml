@@ -37,3 +37,5 @@ jobs:
         run: python -m pytest test/test_patch_platform_ingestion.py -q
       - name: ODK transform renders an OData-shaped submission
         run: pip install --quiet jinja2 && python odk/test_transform.py
+      - name: committed ODK form matches the pipeline and the transform
+        run: pip install --quiet openpyxl && python -m pytest test/test_odk_forms.py -q

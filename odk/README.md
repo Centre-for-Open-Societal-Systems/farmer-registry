@@ -2,6 +2,18 @@
 
 This directory contains the official **XLSForm** and reference datasets for the **OpenG2P Farmer Registry** data collection, ported and aligned from the ATI Gen 1 Odoo implementation (`atifarmer`).
 
+> **Published form.** `ATI_Farmers_Profile_ODK_Form_v2.xlsx` is byte-for-byte the
+> file published on ODK Central dev (`https://odk-central-development.oanstaging.com`,
+> project 13, form id `farmer_profile`), as Central exports it
+> (`GET /v1/projects/13/forms/farmer_profile.xlsx`). Central published it as
+> version **1.0.3**; the `version` cell in the settings sheet still says 1.0.2
+> because Central set the version at publish time. To publish a change, bump
+> that cell past 1.0.3, upload it as a new draft of `farmer_profile` (keep the
+> form id: the connector polls it by name) with the two CSVs, test, publish,
+> and commit the new file here. `test/test_odk_forms.py` checks the form id
+> against the connector pipeline, the CSVs it reads, and that every photo
+> question is one `templates/farmer_transform.j2` maps.
+
 ---
 
 ## 1. Directory Contents

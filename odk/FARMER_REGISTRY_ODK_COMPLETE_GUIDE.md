@@ -112,8 +112,8 @@ Historically, farmer profiling in Gen 1 relied on Odoo modules and manual batch 
 | Parameter | Configuration Value |
 | :--- | :--- |
 | **Base URL** | `https://odk.13.207.43.8.nip.io` |
-| **Admin Web Login** | `vilbertraj21@gmail.com` |
-| **Admin Password** | `odksandbox` |
+| **Admin Web Login** | `<odk-account-email>` |
+| **Admin Password** | `<odk-account-password>` |
 | **Project ID** | `13` (Display Name: `Farmer Registry`) |
 | **Form XML ID** | `farmer_profile` |
 | **Form Display Name** | `Farmer Profiling Data Collection Form` |
@@ -403,8 +403,8 @@ INSERT INTO connector_definitions (
     }',
     'odk_session',
     '{
-        "email": "vilbertraj21@gmail.com",
-        "password": "odksandbox"
+        "email": "<odk-account-email>",
+        "password": "<odk-account-password>"
     }',
     'hmac_sha256'
 )
@@ -495,7 +495,7 @@ curl -s -X POST http://localhost:8050/connectors/farmer-odk-pipeline-01/poll
 
 1. **Install App**: Download **ODK Collect** from Google Play Store or F-Droid.
 2. **Scan Configuration**:
-   - On a desktop, open [https://odk.13.207.43.8.nip.io](https://odk.13.207.43.8.nip.io) (Login: `vilbertraj21@gmail.com` / `odksandbox`).
+   - On a desktop, open [https://odk.13.207.43.8.nip.io](https://odk.13.207.43.8.nip.io) (Login: `<odk-account-email>` / `<odk-account-password>`).
    - Go to **Project 13 (`Farmer Registry`)** ➔ **App Users**.
    - Click the **QR Code** button next to `Field_Officer_1`.
    - On your phone, open ODK Collect, tap **Configure with QR code**, and scan the QR code.

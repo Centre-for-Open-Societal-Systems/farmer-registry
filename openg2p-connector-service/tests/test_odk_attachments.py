@@ -10,6 +10,7 @@ file fields accept.
 from __future__ import annotations
 
 import base64
+import logging
 from typing import Any
 
 import httpx
@@ -46,6 +47,9 @@ def _stub_auth(monkeypatch):
     )
     settings = get_settings()
     monkeypatch.setattr(settings, "strict_incremental", False, raising=False)
+    # Any test that builds the app runs ingest_log.configure(), which stops
+    # odk.ingest propagating; caplog would then see none of these events.
+    monkeypatch.setattr(logging.getLogger("odk.ingest"), "propagate", True)
 
 
 SUBMISSION = {
@@ -168,7 +172,6 @@ def _events(caplog, name="odk.ingest"):
 @pytest.mark.asyncio
 async def test_every_attachment_outcome_is_logged(monkeypatch, caplog):
     import copy
-    import logging
 
     caplog.set_level(logging.INFO, logger="odk.ingest")
     await _fetch(monkeypatch, {**CONFIG, "attachment_max_bytes": 1000}, {
@@ -200,7 +203,6 @@ async def test_every_attachment_outcome_is_logged(monkeypatch, caplog):
 @pytest.mark.asyncio
 async def test_listing_failure_is_logged(monkeypatch, caplog):
     import copy
-    import logging
 
     caplog.set_level(logging.INFO, logger="odk.ingest")
     await _fetch(monkeypatch, CONFIG, {
