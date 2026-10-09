@@ -111,10 +111,11 @@ function patch(src) {
     'className:"absolute left-0 top-full w-full bg-neutral-second border border-primary-second border-t-0 rounded-b-[10px] overflow-hidden z-50"',
     "dropdown menu class"
   );
+  // registry-platform 1.2.2 raised the wrapper from z-10 to z-21; keep its value.
   out = once(
     out,
-    'className:"relative z-10",children:[',
-    'className:"far-new-intake relative w-100 z-10",children:[',
+    /className:"relative (z-10|z-21)",children:\[/g,
+    'className:"far-new-intake relative w-100 $1",children:[',
     "dropdown wrapper class"
   );
   const labels = out.split('("create_new_submission")').length - 1;

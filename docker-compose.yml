@@ -573,7 +573,7 @@ services:
       dockerfile: Dockerfile
       target: staff-ui
       args:
-        STAFF_UI_VERSION: ${REGISTRY_STAFF_PORTAL_UI_VERSION:-1.2.1}
+        STAFF_UI_VERSION: ${REGISTRY_STAFF_PORTAL_UI_VERSION:-1.2.2-rc.544}
         # Target of the Dashboard button patched into the portal header. It is
         # compiled into the client bundle, so changing it needs
         # `docker compose build farmer-registry-staff-ui`, not just a restart.

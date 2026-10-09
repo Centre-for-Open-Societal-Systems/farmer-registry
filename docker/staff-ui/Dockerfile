@@ -18,7 +18,7 @@
 # patch-dashboard-nav.js does.
 #
 # Build context = repo root.
-ARG STAFF_UI_VERSION=1.2.1
+ARG STAFF_UI_VERSION=1.2.2-rc.544
 FROM openg2p/openg2p-registry-staff-ui:${STAFF_UI_VERSION}
 
 # Browser-facing origin of the dashboard service. It is compiled into the client
