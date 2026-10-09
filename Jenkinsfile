@@ -13,12 +13,6 @@ pipeline {
         // No STAFF_UI_VERSION here: the staff-ui target in the root Dockerfile owns
         // that pin, so CI builds the base image the developers build against.
 
-        // No DASHBOARD_URL: nothing serves the dashboard in this deployment, so the
-        // staff UI is built without its Dashboard header button (staff-ui passes an
-        // empty DASHBOARD_URL below). Set one again once dashboard-ui is deployed.
-
-        NEXT_PUBLIC_PORTAL_URL = "http://portal.localtest.me:3000"
-
         // farmer-registry-dashboard-api lives in its own (public) repository and is
         // built here beside the registry images. Each branch builds the
         // dashboard-api branch of the same name -- develop from develop, staging
@@ -89,15 +83,11 @@ pipeline {
                     // docker/patches/patch_platform.py. sanity-tests has no root target.
                     def components = [
                         [name: 'staff-api',     dockerfile: 'Dockerfile', target: 'staff-api',   args: "--build-arg RP_VERSION=${RP_VERSION}"],
-                        [name: 'staff-ui',      dockerfile: 'Dockerfile', target: 'staff-ui',    args: "--build-arg DASHBOARD_URL="],
+                        [name: 'staff-ui',      dockerfile: 'Dockerfile', target: 'staff-ui',    args: ""],
                         [name: 'partner-api',   dockerfile: 'Dockerfile', target: 'partner-api', args: "--build-arg RP_VERSION=${RP_VERSION}"],
                         [name: 'celery',        dockerfile: 'Dockerfile', target: 'celery',      args: "--build-arg RP_VERSION=${RP_VERSION}"],
                         [name: 'db-seed',       dockerfile: 'Dockerfile', target: 'db-seed',     args: "--build-arg RP_VERSION=${RP_VERSION}"],
                         [name: 'sanity-tests',  dockerfile: 'docker/sanity-tests/Dockerfile',    args: "--build-arg RP_VERSION=${RP_VERSION}"],
-                        // dashboard-ui is skipped until dashboard-ui/lib/ is committed -- it
-                        // cannot build from a clean checkout without it. The Helm chart does
-                        // not deploy this image, so nothing downstream depends on it yet.
-                        // [name: 'dashboard-ui',  dockerfile: 'docker/dashboard-ui/Dockerfile',  args: "--build-arg NEXT_PUBLIC_PORTAL_URL=${NEXT_PUBLIC_PORTAL_URL}"],
                         // Built from its own repository, cloned by 'Checkout dashboard-api'.
                         // Tagged with the API repository's commit, not this one: a build
                         // that only picks up new API code must still change the deployed
@@ -221,15 +211,12 @@ registry:
       tag: "${env.IMAGE_TAG}"
 # Of the chart's analytics layer only the reporting views and their hourly
 # refresh are deployed: the dashboard API reads fr_rpt_farmer and fr_rpt_land.
-# The bulk sample-data generator, the Superset dashboard import and the Insights
-# maps content stay out of this deploy.
+# The bulk sample-data generator and Insights maps content stay out of this deploy.
 analytics:
   bulkSample:
     enabled: false
   reportingViews:
     enabled: true
-  dashboards:
-    enabled: false
 mapsContent:
   enabled: false
 EOF

@@ -53,13 +53,6 @@ RUN python3 /tmp/patch_platform.py && rm /tmp/patch_platform.py
 # ----------------------------------------------------------------- staff UI
 FROM openg2p/openg2p-registry-staff-ui:${STAFF_UI_VERSION} AS staff-ui
 
-# Browser-facing origin of the dashboard-ui service, compiled into the client
-# bundle by patch-dashboard-nav.js below — changing it needs a rebuild, not a
-# restart. The default matches that service's published port in
-# docker-compose.yml.
-ARG DASHBOARD_URL=http://localhost:3002
-ARG DASHBOARD_LABEL=Dashboard
-
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/farm_image.jpeg /app/public/images/common/farm_image.jpeg
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/people.svg /app/public/images/common/people.svg
 COPY docker/staff-ui/assets/detail-field-wrapping.css /tmp/detail-field-wrapping.css
@@ -113,17 +106,6 @@ RUN find '/app/.next/static/chunks/app/[locale]' -maxdepth 1 -type f -name 'page
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
     's/\.table-cell-widget label,/.table-cell-widget label.items-baseline,/g' \
     {} +
-
-# Add a Dashboard control to the header, immediately left of Configuration,
-# pointing at the dashboard-ui service. The dashboard is a separate origin and
-# the portal is a prebuilt bundle, so it can be neither a route nor a component.
-# An empty DASHBOARD_URL builds without the button (CI does this: the dashboard
-# is reached from the staff portal tile instead).
-COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
-RUN if [ -n "${DASHBOARD_URL}" ]; then \
-      DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
-        node /tmp/patch-dashboard-nav.js; \
-    else echo "DASHBOARD_URL is empty: building without the Dashboard button"; fi
 
 # Show an empty field as empty. The platform's read-only widgets all fall back
 # to "-" for a missing value (Status Reason, Created by, dates, select and

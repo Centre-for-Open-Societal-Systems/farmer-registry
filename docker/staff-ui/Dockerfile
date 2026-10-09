@@ -1,157 +1,116 @@
-# Farmer Registry — Staff Portal UI image.
-#
-# The staff portal publishes the whole application; this image changes only its
-# background asset. The portal paints its page background with a Tailwind
-# arbitrary value:
-#
-#     bg-primary-first bg-[url('/images/common/bg_pattern.png')]
-#
-# The CSS is compiled into the base image, so this overlay publishes the new
-# image and redirects that compiled declaration to it. The theme colour beneath
-# it still comes from registry_theme_values
-# (primary_color_1), seeded by the extension.
-#
-# It also patches a Dashboard button into the header. The dashboard runs as its
-# own service on its own origin, so it cannot be a portal route, and the portal
-# ships as a prebuilt Next.js bundle, so it cannot be extended with a component
-# either — what is left is patching the compiled bundle, which is what
-# patch-dashboard-nav.js does.
-#
-# Build context = repo root.
+# Farmer staff UI. Keep this stage aligned with the root Dockerfile.
+# Build context: repository root.
 ARG STAFF_UI_VERSION=1.2.2-rc.544
-FROM openg2p/openg2p-registry-staff-ui:${STAFF_UI_VERSION}
+FROM openg2p/openg2p-registry-staff-ui:${STAFF_UI_VERSION} AS staff-ui
 
-# Browser-facing origin of the dashboard service. It is compiled into the client
-# bundle by patch-dashboard-nav.js below, so changing it needs a rebuild. The
-# default matches the dashboard-ui service's published port in
-# docker-compose.yml. Pass it empty to build without the Dashboard button, for a
-# deployment that runs no dashboard service.
-ARG DASHBOARD_URL=http://localhost:3002
-ARG DASHBOARD_LABEL=Dashboard
-
-# Publish the Farmer Registry background under its real JPEG filename. The
-# compiled CSS declaration is redirected to this asset below.
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/farm_image.jpeg /app/public/images/common/farm_image.jpeg
 COPY --chown=nextjs:nodejs docker/staff-ui/assets/people.svg /app/public/images/common/people.svg
 COPY docker/staff-ui/assets/detail-field-wrapping.css /tmp/detail-field-wrapping.css
+COPY docker/staff-ui/assets/staff-ui-1.2-regressions.css /tmp/staff-ui-1.2-regressions.css
+COPY docker/staff-ui/assets/intake-photo-widget.css /tmp/intake-photo-widget.css
 
-# Checksums of the untouched build, so rehash-patched-assets.sh (at the end of
-# this stage) can tell which assets the patches below actually changed. Must be
-# the same `find ... md5sum | sort` invocation used there.
+# Checksums of the untouched build, so rehash-patched-assets.sh (below) can
+# tell which assets the patches changed. Same invocation as in that script.
 RUN cd /app/.next && find static -type f \( -name '*.js' -o -name '*.css' \) -exec md5sum {} + | sort > /tmp/static.before
 
-# The upstream intake selector and submission heading render the machine-facing
-# form_mnemonic verbatim. Keep the mnemonic stable for APIs/integrations and
-# use the form's human-readable description for display, with the mnemonic as
-# fallback. The form_name expressions cover optional and direct property access
-# emitted by different Next.js chunks/minifier passes.
+# Prefer the human-readable form description while retaining the mnemonic as
+# a fallback for records that do not yet have a description.
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
-    -e 's/title:e\.form_mnemonic,children:e\.form_mnemonic/title:e.form_description||e.form_mnemonic,children:e.form_description||e.form_mnemonic/g' \
     -e 's/form_name:\([A-Za-z_$][A-Za-z0-9_$]*\)[?]\.form_mnemonic/form_name:\1?.form_description||\1?.form_mnemonic/g' \
     -e 's/form_name:\([A-Za-z_$][A-Za-z0-9_$]*\)\.form_mnemonic/form_name:\1.form_description||\1.form_mnemonic/g' \
     {} +
 
-# The upstream detail shell shows only five tabs and moves the remainder into
-# a hardcoded More menu. Its tab row already uses flex-wrap, so retain every
-# configured tab in the direct list and let narrower screens wrap naturally.
+# Show every configured detail tab directly and allow the existing tab row to
+# wrap instead of moving later tabs into the hardcoded More menu.
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
-    's/k=S\.slice(0,5),A=S\.slice(5)/k=S,A=[]/g' \
+    's/\([A-Za-z_$][A-Za-z0-9_$]*\)=\([A-Za-z_$][A-Za-z0-9_$]*\)\.slice(0,5),\([A-Za-z_$][A-Za-z0-9_$]*\)=\2\.slice(5)/\1=\2,\3=[]/g' \
     {} +
 
-# The upstream dashboard repeats the background tile by default. Keep the
-# extension-provided image as one responsive backdrop instead. Size it by width
-# rather than using `cover`, which crops and magnifies the image on tall pages.
+# Use one uncropped Farmer Registry background rather than a repeated tile.
 RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
     's|background-image:url(/images/common/bg_pattern.png)}|background-image:url(/images/common/farm_image.jpeg);background-repeat:no-repeat;background-position:top center;background-size:100% auto}|g' \
     {} +
 
-# Append the Farmer Registry's detail-card wrapping rules to each compiled
-# stylesheet. The selectors are scoped to section panels and do not alter
-# tables, whose wide layouts should continue to scroll horizontally.
+# Add the extension-only readability and responsive detail-layout rules.
 RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
     -e '$r /tmp/detail-field-wrapping.css' {} \;
 
-# The dashboard prefers the theme's dashboard_image over people.svg. Ignore
-# that legacy value here so the transparent extension asset removes the people
-# illustration without changing upstream source code or deleting theme data.
+# Undo two 1.2.x base-image regressions: the expanded intake section is tinted
+# with a theme colour, and the New Submission menu is painted under the page
+# card. Both reproduce on the stock image with no overlay applied.
+RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
+    -e '$r /tmp/staff-ui-1.2-regressions.css' {} \;
+
+# Hide the record-metadata chrome of the header-section widget where the
+# intake form reuses it as a bare photo picker (zz_farmer_photo_section.sql).
+RUN find /app/.next/static/css -type f -name '*.css' -exec sed -i \
+    -e '$r /tmp/intake-photo-widget.css' {} \;
+
+# Ignore a legacy dashboard_image value and use the transparent extension
+# asset, which removes the people illustration without changing base source.
 RUN find '/app/.next/static/chunks/app/[locale]' -maxdepth 1 -type f -name 'page-*.js' -exec sed -i \
-    's#let ey=Y?.branding?.dashboard_image||"/images/common/people.svg"#let ey="/images/common/people.svg"#g' \
+    's#let \([A-Za-z_$][A-Za-z0-9_$]*\)=[A-Za-z_$][A-Za-z0-9_$]*?\.branding?\.dashboard_image||"/images/common/people.svg"#let \1="/images/common/people.svg"#g' \
     {} +
 
-# TableWidget hides every <label> inside a table cell so field-name labels
-# (e.g. "Phone Number:") don't repeat next to a column header that already
-# says it. FileInputWidget's clickable "Upload File" trigger also happens to
-# be a <label> wrapping a hidden <input type="file">, so the same blanket
-# rule hides the upload button too — a file column in a table renders only
-# its max-size hint text, with no way to actually pick a file. Narrow the
-# selector to WidgetFieldLabel's stable class signature (flex items-baseline
-# min-w-0 max-w-full) instead of a bare `label` tag, which FileInputWidget's
-# trigger (inline-flex items-center ...) never matches.
+# Preserve file-upload triggers inside editable table cells.
 RUN find /app/.next -type f -name '*.js' -exec sed -i \
     's/\.table-cell-widget label,/.table-cell-widget label.items-baseline,/g' \
     {} +
 
-# Upload the farmer photo captured during intake.
-#
-# The widget library pulls any picked image out of the section records before
-# the save: it walks each record, and for a File (or a serialized File) it
-# stashes the value and blanks the field, then hands the File to the save
-# callback as `SectionChanges.image` (minified: `...C?{image:C}:{}`). The
-# register-detail save hook uploads that File and stamps the returned
-# document_id onto the record as record_image_document_id. The INTAKE save hook
-# only ever handled `change.files` and dropped `change.image` on the floor, so a
-# photo taken during intake was blanked out of the record and then discarded --
-# it never reached the server at all.
-#
-# Mirror the register hook: upload the image, then stamp record_image_document_id
-# onto every record of the section. Anchored on the statement that merges the
-# already-uploaded documents back into the upload result, which sits between the
-# upload and the save-payload build -- the one point where both the image and
-# the records are in scope.
-#
-#   \1 = that merge statement, kept verbatim
-#   \2 = the SectionChanges argument (`i`)
-#   \3 = the records list
-# `h` is the uploadFile hook and `N` the document array in this build; both are
-# matched as single lowercase/uppercase identifiers rather than hardcoded, so an
-# identical bundle with a different minifier pass still matches. BusyBox sed is
-# POSIX ERE: no backreferences inside the pattern, and | must be bracketed.
-RUN find /app/.next -type f -name '*.js' -exec sed -i -E \
-    's/([A-Z]=\[\.\.\.\(([a-z])[?]\.files[|][|]\[\]\)\.filter\([a-z]=>[a-z]&&"object"==typeof [a-z]&&"document_id"in [a-z]\),\.\.\.[A-Z]\];)(let [a-z]=\{submission_id:)/\1if(\2?.image)try{let __u=await h([\2.image]),__d=Array.isArray(__u)?__u[0]:null;__d\&\&__d.document_id\&\&(\2.records=(\2.records||[]).map(__r=>__r\&\&"object"==typeof __r?{...__r,record_image_document_id:__d.document_id}:__r))}catch(__e){console.error("intake profile image upload failed",__e)}\3/g' \
+# Show an empty field as empty. The platform's read-only widgets all fall back
+# to "-" for a missing value (Status Reason, Created by, dates, select and
+# table-cell displays); the script skips the "-" literals the same chunk uses
+# for the numeric input's minus sign and negative-number formatting.
+COPY docker/staff-ui/assets/patch-empty-value-dash.js /tmp/patch-empty-value-dash.js
+RUN node /tmp/patch-empty-value-dash.js
+
+# Show Configuration and the language switch in the header bar, as 1.1.x did,
+# instead of behind the 1.2.x "More" (three-dot) menu. The inline components
+# are still compiled into the header chunk; the script swaps them into the
+# header's control list and drops the menu.
+COPY docker/staff-ui/assets/patch-header-inline-controls.js /tmp/patch-header-inline-controls.js
+RUN node /tmp/patch-header-inline-controls.js
+
+# Lay the intake-form list out like the 1.1.x portal and the other registries:
+# the "New Intake" dropdown beside the title, search and pagination on the
+# right, cards underneath - instead of 1.2.x's top-right "Create New
+# Submission +" button, card/table toggle and "Selected filters" bar. The CSS
+# draws the control's open state, which the patched bundle cannot.
+COPY docker/staff-ui/assets/patch-intake-list-layout.js /tmp/patch-intake-list-layout.js
+COPY docker/staff-ui/assets/intake-list-header.css /tmp/intake-list-header.css
+COPY docker/staff-ui/assets/intake-form-fields.css /tmp/intake-form-fields.css
+RUN node /tmp/patch-intake-list-layout.js &&     find /app/.next/static/css -type f -name '*.css' -exec sed -i     -e '$r /tmp/intake-list-header.css' -e '$r /tmp/intake-form-fields.css' {} \;
+
+# On-the-spot intake behaviour the widget library lacks (family size,
+# Gregorian <-> Ethiopic dates, photo checks and resizing, empty geo levels):
+# a plain script served from /public and loaded by the root layout. The
+# intake save uploads the photo as well as file widgets' files, writes each
+# document_id onto its record, and lists both with the submission's documents.
+COPY --chown=nextjs:nodejs docker/staff-ui/assets/farmer-intake-rules.js /app/public/farmer-intake-rules.js
+COPY docker/staff-ui/assets/patch-intake-rules-script.js /tmp/patch-intake-rules-script.js
+COPY docker/staff-ui/assets/patch-intake-photo-document.js /tmp/patch-intake-photo-document.js
+COPY docker/staff-ui/assets/patch-api-error-messages.js /tmp/patch-api-error-messages.js
+COPY docker/staff-ui/assets/patch-table-remove.js /tmp/patch-table-remove.js
+RUN node /tmp/patch-intake-rules-script.js && node /tmp/patch-intake-photo-document.js && node /tmp/patch-api-error-messages.js && node /tmp/patch-table-remove.js
+
+# Farmer register list (SRS FR-UI-03 / FR-06): open in the table view, which
+# sorts by column, rather than cards, and give the table up to ten display
+# fields instead of six (zz_farmer_list_view.sql orders the SRS columns
+# first). A viewer who already switched to cards keeps that choice: it is
+# stored in localStorage under registerView.
+RUN find /app/.next -type f -name '*.js' -exec sed -i \
+    -e 's/defaultView:"card",viewStorageKey:"registerView"/defaultView:"list",viewStorageKey:"registerView"/g' \
+    -e 's/\.\.\.\([A-Za-z_$][A-Za-z0-9_$]*\)\.slice(0,6)\.map(\([A-Za-z_$][A-Za-z0-9_$]*\)=>({key:/...\1.slice(0,10).map(\2=>({key:/g' \
     {} +
 
-# ── Add the Dashboard header button ─────────────────────────────────────────
-# Puts a Dashboard control immediately left of Configuration, pointing at the
-# dashboard-ui service, and passes the page it left behind as ?returnUrl= for
-# the dashboard's own Back button to read.
-COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
-RUN if [ -n "${DASHBOARD_URL}" ]; then \
-        DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
-        node /tmp/patch-dashboard-nav.js; \
-    else \
-        echo "DASHBOARD_URL is empty -- building without the Dashboard button"; \
-    fi
-
 # Every patch above edited a content-hashed asset in place, and Next serves
-# /_next/static as immutable -- a returning browser keeps the OLD file and never
-# asks for it again, so a patch can be present on the server and absent from
-# every existing tab until a hard refresh. Give each changed asset a new hash
-# and rewrite the references to it.
-#
-# Runs after the dashboard patch above, so an asset that step rewrites is
-# re-hashed too -- including when DASHBOARD_URL is empty and it changes nothing.
+# /_next/static as immutable -- returning browsers would keep the old file
+# until a hard refresh. Give each changed asset a new hash and rewrite the
+# references so a normal page load picks the patched file up.
 COPY docker/staff-ui/rehash-patched-assets.sh /tmp/rehash-patched-assets.sh
-RUN sh /tmp/rehash-patched-assets.sh && rm -f /tmp/static.before /tmp/static.after
+RUN sh /tmp/rehash-patched-assets.sh && rm /tmp/static.before /tmp/static.after
 
 # Fail the build if a bundle patch stopped matching. These seds target MINIFIED
-# identifiers, so a STAFF_UI_VERSION bump can silently drop a customisation
-# while still exiting 0. Assert the results that must be present.
-#
-# The Dashboard button is deliberately NOT asserted: it is optional now, and
-# absent by design when DASHBOARD_URL is empty.
-RUN set -e; \
-    here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; }; \
-    here 'record_image_document_id:__d.document_id' "intake profile image upload"; \
-    here '.table-cell-widget label.items-baseline,' "table-cell upload trigger"; \
-    here 'background-image:url(/images/common/farm_image.jpeg)' "farm background"; \
-    echo "OK: staff-ui bundle patches verified"
+# identifiers, so a base-image bump can silently drop every customisation while
+# still exiting 0 - which is exactly what happened moving 1.1.1 -> 1.2.1.
+RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     here '"_profile"===t.tag){__rs.forEach(r=>{r.record_image_document_id=__id})' "intake profile image upload";     gone 'hdr-field-value",title:[A-Za-z_$][A-Za-z0-9_$]*\|\|"-"' "empty-value dash placeholder";     gone '"flex items-center gap-4",children:\[\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\)\]' "header controls behind the More menu";     here '(__farIntakeList,{breadcrumb:' "intake list 1.1.x layout";     here 'src:"/farmer-intake-rules.js?v=' "intake rules script";     here '"_profile"===__ft[i].tag?"farmer_photo"' "intake uploads recorded and listed";     here 'so this section was not saved' "failed upload aborts the section save";     here 'The file is too large for the server to accept' "readable non-JSON API errors";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=await [A-Za-z_$][A-Za-z0-9_$]*\.json\(\);if\(!' "API helper parses text first";     gone 'edit_action(!=="ADD"&&|==="ADD"[|][|]!\()"string"==typeof' "Remove soft-deletes every saved table row";     here 'defaultView:"list",viewStorageKey:"registerView"' "register list opens as a table";     gone '\.\.\.[A-Za-z_$][A-Za-z0-9_$]*\.slice\(0,6\)\.map\([A-Za-z_$][A-Za-z0-9_$]*=>\(\{key:' "register table capped at six columns";     echo "OK: staff-ui bundle patches verified"

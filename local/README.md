@@ -53,7 +53,6 @@ container port.
 | Service | URL | Notes |
 |---|---|---|
 | Staff Portal UI | http://portal.localtest.me:3000 | `admin` / `admin` |
-| Dashboard UI | http://dashboard.localtest.me:3001 | Reached from the portal's **Dashboard** header button |
 | Staff API | http://localhost:8001/docs | 8000 is taken by IAM, which must publish its container port |
 | Partner API | http://localhost:8002/docs | Does not start — see the upstream bugs below |
 | Keycloak | http://keycloak.localtest.me:8080 | admin console `admin` / `admin` |
@@ -67,15 +66,11 @@ One-shot containers that exit 0 when done: `minio-init` (creates the `default`,
 hierarchy, the ~500-record demo set, record images, DCI templates) and
 `iam-register` (registers the registry's 11 roles and 72 permissions into IAM).
 
-The Staff Portal UI carries no farmer code, so `docker/staff-ui` is the platform
-image with one change: a build step that adds the **Dashboard** header button.
-The dashboard runs on its own origin and the portal ships prebuilt, so it can be
-neither a portal route nor a portal component — the button is patched into the
-compiled bundle instead. See [`dashboard-ui/README.md`](../dashboard-ui/README.md).
+The staff UI image applies Farmer Registry branding and intake fixes to the
+platform portal. Dashboard frontends and Superset assets are maintained separately;
+this repository retains the dashboard API deployment and reporting views.
 
-Not included: `bene-api` (the beneficiary portal API the chart also ships) and the
-Superset dashboards, whose bundle is imported into a Superset this stack does not
-run.
+Not included: `bene-api` (the beneficiary portal API the chart also ships).
 
 ## Upstream bugs at RP_VERSION 0.0.0-develop.383
 
