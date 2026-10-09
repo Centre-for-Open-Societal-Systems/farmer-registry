@@ -87,6 +87,19 @@ class ControllerTests(unittest.TestCase):
         with patch.dict(sys.modules, self.modules): controller.register_bulk_import_routes(app)
         self.assertFalse(any(getattr(r, 'path', '').startswith('/farmer') for r in app.routes))
 
+    def test_discovers_intake_handlers_in_included_router(self):
+        from fastapi import APIRouter
+        app = FastAPI()
+        router = APIRouter()
+        for route in self.app.routes:
+            if getattr(route, 'path', '').startswith('/intake-form-data'):
+                router.add_api_route(route.path, route.endpoint, methods=['POST'])
+        app.include_router(router)
+        with patch.dict(sys.modules, self.modules):
+            controller.register_bulk_import_routes(app)
+        with TestClient(app) as client:
+            self.assertIn('/farmer/bulk-import', client.get('/openapi.json').json()['paths'])
+
     def test_missing_authorization_metadata_fails_closed(self):
         self.app.routes[4].endpoint.permissions = None
         with patch.dict(sys.modules, self.modules), self.assertRaises(RuntimeError):

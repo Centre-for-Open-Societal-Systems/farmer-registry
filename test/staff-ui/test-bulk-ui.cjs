@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-function fixture(fetch) {
+function fixture(fetch, pathname = '/intake-form/farmer') {
   const nodes = [];
   class Node {
     constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; nodes.push(this); }
@@ -25,12 +25,17 @@ function fixture(fetch) {
     createElement: tag => new Node(tag), createTextNode: text => ({textContent: text}),
     getElementById: id => nodes.find(n => n.id === id), querySelector: () => main};
   const window = {addEventListener() {}};
-  const context = {document, window, location:{pathname:'/intake-form/farmer'}, MutationObserver: class {observe() {}},
+  const context = {document, window, location:{pathname}, MutationObserver: class {observe() {}},
     fetch, FormData, Blob, URL, setTimeout};
   vm.runInNewContext(fs.readFileSync('docker/staff-ui/assets/farmer-bulk-upload.js','utf8'), context);
   return {nodes, document};
 }
 const payload = value => Response.json({response_body:{response_payload:value}});
+
+test('upload button mounts on locale-prefixed farmer listing', () => {
+  const {document} = fixture(async () => {}, '/en/intake-form/farmer');
+  assert(document.getElementById('farmer-bulk-open'));
+});
 
 test('templates, mixed results and double-click prevention', async () => {
   let importCalls = 0, release;

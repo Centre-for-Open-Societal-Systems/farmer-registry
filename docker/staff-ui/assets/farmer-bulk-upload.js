@@ -94,7 +94,8 @@
           const td = element('td', '', tr);
           if (row.ok && row.submission_id) {
             const link = element('a', 'Submitted — view intake', td);
-            link.href = '/tasks/intake-form/farmer/' + encodeURIComponent(row.submission_id);
+            const prefix = location.pathname.split('/intake-form/')[0];
+            link.href = prefix + '/tasks/intake-form/farmer/' + encodeURIComponent(row.submission_id);
           } else { td.textContent = (row.errors || ['Import failed']).join('; '); }
         }
         if (result.failed) {
@@ -117,7 +118,7 @@
     } catch (error) { status.textContent = error.message; }
   }
   function mount() {
-    const onList = /^\/intake-form\/farmer\/?$/i.test(location.pathname);
+    const onList = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/intake-form\/farmer\/?$/i.test(location.pathname);
     const existing = document.getElementById('farmer-bulk-open');
     if (!onList) { existing?.remove(); return; }
     if (existing) return;

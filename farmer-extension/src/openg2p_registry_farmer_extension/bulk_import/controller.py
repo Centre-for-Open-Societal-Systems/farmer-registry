@@ -34,8 +34,16 @@ def register_bulk_import_routes(app):
 
     # This extension also loads in partner-api and celery. Only expose this
     # feature where the staff save AND finalize handlers are registered.
+    def leaf_routes(routes):
+        for route in routes:
+            nested = getattr(route, "original_router", None)
+            if nested is not None:
+                yield from leaf_routes(nested.routes)
+            else:
+                yield route
+
     handlers = {}
-    for route in app.routes:
+    for route in leaf_routes(app.routes):
         for operation in ("save_intake_form_submission", "finalize_intake_form_submission"):
             if getattr(route, "path", "").rstrip("/").endswith("/" + operation):
                 handlers[operation] = route
