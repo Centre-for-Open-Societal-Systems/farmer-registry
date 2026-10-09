@@ -1092,6 +1092,9 @@
   // the event and hand over a resized one.
   document.addEventListener("change", function (e) {
     if (!(e.target instanceof HTMLInputElement) || e.target.type !== "file") return;
+    // Spreadsheet imports own their type/size validation; document rules
+    // accept only photos/PDFs and would silently clear this file picker.
+    if (e.target.closest(".farmer-bulk-dialog")) return;
     if (photoWidget(e.target)) photoChange(e);
     else fileCheck(e);
   }, true);

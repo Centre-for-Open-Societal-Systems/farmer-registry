@@ -54,6 +54,9 @@ class TransactionTests(unittest.IsolatedAsyncioTestCase):
             pass
         module = types.ModuleType('openg2p_fastapi_common.errors.base_exception')
         module.BaseAppException = AppError
+        registry_errors = types.ModuleType('openg2p_registry_core.errors')
+        class RegistryError(Exception): pass
+        registry_errors.G2PRegistryException = RegistryError
         class Session:
             async def __aenter__(self): return self
             async def __aexit__(self, *args): return False
@@ -66,7 +69,7 @@ class TransactionTests(unittest.IsolatedAsyncioTestCase):
             async def _validate_form(self, *args): pass
             async def _get_form_sections(self, *args): return metadata()
             async def create_submission_with_session(self, **kwargs):
-                assert kwargs['submission_source'] == 'IMPORT_FILE'
+                assert kwargs['submission_source'] == 'STAFF_PORTAL'
                 assert kwargs['created_by'] == 'staff-sub'
                 return types.SimpleNamespace(submission_id=str(len(attempts)))
             async def save_intake_form_submission_with_session(self, **kwargs):
@@ -74,19 +77,20 @@ class TransactionTests(unittest.IsolatedAsyncioTestCase):
                     name = kwargs['section_payload'][0]['first_name']
                     kwargs['session'].name = name
                     attempts.append(name)
-                    if name == 'SaveError': raise AppError('invalid row')
+                    if name == 'SaveError': raise RegistryError('invalid row')
             async def finalize_submission_with_session(self, submission_id, session, **kwargs):
                 assert kwargs['requester_sub'] == 'staff-sub'
                 assert kwargs['bearer_token'] == 'token'
                 if session.name == 'FinalizeError': raise AppError('workflow unavailable')
         rows = [{'first_name': name, 'father_first_name': 'B'} for name in
                 ['Good', '', 'SaveError', 'FinalizeError', 'CommitError', 'Last']]
-        with patch.dict(sys.modules, {module.__name__: module}), self.assertLogs(service.__name__, level='ERROR'):
+        with patch.dict(sys.modules, {module.__name__: module, registry_errors.__name__: registry_errors}), self.assertLogs(service.__name__, level='ERROR'):
             result = await service.import_rows(rows, 'form', 'staff-sub', 'staff-sub', 'token', Intake(), Session)
         self.assertEqual(committed, ['Good', 'Last'])
         self.assertEqual((result['successful'], result['failed']), (2, 4))
         self.assertEqual([r['ok'] for r in result['results']], [True, False, False, False, False, True])
         self.assertEqual([r['row'] for r in result['results']], [2, 3, 4, 5, 6, 7])
+        self.assertEqual(result['results'][2]['errors'], ['invalid row'])
 
 
 if __name__ == '__main__': unittest.main()

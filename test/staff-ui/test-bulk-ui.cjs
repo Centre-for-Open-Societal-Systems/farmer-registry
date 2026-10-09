@@ -24,30 +24,33 @@ function fixture(fetch, pathname = '/intake-form/farmer') {
   const document = {body, head, cookie: 'X-CSRF-Token=csrf', activeElement: main,
     createElement: tag => new Node(tag), createTextNode: text => ({textContent: text}),
     getElementById: id => nodes.find(n => n.id === id), querySelector: () => main};
-  const window = {addEventListener() {}};
+  const listeners = {};
+  const window = {addEventListener(name, fn) { listeners[name] = fn; }};
   const context = {document, window, location:{pathname}, MutationObserver: class {observe() {}},
     fetch, FormData, Blob, URL, setTimeout};
   vm.runInNewContext(fs.readFileSync('docker/staff-ui/assets/farmer-bulk-upload.js','utf8'), context);
-  return {nodes, document};
+  return {nodes, document, open: () => listeners['farmer-bulk-upload']()};
 }
 const payload = value => Response.json({response_body:{response_payload:value}});
 
-test('upload button mounts on locale-prefixed farmer listing', () => {
-  const {document} = fixture(async () => {}, '/en/intake-form/farmer');
-  assert(document.getElementById('farmer-bulk-open'));
+test('menu event opens on locale listing without inserting page layout elements', async () => {
+  const {document, open} = fixture(async () => payload([]), '/en/intake-form/farmer');
+  assert.equal(document.body.children.length, 1);
+  await open();
+  assert(document.getElementById('farmer-bulk-title'));
 });
 
 test('templates, mixed results and double-click prevention', async () => {
   let importCalls = 0, release;
   const gate = new Promise(resolve => { release = resolve; });
-  const {nodes, document} = fixture(async (url, options) => {
+  const {nodes, open} = fixture(async (url, options) => {
     assert.equal(options.headers['X-CSRF-Token'], 'csrf');
     if (url.endsWith('=forms')) return payload([{form_id:'form',label:'Farmer Registration'}]);
     importCalls++;
     await gate;
     return payload({total:2,successful:1,failed:1,results:[{row:2,ok:true,submission_id:'id'},{row:3,ok:false,errors:['Bad date']}]});
   });
-  await document.getElementById('farmer-bulk-open').click();
+  await open();
   assert.equal(nodes.filter(n => n.tag === 'a' && n.href?.includes('farmer-import-template')).length, 2);
   const input = nodes.find(n => n.type === 'file');
   input.files = [new Blob(['first_name,father_first_name\nA,B'])]; input.files[0].name='farmers.csv';
@@ -64,11 +67,11 @@ test('templates, mixed results and double-click prevention', async () => {
 });
 
 test('network failure clears selection and tells staff to check existing submissions', async () => {
-  const {nodes, document} = fixture(async url => {
+  const {nodes, open} = fixture(async url => {
     if (url.endsWith('=forms')) return payload([{form_id:'form',label:'Farmer'}]);
     throw new TypeError('Failed to fetch');
   });
-  await document.getElementById('farmer-bulk-open').click();
+  await open();
   const input=nodes.find(n=>n.type==='file'); input.files=[new Blob(['x'])]; input.files[0].name='a.csv';
   await nodes.find(n=>n.textContent==='Import and submit').click();
   assert.equal(input.value,'');

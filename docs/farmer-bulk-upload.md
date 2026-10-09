@@ -1,6 +1,7 @@
 # Farmer bulk upload
 
-On the farmer intake list, choose **Bulk upload farmers**, download a CSV or
+On the farmer intake list, choose **New Intake → Import from file →
+Bulk upload farmers (CSV / XLSX)**, download a CSV or
 XLSX template, replace its example row, select the intake form, and import.
 Files are limited to 10 MB and 1,000 non-empty rows. XLSX uses the `Data` sheet
 when present, otherwise its first sheet. Dates use YYYY-MM-DD; Ethiopian dates
@@ -9,6 +10,8 @@ text cells to preserve leading zeroes and long identifiers. Use lookup codes
 configured in your deployment for crops, seasons and water sources.
 
 Each valid row creates a new intake submission and enters normal approval.
+The submission source is `STAFF_PORTAL` (the platform's supported source),
+and the farmer's `import_source` is `IMPORT_FILE`.
 It does not directly create or overwrite an approved registry record. Related
 records are linked to the new farmer; supplied household members create a new
 household parent in the same submission. Normal approval and deduplication
@@ -51,12 +54,35 @@ node --test --test-isolation=none test/staff-ui/test-bulk-proxy.cjs test/staff-u
 Python checks require openpyxl, FastAPI, python-multipart, and httpx. The parser
 tests are real CSV/XLSX round trips; controller/service tests mock platform and
 database boundaries. JavaScript tests exercise the shipped proxy/browser code
-and patch against fixtures. These checks do not prove compatibility with the
-pinned platform images.
+and patch against fixtures. The existing `test/staff-ui/intake-rules.test.js`
+suite (requires jsdom) also checks that document validation leaves the
+spreadsheet picker alone. These tests run in the Checks workflow.
 
-Before release, build the pinned images and verify authenticated CSV and XLSX
-uploads, mixed results, 1,000 rows, forbidden/expired sessions, CSRF rejection,
-intake readback of every section, and approval into the live registry with
-correct parent links. Verify the ordinary document-upload route still works.
-Check proxy/request timeouts with the maximum batch: rows are processed
-sequentially, including approval-service calls.
+`test/bulk-import-integration.py` runs in the built staff API image against a
+disposable copy of a seeded registry database. Set `BULK_TEST_DATABASE` and
+`REGISTRY_STAFF_PORTAL_API_DB_DBNAME` to the same `farmer_bulk_test_*` database
+and set `REGISTRY_STAFF_PORTAL_API_AWE_ENABLED=false`. Mount this repository
+at `/tests` and run `python /tests/test/bulk-import-integration.py` using the
+deployment's normal database/network settings. It writes synthetic submissions,
+verifications and approved records, so never point it at a working database.
+
+Verified locally against the pinned API (`0.0.0-develop.384`) and UI (`1.2.1`):
+
+- Both Docker builds and bundle patch assertions passed.
+- 25 bulk Python tests, 7 bulk JavaScript tests, 14 intake UI tests, the 22
+  existing CI guard tests (plus 6 subtests), and the ODK transform check passed.
+- Authenticated Chrome CSV and XLSX uploads passed through the real UI proxy
+  into an isolated PostgreSQL copy. The import menu opens the dialog without
+  adding a button above the portal header or causing hydration errors.
+- Full CSV/XLSX examples persisted all supplied fields, rejected invalid IDs
+  with row-specific errors, and rolled back failed rows. Required verifications,
+  approval and ingestion passed, with farmer/household/child links preserved.
+
+The database/browser checks disabled external AWE calls; they do not certify
+a deployment's AWE policy, callback configuration or workflow service.
+
+Before production rollout, verify restricted/expired sessions and CSRF with
+the deployment's IAM configuration, actual external AWE approval/callbacks,
+and ordinary document uploads. The 1,000-row parser boundary is tested; load-test
+the maximum batch with production proxy timeouts because rows and workflow
+service calls are processed sequentially.

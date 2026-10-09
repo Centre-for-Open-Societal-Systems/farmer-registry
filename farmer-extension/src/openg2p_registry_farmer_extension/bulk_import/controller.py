@@ -28,6 +28,7 @@ def register_bulk_import_routes(app):
     from openg2p_fastapi_common.errors.base_exception import BaseAppException
     from openg2p_fastapi_common.context import dbengine
     from openg2p_registry_core.models import G2PIntakeFormDefinition
+    from openg2p_registry_core.errors import G2PRegistryException
     from openg2p_registry_core.services import G2PIntakeFormDataService
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -98,6 +99,8 @@ def register_bulk_import_routes(app):
             return JSONResponse(envelope({}, str(error)), status_code=400)
         except BaseAppException as error:
             return JSONResponse(envelope({}, error.message), status_code=error.status_code)
+        except G2PRegistryException as error:
+            return JSONResponse(envelope({}, error.message), status_code=400)
         finally:
             await file.close()
 

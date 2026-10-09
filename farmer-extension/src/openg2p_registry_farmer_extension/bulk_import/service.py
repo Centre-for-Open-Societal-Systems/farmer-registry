@@ -80,6 +80,7 @@ async def import_rows(rows, form_id, actor, requester_sub, bearer_token, intake,
         sections = await intake._get_form_sections(form_id, session)
     results = []
     from openg2p_fastapi_common.errors.base_exception import BaseAppException
+    from openg2p_registry_core.errors import G2PRegistryException
 
     for parsed in rows_to_submissions(rows):
         result = {"row": parsed["row"], "ok": False}
@@ -93,7 +94,7 @@ async def import_rows(rows, form_id, actor, requester_sub, bearer_token, intake,
                 async with session.begin():
                     submission = await intake.create_submission_with_session(
                         form_id=form_id, register_id=FARMER_REGISTER_ID,
-                        submission_source="IMPORT_FILE", partner_id=None,
+                        submission_source="STAFF_PORTAL", partner_id=None,
                         section_payloads=None, created_by=actor, session=session,
                     )
                     for group in groups:
@@ -113,7 +114,7 @@ async def import_rows(rows, form_id, actor, requester_sub, bearer_token, intake,
                     submission_id = str(submission.submission_id)
             # A successful finalize is not sufficient: the commit must succeed.
             result.update(ok=True, submission_id=submission_id)
-        except (RowError, BaseAppException) as error:
+        except (RowError, BaseAppException, G2PRegistryException) as error:
             result["errors"] = [getattr(error, "message", None) or str(error)]
         except Exception:
             _logger.exception("Farmer bulk import failed at row %s", parsed["row"])

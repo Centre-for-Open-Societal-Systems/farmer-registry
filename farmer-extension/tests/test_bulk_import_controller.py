@@ -29,6 +29,7 @@ class ControllerTests(unittest.TestCase):
             'openg2p_fastapi_common.context': module('context', dbengine=types.SimpleNamespace(get=lambda: None)),
             'openg2p_fastapi_common.errors.base_exception': module('errors', BaseAppException=AppError),
             'openg2p_registry_core.models': module('models', G2PIntakeFormDefinition=object),
+            'openg2p_registry_core.errors': module('registry_errors', G2PRegistryException=type('RegistryError', (Exception,), {})),
             'openg2p_registry_core.services': module('services', G2PIntakeFormDataService=types.SimpleNamespace(get_component=lambda: object())),
             'sqlalchemy': module('sqlalchemy', select=lambda x: x),
             'sqlalchemy.ext.asyncio': module('asyncio', async_sessionmaker=lambda *a, **k: object()),

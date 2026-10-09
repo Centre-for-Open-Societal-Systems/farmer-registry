@@ -126,7 +126,7 @@ def _build_columns():
         cols += [
             _c(f"crop_{i}_name", f"Crop {i}", "Crop / commodity", "WHEAT" if ex else ""),
             _c(f"crop_{i}_planted_date", f"Crop {i}", "Planted date YYYY-MM-DD", "2026-06-15" if ex else ""),
-            _c(f"crop_{i}_season", f"Crop {i}", "Season code from configured master data", "SUMMER" if ex else ""),
+            _c(f"crop_{i}_season", f"Crop {i}", "Season code from configured master data", "MEHER" if ex else ""),
             _c(f"crop_{i}_end_use", f"Crop {i}", "End use", "FOOD_HUMAN_CONSUMPTION" if ex else "", END_USE),
         ]
     for i in range(1, N_LIVESTOCK + 1):

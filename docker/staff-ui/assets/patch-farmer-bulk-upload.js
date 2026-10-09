@@ -27,3 +27,38 @@ const script = fs.readFileSync(PUBLIC, 'utf8');
 if (!script.includes('"__FARMER_BULK_UPLOAD_ROUTE__"')) throw new Error('Bulk UI route placeholder is missing');
 fs.writeFileSync(PUBLIC, script.replace('"__FARMER_BULK_UPLOAD_ROUTE__"', JSON.stringify(route.replace(/\/route$/, ''))));
 console.log(`Farmer bulk import uses ${route.replace(/\/route$/, '')}`);
+
+// Render the entry inside React's existing Import from file group, on both
+// server and client. No body-level button or DOM mutation during hydration.
+function patchMenu(source) {
+  const marker = 'case"IMPORT_FILE":';
+  const at = source.indexOf(marker);
+  const end = source.indexOf('case"VERIFIABLE_CREDENTIAL":', at);
+  if (at < 0 || end < 0 || source.indexOf(marker, at + 1) !== -1) throw new Error('Intake import switch changed');
+  const before = source.slice(0, at);
+  const id = '[A-Za-z_$][A-Za-z0-9_$]*';
+  const register = [...before.matchAll(new RegExp(`,(${id})=${id}\\?\\.register_id,`, 'g'))].at(-1)?.[1];
+  const options = [...before.matchAll(new RegExp(`\\{importFileOptions:(${id}),`, 'g'))].at(-1)?.[1];
+  const original = source.slice(at + marker.length, end);
+  const jsx = original.match(new RegExp(`\\(0,(${id})\\.jsx\\)`))?.[1];
+  if (!register || !options || !jsx) throw new Error('Intake import bindings changed');
+  const button = `(0,${jsx}.jsx)("button",{type:"button",id:"farmer-bulk-open",className:"w-full text-left px-4 py-1 font-medium hover:bg-secondary-second cursor-pointer text-[16px]",onClick:()=>window.dispatchEvent(new Event("farmer-bulk-upload")),children:"Bulk upload farmers (CSV / XLSX)"})`;
+  const entry = `if(${register}==="a1a4d25a-1cd4-4356-abac-985a0b3c6bcd")return (0,${jsx}.jsxs)("div",{children:[${button},${options}?.length?(()=>{${original}})():null]});`;
+  return before + marker + entry + source.slice(at + marker.length);
+}
+let menus = 0;
+function walk(directory) {
+  for (const entry of fs.readdirSync(directory, {withFileTypes:true})) {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) { walk(file); continue; }
+    if (!file.endsWith('.js')) continue;
+    const original = fs.readFileSync(file, 'utf8');
+    if (!original.includes('viewStorageKey:"intakeFormView"')) continue;
+    const result = patchMenu(original);
+    new Function(result);
+    fs.writeFileSync(file, result); menus++;
+  }
+}
+walk(ROOT);
+if (menus < 2) throw new Error(`Expected server and client intake menus, found ${menus}`);
+console.log(`Farmer bulk upload added to ${menus} intake menus`);

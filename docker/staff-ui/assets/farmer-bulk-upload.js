@@ -117,19 +117,9 @@
       status.textContent = available.length ? 'Choose a file to begin.' : 'No farmer intake form is configured.';
     } catch (error) { status.textContent = error.message; }
   }
-  function mount() {
-    const onList = /^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/intake-form\/farmer\/?$/i.test(location.pathname);
-    const existing = document.getElementById('farmer-bulk-open');
-    if (!onList) { existing?.remove(); return; }
-    if (existing) return;
-    const host = document.querySelector('main') || document.body;
-    const button = element('button', 'Bulk upload farmers');
-    button.id = 'farmer-bulk-open'; button.className = 'farmer-bulk-open'; button.onclick = open;
-    host.prepend(button);
-  }
   const css = element('link', '', document.head); css.rel = 'stylesheet'; css.href = '/farmer-bulk-upload.css';
-  new MutationObserver(mount).observe(document.body, {childList: true, subtree: true});
-  window.addEventListener('popstate', mount);
+  window.addEventListener('farmer-bulk-upload', () => {
+    if (/^(?:\/[a-z]{2}(?:-[a-z]{2})?)?\/intake-form\/farmer\/?$/i.test(location.pathname)) return open();
+  });
   window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
-  mount();
 })();

@@ -1,4 +1,3 @@
-.farmer-bulk-open { margin: 1rem 2rem; padding: .65rem 1rem; border: 1px solid #166534; border-radius: .4rem; color: #166534; background: white; cursor: pointer; }
 .farmer-bulk-dialog { margin: auto; width: min(52rem, 94vw); max-height: 85vh; overflow: auto; padding: 1.5rem; border: 1px solid #ccc; border-radius: .6rem; background: white; color: #17251c; }
 .farmer-bulk-dialog::backdrop { background: #0008; }
 .farmer-bulk-dialog h2 { font-size: 1.4rem; font-weight: 600; }
