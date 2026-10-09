@@ -37,21 +37,15 @@ class Patch:
 
 
 PATCHES = [
-    Patch(
-        "openg2p_registry_core/services/intake_form_data_service.py",
-        old="    def _build_intake_policy_condition(",
-        new="    async def _build_intake_policy_condition(",
-        why=(
-            "Declared as a plain def but every call site awaits it. Here the "
-            "method is the odd one out, so it becomes async."
-        ),
-    ),
+    # rc.544 fixed every intake-policy call site to use the synchronous helper.
+    # The old def -> async def overlay now returns a coroutine to SQLAlchemy
+    # and breaks intake search, read-back and access checks. Leave it intact.
     Patch(
         "openg2p_registry_core/services/g2p_register_service.py",
         old="policy_condition = await self._build_register_policy_condition(",
         new="policy_condition = self._build_register_policy_condition(",
         why=(
-            "The mirror image of the patch above: _build_register_policy_condition "
+            "_build_register_policy_condition "
             "is correctly a plain def and four of its five call sites treat it as "
             "one. Only get_record awaits it, so awaiting the returned condition "
             "(or the None it returns when no data policies apply) raised "
