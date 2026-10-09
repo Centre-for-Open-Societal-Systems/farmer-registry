@@ -38,4 +38,4 @@ jobs:
       - name: ODK transform renders an OData-shaped submission
         run: pip install --quiet jinja2 && python odk/test_transform.py
       - name: committed ODK form matches the pipeline and the transform
-        run: pip install --quiet openpyxl && python -m pytest test/test_odk_forms.py -q
+        run: pip install --quiet openpyxl && python -m pytest test/test_odk_forms.py test/test_odk_location_media.py -q
