@@ -17,7 +17,7 @@ with its own images built by this repository's pipeline.
 | Connector service and UI | `openg2p-connector-service/`, `openg2p-connector-ui/` |
 | Helm chart | `openg2p-connector-service/deploy/charts/openg2p-connector` |
 | Values for `far` | `ci/connector/values-far.yaml` |
-| Deploy | `ci/connector/deploy.sh` |
+| Deploy | Jenkins job from `ci/connector/Jenkinsfile`, which runs `ci/connector/deploy.sh` |
 | The form, its media, and the field mapping | `odk/` |
 
 ## Activating it in an environment
@@ -26,7 +26,17 @@ with its own images built by this repository's pipeline.
 `connector-ui` alongside the registry images, so any develop build produces
 them. Take that build's tag.
 
-**2. Deploy the release.**
+**2. Deploy the release.** The registry pipeline builds the connector images
+but never deploys them, so a merged connector change is not live until this
+step runs for a build that contains it. Check the running tag with
+`kubectl -n far get deploy farmer-connector-worker -o jsonpath='{..image}'`.
+
+Run the standalone Jenkins job set up from `ci/connector/Jenkinsfile` ("Pipeline
+script from SCM", no triggers): **Build with Parameters**, ENVIRONMENT `dev` or
+`staging`, TAG the build's tag, CONFIRM ticked. DRY_RUN (ticked by default)
+renders the release and lists its images; untick it to apply.
+
+The job runs `deploy.sh`, which can also be run by hand with a kubeconfig:
 
 ```sh
 ENVIRONMENT=far     KUBECONFIG=<dev cluster>     ./ci/connector/deploy.sh <image tag>
@@ -136,7 +146,10 @@ Notes on the mapping:
 - Photos (the farmer photo and each parcel's land certificate) arrive from ODK
   Central as file names only. The connector downloads them and inlines them as
   `{"__type": "File", ...}` when the pipeline's `source_config.embed_attachments`
-  is true (the default; set `false` to turn it off). Files over
+  is true (the default; set `false` to turn it off). The embedding is done by the
+  connector, so it needs a connector build that has it actually deployed (step 2):
+  the registry deploy refreshes the template, not the connector, and an older
+  connector sends file names that the template drops. Files over
   `attachment_max_bytes` (default 10 MiB) are skipped and the record is sent
   without them. Each file is held in memory while it is encoded. The web user
   the connector signs in as needs read access to the project's submissions.
