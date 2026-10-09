@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OpenG2P Gen 2 Farmer Registry — ODK Central & Ingestion Architecture Guide</title>
+<style>
+  @page {
+    size: A4;
+    margin: 14mm 14mm 14mm 14mm;
+    @bottom-right {
+      content: counter(page);
+    }
+  }
+
+  *, *:before, *:after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    color: #1e293b;
+    background: #ffffff;
+    line-height: 1.5;
+    font-size: 12px;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Cover Page */
+  .cover-page {
+    page-break-after: always;
+    box-sizing: border-box;
+    padding: 20px 10px;
+  }
+
+  .cover-header {
+    border-bottom: 3px solid #0284c7;
+    padding-bottom: 20px;
+  }
+
+  .org-badge {
+    display: inline-block;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+  }
+
+  .cover-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+    margin: 0 0 10px 0;
+  }
+
+  .cover-subtitle {
+    font-size: 14px;
+    color: #475569;
+    font-weight: 400;
+    line-height: 1.4;
+    margin: 0;
+  }
+
+  .cover-body {
+    margin: 30px 0;
+  }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+  }
+
+  .meta-item {
+    font-size: 11.5px;
+  }
+
+  .meta-label {
+    font-size: 9.5px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 2px;
+  }
+
+  .meta-val {
+    font-size: 12px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+
+  .badges-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    font-size: 9.5px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+  }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-purple { background: #f3e8ff; color: #6b21a8; }
+  .badge-amber { background: #fef3c7; color: #92400e; }
+
+  .cover-footer {
+    border-top: 1px solid #cbd5e1;
+    padding-top: 14px;
+    font-size: 10px;
+    color: #64748b;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+  }
+
+  /* Document Body Typography */
+  h1 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    border-bottom: 2px solid #0284c7;
+    padding-bottom: 5px;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    page-break-after: avoid;
+  }
+
+  .page-break {
+    page-break-before: always;
+  }
+
+  h2 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0369a1;
+    margin-top: 18px;
+    margin-bottom: 8px;
+    page-break-after: avoid;
+  }
+
+  h3 {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    margin-top: 14px;
+    margin-bottom: 6px;
+    page-break-after: avoid;
+  }
+
+  p {
+    margin: 0 0 8px 0;
+    color: #334155;
+  }
+
+  ul, ol {
+    margin: 0 0 10px 0;
+    padding-left: 20px;
+    color: #334155;
+  }
+
+  li {
+    margin-bottom: 3px;
+  }
+
+  /* Callout Boxes */
+  .callout {
+    border-left: 4px solid;
+    border-radius: 0 6px 6px 0;
+    padding: 10px 14px;
+    margin: 12px 0;
+    font-size: 11.5px;
+    page-break-inside: avoid;
+  }
+  .callout-info {
+    border-color: #0284c7;
+    background: #f0f9ff;
+    color: #0369a1;
+  }
+  .callout-success {
+    border-color: #16a34a;
+    background: #f0fdf4;
+    color: #15803d;
+  }
+  .callout-warning {
+    border-color: #f59e0b;
+    background: #fffbeb;
+    color: #b45309;
+  }
+  .callout-title {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 9.5px;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px 0;
+    font-size: 10.5px;
+    page-break-inside: auto;
+  }
+  tr {
+    page-break-inside: avoid;
+  }
+  th {
+    background: #0f172a;
+    color: #ffffff;
+    font-weight: 600;
+    text-align: left;
+    padding: 6px 8px;
+    border: 1px solid #0f172a;
+  }
+  td {
+    padding: 6px 8px;
+    border: 1px solid #e2e8f0;
+    vertical-align: top;
+    color: #334155;
+  }
+  tr:nth-child(even) td {
+    background: #f8fafc;
+  }
+
+  /* Code & Syntax */
+  code {
+    font-family: "Fira Code", Monaco, Consolas, "Courier New", monospace;
+    font-size: 10px;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 2px 4px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+  }
+
+  pre {
+    background: #0f172a;
+    color: #f8fafc;
+    font-family: "Fira Code", Monaco, Consolas, "Courier New", monospace;
+    font-size: 9.5px;
+    line-height: 1.4;
+    padding: 10px 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 10px 0;
+    page-break-inside: avoid;
+    border: 1px solid #1e293b;
+  }
+
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    border: none;
+    font-size: inherit;
+  }
+
+  /* Visual Flowchart Cards */
+  .flow-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 14px 0;
+    page-break-inside: avoid;
+  }
+
+  .flow-card {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-left: 4px solid #0284c7;
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .flow-step-num {
+    background: #0284c7;
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 11px;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .flow-card-content {
+    flex-grow: 1;
+  }
+
+  .flow-card-title {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 2px;
+  }
+
+  .flow-card-desc {
+    font-size: 10.5px;
+    color: #475569;
+    line-height: 1.35;
+  }
+
+  .flow-arrow {
+    text-align: center;
+    color: #0284c7;
+    font-size: 14px;
+    font-weight: 900;
+    line-height: 0.8;
+  }
+
+  /* Status Badges */
+  .status-pill {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .status-active { background: #dcfce7; color: #15803d; }
+  .status-pending { background: #fef3c7; color: #b45309; }
+
+  /* TOC */
+  .toc {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 12px 18px;
+    margin: 12px 0;
+  }
+  .toc-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #0f172a;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #cbd5e1;
+    padding-bottom: 4px;
+  }
+  .toc-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    columns: 2;
+    column-gap: 20px;
+  }
+  .toc-list li {
+    font-size: 10.5px;
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  .header-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5px;
+    color: #94a3b8;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 4px;
+    margin-bottom: 12px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="cover-page">
+  <div class="cover-header">
+    <div class="org-badge">Agricultural Transformation Institute (ATI) &middot; OpenG2P</div>
+    <div class="cover-title">OpenG2P Gen 2 Farmer Registry</div>
+    <div class="cover-subtitle">ODK Central & Ingestion Architecture: Complete Technical & Operational Reference Guide</div>
+    <div class="badges-row">
+      <span class="badge badge-blue">ODK Central v2024.1</span>
+      <span class="badge badge-green">OpenG2P Gen 2</span>
+      <span class="badge badge-purple">Connector Service v1.2</span>
+      <span class="badge badge-amber">Celery + MinIO Jinja2</span>
+    </div>
+  </div>
+
+  <div class="cover-body">
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">Document Version</div>
+        <div class="meta-val">2.0.0 (Production Release)</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Date of Publication</div>
+        <div class="meta-val">October 2026</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Deployed ODK Server</div>
+        <div class="meta-val">https://odk.13.207.43.8.nip.io</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">ODK Project & Form</div>
+        <div class="meta-val">Project 13 / Form: farmer_profile</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Connector Pipeline ID</div>
+        <div class="meta-val">farmer-odk-pipeline-01 (Active)</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Target Ingest Endpoint</div>
+        <div class="meta-val">http://farmer-registry-partner-api:8000</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>Author: OpenG2P Core Technical Team</span>
+    <span>Confidential &middot; Internal Technical Operations Document</span>
+  </div>
+</div>
+
+<!-- ==================== PAGE 2: TABLE OF CONTENTS & EXEC SUMMARY ==================== -->
+<div class="header-footer">
+  <span>OpenG2P Gen 2 Farmer Registry &middot; Technical Reference</span>
+  <span>Section 1 &middot; Executive Summary</span>
+</div>
+
+<div class="toc">
+  <div class="toc-title">Table of Contents</div>
+  <ul class="toc-list">
+    <li><strong>1.</strong> Executive Summary</li>
+    <li><strong>2.</strong> End-to-End System Architecture</li>
+    <li><strong>3.</strong> Server & Service Inventory</li>
+    <li><strong>4.</strong> ODK Form Architecture (v2)</li>
+    <li><strong>5.</strong> Field-by-Field Mapping Matrix</li>
+    <li><strong>6.</strong> Database Seeds & Config SQL</li>
+    <li><strong>7.</strong> Mobile Enumerator Guide</li>
+    <li><strong>8.</strong> Manual Testing & Verification</li>
+    <li><strong>9.</strong> Operational Troubleshooting</li>
+    <li><strong>10.</strong> Appendix & Useful Commands</li>
+  </ul>
+</div>
+
+<h1>1. Executive Summary</h1>
+<p>
+  This document delivers the comprehensive end-to-end technical reference and operational runbook for the automated ingestion of Ethiopian smallholder farmer profiling data from <strong>ODK Central</strong> into the <strong>OpenG2P Gen 2 Farmer Registry</strong>.
+</p>
+<p>
+  The architecture replaces Gen 1 batch manual spreadsheet imports with an automated, event-driven, decoupled integration. Offline mobile data collection by field enumerators across rural Ethiopia is automatically collected, normalized, transformed, and staged in OpenG2P with full deduplication, relational unnesting of repeat groups (land parcels, crops, livestock), and multi-lingual support.
+</p>
+
+<div class="callout callout-info">
+  <div class="callout-title">Core Principles of Gen 2 Ingestion</div>
+  <strong>Offline First:</strong> Survey forms cache over 9,000 Kebeles and Primary Cooperatives locally on mobile devices.<br>
+  <strong>Zero-Loss Decoupling:</strong> The OpenG2P Connector Service maintains strict cursor timestamps and idempotency keys to ensure exactly-once ingestion.<br>
+  <strong>Four-Eyes Verification:</strong> Raw submissions first enter an Intake Staging area (AWE approval workflow) before staff review commits them to permanent registry tables.
+</div>
+
+<!-- ==================== SECTION 2: ARCHITECTURE ==================== -->
+<h1>2. End-to-End System Architecture</h1>
+<p>
+  The data flow spans six distinct processing stages from field collection to permanent storage:
+</p>
+
+<div class="flow-container">
+  <div class="flow-card">
+    <div class="flow-step-num">1</div>
+    <div class="flow-card-content">
+      <div class="flow-card-title">Mobile Field Collection (ODK Collect on Android)</div>
+      <div class="flow-card-desc">Enumerators complete surveys offline in English, Amharic, or Afaan Oromo with cascading geography from <code>KebeleList.csv</code> (9,000+ Kebeles) and hardware GPS capture.</div>
+    </div>
+  </div>
+  <div class="flow-arrow">&darr;</div>
+
+  <div class="flow-card">
+    <div class="flow-step-num">2</div>
+    <div class="flow-card-content">
+      <div class="flow-card-title">ODK Central Server (https://odk.13.207.43.8.nip.io)</div>
+      <div class="flow-card-desc">Project 13 (&ldquo;Farmer Registry&rdquo;), Form <code>farmer_profile</code> (v1.0.2). Submissions are stored and exposed via OData REST API (<code>.../farmer_profile.svc/Submissions</code>) with repeat group navigation links.</div>
+    </div>
+  </div>
+  <div class="flow-arrow">&darr;</div>
+
+  <div class="flow-card">
+    <div class="flow-step-num">3</div>
+    <div class="flow-card-content">
+      <div class="flow-card-title">OpenG2P Connector Service (:8050 &amp; Worker)</div>
+      <div class="flow-card-desc">Pipeline <code>farmer-odk-pipeline-01</code> polls OData every 30s with <code>resolve_nav_links: true</code>. Maintains checkpoint timestamps, wraps data in OpenG2P envelope, and POSTs to Partner API.</div>
+    </div>
+  </div>
+  <div class="flow-arrow">&darr;</div>
+
+  <div class="flow-card">
+    <div class="flow-step-num">4</div>
+    <div class="flow-card-content">
+      <div class="flow-card-title">Partner Ingest &amp; Celery Worker Transformation</div>
+      <div class="flow-card-desc">Partner API (:8006/:8000) enqueues task to Redis. Celery worker classifies model <code>FARMER_ODK_MODEL</code>, loads MinIO Jinja2 template (<code>farmer_transform.j2</code>), strips spaces from Fayda UID/RID, formats phones, and unnests repeat arrays.</div>
+    </div>
+  </div>
+  <div class="flow-arrow">&darr;</div>
+
+  <div class="flow-card">
+    <div class="flow-step-num">5</div>
+    <div class="flow-card-content">
+      <div class="flow-card-title">Intake Staging &amp; Approval Workflow Engine (AWE)</div>
+      <div class="flow-card-desc">Records stage in <code>g2p_intake_form_submissions</code> with status <code>PENDING</code>. Automatic deduplication against registers triggers. Staff reviews submission in Portal UI (:3001).</div>
+    </div>
+  </div>
+  <div class="flow-arrow">&darr;</div>
+
+  <div class="flow-card">
+    <div class="flow-step-num">6</div>
+    <div class="flow-card-content">
+      <div class="flow-card-title">Permanent Farmer Registry Tables</div>
+      <div class="flow-card-desc">Approved records are atomically committed: <code>g2p_register_farmers</code>, <code>g2p_register_farmer_phones</code>, <code>g2p_register_lands</code>, <code>g2p_register_crops</code>, <code>g2p_register_livestocks</code>.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 3: INVENTORY ==================== -->
+<div class="page-break"></div>
+<div class="header-footer">
+  <span>OpenG2P Gen 2 Farmer Registry &middot; Technical Reference</span>
+  <span>Section 3 &middot; Server & Infrastructure Inventory</span>
+</div>
+
+<h1>3. Server & Infrastructure Inventory</h1>
+
+<h2>3.1 Upstream ODK Central Server Configuration</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Parameter</th>
+      <th>Configuration Value</th>
+      <th>Technical Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Base Server URL</strong></td>
+      <td><code>https://odk.13.207.43.8.nip.io</code></td>
+      <td>Production ODK Central deployment (Nginx + OpenRosa).</td>
+    </tr>
+    <tr>
+      <td><strong>Admin Web Console</strong></td>
+      <td><code>vilbertraj21@gmail.com</code> / <code>odksandbox</code></td>
+      <td>Full administrator rights to projects, forms, and field keys.</td>
+    </tr>
+    <tr>
+      <td><strong>Project ID / Name</strong></td>
+      <td><code>13</code> &middot; <code>Farmer Registry</code></td>
+      <td>Contains all farmer profile forms and media lookup tables.</td>
+    </tr>
+    <tr>
+      <td><strong>Form XML ID</strong></td>
+      <td><code>farmer_profile</code></td>
+      <td>Identifier matching the OData endpoint and connector settings.</td>
+    </tr>
+    <tr>
+      <td><strong>Form Name / Version</strong></td>
+      <td><code>Farmer Profiling Data Collection Form</code> (v1.0.2)</td>
+      <td>Active, published version accepting submissions.</td>
+    </tr>
+    <tr>
+      <td><strong>OData Endpoint</strong></td>
+      <td><code>/v1/projects/13/forms/farmer_profile.svc/Submissions</code></td>
+      <td>Polled by the OpenG2P Connector with OData navigation expansions.</td>
+    </tr>
+    <tr>
+      <td><strong>Field Key 1 (App User)</strong></td>
+      <td><code>Field_Officer_1</code></td>
+      <td>Token: <code>CBgWA1NO$BWgO5vTjqPajzi2TlAmHUOeAf6CH9IYygRP$BvyotGIVlVA8bIHgseT</code></td>
+    </tr>
+    <tr>
+      <td><strong>Field Key 2 (App User)</strong></td>
+      <td><code>QA Rohit</code></td>
+      <td>Token: <code>u$FxbwULP7R0gjoHx1GrZQrj7OSMtv7lUtgAd6AswdavpdMqqm1A83F0$mzI!IDf</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3.2 Local / Platform Container Stack Inventory</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Service Name</th>
+      <th>Docker Container</th>
+      <th>Host Port</th>
+      <th>Internal Port</th>
+      <th>Operational Role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Connector UI</strong></td>
+      <td><code>farmer-registry-connector-ui</code></td>
+      <td><code>5173</code></td>
+      <td><code>8080</code></td>
+      <td>Management dashboard to view pipelines and ingestion runs.</td>
+    </tr>
+    <tr>
+      <td><strong>Connector API</strong></td>
+      <td><code>farmer-registry-connector-api</code></td>
+      <td><code>8050</code></td>
+      <td><code>8050</code></td>
+      <td>FastAPI backend for connector configuration and poll triggers.</td>
+    </tr>
+    <tr>
+      <td><strong>Connector Worker</strong></td>
+      <td><code>farmer-registry-connector-worker</code></td>
+      <td>N/A</td>
+      <td>N/A</td>
+      <td>Celery background task runner polling ODK every 30 seconds.</td>
+    </tr>
+    <tr>
+      <td><strong>Partner API</strong></td>
+      <td><code>farmer-registry-partner-api</code></td>
+      <td><code>8006</code></td>
+      <td><code>8000</code></td>
+      <td>Secure ingress API receiving payloads via <code>/partner/ingest_data</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Staff API</strong></td>
+      <td><code>farmer-registry-staff-api</code></td>
+      <td><code>8001</code></td>
+      <td><code>8000</code></td>
+      <td>Core Registry domain REST service (FastAPI).</td>
+    </tr>
+    <tr>
+      <td><strong>Staff Portal UI</strong></td>
+      <td><code>farmer-registry-staff-ui</code></td>
+      <td><code>3001</code></td>
+      <td><code>3000</code></td>
+      <td>Next.js Web UI for registry officers and data approvers.</td>
+    </tr>
+    <tr>
+      <td><strong>PostgreSQL 16</strong></td>
+      <td><code>farmer-registry-postgres</code></td>
+      <td><code>5445</code></td>
+      <td><code>5432</code></td>
+      <td>Databases: <code>farmer_registry_db</code>, <code>connector</code>, <code>master_data</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Redis Broker</strong></td>
+      <td><code>farmer-registry-redis</code></td>
+      <td><code>6387</code></td>
+      <td><code>6379</code></td>
+      <td>Message broker for Celery task queuing and deduplication cache.</td>
+    </tr>
+    <tr>
+      <td><strong>MinIO Storage</strong></td>
+      <td><code>farmer-registry-minio</code></td>
+      <td><code>9002</code> / <code>9001</code></td>
+      <td><code>9000</code> / <code>9001</code></td>
+      <td>S3 object storage hosting <code>templates/farmer_transform.j2</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>AWE Engine</strong></td>
+      <td><code>farmer-registry-awe-api</code></td>
+      <td><code>8030</code></td>
+      <td><code>8000</code></td>
+      <td>Approval Workflow Engine managing four-eyes approval lifecycles.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3.3 Deployed Server Environment Inventory (far.openg2p.test)</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Server Component</th>
+      <th>URL / Internal Endpoint</th>
+      <th>Operational Role</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>ODK Central Server</strong></td>
+      <td><code>https://odk.13.207.43.8.nip.io</code></td>
+      <td>Upstream cloud data collection server (Project 13, Form: <code>farmer_profile</code>).</td>
+    </tr>
+    <tr>
+      <td><strong>Server Connector Admin UI</strong></td>
+      <td><code>https://connector-farmer-registry.far.openg2p.test</code></td>
+      <td>Server dashboard for monitoring pipelines, runs, and Dead Letter Queue.</td>
+    </tr>
+    <tr>
+      <td><strong>Server Connector API</strong></td>
+      <td><code>https://connector-farmer-registry.far.openg2p.test/connectors</code></td>
+      <td>Server REST API managing pipelines and manual poll triggers.</td>
+    </tr>
+    <tr>
+      <td><strong>Server Active Pipeline ID</strong></td>
+      <td><code>9afff094f9a24a689fd53ce46af32cc4</code></td>
+      <td>Live server pipeline polling ODK Central every 30s.</td>
+    </tr>
+    <tr>
+      <td><strong>Server Staff Portal UI</strong></td>
+      <td><code>https://farmer-registry.far.openg2p.test</code></td>
+      <td>Server Web UI for reviewing & approving farmer intake submissions.</td>
+    </tr>
+    <tr>
+      <td><strong>Server Partner Ingest Target</strong></td>
+      <td><code>http://farmer-registry-partner-api.far.svc.cluster.local/partner/ingest_data</code></td>
+      <td>Internal Kubernetes cluster DNS target used by Connector Worker.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>3.4 Data Routing & Architecture FAQs: Localhost vs. Remote Server</h2>
+<div class="card" style="border-left: 4px solid var(--accent); margin-bottom: 12px; padding: 12px 16px;">
+  <h3 style="margin-top:0; color:var(--primary); font-size:13px;">FAQ 1: Why did my colleague's submission from another state appear in my localhost:3001?</h3>
+  <p style="font-size:11px; margin-bottom:6px;"><strong>The Mechanism:</strong> ODK Central (<code>https://odk.13.207.43.8.nip.io</code>) is a single, centralized cloud server hosted on AWS.</p>
+  <p style="font-size:11px; margin-bottom:6px;"><strong>The Flow:</strong> When a colleague in another state fills out the form in ODK Collect and submits it, the data reaches the shared cloud ODK Central server. If your local Docker stack is running on your laptop, its background container <code>farmer-registry-connector-worker</code> polls the cloud server every 30 seconds, fetches all new submissions across the internet, and stores them in your local PostgreSQL database (<code>localhost:5445</code>). Thus, both your test and your colleague's test appear in your local Staff Portal (<code>localhost:3001</code>).</p>
+  <p style="font-size:11px; margin-bottom:0;"><em>Conclusion:</em> This proves the end-to-end ingestion pipeline, Jinja2 transformation, and intake staging workflow are 100% operational.</p>
+</div>
+
+<div class="card" style="border-left: 4px solid var(--warning); margin-bottom: 16px; padding: 12px 16px;">
+  <h3 style="margin-top:0; color:var(--primary); font-size:13px;">FAQ 2: What happens if the Connector on the server uses localhost instead of the cluster URL?</h3>
+  <p style="font-size:11px; margin-bottom:6px;"><strong>In Simple Terms:</strong> In containerized environments (Docker and Kubernetes), <code>localhost</code> means "inside this pod/container only".</p>
+  <p style="font-size:11px; margin-bottom:0;">If the connector worker pod on the server sends data to <code>http://localhost:8000</code>, it is looking for the Partner API inside itself, where nothing is listening, resulting in <code>Connection Refused</code>. On the remote server, it MUST use the Kubernetes service DNS: <code>http://farmer-registry-partner-api.far.svc.cluster.local/partner/ingest_data</code>.</p>
+</div>
+
+<h2>3.5 Remote Server Deployment Status & DevOps Action Checklist</h2>
+<p style="font-size:11px;">
+  The pipeline has been created and verified on the server:
+</p>
+<ul style="font-size:11px; margin-bottom:12px;">
+  <li><strong>Server Connector Admin UI:</strong> <code>https://connector-farmer-registry.far.openg2p.test</code></li>
+  <li><strong>Configured Pipeline ID:</strong> <code>9afff094f9a24a689fd53ce46af32cc4</code></li>
+  <li><strong>Status:</strong> Active &amp; Polling (fetched 16 submissions from ODK Central).</li>
+  <li><strong>Current Server Blocker:</strong> Partner API returns <code>HTTP 500 Internal Server Error</code> because database seeds are missing on the server.</li>
+</ul>
+
+<div class="card" style="background:#f8fafc; border: 1px solid #cbd5e1; padding: 12px 16px; margin-bottom:16px;">
+  <h3 style="margin-top:0; font-size:12px; color:var(--primary);">Mandatory DevOps Action Items on Server:</h3>
+  <ol style="font-size:11px; margin-bottom:0;">
+    <li><strong>In <code>master_data</code> DB:</strong> <code>INSERT INTO public.g2p_partners (partner_id, partner_mnemonic, keymanager_reference_id, is_active) VALUES ('farmer-partner', 'Farmer', 'farmer-key-ref', true) ON CONFLICT (partner_id) DO NOTHING;</code></li>
+    <li><strong>In <code>farmer_registry_db</code> DB:</strong> Run data model and key path seeds for <code>FARMER_ODK_MODEL</code>.</li>
+    <li><strong>In Server MinIO:</strong> Upload <code>odk/templates/farmer_transform.j2</code> into the <code>templates</code> bucket.</li>
+    <li><strong>Verify:</strong> Click Replay in the Server Connector UI and verify intake records appear in <code>https://farmer-registry.far.openg2p.test/en/intake-form/farmer</code>.</li>
+  </ol>
+</div>
+
+<!-- ==================== SECTION 4: FORM DESIGN ==================== -->
+<div class="page-break"></div>
+<div class="header-footer">
+  <span>OpenG2P Gen 2 Farmer Registry &middot; Technical Reference</span>
+  <span>Section 4 &middot; ODK Form Architecture (v2)</span>
+</div>
+
+<h1>4. ODK Form Design & XLSForm Specifications</h1>
+<p>
+  The profiling form (<code>odk/ATI_Farmers_Profile_ODK_Form_v2.xlsx</code>) is structured into 14 logical sections, translated into three languages, and integrated with offline lookup datasets.
+</p>
+
+<h2>4.1 Tri-Lingual Language Architecture</h2>
+<ol>
+  <li><strong>English (<code>en</code>)</strong>: Default base language used for system labels, enumerator instructions, and fallback text.</li>
+  <li><strong>Amharic (<code>am</code>) &mdash; አማርኛ</strong>: Official federal working language; native Ethiopic Ge'ez script stored directly in PostgreSQL UTF-8 columns.</li>
+  <li><strong>Afaan Oromo (<code>om</code>) &mdash; Afaan Oromoo</strong>: Widely spoken regional language; stored in designated language-specific profile columns.</li>
+</ol>
+
+<h2>4.2 Preloaded Media Attachments</h2>
+<ul>
+  <li><strong><code>KebeleList.csv</code></strong>: Over 9,000 Ethiopian Kebeles pre-indexed with hierarchical codes (<code>region_code</code>, <code>zone_code</code>, <code>woreda_code</code>). Uses ODK’s <code>select_one_from_file</code> with dynamic <code>choice_filter</code> for instant cascading drop-downs without memory lag.</li>
+  <li><strong><code>PrimaryCoopList.csv</code></strong>: Preloaded directory of Primary Agricultural Cooperatives and Unions.</li>
+</ul>
+
+<h2>4.3 Complete Questionnaire Section Breakdown</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Section Identifier</th>
+      <th>Key Question Fields</th>
+      <th>Technical Characteristics</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>1. consent_form_section</strong></td>
+      <td><code>consent_form</code> (agree / disagree)</td>
+      <td>Mandatory gatekeeper. Rejecting exits survey immediately.</td>
+    </tr>
+    <tr>
+      <td><strong>2. household_questions</strong></td>
+      <td><code>household_head</code>, <code>head_registered</code>, <code>relationship_to_head</code></td>
+      <td>Identifies if respondent is the family head or dependent.</td>
+    </tr>
+    <tr>
+      <td><strong>3. national_id_section</strong></td>
+      <td><code>national_id</code>, <code>national_uid</code>, <code>national_rid</code>, <code>other_id</code></td>
+      <td>Captures Fayda National ID (16 digits) and RID (29 digits).</td>
+    </tr>
+    <tr>
+      <td><strong>4. locale_info</strong></td>
+      <td><code>region</code>, <code>zone</code>, <code>woreda</code>, <code>kebele</code>, <code>language</code></td>
+      <td>Cascading administrative boundaries linked to KebeleList.csv.</td>
+    </tr>
+    <tr>
+      <td><strong>5. personal_info</strong></td>
+      <td>3-part names (EN, AM, OM), <code>gender</code>, <code>dob_gc</code>, <code>dob_ec</code>, <code>primary_phone_number</code>, <code>secondary_phone_number</code>, <code>farming_type</code>, <code>disability</code></td>
+      <td>Supports Gregorian and Ethiopian calendar dates. Normalizes phone numbers automatically.</td>
+    </tr>
+    <tr>
+      <td><strong>6. socio_economic_data</strong></td>
+      <td><code>marital_status</code>, <code>education_level</code>, <code>income_source</code></td>
+      <td>Captures social vulnerability and livelihood classification.</td>
+    </tr>
+    <tr>
+      <td><strong>7. membership</strong></td>
+      <td><code>primary_cooperative</code>, <code>coop_union</code>, <code>farmer_cluster</code>, <code>primary_commodity</code></td>
+      <td>Links smallholder to organized agricultural supply chains.</td>
+    </tr>
+    <tr>
+      <td><strong>8. land_info_repeat</strong></td>
+      <td><code>land_ownership</code>, <code>total_land_area</code>, <code>land_id</code>, <code>land_certificate</code> (photo attachment)</td>
+      <td><strong>Repeat group</strong> allowing multiple land parcels per farmer.</td>
+    </tr>
+    <tr>
+      <td><strong>9. crop_information</strong></td>
+      <td><code>crop_name_rep</code>, <code>crop_date</code>, <code>crop_water_source</code></td>
+      <td><strong>Repeat group</strong> capturing planted crops and sowing seasons.</td>
+    </tr>
+    <tr>
+      <td><strong>10. livestock_info</strong></td>
+      <td><code>animal_rep</code>, <code>num_animals</code>, <code>livestock_water_source</code></td>
+      <td><strong>Repeat group</strong> capturing cattle, sheep, goats, poultry.</td>
+    </tr>
+    <tr>
+      <td><strong>11. agricultural_input</strong></td>
+      <td>Fertilizer, pesticide, insecticide, improved seed use</td>
+      <td>Boolean flags and quantities utilized per season.</td>
+    </tr>
+    <tr>
+      <td><strong>12. access_to_resource</strong></td>
+      <td>Machinery access (Tractor, Harvester), Bank loans, Savings</td>
+      <td>Captures mechanization and financial inclusion metrics.</td>
+    </tr>
+    <tr>
+      <td><strong>13. other_hh_members</strong></td>
+      <td>Name, relationship, gender, DOB for each member</td>
+      <td><strong>Repeat group</strong> registering secondary family members.</td>
+    </tr>
+    <tr>
+      <td><strong>14. farmer_location</strong></td>
+      <td><code>location</code> (geopoint string: lat lon alt acc)</td>
+      <td>High-precision hardware GPS coordinates of the farmstead.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ==================== SECTION 5: FIELD MAPPING ==================== -->
+<div class="page-break"></div>
+<div class="header-footer">
+  <span>OpenG2P Gen 2 Farmer Registry &middot; Technical Reference</span>
+  <span>Section 5 &middot; Field-by-Field Mapping & Transformation Matrix</span>
+</div>
+
+<h1>5. Field-by-Field Mapping Matrix</h1>
+<p>
+  The Registry Celery Worker uses the MinIO template <code>farmer_transform.j2</code> to render incoming ODK Central OData payloads into the canonical OpenG2P Intake Schema.
+</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>ODK Question JSON Path</th>
+      <th>Target Table</th>
+      <th>Target Column</th>
+      <th>Data Type</th>
+      <th>Transformation & Sanitization Rule</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>personal_info/first_name_english</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>first_name</code></td>
+      <td>VARCHAR</td>
+      <td>Trims whitespace; Latin given name.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/father_name_english</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>middle_name</code></td>
+      <td>VARCHAR</td>
+      <td>Father's name (Ethiopian naming patronymic).</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/grandfather_name_english</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>last_name</code></td>
+      <td>VARCHAR</td>
+      <td>Grandfather's name (Family name).</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/first_name_amharic</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>first_name_amh</code></td>
+      <td>VARCHAR</td>
+      <td>Native Amharic Ge'ez text preserved in UTF-8.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/father_name_amharic</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>middle_name_amh</code></td>
+      <td>VARCHAR</td>
+      <td>Amharic father's name.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/grandfather_name_amharic</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>last_name_amh</code></td>
+      <td>VARCHAR</td>
+      <td>Amharic grandfather's name.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/first_name_other</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>first_name_om</code></td>
+      <td>VARCHAR</td>
+      <td>Afaan Oromo given name.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/gender</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>gender</code></td>
+      <td>ENUM</td>
+      <td>Normalized to uppercase: <code>MALE</code>, <code>FEMALE</code>, or <code>UNKNOWN</code>.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/date_of_birth</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>birth_date</code></td>
+      <td>DATE</td>
+      <td>Gregorian date parsed to <code>YYYY-MM-DD</code>.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/date_of_birth_ec</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>birth_date_ec</code></td>
+      <td>DATE</td>
+      <td>Ethiopian calendar string preserved as <code>YYYY-MM-DD</code>.</td>
+    </tr>
+    <tr>
+      <td><code>household_questions/household_head</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>is_household_head</code></td>
+      <td>BOOLEAN</td>
+      <td>Evaluated as <code>true</code> if value in <code>['yes', '1', 'true']</code>.</td>
+    </tr>
+    <tr>
+      <td><code>national_id_section/national_uid</code></td>
+      <td><code>g2p_register_farmer_id_documents</code></td>
+      <td><code>value</code> (UID)</td>
+      <td>VARCHAR</td>
+      <td><strong>Space Stripping:</strong> <code>replace(' ', '')</code> turns <code>xxxx xxxx...</code> into 16 digits.</td>
+    </tr>
+    <tr>
+      <td><code>national_id_section/national_rid</code></td>
+      <td><code>g2p_register_farmer_id_documents</code></td>
+      <td><code>value</code> (RID)</td>
+      <td>VARCHAR</td>
+      <td>29-digit Fayda Registration ID; stripped of all spaces.</td>
+    </tr>
+    <tr>
+      <td><code>farmer_reference_id_section/...</code></td>
+      <td><code>g2p_register_farmer_id_documents</code></td>
+      <td><code>value</code> (ODK_ACK)</td>
+      <td>VARCHAR</td>
+      <td>Unique ODK Acknowledgement token.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/primary_phone_number</code></td>
+      <td><code>g2p_register_farmer_phones</code></td>
+      <td><code>phone_number</code></td>
+      <td>VARCHAR</td>
+      <td>Strips <code>+251</code>/<code>251</code>, hyphens, and spaces; tagged <code>PRIMARY</code>.</td>
+    </tr>
+    <tr>
+      <td><code>personal_info/secondary_phone_number</code></td>
+      <td><code>g2p_register_farmer_phones</code></td>
+      <td><code>phone_number</code></td>
+      <td>VARCHAR</td>
+      <td>Normalizes optional backup phone; tagged <code>SECONDARY</code>.</td>
+    </tr>
+    <tr>
+      <td><code>farmer_location/location</code></td>
+      <td><code>g2p_register_farmers</code></td>
+      <td><code>enumerator_latitude</code><br><code>longitude</code><br><code>altitude</code></td>
+      <td>FLOAT</td>
+      <td>Splits space-delimited geopoint: <code>parts[0]</code> Lat, <code>parts[1]</code> Lon, <code>parts[2]</code> Alt.</td>
+    </tr>
+    <tr>
+      <td><code>land_info/land_info_repeat</code></td>
+      <td><code>g2p_register_lands</code></td>
+      <td>Multiple</td>
+      <td>ARRAY</td>
+      <td>Unnests into <code>land_id</code>, <code>area_in_hectare</code>, <code>land_ownership_type</code>.</td>
+    </tr>
+    <tr>
+      <td><code>crop_information/crop_repeat</code></td>
+      <td><code>g2p_register_crops</code></td>
+      <td>Multiple</td>
+      <td>ARRAY</td>
+      <td>Unnests into <code>commodity</code>, <code>planted_date</code>, <code>season</code>.</td>
+    </tr>
+    <tr>
+      <td><code>livestock_info/livestock_repeat</code></td>
+      <td><code>g2p_register_livestocks</code></td>
+      <td>Multiple</td>
+      <td>ARRAY</td>
+      <td>Unnests into <code>livestock_type</code>, <code>head_count</code>, <code>livestock_system</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ==================== SECTION 6: DB SEEDS ==================== -->
+<div class="page-break"></div>
+<div class="header-footer">
+  <span>OpenG2P Gen 2 Farmer Registry &middot; Technical Reference</span>
+  <span>Section 6 &middot; Database Configuration & Seeds</span>
+</div>
+
+<h1>6. Database Seeds & Configuration SQL</h1>
+<p>
+  The ingestion pipeline requires initial seed records across three databases: <code>master_data</code>, <code>farmer_registry_db</code>, and <code>connector</code>.
+</p>
+
+<h2>6.1 Register Ingest Partner in <code>master_data</code> Database</h2>
+<pre><code>-- Target Database: master_data
+INSERT INTO public.g2p_partners (
+    partner_id, partner_mnemonic, keymanager_reference_id, is_active
+) VALUES (
+    'farmer-partner', 'Farmer', 'farmer-key-ref', true
+) ON CONFLICT (partner_id) DO NOTHING;</code></pre>
+
+<h2>6.2 Register Data Model, Key Paths & Semantic Patterns in <code>farmer_registry_db</code> Database</h2>
+<pre><code>-- Target Database: farmer_registry_db
+-- 1. Register Data Model
+INSERT INTO public.data_models (
+    data_model_id, data_model_mnemonic, pattern_for_data_model, response_template_document_id, is_active
+) VALUES (
+    'FARMER_ODK_MODEL', 'FARMER_ODK_MODEL', '$.body.header.sender_id=>^.*$', '1f0953d4-f0fb-4336-a126-4d0519a74ffc', true
+) ON CONFLICT (data_model_id) DO UPDATE SET
+    pattern_for_data_model = EXCLUDED.pattern_for_data_model,
+    response_template_document_id = EXCLUDED.response_template_document_id,
+    is_active = true;
+
+-- 2. Register Incoming Key Paths
+INSERT INTO public.incoming_model_key_paths (
+    key_path_id, data_model_id, key_path_for_message_id, key_path_for_sender, 
+    key_path_for_signature, key_path_for_signature_payload, is_list, key_path_for_list_elements
+) VALUES (
+    'farmer_key_path', 'FARMER_ODK_MODEL', 
+    '$.body.header.message_id', '$.body.header.sender_id', '$.body.header.signature', 
+    '$.body.message', false, ''
+) ON CONFLICT (key_path_id) DO UPDATE SET
+    key_path_for_list_elements = EXCLUDED.key_path_for_list_elements;
+
+-- 3. Register Incoming Model Semantic Pattern (Business Payload Mapping)
+INSERT INTO public.incoming_model_semantic_patterns (
+    semantic_pattern_id, data_model_id, register_id, intake_form_id, section_id,
+    pattern_for_register, pattern_for_intake_form, pattern_for_section,
+    key_path_for_business_payload, raw_payload_enricher_class
+) VALUES (
+    'farmer_odk_semantic_pattern', 'FARMER_ODK_MODEL',
+    'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'a1a4d25a-1cd4-4356-abac-8782382649',
+    NULL, NULL, '$.body.header.sender_id=>^.*$', NULL,
+    '$.body.message.payload', 'G2PDciFarmerCreateEnricherService'
+) ON CONFLICT (semantic_pattern_id) DO UPDATE SET
+    key_path_for_business_payload = EXCLUDED.key_path_for_business_payload;</code></pre>
+
+<h2>6.3 Register Pipeline Definition in <code>connector</code> Database</h2>
+<pre><code>-- Target Database: connector
+INSERT INTO connector_definitions (
+    connector_id, name, platform, transport_type, enabled, paused,
+    data_model_mnemonic, g2p_sender_id, g2p_register_mnemonic,
+    source_config_json, auth_type, auth_secret_json, webhook_verifier
+) VALUES (
+    'farmer-odk-pipeline-01',
+    'Farmer Registry - ODK Central Ingestion',
+    'odk_central',
+    'odk_central',
+    true,
+    false,
+    'FARMER_ODK_MODEL',
+    'farmer-partner',
+    'Farmer',
+    '{
+        "base_url": "https://odk.13.207.43.8.nip.io",
+        "project_id": 13,
+        "form_id": "farmer_profile",
+        "resolve_nav_links": true,
+        "strict_incremental": false,
+        "poll_interval_seconds": 30,
+        "target_url": "http://farmer-registry-partner-api:8000/partner/ingest_data",
+        "target_headers": {
+            "partner-id": "farmer-partner",
+            "Content-Type": "application/json"
+        }
+    }',
+    'odk_session',
+    '{
+        "email": "vilbertraj21@gmail.com",
+        "password": "odksandbox"
+    }',
+    'hmac_sha256'
+)
+ON CONFLICT (connector_id) DO UPDATE SET
+    source_config_json = EXCLUDED.source_config_json,
+    auth_secret_json = EXCLUDED.auth_secret_json,
+    enabled = EXCLUDED.enabled;</code></pre>
+
+<h2>6.4 Deploy Jinja2 Template to MinIO Object Storage</h2>
+<pre><code># 1. Alias the local MinIO instance (API Port: 9002)
+mc alias set myminio http://localhost:9002 admin adminsecret
+
+# 2. Upload template to templates bucket
+mc cp odk/templates/farmer_transform.j2 myminio/templates/farmer_transform.j2
+
+# 3. Verify upload
+mc ls myminio/templates</code></pre>
+
+<!-- ==================== SECTION 7: TESTING & RUNBOOK ==================== -->
+<div class="page-break"></div>
+<div class="header-footer">
+  <span>OpenG2P Gen 2 Farmer Registry &middot; Technical Reference</span>
+  <span>Section 7 &middot; Manual Testing & Verification Protocol</span>
+</div>
+
+<h1>7. Step-by-Step Manual Testing & Verification Protocol</h1>
+<p>
+  Follow these three standardized methods to test the ODK Central to OpenG2P pipeline end-to-end.
+</p>
+
+<h2>Method A: 1-Click Automated Python Test Script (Fastest)</h2>
+<p>
+  A dedicated verification script is located at <code>odk/test_odk_central_submission.py</code>. It constructs a valid OpenRosa XML payload, submits it to ODK Central, triggers the connector poller, and checks ingestion:
+</p>
+
+<pre><code># Execute from workspace root
+python3 odk/test_odk_central_submission.py</code></pre>
+
+<div class="callout callout-success">
+  <div class="callout-title">Sample Output of a Successful Run</div>
+  <code>
+    [*] Submitting test record to ODK Central: https://odk.13.207.43.8.nip.io/v1/key/.../submission<br>
+    [*] Farmer Name: TestManual ODKDevOps Check<br>
+    [+] ODK Central accepted submission! HTTP 201 Created<br>
+    [*] Triggering Connector Service poll...<br>
+    [+] Triggered immediate poll on connector: task_id=8073a92d-7b1d-4689-93f6-dc45b1bde180<br>
+    [*] Connector last poll status: SUCCESS
+  </code>
+</div>
+
+<h2>Method B: Manual cURL OpenRosa Submission via Terminal</h2>
+<p>
+  If Python is unavailable, you can submit raw XML using cURL with the <code>X-OpenRosa-Version: 1.0</code> header:
+</p>
+
+<pre><code># 1. Post XML survey instance to ODK Central App User endpoint
+curl -k -i -X POST \
+  -H "X-OpenRosa-Version: 1.0" \
+  -F "xml_submission_file=@/tmp/test_submission.xml" \
+  "https://odk.13.207.43.8.nip.io/v1/key/CBgWA1NO\$BWgO5vTjqPajzi2TlAmHUOeAf6CH9IYygRP\$BvyotGIVlVA8bIHgseT/projects/13/submission"
+
+# 2. Trigger immediate poll on Connector
+curl -s -X POST http://localhost:8050/connectors/farmer-odk-pipeline-01/poll</code></pre>
+
+<h2>Method C: Real Mobile Field Test via ODK Collect</h2>
+<ol>
+  <li>Install <strong>ODK Collect</strong> from Google Play Store on an Android device.</li>
+  <li>Log into ODK Central Web Console: <a href="https://odk.13.207.43.8.nip.io">https://odk.13.207.43.8.nip.io</a>.</li>
+  <li>Navigate to <strong>Project 13 (&ldquo;Farmer Registry&rdquo;)</strong> &rarr; <strong>App Users</strong> &rarr; Click <strong>QR Code</strong> next to <code>Field_Officer_1</code>.</li>
+  <li>Open ODK Collect on phone &rarr; Select <strong>Configure with QR code</strong> &rarr; Scan the screen.</li>
+  <li>Tap <strong>Get Blank Form</strong> &rarr; Download <strong>Farmer Profiling Data Collection Form</strong>.</li>
+  <li>Tap <strong>Fill Blank Form</strong> &rarr; Fill in farmer details &rarr; Tap <strong>Save Form and Exit</strong> &rarr; <strong>Send Finalized Form</strong>.</li>
+  <li>Within 30 seconds, the Connector Worker pulls the submission from ODK Central into OpenG2P.</li>
+</ol>
+
+<!-- ==================== SECTION 8: VERIFICATION ==================== -->
+<div class="page-break"></div>
+<div class="header-footer">
+  <span>OpenG2P Gen 2 Farmer Registry &middot; Technical Reference</span>
+  <span>Section 8 &middot; Verification & Review Workflows</span>
+</div>
+
+<h1>8. Verification & Review Workflows</h1>
+
+<h2>8.1 Connector UI Run Audit</h2>
+<p>
+  Open <a href="http://localhost:5173">http://localhost:5173</a> in your browser:
+</p>
+<ul>
+  <li>Navigate to <strong>Pipelines</strong> &rarr; <code>farmer-odk-pipeline-01</code>.</li>
+  <li>Click the <strong>Runs</strong> tab. Verify that the recent run indicates <span class="status-pill status-active">SUCCESS</span> with <code>attempt_count: 1</code>.</li>
+</ul>
+
+<h2>8.2 Database Verification Queries</h2>
+<pre><code># 1. Check Celery Classification & Transformation Status
+docker exec -i farmer-registry-postgres psql -U postgres -d farmer_registry_db -c "
+SELECT ingest_id, data_model_id, transformation_status, ingestion_status, intake_form_submission_id, classified_date_time 
+FROM incoming_classified_data 
+ORDER BY classified_date_time DESC LIMIT 1;
+"
+
+# 2. Check Staged Intake Form Submission
+docker exec -i farmer-registry-postgres psql -U postgres -d farmer_registry_db -c "
+SELECT submission_id, application_reference, approval_status, first_created_at 
+FROM g2p_intake_form_submissions 
+ORDER BY first_created_at DESC LIMIT 1;
+"
+
+# 3. Check Staged Farmer Personal Information
+docker exec -i farmer-registry-postgres psql -U postgres -d farmer_registry_db -c "
+SELECT first_name, middle_name, last_name, first_name_amh, gender, birth_date, region_name, woreda_name 
+FROM g2p_intake_form_farmers 
+ORDER BY created_at DESC LIMIT 1;
+"
+
+# 4. Check Staged Land Parcel Repeat Group
+docker exec -i farmer-registry-postgres psql -U postgres -d farmer_registry_db -c "
+SELECT land_id, land_ownership_type, area_in_hectare 
+FROM g2p_intake_form_lands 
+ORDER BY created_at DESC LIMIT 1;
+"</code></pre>
+
+<h2>8.3 Staff Review & Final Approval</h2>
+<ol>
+  <li>Log in to the Staff Portal UI at <a href="http://localhost:3001">http://localhost:3001</a> (Credentials: <code>staff</code> / <code>staff</code>).</li>
+  <li>Navigate to <strong>Intake Forms</strong> &rarr; <strong>Farmer Ingestion Intake</strong>.</li>
+  <li>Click on the newly staged submission (e.g. <code>2026OCT05-316599</code>).</li>
+  <li>Review the 8 tabs: Personal Details, Administrative Hierarchy, GPS Coordinates, Land Parcels, Crops, Livestock, Inputs, and Cooperatives.</li>
+  <li>Click <strong>Approve</strong>. The Approval Workflow Engine commits the submission into <code>g2p_register_farmers</code> with an assigned Functional ID (e.g. <code>ET-FRM-00123</code>).</li>
+</ol>
+
+<!-- ==================== SECTION 9: TROUBLESHOOTING ==================== -->
+<div class="page-break"></div>
+<div class="header-footer">
+  <span>OpenG2P Gen 2 Farmer Registry &middot; Technical Reference</span>
+  <span>Section 9 &middot; Troubleshooting & Operational Runbook</span>
+</div>
+
+<h1>9. Troubleshooting & Operational Runbook</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Issue / Error Symptom</th>
+      <th>Root Cause</th>
+      <th>Corrective Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>HTTP 400: An expected header field (X-OpenRosa-Version) did not match</strong></td>
+      <td>ODK Central OpenRosa submission endpoint strictly enforces protocol versioning.</td>
+      <td>Pass <code>-H "X-OpenRosa-Version: 1.0"</code> in the HTTP POST request.</td>
+    </tr>
+    <tr>
+      <td><strong>Server error 500: Server error for url 'http://farmer-registry-partner-api:8000/partner/ingest_data'</strong></td>
+      <td><code>farmer-partner</code> is missing in <code>master_data.g2p_partners</code> or Partner API is unreachable.</td>
+      <td>Run the partner seed SQL in <code>master_data</code>. Inspect container logs: <code>docker logs farmer-registry-partner-api</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>FARMER_ODK_MODEL transformation failed in Celery</strong></td>
+      <td>MinIO bucket is missing <code>farmer_transform.j2</code> or S3 credentials failed.</td>
+      <td>Execute <code>mc cp odk/templates/farmer_transform.j2 myminio/templates/farmer_transform.j2</code>. Check MinIO health at <code>:9002</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Repeat groups (Land / Crops) are missing in Intake Form</strong></td>
+      <td><code>resolve_nav_links</code> is set to <code>false</code> in the connector source config.</td>
+      <td>Set <code>"resolve_nav_links": true</code> in <code>source_config_json</code> inside <code>connector.connector_definitions</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Connector stops polling or skips recent submissions</strong></td>
+      <td>Cursor boundary is stuck or corrupted in <code>poll_state_json</code>.</td>
+      <td>Reset cursor via API: <code>curl -X POST http://localhost:8050/connectors/farmer-odk-pipeline-01/reset-cursor</code> or clear idempotency keys.</td>
+    </tr>
+    <tr>
+      <td><strong>All connection attempts failed in Connector Worker</strong></td>
+      <td>Internal Docker network cannot resolve external DNS for <code>odk.13.207.43.8.nip.io</code>.</td>
+      <td>Test network egress: <code>docker exec -it farmer-registry-connector-worker curl -k -I https://odk.13.207.43.8.nip.io</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Fayda UID validation regex failure</strong></td>
+      <td>Enumerator entered Fayda UID with spaces (e.g. <code>1234 5678 9012 3456</code>).</td>
+      <td>Sanitized by <code>farmer_transform.j2</code> via <code>replace(' ', '')</code>. Ensure latest template is active in MinIO.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h1>10. Appendix: Cheat Sheet & Essential Endpoints</h1>
+
+<pre><code># Check connector health
+curl -s http://localhost:8050/health/ready
+
+# List active connectors
+curl -s http://localhost:8050/connectors | jq
+
+# Trigger immediate poll
+curl -s -X POST http://localhost:8050/connectors/farmer-odk-pipeline-01/poll
+
+# View recent runs
+curl -s http://localhost:8050/runs | jq '.[0:3]'
+
+# Check Celery Worker logs
+docker logs --tail 50 -f farmer-registry-celery-worker
+
+# Check Connector Worker logs
+docker logs --tail 50 -f farmer-registry-connector-worker</code></pre>
+
+<div class="callout callout-info" style="margin-top: 30px;">
+  <strong>Document Approval & Maintenance:</strong> This guide must be reviewed and re-validated upon any changes to XLSForm versions, OpenG2P core schema migrations, or ODK Central infrastructure updates.
+</div>
+
+</body>
+</html>

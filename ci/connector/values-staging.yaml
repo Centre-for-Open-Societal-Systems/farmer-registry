@@ -1,0 +1,104 @@
+# Values for the `farmer-connector` release on the STAGING cluster (10.0.1.212).
+#
+# Staging runs the registry in the same `far` namespace as dev but on a
+# different cluster, with a different layout -- so this is not values-far.yaml
+# with one URL changed, and deploy.sh will not pick it by namespace. Pass
+# ENVIRONMENT=staging.
+#
+#   dev (10.0.1.166)                      staging (10.0.1.212)
+#   postgres in far                       postgres in commons, shared by far/crop/live
+#   database farmer_registry              database farmer_registry_far
+#   user     farmer_registry_user         user     far_farmer_registry_user
+#   pull secret far-ecr                   pull secret ecr-pull-secret
+#   ODK Central in-cluster (unused)       ODK Central external, odk-central.oanstaging.com
+fullnameOverride: farmer-connector
+
+global:
+  # Internal only, like dev's. The connector UI manages pipelines and holds ODK
+  # credentials, so it stays on the WireGuard side; staging's public names are
+  # *.oanstaging.com on the same `internal` gateway, and this deliberately is
+  # not one of them. Matches the id-generator's *.far.staging.openg2p.test.
+  hostname: connector-farmer-registry.far.staging.openg2p.test
+  # Cross-namespace: postgres is in commons here, not in far.
+  postgresqlHost: commons-postgresql.commons.svc.cluster.local
+  postgresqlPort: 5432
+  redisHost: farmer-registry-redis-master
+  redisPort: 6379
+  partnerApiService: farmer-registry-partner-api
+  # Follows staging's own naming: farmer_registry_far, far_farmer_registry_user.
+  connectorDB: farmer_connector_far
+  connectorDBUser: far_farmer_connector_user
+  connectorDBSecret: farmer-connector
+  connectorDBUserPasswordKey: farmer-connector-db-user
+
+# Staging names its ECR pull secret differently from dev's far-ecr.
+imagePullSecrets:
+  - name: ecr-pull-secret
+
+commonEnv:
+  CONNECTOR_DB_DRIVER: postgresql+asyncpg
+  CONNECTOR_LOG_LEVEL: INFO
+  CONNECTOR_STORE_RUN_PAYLOADS: "true"
+  CONNECTOR_STRICT_INCREMENTAL: "true"
+  CONNECTOR_FULL_SCAN_ON_INCREMENTAL_UNSUPPORTED: "false"
+  CONNECTOR_METRICS_ENABLED: "true"
+  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry.far.staging.openg2p.test
+
+# NOT commonEnv: that helper renders a fixed allowlist and silently drops
+# anything else, which is why values-far.yaml's CONNECTOR_ODK_CENTRAL_BASE_URL
+# never reached a container.
+#
+# External ODK Central, not the in-cluster one. Verified from a pod in far:
+# GET /v1/projects answers 401 with a valid certificate (ssl_verify_result=0),
+# so egress and TLS both work and only credentials are missing.
+extraEnv:
+  CONNECTOR_ODK_CENTRAL_BASE_URL: https://odk-central.oanstaging.com
+  CONNECTOR_ODK_PROJECT_ID: "1"
+  CONNECTOR_ODK_FORM_ID: farmer_profile
+  # The ODK Central account the connector polls as. Not a secret, but still
+  # environment-specific; the password is the only part that must not be here.
+  CONNECTOR_ODK_CENTRAL_EMAIL: asmitanandsingh@gmail.com
+
+# The password never goes in values. The secret is created out of band:
+#   kubectl -n far create secret generic farmer-connector-odk \
+#     --from-file=password=<file>
+extraEnvFrom:
+  CONNECTOR_ODK_CENTRAL_PASSWORD:
+    secretKeyRef:
+      name: farmer-connector-odk
+      key: password
+
+# Creates farmer_connector_far and its user. The chart reads the shared
+# postgres' superuser password from the commons-postgresql secret, which is
+# mirrored into far on this cluster, so the hook can run in far even though the
+# server lives in commons.
+postgres-init:
+  enabled: true
+
+istio:
+  enabled: true
+  gateway:
+    create: false
+    name: internal
+  virtualservice:
+    enabled: true
+    gateway: internal
+
+# Same images as dev: one ECR repository per component, tag per build.
+# Tags are replaced per build by ci/connector/deploy.sh.
+api:
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/connector-service
+    pullPolicy: Always
+worker:
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/connector-service
+    pullPolicy: Always
+beat:
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/connector-service
+    pullPolicy: Always
+ui:
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/connector-ui
+    pullPolicy: Always

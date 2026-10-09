@@ -180,6 +180,16 @@ COPY docker/staff-ui/assets/patch-api-error-messages.js /tmp/patch-api-error-mes
 COPY docker/staff-ui/assets/patch-table-remove.js /tmp/patch-table-remove.js
 RUN node /tmp/patch-intake-rules-script.js && node /tmp/patch-intake-photo-document.js && node /tmp/patch-api-error-messages.js && node /tmp/patch-table-remove.js
 
+# Farmer register list (SRS FR-UI-03 / FR-06): open in the table view, which
+# sorts by column, rather than cards, and give the table up to ten display
+# fields instead of six (zz_farmer_list_view.sql orders the SRS columns
+# first). A viewer who already switched to cards keeps that choice: it is
+# stored in localStorage under registerView.
+RUN find /app/.next -type f -name '*.js' -exec sed -i \
+    -e 's/defaultView:"card",viewStorageKey:"registerView"/defaultView:"list",viewStorageKey:"registerView"/g' \
+    -e 's/\.\.\.\([A-Za-z_$][A-Za-z0-9_$]*\)\.slice(0,6)\.map(\([A-Za-z_$][A-Za-z0-9_$]*\)=>({key:/...\1.slice(0,10).map(\2=>({key:/g' \
+    {} +
+
 # Every patch above edited a content-hashed asset in place, and Next serves
 # /_next/static as immutable -- returning browsers would keep the old file
 # until a hard refresh. Give each changed asset a new hash and rewrite the
@@ -190,7 +200,7 @@ RUN sh /tmp/rehash-patched-assets.sh && rm /tmp/static.before /tmp/static.after
 # Fail the build if a bundle patch stopped matching. These seds target MINIFIED
 # identifiers, so a base-image bump can silently drop every customisation while
 # still exiting 0 - which is exactly what happened moving 1.1.1 -> 1.2.1.
-RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     here 'record_image_document_id:__doc.document_id' "intake profile image upload";     gone 'hdr-field-value",title:[A-Za-z_$][A-Za-z0-9_$]*\|\|"-"' "empty-value dash placeholder";     gone '"flex items-center gap-4",children:\[\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\)\]' "header controls behind the More menu";     here '(__farIntakeList,{breadcrumb:' "intake list 1.1.x layout";     here 'src:"/farmer-intake-rules.js?v=' "intake rules script";     here '__slot||"farmer_photo"' "intake uploads recorded and listed";     here 'so this section was not saved' "failed upload aborts the section save";     here 'The file is too large for the server to accept' "readable non-JSON API errors";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=await [A-Za-z_$][A-Za-z0-9_$]*\.json\(\);if\(!' "API helper parses text first";     here '?.internal_record_id){let' "Remove drops an unsaved table row";     echo "OK: staff-ui bundle patches verified"
+RUN set -e;     gone() { if grep -rqE "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (pattern still present): $2" >&2; exit 1; fi; };     here() { if ! grep -rqF "$1" /app/.next 2>/dev/null; then echo "PATCH NOT APPLIED (result missing): $2" >&2; exit 1; fi; };     gone '\.slice\(0,5\),[A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\.slice\(5\)' "tab overflow -> More menu";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=[A-Za-z_$][A-Za-z0-9_$]*\?\.branding\?\.dashboard_image' "dashboard image override";     here '.table-cell-widget label.items-baseline,' "table-cell upload trigger";     here 'background-image:url(/images/common/farm_image.jpeg)' "farm background";     here 'record_image_document_id:__doc.document_id' "intake profile image upload";     gone 'hdr-field-value",title:[A-Za-z_$][A-Za-z0-9_$]*\|\|"-"' "empty-value dash placeholder";     gone '"flex items-center gap-4",children:\[\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\),\(0,[A-Za-z_$][A-Za-z0-9_$]*\.jsx\)\([A-Za-z_$][A-Za-z0-9_$]*\.default,[{][}]\)\]' "header controls behind the More menu";     here '(__farIntakeList,{breadcrumb:' "intake list 1.1.x layout";     here 'src:"/farmer-intake-rules.js?v=' "intake rules script";     here '__slot||"farmer_photo"' "intake uploads recorded and listed";     here 'so this section was not saved' "failed upload aborts the section save";     here 'The file is too large for the server to accept' "readable non-JSON API errors";     gone 'let [A-Za-z_$][A-Za-z0-9_$]*=await [A-Za-z_$][A-Za-z0-9_$]*\.json\(\);if\(!' "API helper parses text first";     here '?.internal_record_id){let' "Remove drops an unsaved table row";     here 'defaultView:"list",viewStorageKey:"registerView"' "register list opens as a table";     gone '\.\.\.[A-Za-z_$][A-Za-z0-9_$]*\.slice\(0,6\)\.map\([A-Za-z_$][A-Za-z0-9_$]*=>\(\{key:' "register table capped at six columns";     echo "OK: staff-ui bundle patches verified"
 
 # ------------------------------------------------------------------ DB seed
 FROM registry.gitlab.com/openg2p/registry/registry-platform/db-seed:${RP_VERSION} AS db-seed
@@ -201,6 +211,10 @@ RUN rm -rf /seed/meta_data/* /seed/awe_meta_data/* /seed/templates/* /seed/seed-
 COPY farmer-extension/src/openg2p_registry_farmer_extension/meta_data/     /seed/meta_data/
 COPY farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data/ /seed/awe_meta_data/
 COPY farmer-extension/src/openg2p_registry_farmer_extension/templates/     /seed/templates/
+# The ODK transform template (catalogue row and routing in
+# registry-inbound-message-rules/zz_farmer_odk_ingestion.sql). It stays next to
+# the form in odk/; LOAD_TEMPLATES uploads it like the DCI ones.
+COPY odk/templates/farmer_transform.j2                                    /seed/templates/farmer_transform.j2
 COPY docker/db-seed/seed-data/                                             /seed/seed-data/
 
 COPY docker/db-seed/load_sample_data.py /seed/load_sample_data.py

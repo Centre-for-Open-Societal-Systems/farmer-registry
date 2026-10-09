@@ -149,17 +149,70 @@ class TestRuleBehaviour(unittest.TestCase):
         for blank in (None, "", "   "):
             self.assertTrue(rules.matches(rules.NAME_PATTERN, blank))
 
-    def test_phone_takes_the_national_part_only(self):
-        for good in ("0912345678", "912345678", "0111234567"):
+    def test_phone_accepts_local_and_gen1_e164_forms(self):
+        for good in ("0912345678", "912345678", "0111234567", "+251912345678", "251912345678"):
             self.assertTrue(rules.matches(rules.PHONE_PATTERN, good), good)
-        for bad in ("+251912345678", "251912345678", "091234567", "09123456789"):
+        for bad in ("091234567", "09123456789", "+25109123456", "+1912345678", "0012345678", "abcdefghij"):
             self.assertFalse(rules.matches(rules.PHONE_PATTERN, bad), bad)
 
+    def test_phone_max_length_matches_the_form(self):
+        widget = _find_widget("zz_farmer_phone_register.sql", "phone_number")
+        self.assertEqual(widget["widget-data-validation"].get("maxLength"), rules.PHONE_MAX_LENGTH)
+        self.assertEqual(len("+251912345678"), rules.PHONE_MAX_LENGTH)
+
+    def test_every_accepted_form_normalises_to_the_national_number(self):
+        for raw in (
+            "0912345678",
+            "912345678",
+            "+251912345678",
+            "251912345678",
+            " +251 91-234-5678 ",
+            "(091) 234 5678",
+        ):
+            with self.subTest(raw=raw):
+                self.assertEqual(rules.normalize_phone(raw), "912345678")
+                self.assertEqual(rules.phone_e164(rules.normalize_phone(raw)), "+251912345678")
+
+    def test_normalise_rejects_junk_and_blank(self):
+        for raw in (None, "", "   ", "091234567", "+1912345678", "phone", "0912345678x"):
+            with self.subTest(raw=raw):
+                self.assertIsNone(rules.normalize_phone(raw))
+        self.assertIsNone(rules.phone_e164(None))
+
     def test_national_id_allows_the_fan_prefix(self):
-        for good in ("123456789012", "FAN-123456789012", "12345678901234567"):
+        for good in ("123456789012", "FAN-123456789012", "FAN-1234567890123456", "1" * 29):
             self.assertTrue(rules.matches(rules.NATIONAL_ID_PATTERN, good), good)
-        for bad in ("12345678901", "AB-2024-0091", "FAN123456789012"):
+        for bad in ("12345678901", "12345678901234567", "AB-2024-0091", "FAN123456789012", "ET-NID-100001"):
             self.assertFalse(rules.matches(rules.NATIONAL_ID_PATTERN, bad), bad)
+
+    def test_uid_and_rid_are_told_apart(self):
+        """The form's column pattern is the union; the per-type rules
+        are what keep a UID out of the RID slot and the reverse."""
+        uid, rid = rules.ID_TYPE_PATTERNS["UID"], rules.ID_TYPE_PATTERNS["RID"]
+        for fin_or_fan in ("123456789012", "1234567890123456", "FAN-1234567890123456"):
+            self.assertTrue(rules.matches(uid, fin_or_fan), fin_or_fan)
+            self.assertFalse(rules.matches(rid, fin_or_fan), fin_or_fan)
+        self.assertTrue(rules.matches(rid, "1" * 29))
+        self.assertFalse(rules.matches(uid, "1" * 29))
+
+    def test_intake_rules_script_uses_the_same_id_patterns(self):
+        """farmer-intake-rules.js restates UID/RID to explain a refused row on
+        the spot; it must say exactly what the server will enforce."""
+        script = (
+            Path(__file__).resolve().parents[2] / "docker" / "staff-ui" / "assets" / "farmer-intake-rules.js"
+        )
+        if not script.exists():
+            self.skipTest("staff-ui assets not mounted (run with the whole repo)")
+        text = script.read_text(encoding="utf-8")
+        for name in ("UID_PATTERN", "RID_PATTERN"):
+            m = re.search(rf"var {name} = /(.+)/;", text)
+            self.assertIsNotNone(m, f"{name} not found in farmer-intake-rules.js")
+            self.assertEqual(m.group(1), getattr(rules, name), f"{name} drifted between JS and Python")
+
+    def test_every_per_type_rule_is_within_the_form_pattern(self):
+        """Anything a per-type rule accepts, the form must let through."""
+        for sample in ("123456789012", "1234567890123456", "FAN-1234567890123456", "1" * 29):
+            self.assertTrue(rules.matches(rules.NATIONAL_ID_PATTERN, sample), sample)
 
     def test_bulk_import_is_not_treated_as_interactive(self):
         """Required-checks must not fire on migrated records."""

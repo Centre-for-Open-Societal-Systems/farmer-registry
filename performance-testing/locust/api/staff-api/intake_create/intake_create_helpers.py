@@ -128,7 +128,7 @@ SECTION_DEFS: dict[str, dict[str, Any]] = {
         "standard_payload": {
             "commodity": "MAIZE",
             "planted_date": "2026-03-01",
-            "season": "KHARIF",
+            "season": "MEHER",
             "end_use": "FOOD_HUMAN_CONSUMPTION",
         },
     },

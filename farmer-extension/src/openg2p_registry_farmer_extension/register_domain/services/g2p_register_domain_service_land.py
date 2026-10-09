@@ -10,6 +10,8 @@ from .domain_validation_utils import (
     as_float,
     as_int,
     is_embedded_file,
+    normalized_text,
+    reject_duplicates,
     upload_embedded_file,
     validation_error,
 )
@@ -33,6 +35,14 @@ UNIT_TO_HECTARES = {
 
 class G2PRegisterDomainServiceLand(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
+        # Before any certificate is uploaded, so a refused save leaves no
+        # orphaned document behind in object storage.
+        reject_duplicates(
+            records,
+            lambda record: normalized_text(record.get("land_id")),
+            "The same Land ID is listed more than once; each land can be "
+            "attached only once",
+        )
         for record in records:
             await self._persist_embedded_certificate(record)
             self._synchronize_area_in_hectare(record)
@@ -61,7 +71,7 @@ class G2PRegisterDomainServiceLand(G2PRegisterDomainService):
         if not is_embedded_file(value):
             return
         record["certificate_storage_id"] = await upload_embedded_file(
-            value, record.get("created_by")
+            value, record.get("created_by"), purpose="land_certificate"
         )
 
     def _synchronize_area_in_hectare(self, record: dict) -> None:
