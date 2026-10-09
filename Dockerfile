@@ -8,7 +8,7 @@
 # Build every target through `docker compose build`, or select one directly
 # with `docker build --target <target> ...`.
 
-ARG RP_VERSION=1.2.1
+ARG RP_VERSION=1.2.2-rc.544
 ARG STAFF_UI_VERSION=1.2.1
 
 # ---------------------------------------------------------------- staff API

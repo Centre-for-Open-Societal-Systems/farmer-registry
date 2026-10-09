@@ -8,7 +8,7 @@ pipeline {
         ECR_PATH       = "openg2p/farmer-registry"
 
      
-        RP_VERSION     = "1.2.1"
+        RP_VERSION     = "1.2.2-rc.544"
 
         // No STAFF_UI_VERSION here: the staff-ui target in the root Dockerfile owns
         // that pin, so CI builds the base image the developers build against.

@@ -17,6 +17,7 @@ from openg2p_registry_core.models import (
     PipelineActionEnum,
     ProcessStatusEnum,
 )
+from openg2p_registry_core.helpers.notification import NotificationHelper, NotificationWorkflow
 from openg2p_registry_core.services import G2PIntakeFormDataService
 
 from ..app import celery_app
@@ -91,6 +92,12 @@ async def _process_ingestion_async(ingest_id: str) -> None:
             incoming_classified_data.ingestion_date_time = datetime.now()
             session.add(incoming_classified_data)
             await session.commit()
+            if submission_id is not None:
+                await NotificationHelper.dispatch_intake_form_notification(
+                    submission_id,
+                    NotificationWorkflow.INTAKE_FORM_SUBMISSION_CREATED,
+                    session,
+                )
     except Exception as error:
         _logger.error(
             "Error during processing ingest_data_worker for ingest_id %s: %s",
