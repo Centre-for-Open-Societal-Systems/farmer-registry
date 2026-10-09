@@ -133,9 +133,13 @@ RUN find /app/.next -type f -name '*.js' -exec sed -i \
 # Add a Dashboard control to the header, immediately left of Configuration,
 # pointing at the dashboard-ui service. The dashboard is a separate origin and
 # the portal is a prebuilt bundle, so it can be neither a route nor a component.
+# An empty DASHBOARD_URL builds without the button (CI does this: the dashboard
+# is reached from the staff portal tile instead).
 COPY docker/staff-ui/assets/patch-dashboard-nav.js /tmp/patch-dashboard-nav.js
-RUN DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
-    node /tmp/patch-dashboard-nav.js || echo "SKIPPED: dashboard-nav patch needs re-anchoring for 1.2.x"
+RUN if [ -n "${DASHBOARD_URL}" ]; then \
+      DASHBOARD_URL="${DASHBOARD_URL}" DASHBOARD_LABEL="${DASHBOARD_LABEL}" \
+        node /tmp/patch-dashboard-nav.js; \
+    else echo "DASHBOARD_URL is empty: building without the Dashboard button"; fi
 
 # Show an empty field as empty. The platform's read-only widgets all fall back
 # to "-" for a missing value (Status Reason, Created by, dates, select and

@@ -157,9 +157,11 @@ PATCHES = [
         "openg2p_registry_celery_worker/app.py",
         # Anchored on the line after the insertion point too, so the new text
         # does not contain the old one and a re-run reports "already applied".
-        old="        G2PGeoHierarchyService()\n\n        # Domain factory",
+        # The platform's worker already creates the attribute validator; the
+        # rest arrive with registry-platform 1.2.2 (drop this entry on that bump).
+        old="        G2PAttributeValueValidator()\n\n        # Factories",
         new=(
-            "        G2PGeoHierarchyService()\n"
+            "        G2PAttributeValueValidator()\n"
             "\n"
             "        # Created by the staff-api's Initializer but not by this one, while\n"
             "        # ingest_data_worker saves the draft intake through the same\n"
@@ -167,7 +169,6 @@ PATCHES = [
             "        # get_component() (None here) and the fastapi-cache decorator.\n"
             "        from openg2p_registry_core.cache import init_cache\n"
             "        from openg2p_registry_core.helpers.awe_helper import AweHelper\n"
-            "        from openg2p_registry_core.services.g2p_attribute_value_validator import G2PAttributeValueValidator\n"
             "        from openg2p_registry_core.services.g2p_awe_integration_service import G2PAweIntegrationService\n"
             "        from openg2p_registry_core.services.g2p_awe_policy_configuration_service import G2PAwePolicyConfigurationService\n"
             "        from openg2p_registry_core.services.g2p_completion_score_service import G2PCompletionScoreService\n"
@@ -178,7 +179,6 @@ PATCHES = [
             "\n"
             "        init_cache()\n"
             "        AweHelper()\n"
-            "        G2PAttributeValueValidator()\n"
             "        G2PAweIntegrationService()\n"
             "        G2PAwePolicyConfigurationService()\n"
             "        G2PCompletionScoreService()\n"
@@ -187,10 +187,10 @@ PATCHES = [
             "        G2PScoreComputeService()\n"
             "        G2PRegisterVerificationService()\n"
             "\n"
-            "        # Domain factory"
+            "        # Factories"
         ),
         why=(
-            "The celery worker never creates the attribute validator, document, "
+            "The celery worker never creates the document, "
             "history, verification, score, AWE and AWE policy services, nor the "
             "fastapi-cache "
             "backend. Saving an ingested submission as a draft intake (the ODK "

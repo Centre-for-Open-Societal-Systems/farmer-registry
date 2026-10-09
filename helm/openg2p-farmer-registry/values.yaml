@@ -95,7 +95,7 @@ registry:
     image:
       repository: registry.gitlab.com/openg2p/registry/farmer-registry/staff-api
       tag: 0.0.0-develop
-  staffPortalUi:
+  staffUi:
     image:
       repository: registry.gitlab.com/openg2p/registry/farmer-registry/staff-ui
       tag: 0.0.0-develop
@@ -155,14 +155,9 @@ registry:
     loadSampleData: true
     loadImages: true
     loadTemplates: true
-    # Copy the country's code lists from Master Data, and match the geo dropdowns
-    # to the hierarchy it holds. Both are country-agnostic: they take whatever
-    # pack this environment loaded. They no-op when Master Data carries neither.
-    loadAttributes: true
-    # A Farmer Registry needs the agriculture lists (crops, livestock) on top of
-    # the core ones; a social registry has no use for them.
-    attributeDomains:
-      - agriculture
+    # Match the geo dropdowns to the hierarchy Master Data holds. Code lists are
+    # not seeded into the registry: from openg2p-registry 1.2 they are read live
+    # from Master Data, so the old loadAttributes/attributeDomains switches are gone.
     syncGeoWidgets: true
 
   # Name of this registry's tile in IAM. The roles/permissions catalog itself is
@@ -185,7 +180,7 @@ registry:
             idLength: 10
 
   # beneApi is consumed as-is from the openg2p-registry base image.
-  # staffPortalUi is a thin branding overlay that replaces only the dashboard
+  # staffUi is a thin branding overlay that replaces only the dashboard
   # background asset.
 
   # ── Farmer e2e sanity suite (image built here; Set 2 field tests) ───────────
