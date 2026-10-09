@@ -4,22 +4,15 @@ description: |
   OpenG2P Farmer Registry — a thin, branded package over the shared
   openg2p-registry chart published by the registry platform.
 
-  This chart owns NO service templates. It declares openg2p-registry as a pinned
-  dependency and supplies the farmer values overlay (variant identity, hostname,
-  the farmer-built images, seed toggles and the farmer sanity suite). Every
-  deployment, service, ingress, keycloak/iam wiring and the db-seed machinery
-  come from the openg2p-registry subchart.
+  The openg2p-registry dependency provides the core registry workloads,
+  identity wiring and seed jobs. This chart supplies farmer values, images
+  and metadata, and owns the dashboard API and farmer reporting layer:
 
-  It does own the ANALYTICS layer, in templates/ — because the reporting views
-  and dashboards are written against the farmer schema and the platform has no
-  concept of them:
-
-    analytics-jobs.yaml                reporting-views + dashboard-import Jobs
-    reporting-views-refresh.yaml       CronJob refreshing the materialized views
-    dashboard-bundle-configmap.yaml    ships fr-dashboards.zip into the cluster
+    dashboard-api.yaml                 read-only chart-data API
+    analytics-jobs.yaml                bulk-sample + reporting-views Jobs
+    reporting-views-refresh.yaml       materialized-view refresh CronJob
     maps-content-configmap.yaml        maps content for G2P Insights
     _maps-content.tpl                  its name helper
-    superset-service-account-secret.yaml
 
   Hook weights order these above the sanity suite (25), so rebuilding the views
   cannot change what the sanity tests asserted against.
@@ -59,8 +52,8 @@ maintainers:
 dependencies:
   - name: openg2p-registry
     alias: registry
-    version: 0.0.0-develop.384
-    repository: https://gitlab.com/api/v4/projects/84460547/packages/helm/stable
+    version: 1.2.2-rc.544
+    repository: https://openg2p.github.io/openg2p-helm
 
 # Rancher catalog branding
 annotations:

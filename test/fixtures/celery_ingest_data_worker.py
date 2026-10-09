@@ -5,8 +5,6 @@ from copy import deepcopy
 from datetime import datetime
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker
-
 from openg2p_registry_core.models import (
     ChangeRequestSourceEnum,
     G2PIntakeFormSubmission,
@@ -19,6 +17,7 @@ from openg2p_registry_core.models import (
     PipelineActionEnum,
     ProcessStatusEnum,
 )
+from openg2p_registry_core.helpers.notification import NotificationHelper, NotificationWorkflow
 from openg2p_registry_core.services import G2PIntakeFormDataService
 
 from ..app import celery_app
@@ -27,7 +26,7 @@ from ..engine import Engine
 
 _config = Settings.get_config()
 _logger = logging.getLogger(_config.logging_default_logger_name)
-_async_engine = Engine.get_async_engine()
+_session_maker = Engine.get_async_session_maker()
 
 _loop = asyncio.new_event_loop()
 asyncio.set_event_loop(_loop)
@@ -35,7 +34,7 @@ _INGESTION_CREATED_BY = "system"
 
 
 async def _process_ingestion_async(ingest_id: str) -> None:
-    session_maker = async_sessionmaker(bind=_async_engine, expire_on_commit=False)
+    session_maker = _session_maker
 
     try:
         async with session_maker() as session:
@@ -93,6 +92,12 @@ async def _process_ingestion_async(ingest_id: str) -> None:
             incoming_classified_data.ingestion_date_time = datetime.now()
             session.add(incoming_classified_data)
             await session.commit()
+            if submission_id is not None:
+                await NotificationHelper.dispatch_intake_form_notification(
+                    submission_id,
+                    NotificationWorkflow.INTAKE_FORM_SUBMISSION_CREATED,
+                    session,
+                )
     except Exception as error:
         _logger.error(
             "Error during processing ingest_data_worker for ingest_id %s: %s",

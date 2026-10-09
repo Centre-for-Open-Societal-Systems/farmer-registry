@@ -15,13 +15,9 @@
 //   * the rehash step renames content-hashed assets, so a missed reference
 //     leaves the route pointing at a filename that no longer exists.
 //
-// None of those are visible to a grep for the marker. This checks all three,
-// against the intake-upload block as patch-intake-photo-document.js leaves it:
-// the one File a section save carries is uploaded, its document id fills a
-// blank *_storage_id field of the record (a land certificate) or else is
-// stamped as record_image_document_id (the farmer photo), the upload is listed
-// in the section's documents under that field, and an upload that comes back
-// empty abandons the save with an error toast instead of saving without it.
+// Verify the rc.544 section_files contract using both the upload block and
+// file deserializer extracted from the bundle. Photos and file-widget uploads
+// must persist their IDs, and failed uploads must abort the section save.
 //
 // USAGE (against a built image):
 //   docker run --rm -v "$PWD/test/staff-ui:/t" --entrypoint node <image> \
@@ -31,9 +27,7 @@
 
 const fs = require('fs');
 
-const NEXT = '/app/.next';
-const MARKER = 'record_image_document_id:__doc.document_id';
-const ID = '[A-Za-z_$][A-Za-z0-9_$]*';
+const {loadUploadHarness, serializedFile} = require('./upload-bundle-harness.cjs');
 
 let pass = 0, fail = 0;
 const check = (name, cond, detail = '') => {
@@ -42,81 +36,22 @@ const check = (name, cond, detail = '') => {
 };
 const done = () => { console.log(`\n${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0); };
 
-// ---------------------------------------------------------------- discovery
-function walk(dir, out = []) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = `${dir}/${e.name}`;
-    if (e.isDirectory()) walk(p, out);
-    else out.push(p);
-  }
-  return out;
-}
-
-const allFiles = walk(NEXT);
-const patchedChunks = allFiles.filter(
-  (f) => f.startsWith(`${NEXT}/static/chunks/`) &&
-         f.endsWith('.js') &&
-         fs.readFileSync(f, 'utf8').includes(MARKER),
-);
-
-check('intake-upload patch landed in exactly one static chunk',
-      patchedChunks.length === 1,
-      `found ${patchedChunks.length}`);
-if (patchedChunks.length !== 1) done();
-
-const chunkPath = patchedChunks[0];
+let harness;
+try { harness = loadUploadHarness(); }
+catch (e) { check('shipped upload block and deserializer load', false, e.message); done(); }
+const {root: NEXT, allFiles, chunkPath, run} = harness;
 const chunkName = chunkPath.split('/').pop().replace(/\.js$/, '');
-console.log(`      patched chunk: ${chunkName}`);
-
-// ------------------------------------------------------- 1. does it parse?
-// Same V8 that will serve it. `new Function` forces a full parse.
-try { new Function(fs.readFileSync(chunkPath, 'utf8')); check('patched chunk is syntactically valid JS', true); }
-catch (e) { check('patched chunk is syntactically valid JS', false, e.message); }
-
-// -------------------------------------------- 2. does the logic behave?
-// The block is EXTRACTED from the shipped chunk, not retyped, so this test
-// cannot drift from what actually ships. Its free variables -- the section
-// changes, the upload helper, the toast module, the labels and documents
-// lists -- are minified names, read off the block and supplied as stubs.
-const src = fs.readFileSync(chunkPath, 'utf8');
-const BLOCK = new RegExp(
-  `if\\((${ID})\\?\\.image\\)\\{let __up=await (${ID})\\(\\[\\1\\.image\\]\\).*?(${ID})\\.push\\(__doc\\)\\}\\}`,
-);
-const m = BLOCK.exec(src);
-check('injected upload block is locatable in the shipped chunk', !!m);
-if (!m) done();
-
-const block = m[0];
-const [, CHANGES, UPLOAD, DOCS] = m;
-const toastM = new RegExp(`\\{(${ID})\\.oR\\.error\\(`).exec(block);
-const labelsM = new RegExp(`;(${ID})=\\1\\|\\|\\[\\];\\1\\[${DOCS.replace('$', '\\$')}\\.length\\]`).exec(block);
-check('toast and labels bindings are readable off the block', !!toastM && !!labelsM);
-if (!toastM || !labelsM) done();
-const TOAST = toastM[1], LABELS = labelsM[1];
-const names = [CHANGES, UPLOAD, TOAST, LABELS, DOCS];
-check('block free variables are distinct', new Set(names).size === names.length, names.join(','));
-
-// Runs the block once. Resolves to false when the block abandoned the save
-// (its own `return!1`), otherwise to the labels/docs it left behind.
-function run(changes, upload) {
-  const toasts = [];
-  const toast = { oR: { error: (msg) => toasts.push(msg) } };
-  const labels = [];
-  const docs = [];
-  const fn = new Function(...names,
-    `return (async () => { ${block}; return { labels: ${LABELS}, docs: ${DOCS} }; })();`);
-  return fn(changes, upload, toast, labels, docs).then((out) => ({ out, toasts, labels, docs }));
-}
+check('exactly one patched chunk parses and its upload block loads', true);
 
 (async () => {
-  const photo = { name: 'farmer.jpg' };
+  const photo = serializedFile('farmer.jpg', '_profile');
   const ok = async () => [{ document_id: 'doc-123' }];
 
   // Farmer photo: uploaded, stamped on every record, listed as the photo.
   let got = null;
-  const a = { image: photo, records: [{ first_name: 'Abebe' }, { first_name: 'Kebede' }] };
+  const a = { section_files: [photo], records: [{ first_name: 'Abebe' }, { first_name: 'Kebede' }] };
   const ra = await run(a, async (f) => { got = f; return ok(); });
-  check('picked file is uploaded', got && got[0] === photo);
+  check('picked file is uploaded', got && got.length === 1 && got[0] instanceof File && got[0].name === photo.name);
   check('photo document id stamped on every record',
         a.records.every((r) => r.record_image_document_id === 'doc-123'));
   check('unrelated fields preserved', a.records[0].first_name === 'Abebe');
@@ -124,9 +59,9 @@ function run(changes, upload) {
         ra.docs.length === 1 && ra.docs[0].document_id === 'doc-123' && ra.labels[0] === 'farmer_photo');
 
   // Land certificate: the document id fills the blank storage field instead.
-  const b = { image: { name: 'deed.pdf' }, records: [{ land_id: 'LAN-001', certificate_storage_id: '' }] };
+  const b = { section_files: [serializedFile('deed.pdf', '_direct_file', 'certificate_storage_id')], records: [{ land_id: 'LAN-001', certificate_storage_id: '' }] };
   const rb = await run(b, ok);
-  check('certificate document id fills the blank *_storage_id field',
+  check('certificate document id fills its target field',
         b.records[0].certificate_storage_id === 'doc-123');
   check('certificate is not also stamped as the profile image',
         !('record_image_document_id' in b.records[0]));
@@ -145,7 +80,7 @@ function run(changes, upload) {
   // Upload came back empty (the API helper toasts and returns null, e.g. a
   // 413 from a proxy): the save is abandoned, with a message, records untouched.
   for (const [label, result] of [['null', null], ['empty list', []], ['no document_id', [{}]]]) {
-    const d = { image: photo, records: [{ first_name: 'Abebe' }] };
+    const d = { section_files: [photo], records: [{ first_name: 'Abebe' }] };
     const rd = await run(d, async () => result);
     check(`failed upload (${label}) abandons the save`, rd.out === false);
     check(`failed upload (${label}) says so`, rd.toasts.length === 1 && /could not be uploaded/.test(rd.toasts[0]));
@@ -155,8 +90,40 @@ function run(changes, upload) {
 
   // Header-only photo edit with no records must not crash.
   let crashed = false;
-  try { await run({ image: photo, records: [] }, ok); } catch { crashed = true; }
+  try { await run({ section_files: [photo], records: [] }, ok); } catch { crashed = true; }
   check('empty records list does not crash', !crashed);
+
+  // Multiple files keep labels, IDs and record targets aligned. Supporting
+  // documents retain the platform's own handling and are not uploaded here.
+  const multi = {
+    section_files: [photo,
+      serializedFile('deed.pdf', '_direct_file', 'certificate_storage_id'),
+      serializedFile('support.pdf', '_supporting_docs')],
+    records: [{certificate_storage_id: null, first_name: 'Abebe'}],
+  };
+  const rm = await run(multi, async files => {
+    check('only profile and direct files are uploaded',
+      files.length === 2 && files[0].name === 'farmer.jpg' && files[1].name === 'deed.pdf');
+    return [{document_id: 'photo-id'}, {document_id: 'deed-id'}];
+  });
+  check('mixed uploads persist the correct IDs',
+    multi.records[0].record_image_document_id === 'photo-id' &&
+    multi.records[0].certificate_storage_id === 'deed-id');
+  check('mixed uploads retain document labels',
+    rm.labels.join(',') === 'farmer_photo,certificate_storage_id');
+  const partial = {section_files: multi.section_files, records: [{first_name: 'Abebe'}]};
+  const rp = await run(partial, ok);
+  check('partial upload aborts before modifying records',
+    rp.out === false && rp.toasts.length === 1 &&
+    JSON.stringify(partial.records) === '[{"first_name":"Abebe"}]');
+  const rows = {
+    section_files: [serializedFile('deed.pdf', '_direct_file', 'certificate_storage_id')],
+    records: [{certificate_storage_id: 'existing-id'}, {certificate_storage_id: {__type: 'File'}}],
+  };
+  await run(rows, ok);
+  check('list upload preserves existing certificates and fills the picked row',
+    rows.records[0].certificate_storage_id === 'existing-id' &&
+    rows.records[1].certificate_storage_id === 'doc-123');
 
   // ------------------------------------ 3. is it wired into the routes?
   const refs = allFiles.filter(

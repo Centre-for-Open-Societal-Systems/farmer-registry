@@ -1,24 +1,22 @@
 #!/usr/bin/env node
 /*
- * "Remove" on a table row that was never saved removes it.
+ * "Remove" on a table row soft-deletes it exactly when the server holds it.
  *
  * Both table widgets (the inline table and the dialog table) soft-delete on
- * Remove: the row is kept, marked edit_action DELETE and tinted with
- * --owt-widget-table-deleted-row-bg, which the theme resolves to #F3F1F4 --
- * indistinguishable from white. That is right for a row the server holds
- * (the DELETE must reach it on save) and meaningless for a row added in this
- * session and not yet saved: the enumerator clicks Remove and nothing
- * happens, and the row is only dropped later, silently, when the section
- * saves. Such a row -- one without a server-issued internal_record_id --
- * is now removed from the list at once; saved rows keep the soft delete,
- * which intake-form-fields.css makes visible (struck through, dimmed).
- * (edit_action is not the signal: the store still says "ADD" after the
- * section has been saved and the row re-read.)
+ * Remove: the row is kept and marked edit_action DELETE so the DELETE reaches
+ * the server on save, which intake-form-fields.css makes visible (struck
+ * through, dimmed). A row added in this session and never saved has nothing to
+ * delete and is dropped from the list at once.
  *
- * Patches the ui-widgets chunk in both the static and the server bundle
- * (same source, different minifier output is tolerated by matching the
- * identifiers). Exits non-zero unless both handlers are patched in at least
- * one static chunk.
+ * From registry-platform 1.2.2 the widgets do that themselves, but they also
+ * treat any row whose edit_action is still "ADD" as unsaved. The store keeps
+ * "ADD" on a row after its section has been saved and re-read, so Remove on
+ * such a row dropped it locally and no DELETE was ever sent: the row came back
+ * on the next load. The server-issued internal_record_id alone decides here,
+ * as it did before 1.2.2.
+ *
+ * Patches the ui-widgets chunk in the static and the server bundle. Exits
+ * non-zero unless both handlers are patched in at least one static chunk.
  */
 const fs = require("fs");
 const path = require("path");
@@ -26,16 +24,12 @@ const path = require("path");
 const ROOT = process.env.STAFF_UI_NEXT_ROOT || "/app/.next";
 const ID = "[A-Za-z_$][A-Za-z0-9_$]*";
 
-// DialogTableWidget.deleteRow:
-//   q=(0,R.useCallback)(e=>{if(m){let t=[...c];t[e]={...t[e],edit_action:"DELETE"},a(t);return}a(c.filter((t,r)=>r!==e))},[c,a,m])
-const DIALOG = new RegExp(
-  `\\((${ID})=>\\{if\\((${ID})\\)\\{let (${ID})=\\[\\.\\.\\.(${ID})\\];\\3\\[\\1\\]=\\{\\.\\.\\.\\3\\[\\1\\],edit_action:"DELETE"\\},(${ID})\\(\\3\\);return\\}\\5\\(\\4\\.filter\\(`
-);
 // TableWidget.deleteRow:
-//   ...,N){let t=[...g];t[e]={...t[e],edit_action:"DELETE"},a(t)}else{let t=g.filter((t,r)=>r!==e);a(t)}
-const TABLE = new RegExp(
-  `,(${ID})\\)\\{let (${ID})=\\[\\.\\.\\.(${ID})\\];\\2\\[(${ID})\\]=\\{\\.\\.\\.\\2\\[\\4\\],edit_action:"DELETE"\\},(${ID})\\(\\2\\)\\}else\\{let \\2=\\3\\.filter\\(`
-);
+//   let t=g[e];if(t?.edit_action!=="ADD"&&"string"==typeof t?.internal_record_id&&...
+const TABLE = new RegExp(`let (${ID})=(${ID})\\[(${ID})\\];if\\(\\1\\?\\.edit_action!=="ADD"&&"string"==typeof \\1\\?\\.internal_record_id`, "g");
+// DialogTableWidget.deleteRow:
+//   let t=c[e];if(t?.edit_action==="ADD"||!("string"==typeof t?.internal_record_id&&...
+const DIALOG = new RegExp(`let (${ID})=(${ID})\\[(${ID})\\];if\\(\\1\\?\\.edit_action==="ADD"\\|\\|!\\("string"==typeof \\1\\?\\.internal_record_id`, "g");
 
 function listJs(dir) {
   const out = [];
@@ -50,30 +44,26 @@ function listJs(dir) {
 
 let staticDialog = 0, staticTable = 0;
 for (const file of [...listJs(path.join(ROOT, "static")), ...listJs(path.join(ROOT, "server"))]) {
-  let s = fs.readFileSync(file, "utf8");
-  let changed = false;
-  const d = DIALOG.exec(s);
-  if (d) {
-    const [row, soft, , rows] = [d[1], d[2], d[3], d[4]];
-    s = s.slice(0, d.index) + d[0].replace(`if(${soft}){`, `if(${soft}&&${rows}[${row}]?.internal_record_id){`) + s.slice(d.index + d[0].length);
-    changed = true;
-    if (!path.relative(ROOT, file).startsWith("server")) staticDialog += 1;
-  }
-  const t = TABLE.exec(s);
-  if (t) {
-    const [soft, , rows, row] = [t[1], t[2], t[3], t[4]];
-    s = s.slice(0, t.index) + t[0].replace(`,${soft}){`, `,${soft}&&${rows}[${row}]?.internal_record_id){`) + s.slice(t.index + t[0].length);
-    changed = true;
-    if (!path.relative(ROOT, file).startsWith("server")) staticTable += 1;
-  }
-  if (changed) {
-    fs.writeFileSync(file, s);
-    console.log("  patched " + path.relative(ROOT, file) + (d ? " [dialog-table]" : "") + (t ? " [table]" : ""));
-  }
+  const before = fs.readFileSync(file, "utf8");
+  if (!before.includes('edit_action:"DELETE"')) continue;
+  let t = 0, d = 0;
+  let s = before.replace(TABLE, (_m, row, rows, i) => {
+    t += 1;
+    return `let ${row}=${rows}[${i}];if("string"==typeof ${row}?.internal_record_id`;
+  });
+  s = s.replace(DIALOG, (_m, row, rows, i) => {
+    d += 1;
+    return `let ${row}=${rows}[${i}];if(!("string"==typeof ${row}?.internal_record_id`;
+  });
+  if (s === before) continue;
+  fs.writeFileSync(file, s);
+  const isStatic = !path.relative(ROOT, file).startsWith("server");
+  if (isStatic) { staticTable += t; staticDialog += d; }
+  console.log("  patched " + path.relative(ROOT, file) + (d ? " [dialog-table]" : "") + (t ? " [table]" : ""));
 }
 
 if (staticDialog < 1 || staticTable < 1) {
   console.error(`table-remove patch: dialog-table handler in ${staticDialog} static chunk(s), table handler in ${staticTable} - expected both`);
   process.exit(1);
 }
-console.log("Remove drops an unsaved row outright; saved rows keep the soft delete");
+console.log("Remove soft-deletes saved rows and drops unsaved ones; edit_action ADD no longer counts as unsaved");
