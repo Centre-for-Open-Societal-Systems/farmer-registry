@@ -8,10 +8,22 @@ _config = Settings.get_config()
 _logger = logging.getLogger(_config.logging_default_logger_name)
 
 from celery import Celery
-from openg2p_registry_core.helpers import TemplateHelper, WebsubHelper, get_document_handler
+from openg2p_notification.app import Initializer as NotificationInitializer
+from openg2p_registry_core.helpers import (
+    AweHelper,
+    MasterDataClient,
+    PartnerManagementClient,
+    TemplateHelper,
+    WebsubHelper,
+    get_document_handler,
+)
 from openg2p_fastapi_common.app import Initializer as BaseInitializer
 from openg2p_fastapi_common.exception import BaseExceptionHandler        
 from openg2p_registry_core.services import (
+    G2PAttributeValueValidator,
+    G2PAweIntegrationService,
+    G2PAwePolicyConfigurationService,
+    G2PDocumentService,
     G2PIngestService,
     G2PIntakeFormDataService,
     G2PIntakeFormLinkService,
@@ -24,29 +36,42 @@ from openg2p_registry_core.services.g2p_register_change_request_service import (
 from openg2p_registry_core.services.g2p_change_request_worker_service import (
     G2PChangeRequestWorkerService,
 )
-from openg2p_registry_extensions.register_domain.factory import G2PRegisterDomainFactory
+from openg2p_registry_core.services.g2p_section_document_reconcile_service import (
+    G2PSectionDocumentReconcileService,
+)
+from openg2p_registry_core.interfaces import G2PIdGeneratorFactory, G2PRegisterDomainFactory
 
 class Initializer(BaseInitializer):
     def initialize(self, **kwargs):
         super().initialize()
         BaseExceptionHandler()
 
-        # Services
-        G2PRegisterService()
-        G2PIngestService()
-        G2PIntakeFormDataService()
-        G2PIntakeFormLinkService()
-        G2PRegisterChangeRequestService()
-        G2PChangeRequestWorkerService()
-        G2PGeoHierarchyService()
-
-        # Domain factory (needed for dynamic domain resolution during approvals)
-        G2PRegisterDomainFactory()
-
         # Helpers
         get_document_handler()
         TemplateHelper()
         WebsubHelper()
+        PartnerManagementClient()
+        MasterDataClient()
+        AweHelper()
+        NotificationInitializer()
+
+        # Services
+        G2PDocumentService()
+        G2PRegisterService()
+        G2PIngestService()
+        G2PIntakeFormDataService()
+        G2PAwePolicyConfigurationService()
+        G2PAweIntegrationService()
+        G2PIntakeFormLinkService()
+        G2PRegisterChangeRequestService()
+        G2PSectionDocumentReconcileService()
+        G2PChangeRequestWorkerService()
+        G2PGeoHierarchyService()
+        G2PAttributeValueValidator()
+
+        # Factories
+        G2PRegisterDomainFactory()
+        G2PIdGeneratorFactory()
 
 
 celery_app = Celery(

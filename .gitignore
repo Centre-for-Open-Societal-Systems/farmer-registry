@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-# Anchored to the root: an unanchored `lib/` also swallowed dashboard-ui/lib/.
+# Keep nested application source directories named lib trackable.
 /lib/
 lib64/
 parts/

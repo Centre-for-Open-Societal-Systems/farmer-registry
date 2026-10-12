@@ -28,7 +28,7 @@ Helm chart + base images from GitLab) plus a thin farmer layer on top:
 | staff-portal-ui (1.2.1 base + farmer bundle patches) | root `Dockerfile`, target `staff-ui` | same release |
 | farmer domain package (`farmer-extension/`), seed metadata, AWE policy, DCI templates | this repo, baked into the images | same release |
 | sanity e2e suite | `docker/sanity-tests/Dockerfile` | same release, post-upgrade hook Job |
-| analytics layer (reporting views, Superset dashboards, Insights maps content) | `helm/openg2p-farmer-registry/templates/` | same release; CI enables **only the reporting views** |
+| analytics layer (reporting views, Insights maps content) | `helm/openg2p-farmer-registry/templates/` | same release; CI enables **only the reporting views** |
 | dashboard-api (chart data for the OAN dashboards) | [farmer-registry-dashboard-api](https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api), cloned by CI; `templates/dashboard-api.yaml` | same release, ClusterIP only (§3.5) |
 | IAM, Keycloak, AWE, Master Data, Partner Mgmt, Consent Mgr, audit manager, keymanager, (Superset off) | `openg2p-commons-services` chart | Helm release **`commons-services`** |
 | PostgreSQL (`commons-postgresql-0`), Redis (`commons-redis`), MinIO (`commons-minio`) | `openg2p-commons` base chart | Helm release **`commons`** |
@@ -96,9 +96,8 @@ the older `docker/<service>/Dockerfile` copies — those drifted (staff-ui still
 | `partner-api` | `--target partner-api` | `.../registry-platform/partner-api:${RP_VERSION}` | `RP_VERSION` |
 | `celery` (worker **and** beat) | `--target celery` | `.../registry-platform/celery:${RP_VERSION}` | `RP_VERSION` |
 | `db-seed` | `--target db-seed` | `.../registry-platform/db-seed:${RP_VERSION}` | `RP_VERSION` |
-| `staff-ui` | `--target staff-ui` | `openg2p/openg2p-registry-staff-ui:${STAFF_UI_VERSION}` (Docker Hub, **1.2.1**) | `DASHBOARD_URL=` (empty: no Dashboard button) |
+| `staff-ui` | `--target staff-ui` | `openg2p/openg2p-registry-staff-ui:${STAFF_UI_VERSION}` (Docker Hub, **1.2.1**) | `STAFF_UI_VERSION` |
 | `sanity-tests` | `docker/sanity-tests/Dockerfile` | platform sanity image | `RP_VERSION` |
-| `dashboard-ui` | `docker/dashboard-ui/Dockerfile` | — | **skipped in CI**: needs the untracked `dashboard-ui/lib/`; the chart does not deploy it |
 | `dashboard-api` | `.build/dashboard-api/Dockerfile`, context `.build/dashboard-api` (the dashboard-api repo, §3.5) | `python:3.11-slim` | — |
 
 `RP_VERSION` is **`0.0.0-develop.384`** and is pinned in three places that must
@@ -163,7 +162,7 @@ Multibranch pipeline. Every branch builds and pushes; only `develop` and
    - `registry.{staffApi,staffUi,partnerApi,celeryWorker,celeryBeat,dbSeed,sanity}.image.{repository,tag}` → ECR + `<sha12>`
    - `registry.dbSeed.loadAttributes: false`
    - `dashboardApi.enabled: true`, `dashboardApi.image.{repository,tag}` → ECR + the API repository's `<sha12>`
-   - `analytics.reportingViews.enabled: true` (the dashboard API reads `fr_rpt_*`); `analytics.{bulkSample,dashboards}.enabled: false`, `mapsContent.enabled: false`
+   - `analytics.reportingViews.enabled: true` (the dashboard API reads `fr_rpt_*`); `analytics.bulkSample.enabled: false`, `mapsContent.enabled: false`
 3. `helm get values farmer-registry -n far -o yaml` → `/tmp/far-values-current-<build>.yaml`.
    **This is what preserves the environment**: hostnames, Keycloak/IAM wiring,
    cookie domain, CA-bundle mount all live in the release's values, not in git.
@@ -207,7 +206,7 @@ created, so the last run's Job stays visible until the next deploy):
 | 11 / 12 / 13 | sanity `pm-seed`, `cm-seed`, `data-seed` | seed a persistent sanity partner into PM/CM and a sanity farmer |
 | 19 / 20 | `iam-register` configmap + Job | registers the "Farmer Registry" tile, roles and permissions in IAM |
 | 25 | `farmer-registry-sanity` | farmer e2e suite (`registry.sanity.*`), `runE2e`/`failOnError` at subchart defaults |
-| 40 / 50 | analytics bulk sample, dashboard import | **disabled** by the CI overlay |
+| 40 | analytics bulk sample | **disabled** by the CI overlay |
 | 45 | `farmer-registry-fr-reporting-views` | creates the `fr_rpt_*` views the dashboard API reads; refreshed hourly by CronJob `farmer-registry-fr-reporting-views-refresh` |
 
 Consequences: a deploy is never a no-op — db-seed, sanity seeds and
@@ -601,8 +600,7 @@ schema top-up is additive and needs no undo.
 ## 11. Uninstall
 
 `scripts/uninstall-registry.sh` removes a registry release and everything it
-touched that `helm uninstall` leaves behind: this registry's Superset assets,
-leftover hook Jobs/pods, labelled Secrets/ConfigMaps, the Postgres DB and role
+touched that `helm uninstall` leaves behind: leftover hook Jobs/pods, labelled Secrets/ConfigMaps, the Postgres DB and role
 inside `commons-postgresql-0`, its IAM rows (`staff_portal_applications`,
 roles/permissions for `farmer-registry-staff-portal`), PVCs and released PVs.
 It deliberately leaves the shared sanity partner in PM and its CM binding.
@@ -629,9 +627,9 @@ matches the cluster's behavior.
    CA-bundle wiring exist only as live Helm values. A rebuild depends on a
    `helm get values` backup someone remembered to take.
 2. **`far-ca-bundle` is hand-applied** (§4.4). Decision pending with Suresh.
-3. **Analytics layer is disabled** by the CI overlay; `dashboard-ui` is not
-   built (untracked `lib/`) and not deployed. The staff-ui is built with an
-   empty `DASHBOARD_URL`.
+3. **Dashboard frontends and Superset assets live separately.** This release
+   retains the dashboard API and reporting views, including their hourly refresh.
+   Bulk sample data and maps content stay disabled in CI.
 4. **`values-dev.yaml` is stale** (different ECR account/path, unreferenced).
 5. **`farmer-registry` release was `failed` at rev 15**; cause not yet
    established.

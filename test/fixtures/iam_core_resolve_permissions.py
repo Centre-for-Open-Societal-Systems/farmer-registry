@@ -1,8 +1,3 @@
-# Verbatim copy of iam_core/user_auth/middleware/resolve_permissions.py from the
-# iam-core 1.2.1 wheel installed in the pinned registry-platform staff-api image
-# (openg2p/iam, Mozilla Public License 2.0). Test fixture only: it is what
-# docker/patches/patch_platform.py patches at image build time. Refresh it
-# from the image whenever RP_VERSION moves iam-core.
 from collections.abc import Callable
 from typing import Any
 

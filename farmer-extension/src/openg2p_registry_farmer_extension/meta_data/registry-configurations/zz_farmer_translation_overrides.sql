@@ -131,3 +131,24 @@ SET "domain_translation" = (
     )
 )::json
 WHERE "language_code" = 'en';
+
+-- registry-platform 1.2.2 changes. The UI merges this row over its own
+-- defaults one level deep, so the "common" group seeded above replaces the
+-- platform's whole group: labels the platform adds inside it render as raw keys
+-- ("common.new") until they are added here. no_notifications follows the
+-- platform's newer wording.
+UPDATE "public"."registry_languages"
+SET "core_translation" = jsonb_set(
+    jsonb_set("core_translation"::jsonb, '{common,new}', to_jsonb('New'::text), true),
+    '{common,old}', to_jsonb('Old'::text), true
+)::json
+WHERE "language_code" = 'en';
+
+UPDATE "public"."registry_languages"
+SET "core_translation" = jsonb_set(
+    "core_translation"::jsonb,
+    '{no_notifications}',
+    to_jsonb('No notifications'::text),
+    true
+)::json
+WHERE "language_code" = 'en';
