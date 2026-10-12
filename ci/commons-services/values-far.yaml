@@ -5,90 +5,27 @@
 # environment's hostnames and wiring and stay untouched; this file holds only
 # what the farmer registry needs from the shared platform services.
 #
-# G2R-172: staff-ui 1.2.1 calls master-data at /geo/get_all_geo_levels and
-# /geo/get_geo_level_values, but the master-data build that was installed by
-# hand (an early pull of the floating 0.0.0-develop.26 tag) only serves the old
-# /geo/get_all_g2p_geo_levels names, so the intake form's Location section got
-# 404s. The chart bump to 2.3.0-rc.217 moves master-data to 1.1.0-rc.55, which
-# serves the current names. An image-only swap is not possible: chart 2.2.0
-# renders GEN2_MASTER_DATA_API_* env names and the new build reads
-# MASTER_DATA_API_*, so it would start with no database configuration.
+# IMAGES. Every image is set here explicitly, repository and tag, for two
+# reasons:
+#   * OpenG2P no longer publishes to registry.gitlab.com, and the old paths
+#     refuse anonymous pulls. Live values from earlier revisions still name
+#     those paths, and upgrade.sh layers this file on top of them, so a key left
+#     out here would quietly keep a GitLab path. upgrade.sh fails the run if any
+#     rendered image still points at registry.gitlab.com.
+#   * The chart (openg2p-commons-services 2.3.3) pins each service's release.
+#     The tags below are those releases, or the newer patch release of the same
+#     line where one exists (Master Data 1.1.3, IAM 1.4.2, Consent Manager
+#     1.0.3): dependency and connection-pool fixes only, and the set verified end
+#     to end with registry-platform 1.2 on the local stack.
 masterData:
   masterDataAPI:
     image:
-      # The chart default still points at registry.gitlab.com/openg2p/
-      # master-data-service/..., which no longer allows anonymous pulls. Same
-      # image, current path. The tag stays at the chart default (1.1.0-rc.55).
-      repository: registry.gitlab.com/openg2p/platform-services/master-data-service/master-data-api
-    # THE ENV PREFIX. The image running in `far` is a 1.1.0-generation build
-    # whose Settings subclasses iam_core's with
-    # `env_prefix="master_data_api_"`. iam_core's middleware resolves config by
-    # `get_config(strict=False)`, which matches on isinstance and therefore
-    # returns the APP's Settings -- so the chart's GEN2_MASTER_DATA_API_* and
-    # COMMON_* variables, written for the 0.0.0-develop.26 generation, are
-    # read by nothing. Not one of them. The app ran entirely on class defaults:
-    # db_hostname 'localhost', auth_redis_url redis://localhost:6379/0,
-    # auth_provider_api_url None. The database was never reachable and the
-    # startup migration has never completed under these models.
-    #
-    # It presents as an HTTP 500 from /geo/get_all_geo_levels, which the
-    # staff-ui proxy flattens to {"statusText":"Internal Server Error"} with
-    # the upstream body dropped -- so the intake form's Location section, whose
-    # geo-hierarchy widget calls that endpoint on every render, shows nothing.
-    #
-    # The `postgres-checker` init container passes throughout, because it is a
-    # shell script doing ${VAR} expansion: it validates a hostname the
-    # application itself never consults.
-    #
-    # Values below are the ones the chart already computed for this
-    # environment, read off the live Deployment's old-prefix variables and
-    # re-keyed -- not re-derived. The key is a MAP named envVars (not env /
-    # extraEnv / a list). Verified against openg2p-commons-services
-    # 2.2.0-patched1 with the ECR image override in place; re-check both the
-    # shape and the prefix when either pin moves.
-    envVars:
-      # Pinned rather than left to the class default (which is already
-      # postgresql+asyncpg in this image). The whole incident is an implicit
-      # default changing underneath the chart; this one costs nothing to fix
-      # in place.
-      MASTER_DATA_API_DB_DRIVER: postgresql+asyncpg
-      MASTER_DATA_API_DB_HOSTNAME: commons-postgresql
-      MASTER_DATA_API_DB_PORT: "5432"
-      MASTER_DATA_API_DB_DBNAME: master_data
-      MASTER_DATA_API_DB_USERNAME: master_data_user
-      # master-data mounts iam_core's session middleware, which checks
-      # refresh_token:* on every authenticated request. Mirrors IAM's own
-      # IAM_STAFF_AUTH_REDIS_URL template, and the DB index is not a free
-      # choice: master-data READS the keys IAM WRITES, so a different instance
-      # or index resolves a valid session to None and turns the 500 into a 401.
-      MASTER_DATA_API_AUTH_REDIS_URL: 'redis://{{ tpl .Values.global.redisInstallationName $ }}-master:6379/0'
-      # Only consulted for endpoints carrying a non-empty @require_permissions
-      # (geo:create, referenceData:create, ...). The registry UI's geo reads
-      # are @require_permissions({}) -- an EMPTY set, which still requires a
-      # valid principal but resolves to no roles and makes no IAM call at all.
-      # So these two are not on the Location section's critical path; they are
-      # here for the admin write paths.
-      MASTER_DATA_API_AUTH_PROVIDER_API_URL: http://commons-services-iam-staff-portal-api
-      MASTER_DATA_API_KEYCLOAK_CLIENT_ID: registry-staff-portal
-    # Separate map, for valueFrom. The password is never a literal: this
-    # mirrors the secretKeyRef the chart already uses for the old-prefix name.
-    envVarsFrom:
-      MASTER_DATA_API_DB_PASSWORD:
-        secretKeyRef:
-          name: master-data
-          key: master-data-db-user
-  # global.authProviderApiUrl ships as http://iam-staff-portal-api, which
-  # resolves nowhere; the chart's own global.iamServiceUrl one line away
-  # already carries the correct Service name. Only the master-data Deployment
-  # consumes it in the whole rendered release, so overriding the global is
-  # safe and fixes the defect rather than patching around it.
-  #
-  # Kept under masterData for locality with the change above, but it is a
-  # global -- see the `global:` block at the end of this file.
+      repository: openg2p/master-data-api
+      tag: "1.1.3"
   geoSeed:
     image:
-      # Same path move for the seed the post-upgrade hook runs.
-      repository: registry.gitlab.com/openg2p/platform-services/master-data-service/master-data-db-seed
+      repository: openg2p/master-data-db-seed
+      tag: "1.1.3"
     # Explicit rather than inherited: the subchart's own default is XKM, the
     # fictitious Kamuntu pack, and none of it may come back into this namespace.
     countryPack: ETH
@@ -117,90 +54,113 @@ masterData:
   # nothing in the farmer registry uses it.
   masterDataUi:
     enabled: false
+    image:
+      repository: openg2p/master-data-ui
+      tag: "1.1.3"
 
-# Image paths for the other services this chart version moves. OpenG2P moved its
-# GitLab projects under openg2p/platform-services/ around 2026-08-24, and the old
-# paths answer 403 to anonymous pulls, so a rollout onto a chart default would sit
-# in ImagePullBackOff while the old pod keeps serving -- a stuck upgrade that still
-# reports success, because helm does not wait on these deployments. Same images,
-# same tags, current path; each tag below was checked against the registry.
-#
-# partner-management is listed even though its Deployments do not restart -- their
-# rendered pod template matches the one in the release manifest. The kc-sa-role
-# hook Job is the reason: helm creates it fresh on every upgrade and it pulls the
-# staff-portal-api image, so on the old path it wedges in ImagePullBackOff and helm
-# waits on the hook until the upgrade times out. Seen on the 2026-09-16 run.
-#
-# Not listed, deliberately: audit-manager, whose tag here matches what is already
-# running, so the upgrade neither restarts nor pulls it.
 openg2p-awe:
   awe:
     image:
-      repository: registry.gitlab.com/openg2p/platform-services/awe/openg2p-awe
+      repository: openg2p/openg2p-awe
+      tag: "1.2.2"
   ui:
     image:
-      repository: registry.gitlab.com/openg2p/platform-services/awe/openg2p-awe-ui
+      repository: openg2p/openg2p-awe-ui
+      tag: "1.2.2"
+
 openg2p-iam-service:
   iamStaffPortalApi:
     image:
-      repository: registry.gitlab.com/openg2p/platform-services/iam/iam-staff-portal-api
-  # Two deployments this chart version would add to the namespace. The agent
-  # portal reads its config from a secret named `agent-portal`, which this chart
-  # does not create and `far` does not have, so the pod would sit in
+      repository: openg2p/iam-staff-portal-api
+      tag: "1.4.2"
+  # Two deployments this chart would add to the namespace. The agent portal
+  # reads its config from a secret named `agent-portal`, which this chart does
+  # not create and `far` does not have, so the pod would sit in
   # CreateContainerConfigError; the IAM staff UI is the IAM admin console, which
-  # nothing here routes to. The image paths stay current so that enabling either
-  # one later does not land back on a path that refuses anonymous pulls.
+  # nothing here routes to. Their images are set anyway, so enabling either one
+  # later does not land on a GitLab path carried over in the live values.
   iamAgentPortalApi:
     enabled: false
     image:
-      repository: registry.gitlab.com/openg2p/platform-services/iam/iam-agent-portal-api
+      repository: openg2p/iam-agent-portal-api
+      tag: "1.4.2"
   iamStaffUi:
     enabled: false
     image:
-      repository: registry.gitlab.com/openg2p/platform-services/iam/iam-staff-ui
+      repository: openg2p/iam-staff-ui
+      tag: "1.4.2"
+
 openg2p-consent-manager:
   consentManagerApi:
     image:
-      # This subchart keeps the host in a separate `registry` key, which stays.
-      repository: openg2p/platform-services/consent-manager/consent-manager-api
+      repository: openg2p/consent-manager-api
+      tag: "1.0.3"
   ui:
     image:
-      repository: openg2p/platform-services/consent-manager/consent-manager-ui
+      repository: openg2p/consent-manager-ui
+      tag: "1.0.3"
   sanity:
     image:
-      # sanity's template renders repository:tag directly, so the host goes here.
-      repository: registry.gitlab.com/openg2p/platform-services/consent-manager/consent-manager-sanity
+      repository: openg2p/consent-manager-sanity
+      tag: "1.0.3"
+
+# Registry platform 1.2 resolves every ingest's sender against Partner
+# Management, so the farmer partner-api cannot accept ODK submissions while it
+# is down. The staff-portal-api image is also the image of the kc-sa-role hook
+# Job, which gives the commons-services-staff-portal service account the
+# partner_manager role the registry and register-partners.sh authenticate with.
 partner-management:
   staffPortalApi:
     image:
-      # Also the image of the kc-sa-role hook Job, which pulls on every upgrade.
-      # Separate `registry` key here, as in consent-manager: only the path moves.
-      repository: openg2p/platform-services/partner-management/staff-portal-api
+      repository: openg2p/partner-management-staff-portal-api
+      tag: "1.0.2"
+    # Partner Management rejects a token whose `iss` is not in this list, and
+    # the farmer partner-api's lookups would all come back unauthorized. The
+    # chart renders global.keycloakIssuerUrl, which carries an explicit :80;
+    # Keycloak takes the issuer from the request's Host header, and HTTP clients
+    # drop the default port from it, so the registry's tokens say
+    # http://commons-keycloak.commons.svc.cluster.local/realms/staff. Both forms
+    # are accepted. The two lists are paired by position, hence the repeated
+    # JWKS URL.
+    envVars:
+      PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS: '["http://commons-keycloak.commons.svc.cluster.local/realms/staff","http://commons-keycloak.commons.svc.cluster.local:80/realms/staff"]'
+      PARTNER_MANAGER_AUTH_DEFAULT_JWKS_URLS: '["http://commons-keycloak.commons.svc.cluster.local/realms/staff/protocol/openid-connect/certs","http://commons-keycloak.commons.svc.cluster.local/realms/staff/protocol/openid-connect/certs"]'
   partnerApi:
     image:
-      repository: openg2p/platform-services/partner-management/partner-api
+      repository: openg2p/partner-management-partner-api
+      tag: "1.0.2"
   staffPortalUi:
     image:
-      repository: openg2p/platform-services/partner-management/staff-portal-ui
+      repository: openg2p/partner-management-staff-portal-ui
+      tag: "1.0.2"
 
-# Components this chart version would add to the namespace that the farmer
-# registry does not use. Held off so the upgrade stays within what G2R-172
-# requires; enable deliberately when there is a consumer.
+openg2p-audit-manager:
+  auditManager:
+    image:
+      repository: openg2p/openg2p-audit-manager
+      tag: "1.2.0"
+
+# The staff portal builds IAM_URL from its own global.iamUrl, which defaults to
+# an external https://staff-iam.<namespace>.<domain> host, while the parent
+# chart passes it iamServiceUrl, which it never reads. The portal calls IAM from
+# its server, so it keeps the in-cluster Service it uses today.
+openg2p-staff-portal-ui:
+  global:
+    iamUrl: http://commons-services-iam-staff-portal-api
+
+# Subchart defaults that build hostnames as <name>.<namespace>.openg2p.org.
+# This environment's domain is openg2p.test (global.baseDomain in the live
+# values): the staff portal's cookie domain and the application links IAM hands
+# out follow it.
+global:
+  domain: openg2p.test
+  aweApplicationUrl: 'https://awe.{{ .Release.Namespace }}.openg2p.test'
+  masterDataApplicationUrl: 'https://master-data.{{ .Release.Namespace }}.openg2p.test'
+  iamStaffUiApplicationUrl: 'https://iam-staff-ui.{{ .Release.Namespace }}.openg2p.test'
+
+# Components this chart would add to the namespace that the farmer registry
+# does not use. Enable deliberately when there is a consumer.
 superset:
   enabled: false
 openg2p-inji-certify:
   enabled: false
-
-# Chart-level defect, fixed here because only one Deployment consumes it.
-# global.authProviderApiUrl ships as `http://iam-staff-portal-api`, a Service
-# name that exists in no namespace, while global.iamServiceUrl -- declared a
-# few lines away in the same block -- carries the correct
-# `http://commons-services-iam-staff-portal-api`. Only
-# Deployment/commons-services-master-data-api reads authProviderApiUrl in the
-# whole rendered release, so the blast radius of correcting it is exactly one
-# workload. Applied to staging by hand alongside the MASTER_DATA_API_* set
-# above. Note it is read only under the MASTER_DATA_API_ prefix by the image
-# actually running, so the global alone does not reach the app -- see the
-# envVars block for why.
-global:
-  authProviderApiUrl: http://commons-services-iam-staff-portal-api

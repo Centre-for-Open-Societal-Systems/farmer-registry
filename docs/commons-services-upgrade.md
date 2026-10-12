@@ -17,6 +17,8 @@ chart's post-upgrade hooks (geo seed, iam-register) re-run on every
 | `values-far.yaml` | Values overlay layered on the release's live values. Only what the farmer registry needs from the platform. |
 | `master-data-schema-topup.sql` | Idempotent `ADD COLUMN IF NOT EXISTS` set for Master Data, generated from the target image's models. Run inside the master-data-api pod before the upgrade. |
 | `apply-sql-in-pod.py` | Runs SQL from stdin inside the master-data-api pod, using the DB settings from the pod environment (either prefix). |
+| `register-partners.py` | Makes every partner in `partners-far.json` active in Partner Management, from inside its staff-portal-api pod. Idempotent. |
+| `partners-far.json` | The ingest senders the registry accepts. Registry platform 1.2 rejects an ingest whose sender is not an active Partner Management partner. |
 | `seed-locations.sh` | Loads the Ethiopia location hierarchy into a namespace's Master Data, additively. See [Location hierarchy](#location-hierarchy). |
 | `migrate-far-geo.sh` | One-time: moves `far` off the chart's ETH pack and the Kamuntu sample country onto that hierarchy, remapping farmer records. |
 | `geo-common.sh`, `geo/*.sql` | The SQL and helpers both scripts run, each file headed with what it does and why. |
@@ -68,11 +70,12 @@ combination is affected, and `patched1` exists only because someone hit it and p
 around it without publishing the result. If that artifact surfaces, the proper chart
 path reopens.
 
-**Consequence for `values-far.yaml`:** the master-data auth values it now carries
+**Consequence for `values-far.yaml`:** the master-data auth values once carried here
 (`COMMON_AUTH_REDIS_URL`, `global.authProviderApiUrl`) were applied to staging by hand
-with `kubectl set env`, because no safe chart path existed. That is drift on a
-Helm-managed Deployment and any upgrade reverts it — which is exactly why they are in
-the overlay, so the upgrade puts them back rather than undoing them.
+with `kubectl set env`, because no safe chart path existed. Chart 2.3.3 renders
+master-data's `MASTER_DATA_API_*` settings and the IAM URL correctly by itself, so the
+overlay no longer carries them. Before upgrading staging, compare its hand-set values
+with what 2.3.3 renders; any that differ are drift the upgrade will revert.
 
 ## Running it
 
@@ -104,12 +107,49 @@ platform is a deliberate act with the full values, not something this does.
    credentials in its environment (under either the old `GEN2_MASTER_DATA_API_`
    or the new `MASTER_DATA_API_` prefix — the snippet accepts both) and ships
    `asyncpg`, so nothing is copied out of the cluster.
-3. Renders the upgrade (`helm template`) and lists the resulting images.
-4. `helm upgrade` with live values + `values-far.yaml` at the pinned chart
+3. Renders the upgrade (`helm template`) and lists the resulting images. It
+   stops if any image still points at `registry.gitlab.com`: OpenG2P no
+   longer publishes there, the paths refuse anonymous pulls, and live values
+   from older revisions still name them, so every image is set in
+   `values-far.yaml`.
+4. Deletes the master-data-api Deployment if its selector predates chart 2.3,
+   which added `app.kubernetes.io/component` to it. A selector is immutable,
+   so helm cannot patch the old Deployment; the upgrade creates it again.
+   Master Data is down from here until its new pod is ready.
+5. `helm upgrade` with live values + `values-far.yaml` at the pinned chart
    version, capturing hook pod logs and printing them if it fails.
-5. Waits for the master-data-api rollout and checks, from the staff-ui pod,
-   that the master-data behind `MASTERDATA_BACKEND_API_URL` now serves
-   `/geo/get_all_geo_levels`. A missing route is a failure.
+6. Waits for master-data and Partner Management (staff-portal-api and
+   partner-api), then runs `register-partners.py` inside the Partner
+   Management pod. It authenticates exactly as the registry does (token URL,
+   client and secret read off the registry's partner-api; the secret goes in
+   on stdin), and leaves every partner in `partners-far.json` active:
+   onboarding plus approval when absent, approval when pending, enable when
+   disabled.
+7. Checks, from the staff-ui pod, that the master-data behind
+   `MASTERDATA_BACKEND_API_URL` serves `/geo/get_all_geo_levels`. A missing
+   route is a failure.
+
+## Partner Management and the registry
+
+Registry platform 1.2 looks every ingest's sender up in Partner Management
+(`GET /partners/{id}` on its staff-portal-api, as the
+`commons-services-staff-portal` client) and rejects the ingest unless the
+partner is active. Two things in `values-far.yaml` and this directory exist for
+that:
+
+- **Accepted issuers.** Partner Management checks a token's `iss` against
+  `PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS`. The chart fills it from
+  `global.keycloakIssuerUrl`, which carries an explicit `:80`, but Keycloak
+  builds `iss` from the request's Host header and HTTP clients drop the
+  default port, so the registry's tokens say
+  `http://commons-keycloak.commons.svc.cluster.local/realms/staff`. The overlay
+  lists both forms (and the JWKS URL twice, since the two lists pair by
+  position).
+- **The partner itself.** Onboarding needs at least one public key. The ODK
+  connector sends `signature: stub-sig` and signs nothing, so
+  `partners-far.json` carries a placeholder Ed25519 public key whose private
+  half was never kept. When the connector starts signing, file a key-update
+  request with its real key.
 
 ## After the upgrade: AWE issuers
 
@@ -134,7 +174,10 @@ kubectl -n far rollout restart deploy/commons-services-awe
 
 ## Rollback
 
-`helm -n far rollback commons-services <revision printed in step 1>`. The
+`helm -n far rollback commons-services <revision printed in step 1>` works
+between revisions on Docker Hub images. A revision from before the move pulls
+from `registry.gitlab.com` and cannot start, and rolling Master Data back onto
+the old selector fails the same way as step 4, so fix forward from there. The
 schema top-up is additive and harmless to the previous build, so it needs no
 undo.
 
@@ -217,12 +260,14 @@ by design.
 
 ## Regenerating the schema top-up
 
-Whenever the chart pin moves the master-data image, regenerate the SQL from
-that image so it matches the models the seed will write:
+Whenever `values-far.yaml` moves the master-data image, generate the SQL from
+that image and add what it lacks to the file. Keep the existing statements: an
+environment may still be on the older build when the script runs, and each one
+is a no-op where the column exists.
 
 ```sh
-IMG=registry.gitlab.com/openg2p/platform-services/master-data-service/master-data-api:<tag>
-docker run --rm -i --entrypoint python "$IMG" - <<'EOF' > ci/commons-services/master-data-schema-topup.sql
+IMG=openg2p/master-data-api:<tag>
+docker run --rm -i --entrypoint python "$IMG" - <<'EOF' > /tmp/topup-new.sql
 import os, importlib, pkgutil
 os.environ.setdefault("MASTER_DATA_API_DB_HOSTNAME", "x")
 from sqlalchemy.dialects import postgresql
@@ -243,15 +288,33 @@ print("COMMIT;")
 EOF
 ```
 
-Then put the explanatory header back at the top of the file.
+Then copy the `ALTER TABLE` lines that `master-data-schema-topup.sql` does not
+have yet into it, above `COMMIT;`, under a comment naming the version.
 
-## Why 2.3.0-rc.217
+## Why 2.3.3
 
-Of the chart versions that render the `MASTER_DATA_API_*` names,
-`2.2.2-rc.214` and `2.3.0-rc.217` pin the same subcharts (master-data
-1.1.0-rc.55, IAM 1.4.0-rc.90, audit-manager 1.0.1) but rc.214 still overrides
-the IAM images to the bare floating `develop` tag; rc.217 lets the IAM subchart
-own them. `0.0.0-develop.231` floats every service on `develop.*` tags. The
-master-data image was verified directly: `1.1.0-rc.55` serves
-`/geo/get_all_geo_levels` and `/geo/get_geo_level_values`, reads
-`MASTER_DATA_API_*`, and its geo model matches its own seed.
+OpenG2P moved back to GitHub. Its GitLab container registry and Helm repository
+are no longer published to, and the GitLab image paths refuse anonymous pulls:
+Partner Management, audit-manager and the consent-manager expiry job had sat in
+ImagePullBackOff since their pods were rescheduled, and the other services ran
+only because the node still had their images cached.
+
+`openg2p-commons-services` 2.3.3 is the latest commons release on the GitHub
+Helm repository (https://openg2p.github.io/openg2p-helm), and every image it
+pins is a release on Docker Hub. `values-far.yaml` takes those, except where a
+newer patch release of the same line exists: master-data 1.1.3, IAM 1.4.2 and
+consent-manager 1.0.3 (dependency and connection-pool fixes only; this set,
+with AWE 1.2.2, was verified end to end with registry platform 1.2 on the local
+stack). Checked against `far` before pinning:
+
+- Each service's ORM models in the target image against its live database:
+  no missing column in an existing table and no type mismatch, apart from
+  `g2p_sample_individuals.birth_date`, which the top-up adds.
+- Master Data 1.1.3 serves every route registry platform 1.2.2-rc.544 calls
+  (`/geo/get_all_geo_levels`, `/geo/get_geo_level_values`,
+  `/attributes/get_attribute_values`), and the chart renders its
+  `MASTER_DATA_API_*` settings with the values `far` already ran on.
+- The rendered release against the live one: no resource removed except the
+  previous revision's Keycloak-init Jobs; the only immutable-field change is
+  the master-data selector (step 4); the database and client Secrets are
+  `lookup`-guarded, so existing passwords and client secrets are kept.

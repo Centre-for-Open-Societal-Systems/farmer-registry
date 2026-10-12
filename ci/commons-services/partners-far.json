@@ -1,0 +1,9 @@
+[
+  {
+    "partner_id": "farmer-partner",
+    "name": "Farmer Registry ODK connector",
+    "org_name": "Farmer Registry",
+    "description": "Sender of the ODK Central ingestion pipeline (connector g2p_sender_id). The connector does not sign its envelopes yet; this placeholder key, whose private half was never kept, satisfies onboarding until it does, and is replaced then with a key-update request.",
+    "public_key": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA1/39uqldspheV+qhgpyVqAbUhDYqHAeidNdXFJv1W18=\n-----END PUBLIC KEY-----\n"
+  }
+]

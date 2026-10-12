@@ -353,12 +353,13 @@ pipeline.
 
 | File | Purpose |
 | --- | --- |
-| `upgrade.sh` | the upgrade end to end; pins `CHART_VERSION=2.3.0-rc.217` |
+| `upgrade.sh` | the upgrade end to end; pins `CHART_VERSION=2.3.3` from OpenG2P's GitHub Helm repository |
 | `Jenkinsfile` | Pipeline job: `ENVIRONMENT` (`dev`/`staging`), optional `CHART_VERSION`, `CONFIRM` boolean; no triggers; `disableConcurrentBuilds` |
-| `values-far.yaml` | overlay applied on top of the live values: master-data image path moved to `platform-services/`, geo-seed image path, `objectStore.endpoint: ""`, `masterDataUi/superset/inji-certify` disabled |
+| `values-far.yaml` | overlay applied on top of the live values: every service image (Docker Hub, release tags), Partner Management's accepted token issuers, the staff portal's IAM URL and domain, the geo-seed settings, `masterDataUi/superset/inji-certify` disabled |
+| `register-partners.py`, `partners-far.json` | make each ingest sender an active Partner Management partner (registry platform 1.2 rejects ingests from any other sender) |
 | `master-data-schema-topup.sql` | idempotent `ADD COLUMN IF NOT EXISTS` set for master-data, run in the pod before the upgrade |
 | `apply-sql-in-pod.py` | runs SQL from stdin inside the master-data-api pod with its own DB env (old or new prefix) |
-| `../docs/commons-services-upgrade.md` | rationale, how to regenerate the top-up SQL, why rc.217 |
+| `../docs/commons-services-upgrade.md` | rationale, how to regenerate the top-up SQL, why 2.3.3 |
 
 ### 4.2 Job setup (one-time, in Jenkins)
 
@@ -378,19 +379,24 @@ Check the job exists before relying on it — this functionality was introduced 
 2. `kubectl exec deploy/commons-services-master-data-api -- python -c
    apply-sql-in-pod.py < master-data-schema-topup.sql`.
 3. `helm template` with live values + `values-far.yaml`; prints the unique
-   `image:` lines (this is where you catch a floating/unpullable tag).
-4. `helm upgrade commons-services openg2p-gitlab/openg2p-commons-services
-   --version 2.3.0-rc.217 -f <live> -f values-far.yaml --timeout 20m`, with
-   the same hook-log capture as the registry pipeline (`*-(seed|register|init)-*`).
-5. `kubectl rollout status deploy/commons-services-master-data-api`, then from
-   the **staff-ui pod** fetches `$MASTERDATA_BACKEND_API_URL/openapi.json` and
+   `image:` lines and **fails if any still points at `registry.gitlab.com`**.
+4. Deletes `commons-services-master-data-api` when its selector predates chart
+   2.3 (selectors are immutable; the upgrade recreates it), then
+   `helm upgrade commons-services openg2p/openg2p-commons-services
+   --version 2.3.3 -f <live> -f values-far.yaml --timeout 20m`, with hook-log
+   capture (`*-(seed|register|init|role|sync)-*`).
+5. Waits for master-data and Partner Management's two APIs, then runs
+   `register-partners.py` in the Partner Management pod: every sender in
+   `partners-far.json` ends up an active partner.
+6. From the **staff-ui pod** fetches `$MASTERDATA_BACKEND_API_URL/openapi.json` and
    fails unless `/geo/get_all_geo_levels` is served (the G2R-172 regression).
 
-Subcharts at rc.217: master-data `1.1.0-rc.55`, IAM `1.4.0-rc.90`,
-audit-manager `1.0.1`, `openg2p-awe 0.0.0-develop.70` (no alias, so its values
-key is `openg2p-awe:`). `0.0.0-develop.N` tags of OpenG2P images are **rebuilt
-in place** — a local pull of the same tag proves nothing about what a pod runs;
-read the truth from the pod (`openapi.json`, `imageID`, `env`).
+Services at 2.3.3, pinned in `values-far.yaml`: master-data `1.1.3`, IAM
+`1.4.2`, AWE `1.2.2`, consent-manager `1.0.3`, partner-management `1.0.2`,
+audit-manager `1.2.0`, all from Docker Hub. Keep `0.0.0-develop.N` tags out of
+it: OpenG2P **rebuilds them in place**, so a local pull of the same tag proves
+nothing about what a pod runs; read the truth from the pod (`openapi.json`,
+`imageID`, `env`).
 
 ### 4.4 TLS trust inside the cluster (the CA bundle)
 

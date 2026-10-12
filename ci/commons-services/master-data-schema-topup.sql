@@ -1,9 +1,12 @@
 -- Master Data schema top-up, run by upgrade.sh inside the master-data-api pod
 -- before the chart upgrade.
 --
--- Generated from the SQLAlchemy models of openg2p_gen2_master_data 1.1.0
--- (image master-data-api:1.1.0-rc.55, the version chart 2.3.0-rc.217 pins):
--- one ADD COLUMN IF NOT EXISTS per model column, nullable columns only, so it
+-- Generated from the SQLAlchemy models of openg2p_gen2_master_data: first
+-- 1.1.0 (master-data-api:1.1.0-rc.55), then extended with what 1.1.3 (the
+-- version values-far.yaml pins) adds. The union is kept on purpose: an
+-- environment can still be on the older build when this runs, and every
+-- statement is a no-op where the column exists. One ADD COLUMN IF NOT EXISTS
+-- per model column, nullable columns only, so it
 -- is idempotent and keeps every existing row and id. Tables that do not exist
 -- are created by the API itself at startup (create_all), which is also why
 -- the API cannot add these columns: create_all never alters existing tables.
@@ -101,6 +104,8 @@ ALTER TABLE IF EXISTS public.g2p_sample_individuals ADD COLUMN IF NOT EXISTS "la
 ALTER TABLE IF EXISTS public.g2p_sample_individuals ADD COLUMN IF NOT EXISTS "longitude" FLOAT;
 ALTER TABLE IF EXISTS public.g2p_sample_individuals ADD COLUMN IF NOT EXISTS "country" VARCHAR;
 ALTER TABLE IF EXISTS public.g2p_sample_individuals ADD COLUMN IF NOT EXISTS "version" VARCHAR;
+-- Added in 1.1.3.
+ALTER TABLE IF EXISTS public.g2p_sample_individuals ADD COLUMN IF NOT EXISTS "birth_date" DATE;
 -- SKIPPED (NOT NULL, must already exist): partner_keys.active BOOLEAN
 -- SKIPPED (NOT NULL, must already exist): partner_keys.reference_id VARCHAR
 -- SKIPPED (NOT NULL, must already exist): partner_keys.public_key VARCHAR
