@@ -178,23 +178,12 @@ spec:
             - -c
             - |
               set -e
-              # 1. The registry's OWN views — the semantic ones. Materialized,
-              #    hand-maintained, and named under `custom:` in reporting.yaml
-              #    so step 2 leaves them alone.
+              # 1. The reporting views the dashboard API reads, all of them
+              #    hand-written and materialized.
               psql -v ON_ERROR_STOP=1 -f /seed/reporting_views.sql
-              {{- if .Values.analytics.reportingViews.generate }}
-              # 2. The mechanical rest, from the platform: one view per entity
-              #    node, discovered from this registry's own schema. It runs
-              #    SECOND because a generated child reads its parent's columns,
-              #    and the semantic parents are created above.
-              #
-              #    It fails the job if personal data reaches a generated view.
-              #    That is the point: an allow-list a planner respects is a
-              #    convention, a column that is not in the view is a boundary.
-              python3 /seed/generate_reporting_views.py
-              {{- else }}
-              echo "[reporting-views] generation disabled (analytics.reportingViews.generate=false)"
-              {{- end }}
+              # 2. The geo level names that title their geo_N columns, from
+              #    Master Data.
+              sh /seed/reporting_geo_levels.sh
           env:
             - name: PGHOST
               value: {{ $pg | quote }}
@@ -209,14 +198,10 @@ spec:
                 secretKeyRef:
                   name: {{ tpl .Values.global.registryDBSecret $ | quote }}
                   key: {{ tpl .Values.global.registryDBUserPasswordKey $ | quote }}
-            - name: REPORTING_PREFIX
-              value: {{ .Values.analytics.reportingViews.matchPrefix | quote }}
-            - name: REPORTING_CONFIG
-              value: /seed/reporting.yaml
-            {{/* Master Data owns the country pack, and the hierarchy DEPTH comes
+            {{/* Master Data owns the country pack, and the geo level names come
                  from it rather than from registered rows. A production registry
-                 is installed empty, so measuring the data gave every view zero
-                 geo columns on precisely the install that matters. It is a
+                 is installed empty, so reading the data gave an empty lookup on
+                 precisely the install that matters. It is a
                  separate database owned by a separate role — reading it as the
                  registry user fails with "permission denied for
                  g2p_geo_levels". */}}
