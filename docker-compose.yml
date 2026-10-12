@@ -57,7 +57,7 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:latest
+    image: chainguard/minio:latest
     container_name: farmer-registry-minio
     command: server /data --console-address ":9001"
     # Presigned document URLs (farmer photo, land certificate, attachments) are
@@ -80,33 +80,26 @@ services:
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      # chainguard/minio has bash (with working /dev/tcp) but no curl; probe the API port.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000"]
       interval: 10s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
   minio-init:
-    image: minio/mc:latest
+    image: chainguard/minio-client:latest
     container_name: farmer-registry-minio-init
+    # chainguard's mc client is distroless (no shell), so configure the alias via
+    # MC_HOST_local and create all buckets in a single `mc mb` call.
     depends_on:
       minio:
         condition: service_healthy
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-adminsecret}
-      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-default-bucket}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -e
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}"
-        mc mb --ignore-existing "local/$${MINIO_BUCKET_NAME}"
-        mc mb --ignore-existing local/templates
-        mc mb --ignore-existing local/registrant-photos
-        mc mb --ignore-existing local/documents
-        exit 0
-    restart: "no"
+      MC_HOST_local: http://${MINIO_ROOT_USER:-admin}:${MINIO_ROOT_PASSWORD:-adminsecret}@minio:9000
+    entrypoint: ["/usr/bin/mc"]
+    command: ["mb", "--ignore-existing", "local/${MINIO_BUCKET_NAME:-default-bucket}", "local/templates", "local/registrant-photos", "local/documents"]
+    restart: "on-failure"
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -475,6 +468,13 @@ services:
       REGISTRY_PARTNER_API_AUDIT_ENABLED: "false"
       REGISTRY_PARTNER_API_OPENAPI_ROOT_PATH: /
       REGISTRY_PARTNER_API_CORS_ALLOW_ORIGINS: '["*"]'
+      # Phase-1 local demo: skip Consent Manager validation so the DCI search
+      # returns farmer data without the subject-grant/consent-JWS layer. This is
+      # the platform's documented local testing bypass — NOT for production.
+      REGISTRY_PARTNER_API_CONSENT_ENFORCEMENT_ENABLED: "false"
+      # Phase-1 local demo: skip partner-signature (detached JWS) verification so
+      # an unsigned DCI envelope is accepted. Documented testing bypass only.
+      REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED: "false"
     ports:
       - "${FARMER_REGISTRY_PARTNER_API_PORT:-8006}:8000"
     restart: unless-stopped
