@@ -29,6 +29,8 @@ jobs:
       - run: pip install --quiet pytest
       - name: openg2p-registry pin lockstep
         run: python -m pytest test/test_rp_pin_lockstep.py -q
+      - name: db-seed image ships every /seed file the chart's jobs run
+        run: python -m pytest test/test_seed_files_shipped.py -q
       - name: platform overlay patches still apply
         run: python -m pytest test/test_patch_platform_iam_permissions.py -q
       - name: location seed is one connected tree

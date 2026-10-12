@@ -1,8 +1,12 @@
 -- Farmer Registry reporting layer
 -- =============================================================================
--- Flattens the register into wide, indexed materialized views that dashboards
--- (Superset) read from. Charts then stay simple SELECTs instead of repeating
--- multi-table joins and JSONB digging in every chart definition.
+-- Flattens the register into wide, indexed materialized views that the
+-- registry's dashboard API reads from. Charts then stay simple SELECTs instead of
+-- repeating multi-table joins and JSONB digging in every chart definition.
+--
+-- These views are the whole reporting surface: each one exists because a chart
+-- reads it. A new chart over another entity gets a view written here, next to the
+-- others, rather than one generated for every table in the schema.
 --
 -- Grain differs from NSR, deliberately
 -- ------------------------------------
@@ -23,6 +27,9 @@
 --                   Area questions MUST use this view: rolling area to the farmer
 --                   and then charting it double-counts nothing, but slicing by a
 --                   parcel attribute (tenure, use) only makes sense per parcel.
+--
+-- plus fr_rpt_crop, one row per planting, for "which crops, where" (the
+-- commodities map layer).
 --
 -- Country-agnostic by construction
 -- --------------------------------
@@ -47,22 +54,52 @@
 --
 --   REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_land;
 --   REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_farmer;
+--   REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_crop;
 --
--- fr_rpt_crop is GENERATED now, from reporting.yaml, and is refreshed with the
--- rest — the refresh job resolves its order from pg_depend, so it still lands
--- after the land view it reads.
---
--- (CONCURRENTLY needs the unique indexes created at the bottom, and those in turn
--- need a first non-concurrent refresh — which CREATE ... AS does for us.)
+-- (The refresh job resolves that order from pg_depend. CONCURRENTLY needs the
+-- unique indexes created at the bottom, and those in turn need a first
+-- non-concurrent refresh — which CREATE ... AS does for us.)
 -- =============================================================================
 
--- fr_rpt_geo_levels is GENERATED, from Master Data.
+-- fr_rpt_geo_levels is built from Master Data by reporting_geo_levels.sh, which
+-- the reporting job runs after this file.
 --
 -- It used to be derived here, by unpacking a registered farmer's own hierarchy.
 -- That made the labels a property of the DATA: a registry installed empty — the
 -- production case — produced an empty lookup, so nothing could name its own geo
 -- columns. Master Data holds the country pack and knows the answer before the
 -- first record exists.
+
+-- ---------------------------------------------------------------------------
+-- Retired views
+-- ---------------------------------------------------------------------------
+-- Older installs carry one view per register table, created by the registry
+-- platform's view generator for Superset. Nothing reads them any more, and with
+-- nothing refreshing their definitions they would drift from the schema. Named
+-- one by one: a pattern here would also drop a view added above later.
+DO $$
+DECLARE
+    v text;
+    kind "char";
+BEGIN
+    FOREACH v IN ARRAY ARRAY[
+        'fr_rpt_change_request', 'fr_rpt_consent_receipt', 'fr_rpt_consent_request',
+        'fr_rpt_farm_input', 'fr_rpt_farmer_phone', 'fr_rpt_household',
+        'fr_rpt_household_member', 'fr_rpt_livestock', 'fr_rpt_membership',
+        'fr_rpt_record_history', 'fr_rpt_reg_id', 'fr_rpt_score',
+        'fr_rpt_score_history'
+    ] LOOP
+        SELECT c.relkind INTO kind
+        FROM pg_class c
+        WHERE c.relname = v AND c.relnamespace = 'public'::regnamespace;
+        IF kind = 'v' THEN
+            EXECUTE format('DROP VIEW %I CASCADE', v);
+        ELSIF kind = 'm' THEN
+            EXECUTE format('DROP MATERIALIZED VIEW %I CASCADE', v);
+        END IF;
+        kind := NULL;
+    END LOOP;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Land parcels
@@ -404,12 +441,68 @@ COMMENT ON MATERIALIZED VIEW fr_rpt_farmer IS
 
 
 -- ---------------------------------------------------------------------------
+-- Crops
+-- ---------------------------------------------------------------------------
+-- One row per crop planting, with geography. fr_rpt_land collapses commodities
+-- into a comma-joined string for drill-down, which cannot be grouped by — "which
+-- crops, where" needs the crop grain. Keep aggregates that COUNT PARCELS on
+-- fr_rpt_land and aggregates that COUNT PLANTINGS here.
+--
+-- A crop links to EITHER its land parcel or straight to its farmer, depending on
+-- which form captured it; intake records crops against the farmer. Geography is
+-- the parcel's when there is one and the farmer's otherwise, so every planting
+-- lands on the map. Built after fr_rpt_farmer because it reads it.
+DROP MATERIALIZED VIEW IF EXISTS fr_rpt_crop CASCADE;
+CREATE MATERIALIZED VIEW fr_rpt_crop AS
+SELECT
+    c.internal_record_id                               AS crop_id,
+    l.land_id,
+    f.farmer_id,
+    c.commodity,
+    c.season,
+    c.planted_date,
+    c.end_use,
+    (c.end_use = 'FOOD_HUMAN_CONSUMPTION')             AS is_food_crop,
+    (c.end_use = 'FEED_ANIMALS')                       AS is_feed_crop,
+    COALESCE(l.geo_1, f.geo_1)                         AS geo_1,
+    COALESCE(l.geo_2, f.geo_2)                         AS geo_2,
+    COALESCE(l.geo_3, f.geo_3)                         AS geo_3,
+    COALESCE(l.geo_4, f.geo_4)                         AS geo_4,
+    COALESCE(l.geo_5, f.geo_5)                         AS geo_5,
+    COALESCE(l.geo_1_id, f.geo_1_id)                   AS geo_1_id,
+    COALESCE(l.geo_2_id, f.geo_2_id)                   AS geo_2_id,
+    COALESCE(l.geo_3_id, f.geo_3_id)                   AS geo_3_id,
+    COALESCE(l.geo_4_id, f.geo_4_id)                   AS geo_4_id,
+    COALESCE(l.geo_5_id, f.geo_5_id)                   AS geo_5_id,
+    -- Parcel attributes are NULL for a crop recorded against the farmer.
+    l.land_ownership_type,
+    l.current_land_use,
+    l.farming_type,
+    -- Parcel area repeats on every crop row: correct for "area where X is grown",
+    -- WRONG to SUM across a parcel's crops. Charts that total area use fr_rpt_land.
+    l.land_size_ha                                     AS parcel_land_size_ha
+FROM g2p_register_crops c
+LEFT JOIN fr_rpt_land l ON l.land_id = c.link_internal_record_id
+LEFT JOIN fr_rpt_farmer f
+       ON f.farmer_id = COALESCE(l.farmer_id, c.link_internal_record_id)
+WHERE c.record_status = 'ACTIVE';
+
+COMMENT ON MATERIALIZED VIEW fr_rpt_crop IS
+    'One row per crop planting with geography (the parcel''s, else the farmer''s). '
+    'Use for crop-mix and end-use questions; parcel_land_size_ha repeats per crop, '
+    'so never SUM it.';
+
+
+-- ---------------------------------------------------------------------------
 -- Indexes
 -- ---------------------------------------------------------------------------
 -- Unique indexes are what allow REFRESH ... CONCURRENTLY (refresh without
 -- blocking readers — a dashboard mid-query keeps the old snapshot).
 CREATE UNIQUE INDEX fr_rpt_farmer_pk ON fr_rpt_farmer (farmer_id);
 CREATE UNIQUE INDEX fr_rpt_land_pk   ON fr_rpt_land   (land_id);
+CREATE UNIQUE INDEX fr_rpt_crop_pk   ON fr_rpt_crop   (crop_id);
+CREATE INDEX fr_rpt_crop_commodity   ON fr_rpt_crop   (commodity);
+CREATE INDEX fr_rpt_crop_geo         ON fr_rpt_crop   (geo_1, geo_2, geo_3);
 
 -- Geo indexes back the region drill-down, which filters progressively by level.
 CREATE INDEX fr_rpt_farmer_geo    ON fr_rpt_farmer (geo_1, geo_2, geo_3);
