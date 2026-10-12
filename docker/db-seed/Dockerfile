@@ -60,4 +60,7 @@ RUN chmod +x /seed/sync_catalogue_attributes.py
 COPY docker/db-seed/generate_fr_bulk_sample.py /seed/generate_fr_bulk_sample.py
 COPY docker/db-seed/reporting_views.sql        /seed/reporting_views.sql
 COPY docker/db-seed/reporting_geo_levels.sh    /seed/reporting_geo_levels.sh
-RUN chmod +x /seed/generate_fr_bulk_sample.py /seed/reporting_geo_levels.sh
+# Run by the chart's pre-upgrade migration job.
+COPY scripts/migrate-rp-geo-columns.sh         /seed/migrate-rp-geo-columns.sh
+RUN chmod +x /seed/generate_fr_bulk_sample.py /seed/reporting_geo_levels.sh \
+             /seed/migrate-rp-geo-columns.sh

@@ -18,6 +18,15 @@ materialized views are refreshed in dependency order. Unexpected dependencies
 abort instead of being dropped with CASCADE. Repeating the migration after
 success is a no-op. Keep the generated backup and migration SQL.
 
+On Kubernetes the chart runs it for you: the pre-upgrade Job
+`<release>-migrate-coordinates` (`templates/db-migrations.yaml`,
+`dbMigrations.coordinateTypes.enabled`) runs the script from the db-seed image
+as the registry database user, before the new pods start. Its backup directory
+is pod scratch space and is discarded, so take a database backup before
+upgrading an environment whose data matters. If the Job fails, the transaction
+has rolled back and the upgrade stops; its log names the invalid values. The new
+pods start with fresh connections, so no restart is needed afterwards.
+
 For the local shared-infra setup, copy the script into
 `openg2p-shared-postgres`, stop the farmer API/worker/beat containers, and run:
 

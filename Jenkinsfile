@@ -263,7 +263,7 @@ EOF
                         LOGDIR=\$(mktemp -d)
                         ( set +x
                           while sleep 5; do
-                            for P in \$(kubectl get pods -n ${HELM_NAMESPACE} -o name | grep -E '/${HELM_RELEASE}-(db-seed|iam-register|sanity|fr-reporting-views)-'); do
+                            for P in \$(kubectl get pods -n ${HELM_NAMESPACE} -o name | grep -E '/${HELM_RELEASE}-(migrate-coordinates|db-seed|iam-register|sanity|fr-reporting-views)-'); do
                               kubectl logs \$P -n ${HELM_NAMESPACE} --all-containers --tail=100 > \$LOGDIR/\${P#pod/}.log 2>&1 || true
                             done
                           done ) &

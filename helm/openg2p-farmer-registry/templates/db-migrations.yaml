@@ -1,0 +1,81 @@
+{{/*
+Schema repairs the registry platform does not make itself.
+
+The platform creates tables with create_all(), which never alters a column that
+already exists. When a platform release changes a column's type, a long-lived
+database keeps the old type and every query that reads the column fails, while
+a fresh install is fine. These jobs bring an upgraded database to the types the
+deployed images expect.
+
+They run pre-upgrade, before the new pods start, so an upgrade never serves the
+new images against the old columns. Each one checks first and exits without
+changes when the database already matches, so it is safe on every upgrade and
+on a database that was repaired by hand. A fresh install has nothing to repair,
+so there is no pre-install hook.
+*/}}
+{{- if .Values.dbMigrations.coordinateTypes.enabled }}
+{{- $pg := tpl .Values.global.postgresqlHost $ }}
+{{/* The registry's db-seed image, as for the analytics jobs: CI rewrites
+     .registry.dbSeed.image.tag to the freshly built version. */}}
+{{- $seedRepo := .Values.analytics.image.repository | default .Values.registry.dbSeed.image.repository }}
+{{- $seedTag := .Values.analytics.image.tag | default .Values.registry.dbSeed.image.tag }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-migrate-coordinates
+  labels:
+    app.kubernetes.io/name: migrate-coordinates
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    helm.sh/hook: pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  {{/* No retries: the migration is one transaction, so a failure leaves the
+       database unchanged and a retry would only fail the same way. */}}
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate-coordinates
+          image: {{ $seedRepo }}:{{ $seedTag }}
+          {{/* Registry platform 1.2 maps latitude, longitude and altitude as
+               numbers; databases created before it hold them as varchar, and
+               every read then fails with "Unknown PG numeric type: 1043". The
+               script validates every value before altering anything and makes
+               the change in a single transaction, rebuilding the reporting
+               views that depend on these columns.
+
+               Its backup directory is pod scratch space here and is discarded
+               with the pod. Take a database backup before upgrading an
+               environment whose data matters; the script itself never commits
+               a partial change. */}}
+          command:
+            - bash
+            - /seed/migrate-rp-geo-columns.sh
+            - /work/backup
+          env:
+            - name: PGHOST
+              value: {{ $pg | quote }}
+            - name: PGPORT
+              value: {{ .Values.global.registryDBPort | default 5432 | quote }}
+            - name: PGDATABASE
+              value: {{ tpl .Values.global.registryDB $ | quote }}
+            - name: PGUSER
+              value: {{ tpl .Values.global.registryDBUser $ | quote }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ tpl .Values.global.registryDBSecret $ | quote }}
+                  key: {{ tpl .Values.global.registryDBUserPasswordKey $ | quote }}
+          resources: {{- toYaml .Values.analytics.resources | nindent 12 }}
+          volumeMounts:
+            - name: work
+              mountPath: /work
+      volumes:
+        - name: work
+          emptyDir: {}
+{{- end }}

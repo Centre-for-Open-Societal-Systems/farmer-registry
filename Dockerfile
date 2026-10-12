@@ -186,6 +186,7 @@ COPY docker/db-seed/sync_catalogue_attributes.py /seed/sync_catalogue_attributes
 COPY docker/db-seed/generate_fr_bulk_sample.py /seed/generate_fr_bulk_sample.py
 COPY docker/db-seed/reporting_views.sql /seed/reporting_views.sql
 COPY docker/db-seed/reporting_geo_levels.sh /seed/reporting_geo_levels.sh
+COPY scripts/migrate-rp-geo-columns.sh /seed/migrate-rp-geo-columns.sh
 
 # Overrides the base image's own load_geo_data.py, which loads a generic
 # fictional sample pack. LOAD_GEO_DATA=true now loads the real Ethiopia
@@ -200,4 +201,5 @@ RUN chmod +x \
     /seed/sync_catalogue_attributes.py \
     /seed/generate_fr_bulk_sample.py \
     /seed/reporting_geo_levels.sh \
+    /seed/migrate-rp-geo-columns.sh \
     /seed/load_geo_data.py

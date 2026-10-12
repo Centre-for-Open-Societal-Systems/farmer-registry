@@ -208,6 +208,17 @@ registry:
     crSectionId: "farmer_farmer_personal_identification_section_01"
 
 
+# ── Schema repairs on upgrade ────────────────────────────────────
+# Pre-upgrade jobs that change column types the platform's create_all() never
+# changes on an existing database (templates/db-migrations.yaml). Each one is a
+# no-op on a database that already matches.
+dbMigrations:
+  # latitude/longitude/altitude varchar -> double precision, for databases
+  # created before registry platform 1.2 (scripts/migrate-rp-geo-columns.sh).
+  coordinateTypes:
+    enabled: true
+
+
 # ── Analytics: sample data, reporting views ──────────────────────
 # Runs after the registry db-seed (hook weight 10) at hook weights 40 -> 45.
 #
