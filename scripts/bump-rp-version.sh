@@ -4,7 +4,7 @@
 # dependency -- atomically, so the two can never drift.
 #
 # Source of truth: https://github.com/OpenG2P/versions (registry-platform/versions/).
-# Pin a RELEASE (X.Y.Z), not a develop build. Images come from the openg2p Docker
+# Pin a stable RELEASE or explicit RC, not a develop build. Images come from the openg2p Docker
 # Hub org (openg2p/openg2p-registry-*), the chart from the openg2p-helm index.
 #
 # Usage:
@@ -18,7 +18,6 @@ CHART_DIR="helm/openg2p-farmer-registry"
 REGISTRY_CHART="openg2p-registry"
 HELM_REPO="https://openg2p.github.io/openg2p-helm"
 VERSIONS_API="https://api.github.com/repos/OpenG2P/versions/contents/registry-platform/versions"
-PROBE_IMAGE="openg2p-registry-staff-api"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 note() { echo "  $*"; }
@@ -47,19 +46,27 @@ if [ -n "$VERSION_ARG" ]; then VERSION="$VERSION_ARG"; else
   VERSION=$(latest_release); [ -n "$VERSION" ] || die "no stable release found in OpenG2P/versions"
 fi
 note "target version: $VERSION"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]] \
+  || die "choose a stable release or release candidate, not a develop build"
+curl -fsS -o /dev/null "https://raw.githubusercontent.com/OpenG2P/versions/develop/registry-platform/versions/${VERSION}.md" \
+  || die "$VERSION is not published in OpenG2P/versions"
 
-curl -fsSL "${HELM_REPO}/index.yaml" | grep -q "${REGISTRY_CHART}-${VERSION}\.tgz" \
+curl -fsS -o /dev/null "${HELM_REPO}/${REGISTRY_CHART}-${VERSION}.tgz" \
   || die "no ${REGISTRY_CHART} ${VERSION} chart in ${HELM_REPO}"
-curl -fsS -o /dev/null "https://hub.docker.com/v2/repositories/openg2p/${PROBE_IMAGE}/tags/${VERSION}" \
-  || die "no openg2p/${PROBE_IMAGE}:${VERSION} image on Docker Hub"
+for component in staff-api staff-ui partner-api celery db-seed sanity-tests; do
+  curl -fsS -o /dev/null "https://hub.docker.com/v2/repositories/openg2p/openg2p-registry-${component}/tags/${VERSION}" \
+    || die "no openg2p/openg2p-registry-${component}:${VERSION} image on Docker Hub"
+done
 note "verified: chart + images exist for $VERSION"
 
-CUR_DOCKER=$(grep -hoE 'ARG RP_VERSION=\S+' docker/*/Dockerfile | sed 's/ARG RP_VERSION=//' | sort -u | tr '\n' ',' | sed 's/,$//')
+CUR_DOCKER=$(grep -hoE 'ARG RP_VERSION=\S+' Dockerfile docker/*/Dockerfile | sed 's/ARG RP_VERSION=//' | sort -u | tr '\n' ',' | sed 's/,$//')
 note "current dockerfiles: $CUR_DOCKER"
 [ "$CHECK_ONLY" = "true" ] && { echo "  would bump to ${VERSION} (run without -n to apply)"; exit 0; }
 
 for f in docker/*/Dockerfile Dockerfile; do
-  [ -f "$f" ] && grep -q 'ARG RP_VERSION=' "$f" && sed -i -E "s/^ARG RP_VERSION=.*/ARG RP_VERSION=${VERSION}/" "$f"
+  if [ -f "$f" ]; then
+    sed -i -E "s/^ARG RP_VERSION=.*/ARG RP_VERSION=${VERSION}/; s/^ARG STAFF_UI_VERSION=.*/ARG STAFF_UI_VERSION=${VERSION}/" "$f"
+  fi
 done
 python3 - "$CHART_DIR/Chart.yaml" "$VERSION" <<'PY'
 import re,sys

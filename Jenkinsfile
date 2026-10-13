@@ -24,6 +24,7 @@ pipeline {
         HELM_RELEASE   = "farmer-registry"
         HELM_NAMESPACE = "far"
         HELM_CHART_DIR = "helm/openg2p-farmer-registry"
+        HELM_ENV_VALUES = "helm/openg2p-farmer-registry/environments/${env.BRANCH_NAME == 'develop' ? 'dev-common' : 'staging-legacy'}.yaml"
     }
 
     stages {
@@ -135,7 +136,7 @@ pipeline {
             // Deploy runs on a different (vpn-agent2) node -- carry just the
             // local chart directory over, not the whole repo/build context.
             steps {
-                stash name: 'farmer-chart', includes: "${HELM_CHART_DIR}/**"
+                stash name: 'farmer-chart', includes: "${HELM_CHART_DIR}/**,ci/gen2/**"
             }
         }
 
@@ -165,8 +166,10 @@ pipeline {
                 withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
                     sh """
                      
-                        helm repo add openg2p-gitlab https://gitlab.com/api/v4/projects/84460547/packages/helm/stable || true
-                        helm repo update openg2p-gitlab
+                        set -eu
+                        # Match Chart.yaml and the artifact URLs in OpenG2P/versions.
+                        helm repo add openg2p https://openg2p.github.io/openg2p-helm --force-update
+                        helm repo update openg2p
                         # `update`, not `build`: Chart.lock is gitignored (it pins a
                         # moving -develop tag, so it buys no determinism), which leaves
                         # the workspace copy on the agent as the only one -- and git
@@ -204,7 +207,6 @@ registry:
     image:
       repository: ${ECR_REGISTRY}/${ECR_PATH}/db-seed
       tag: "${env.IMAGE_TAG}"
-    loadAttributes: false
   sanity:
     image:
       repository: ${ECR_REGISTRY}/${ECR_PATH}/sanity-tests
@@ -250,11 +252,30 @@ EOF
                             : > /tmp/far-values-current-\${BUILD_NUMBER}.yaml
                         fi
 
-                        # Dry-run render of exactly what the upgrade below applies.
+                        # One argument list for render AND upgrade. Tracked dev wiring
+                        # wins over stale live short-name overrides; CI owns images.
+                        # A platform-approved browser values file on vpn-agent2 is
+                        # optional on upgrades and required on a first install. It
+                        # contains hostnames/CA references, never passwords or tokens.
+                        set -- -f /tmp/far-values-current-\${BUILD_NUMBER}.yaml -f ${HELM_ENV_VALUES}
+                        if [ '${env.BRANCH_NAME}' = develop ] && [ -n "\${GEN2_BROWSER_VALUES_FILE:-}" ]; then
+                            set -- "\$@" -f "\$GEN2_BROWSER_VALUES_FILE"
+                        fi
+                        set -- "\$@" -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml
+
+                        # Offline render of exactly what the upgrade below applies.
                         helm template ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} \
-                            -f /tmp/far-values-current-\${BUILD_NUMBER}.yaml \
-                            -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml > /tmp/far-new-\${BUILD_NUMBER}.yaml
+                            "\$@" > /tmp/far-new-\${BUILD_NUMBER}.yaml
                         echo "Rendered \$(wc -l < /tmp/far-new-\${BUILD_NUMBER}.yaml) lines to /tmp/far-new-\${BUILD_NUMBER}.yaml"
+                        helm lint ${HELM_CHART_DIR} "\$@" --strict
+                        if [ '${env.BRANCH_NAME}' = develop ]; then
+                            # Configuration validation before any cluster mutation.
+                            python3 -m venv .cache/gen2-validation-venv
+                            .cache/gen2-validation-venv/bin/python -m pip install --quiet -r ci/gen2/requirements.txt
+                            .cache/gen2-validation-venv/bin/python ci/gen2/validate_manifest.py \
+                                /tmp/far-new-\${BUILD_NUMBER}.yaml --release ${HELM_RELEASE} --namespace ${HELM_NAMESPACE}
+                            bash ci/gen2/preflight.sh
+                        fi
 
                         # The hook Jobs (db-seed, iam-register, sanity, reporting views) delete their pod
                         # when they give up, and its log goes with it: all helm reports
@@ -270,8 +291,7 @@ EOF
                         trap "set +e; kill \$! 2>/dev/null; wait \$! 2>/dev/null; rm -rf \$LOGDIR" EXIT
 
                         if ! helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} \
-                            -f /tmp/far-values-current-\${BUILD_NUMBER}.yaml \
-                            -f /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml --timeout 20m; then
+                            "\$@" --timeout 20m; then
                             for F in \$LOGDIR/*.log; do
                                 [ -f \$F ] || continue
                                 echo "=== \$(basename \$F .log): last 100 log lines ==="

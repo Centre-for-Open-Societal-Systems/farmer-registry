@@ -1,5 +1,12 @@
 # Farmer Registry — deployment setup, end to end
 
+> **Gen2 development update:** the new dev profile uses Commons Base and
+> Commons Services `2.3.4-rc.245` in **`common`**, with the farmer release in
+> `far`. See [gen2-common-upgrade.md](gen2-common-upgrade.md) for the current
+> topology, tracked values, prerequisites and validation gates. The old
+> same-namespace topology and `ci/commons-services` instructions below describe
+> the legacy deployment and must not be used to upgrade shared Gen2 dev.
+
 Everything needed to build, deploy, upgrade, verify, roll back and debug the
 Farmer Registry on the `far` namespace of the dev and staging clusters. Written
 against the repo as of 2026-09-17 (including recent platform dependency updates and AWE callback fixes).

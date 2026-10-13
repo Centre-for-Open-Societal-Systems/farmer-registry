@@ -41,3 +41,29 @@ jobs:
         run: pip install --quiet jinja2 && python odk/test_transform.py
       - name: committed ODK form matches the pipeline and the transform
         run: pip install --quiet openpyxl && python -m pytest test/test_odk_forms.py test/test_odk_location_media.py -q
+
+  gen2-helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-helm@v4
+        with:
+          version: 'v3.19.0'
+      - run: pip install --quiet pytest -r ci/gen2/requirements.txt
+      - name: resolve the published registry dependency
+        run: |
+          helm repo add openg2p https://openg2p.github.io/openg2p-helm
+          helm dependency update helm/openg2p-farmer-registry
+      - name: lint the Gen2 development profile
+        run: helm lint helm/openg2p-farmer-registry -f helm/openg2p-farmer-registry/environments/dev-common.yaml --strict
+      - name: resolve both Commons RC artifacts for contract checks
+        run: |
+          VERSION=$(python -c "import yaml; print(yaml.safe_load(open('helm/openg2p-farmer-registry/environments/dev-common.yaml'))['sharedCommons']['chartVersion'])")
+          mkdir -p .cache/gen2-charts
+          helm pull openg2p/openg2p-commons-base --version "$VERSION" --destination .cache/gen2-charts
+          helm pull openg2p/openg2p-commons-services --version "$VERSION" --destination .cache/gen2-charts
+      - name: render and assert shared-service and browser contracts
+        run: python -m pytest test/test_gen2_common_helm.py -q

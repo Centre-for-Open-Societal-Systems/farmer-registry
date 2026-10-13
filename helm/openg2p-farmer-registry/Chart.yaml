@@ -45,10 +45,9 @@ maintainers:
 # deliberately. Aliased to `registry` so the overlay nests under a hyphen-free
 # key (.Values.registry.*).
 #
-# Since the platform moved to GitLab, openg2p-registry is pulled from the shared
-# `openg2p/charts` Helm registry (project 84460547, channel `stable`) rather than
-# the old openg2p-helm GitHub Pages index, which is frozen at the pre-move
-# versions. The project is public, so no credentials are needed to resolve it.
+# The published release artifacts in OpenG2P/versions point to this Helm index.
+# Resolve the same repository in local tooling and Jenkins; no GitLab credentials
+# or a second Helm repository are required for this pinned release.
 dependencies:
   - name: openg2p-registry
     alias: registry
