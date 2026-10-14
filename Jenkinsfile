@@ -22,7 +22,8 @@ pipeline {
         DASHBOARD_API_REPO = "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api.git"
 
         HELM_RELEASE   = "farmer-registry"
-        HELM_NAMESPACE = "far"
+        // The dev box runs the registry in `farmer`, staging in `far`.
+        HELM_NAMESPACE = "${env.BRANCH_NAME == 'staging' ? 'far' : 'farmer'}"
         HELM_CHART_DIR = "helm/openg2p-farmer-registry"
     }
 
@@ -139,13 +140,13 @@ pipeline {
             }
         }
 
-        stage('Deploy (far namespace)') {
+        stage('Deploy') {
             // Every develop build deploys to dev, and every staging build to staging;
             // other branches only build and push. Each credential is a kubeconfig for
-            // the far:farmer-ci service account on that cluster:
-            //   develop  gen2-dev-kubeconfig        dev, 10.0.1.166; its rights in far
-            //                                       come from ci/k8s/farmer-deploy-rbac.yaml
-            //   staging  staging-farmer-kubeconfig  staging, 10.0.1.212
+            // the farmer-ci service account in that cluster's registry namespace:
+            //   develop  farmer-dev-kubeconfig      dev, 10.0.1.58, namespace farmer; its
+            //                                       rights come from ci/k8s/farmer-deploy-rbac.yaml
+            //   staging  staging-farmer-kubeconfig  staging, 10.0.1.212, namespace far
             // beforeAgent: decide before asking for vpn-agent2, so a build of any other
             // branch never waits for that node.
             when {
@@ -158,7 +159,7 @@ pipeline {
          
             agent { label 'vpn-agent2' }
             environment {
-                KUBECONFIG_CREDENTIAL = "${env.BRANCH_NAME == 'staging' ? 'staging-farmer-kubeconfig' : 'gen2-dev-kubeconfig'}"
+                KUBECONFIG_CREDENTIAL = "${env.BRANCH_NAME == 'staging' ? 'staging-farmer-kubeconfig' : 'farmer-dev-kubeconfig'}"
             }
             steps {
                 unstash 'farmer-chart'
@@ -223,18 +224,14 @@ EOF
                         # dashboard-api only when this build made its image (not on staging).
                         if [ -n "${env.DASHBOARD_API_SHA ?: ''}" ]; then
                             cat >> /tmp/values-far-cicd-\${BUILD_NUMBER}.yaml <<EOF
-# The dashboard service for the OAN dashboards (ClusterIP only).
+# The dashboard service for the OAN dashboards (ClusterIP only). No
+# VirtualService: the dev box's internal gateway serves *.farmer-dev.oanstaging.com,
+# which is public, so a route would publish the API. The BFF uses the Service.
 dashboardApi:
   enabled: true
   image:
     repository: ${ECR_REGISTRY}/${ECR_PATH}/dashboard-api
     tag: "${env.DASHBOARD_API_SHA}"
-  # Private hostname for developers and tools (host nginx allowlist + the
-  # namespace's internal gateway). The BFF uses the ClusterIP Service.
-  virtualService:
-    enabled: true
-    host: dashboard-api.${HELM_NAMESPACE}.openg2p.test
-    gateway: internal
 EOF
                         fi
 
