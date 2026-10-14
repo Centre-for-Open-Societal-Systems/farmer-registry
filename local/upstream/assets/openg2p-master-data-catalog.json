@@ -1,0 +1,56 @@
+{
+  "application_mnemonic": "__APPLICATION_MNEMONIC__",
+  "application_url": "__APPLICATION_URL__",
+  "application_description": "__APPLICATION_DESCRIPTION__",
+  "icon_base64": "",
+  "width": 80,
+  "order": 1,
+  "active": true,
+  "permissions": [
+    {
+      "permission_mnemonic": "referenceData:create",
+      "permission_description": "referenceData:create",
+      "active": true
+    },
+    {
+      "permission_mnemonic": "referenceData:edit",
+      "permission_description": "referenceData:edit",
+      "active": true
+    },
+    {
+      "permission_mnemonic": "referenceData:delete",
+      "permission_description": "referenceData:delete",
+      "active": true
+    },
+    {
+      "permission_mnemonic": "geo:create",
+      "permission_description": "geo:create",
+      "active": true
+    },
+    {
+      "permission_mnemonic": "geo:edit",
+      "permission_description": "geo:edit",
+      "active": true
+    },
+    {
+      "permission_mnemonic": "geo:delete",
+      "permission_description": "geo:delete",
+      "active": true
+    }
+  ],
+  "roles": [
+    {
+      "role_mnemonic": "MASTER_DATA_ADMIN",
+      "role_description": "Master data administrator - manages attribute code lists and geography.",
+      "active": true,
+      "permissions": [
+        "referenceData:create",
+        "referenceData:edit",
+        "referenceData:delete",
+        "geo:create",
+        "geo:edit",
+        "geo:delete"
+      ]
+    }
+  ]
+}

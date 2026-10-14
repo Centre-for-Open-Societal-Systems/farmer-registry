@@ -195,4 +195,6 @@ helm/**/Chart.lock
 helm/**/charts/*.tgz
 
 # Local dev tooling (docker compose stack, seeds, env) — never shipped
-local/
+local/*
+!local/upstream/
+local/upstream/generated/

@@ -1,0 +1,135 @@
+{
+  "upstream_repository": "https://github.com/OpenG2P/farmer-registry.git",
+  "upstream_layout_commit": "5babaca7d513cf94a7cc6f366b19964f2c021913",
+  "coss_source_commit": "10d03aaa5861b8e358f3d89ecf7f3378b6e31ec7",
+  "registry_platform": "1.2.2-rc.544",
+  "commons_base_contract": "2.3.3",
+  "commons_services_contract": "2.3.4-rc.245",
+  "note": "Local trial with uncommitted COSS overlay; source layout commit is not an RC release tag. Image identities describe this run, not a deployment lock.",
+  "images": [
+    {
+      "reference": "apache/kafka:3.9.0",
+      "available_locally": false
+    },
+    {
+      "reference": "farmer-upstream-trial/celery:rc544-coss",
+      "available_locally": false
+    },
+    {
+      "reference": "farmer-upstream-trial/db-seed:rc544-coss",
+      "available_locally": false
+    },
+    {
+      "reference": "farmer-upstream-trial/partner-api:rc544-coss",
+      "available_locally": false
+    },
+    {
+      "reference": "farmer-upstream-trial/sanity-tests:rc544-coss",
+      "available_locally": false
+    },
+    {
+      "reference": "farmer-upstream-trial/staff-api:rc544-coss",
+      "available_locally": false
+    },
+    {
+      "reference": "farmer-upstream-trial/staff-ui:rc544-coss",
+      "available_locally": false
+    },
+    {
+      "reference": "minio/mc:latest",
+      "available_locally": false
+    },
+    {
+      "reference": "minio/minio:latest",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/consent-manager-api:1.0.2",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/consent-manager-ui:1.0.2",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/iam-staff-portal-api:1.4.4-rc.125",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/master-data-api:1.1.4-rc.104",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/master-data-db-seed:1.1.4-rc.104",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/master-data-ui:1.1.4-rc.104",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-audit-manager:1.2.0",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-awe-ui:1.2.2",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-awe:1.2.2",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-id-generator:1.0.0",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-registry-celery:1.2.2-rc.544",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-registry-db-seed:1.2.2-rc.544",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-registry-partner-api:1.2.2-rc.544",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-registry-sanity-tests:1.2.2-rc.544",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-registry-staff-api:1.2.2-rc.544",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-staff-portal-ui:1.2.0",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/partner-management-partner-api:1.0.2",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/partner-management-staff-portal-api:1.0.2",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/partner-management-staff-portal-ui:1.0.2",
+      "available_locally": false
+    },
+    {
+      "reference": "postgres:16",
+      "available_locally": false
+    },
+    {
+      "reference": "quay.io/keycloak/keycloak:26.0",
+      "available_locally": false
+    },
+    {
+      "reference": "redis:7-alpine",
+      "available_locally": false
+    }
+  ]
+}

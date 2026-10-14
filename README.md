@@ -1,5 +1,10 @@
 # Farmer Registry
 
+This local COSS adoption trial uses registry-platform **1.2.2-rc.544** with
+separate Commons Base, Commons Services and Registry Compose projects.
+See [the trial architecture and runbook](local/upstream/README.md) for ownership,
+startup, validation and remaining limitations. Publication is not part of this trial.
+
 An installable **Farmer Registry** built as a thin extension of the OpenG2P
 [registry platform](https://github.com/OpenG2P/registry-platform). Under the
 inverted build model the platform publishes the runnable base images and the
@@ -11,7 +16,7 @@ inverted build model the platform publishes the runnable base images and the
 |---|---|
 | `farmer-extension/` | The farmer domain package — models, schemas, services, seed metadata (registers, AWE policy, DCI templates) |
 | `docker/` | Thin Dockerfiles (`FROM openg2p/openg2p-registry-*` + `pip install farmer-extension`) selected at runtime by `REGISTRY_EXTENSION_MODULE` (Option C) |
-| `helm/openg2p-farmer-registry/` | A thin wrapper chart: pins `openg2p-registry` as a dependency and supplies the farmer values overlay (no templates) |
+| `helm/openg2p-farmer-registry/` | A thin wrapper chart: pins `openg2p-registry`, supplies farmer values and owns farmer analytics templates |
 | `test/sanity/` | The farmer **field-specific** sanity tests (Set 2); the harness + generic tests are inherited from the platform sanity image |
 
 The `openg2p-registry` base image tag (`RP_VERSION` in each Dockerfile) and the
