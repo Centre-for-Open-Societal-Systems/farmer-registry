@@ -44,6 +44,16 @@ pipeline {
             steps { checkout scm }
         }
 
+        stage('Validate legacy target') {
+            steps {
+                script {
+                    if (params.CONFIRM && params.ENVIRONMENT == 'dev') {
+                        error('Gen2 dev Commons is platform-owned in commons. This legacy far-scoped job must not upgrade or reseed it. Use the platform-owner deployment workflow.')
+                    }
+                }
+            }
+        }
+
         stage('Upgrade commons-services') {
             when {
                 expression { return params.CONFIRM && params.ACTION == 'upgrade' }

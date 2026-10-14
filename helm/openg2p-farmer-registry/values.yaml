@@ -86,17 +86,18 @@ global:
   masterDataDBSecret: 'master-data'
   masterDataDBUserPasswordKey: 'master-data-db-user'
 
-# Opt-in compatibility for split-namespace deployments. rc.544's db-seed
-# wait-for-apps hardcodes http://<aweReleaseName>-awe rather than aweBaseUrl.
-# Only this alias is needed; configurable endpoints use namespace-qualified URLs.
-# Leave off for existing same-namespace/staging deployments.
+# Document the opt-in Gen2 shared-service contract. The platform already supplies
+# the ExternalName aliases in farmer; this chart must not recreate/adopt them.
+# Configurable endpoints use namespace-qualified URLs to commons.
 sharedCommons:
   enabled: false
-  namespace: common
+  namespace: commons
   baseRelease: commons
   servicesRelease: commons-services
-  # One identical, immutable RC for both umbrella charts; source: OpenG2P/versions.
-  chartVersion: 2.3.4-rc.245
+  # Published versions actually running on new Gen2 dev. The registry pipeline
+  # consumes this contract, never upgrades either shared release.
+  baseChartVersion: 2.3.3
+  servicesChartVersion: 2.3.4-rc.245
 
 # ── openg2p-registry subchart overrides ───────────────────────────────────────
 registry:

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Read-only check. The platform owner provisions these credentials in far;
-# farmer-ci does NOT get permission to read common Secrets or upgrade commons.
+# Read-only check. The platform owner provisions these credentials in farmer;
+# farmer-ci does NOT get permission to read commons Secrets or upgrade commons.
 # Query namespace-local Secret objects but emit ONLY key-presence, never values.
 set -euo pipefail
-NS="${HELM_NAMESPACE:-far}"
+NS="${HELM_NAMESPACE:-farmer}"
 RELEASE="${HELM_RELEASE:-farmer-registry}"
 
 check_key() {
@@ -29,13 +29,24 @@ check_key awe-db-user awe-db-user-password
 # need it for service-token calls to Master Data/partner-management.
 check_key commons-services-staff-portal client_secret
 
-# Helm cannot take over a manually created alias. Fail BEFORE any upgrade rather
-# than adopting/deleting a resource that might belong to somebody else's release.
-alias_json=$(kubectl get service commons-services-awe -n "$NS" --ignore-not-found \
-  -o 'go-template={{.spec.externalName}}|{{index .metadata.annotations "meta.helm.sh/release-name"}}|{{index .metadata.annotations "meta.helm.sh/release-namespace"}}|{{index .metadata.labels "app.kubernetes.io/managed-by"}}')
-if [ -n "$alias_json" ] && [ "$alias_json" != "commons-services-awe.common.svc.cluster.local|$RELEASE|$NS|Helm" ]; then
-  echo "commons-services-awe exists in $NS without the expected farmer release ownership/target." >&2
-  echo "Have the platform owner resolve the legacy alias before upgrading; no resources were changed." >&2
+# rc.544's db-seed health wait needs this existing platform-owned alias. Its
+# ownership is deliberately irrelevant: this chart never creates/adopts it.
+alias_target=$(kubectl get service commons-services-awe -n "$NS" --ignore-not-found \
+  -o 'go-template={{.spec.type}}|{{.spec.externalName}}')
+if [ "$alias_target" != "ExternalName|commons-services-awe.commons.svc.cluster.local" ]; then
+  echo "Missing or incorrect commons-services-awe alias in $NS; expected an ExternalName to commons." >&2
+  echo "Ask the platform owner to provision/correct it; no resources were changed." >&2
   exit 1
+fi
+
+# Stop an existing rc.384-era database from being served by rc.544 before its
+# required varchar-to-Float migration. This does NOT run the migration or seed.
+deployment=$(kubectl get deployment "$RELEASE-staff-portal-api" -n "$NS" --ignore-not-found -o name)
+if [ -n "$deployment" ]; then
+  HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  kubectl exec -i -n "$NS" "deploy/$RELEASE-staff-portal-api" -c staff-portal-api -- \
+    python3 - < "$HERE/check_geo_schema.py"
+else
+  echo "No existing staff API pod: first-install schema/restored-DB readiness must be confirmed by the platform owner."
 fi
 echo "Gen2 namespace-local prerequisites OK (shared RC version must be checked by the platform owner)."

@@ -7,5 +7,11 @@
 **/__pycache__
 .git
 
+# Local cutover backups contain DB contents and container configuration.
+# They are never inputs to any Farmer image.
+local/gen2/backups
+local/gen2/generated
+local/gen2/.env
+
 # The dashboard-api clone the Jenkinsfile makes. It has its own build context.
 .build

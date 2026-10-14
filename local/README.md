@@ -1,5 +1,9 @@
 # Local Docker Compose stack
 
+For the Gen2 Commons/Farmer split, use [gen2/README.md](gen2/README.md).
+It preserves the existing shared volumes and gives the two projects independent
+lifecycles. The self-contained setup below is the earlier local topology.
+
 Runs the whole Farmer Registry — including the real OIDC login chain — on a
 laptop.
 

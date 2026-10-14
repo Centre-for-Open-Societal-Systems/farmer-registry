@@ -1,8 +1,8 @@
 # Farmer Registry — deployment setup, end to end
 
-> **Gen2 development update:** the new dev profile uses Commons Base and
-> Commons Services `2.3.4-rc.245` in **`common`**, with the farmer release in
-> `far`. See [gen2-common-upgrade.md](gen2-common-upgrade.md) for the current
+> **Gen2 development update:** the new dev profile uses Commons Base `2.3.3` and
+> Commons Services `2.3.4-rc.245` in **`commons`**, with the farmer release in
+> `farmer`. See [gen2-commons-upgrade.md](gen2-commons-upgrade.md) for the current
 > topology, tracked values, prerequisites and validation gates. The old
 > same-namespace topology and `ci/commons-services` instructions below describe
 > the legacy deployment and must not be used to upgrade shared Gen2 dev.
@@ -49,7 +49,7 @@ already point at (`commons-postgresql`, `commons-services-iam-staff-portal-api`,
 
 | Env | Cluster | API server | Jenkins kubeconfig credential | Triggered by |
 | --- | --- | --- | --- | --- |
-| dev | rke2, "gen2 dev" | `https://10.0.1.166:6443` | `gen2-dev-kubeconfig` | push to `develop` |
+| dev | rke2, "gen2 dev" | `https://10.0.1.58:6443` | `farmer-dev-kubeconfig` | push to `develop` |
 | staging | EC2 `farmer-registry-development.oanstaging.com` | `10.0.1.212` | `staging-farmer-kubeconfig` | push to `staging` |
 
 Both use namespace `far`, release name `farmer-registry`, and the same
@@ -437,9 +437,9 @@ Then build the kubeconfig on the box (the exact commands are in the manifest's
 header comment: extract `ca.crt` and `token` from `farmer-ci-token`,
 `kubectl config set-cluster/set-credentials/set-context`, verify with
 `kubectl auth can-i list secrets -n far`) and upload it to Jenkins as a
-**Secret file** credential with ID `gen2-dev-kubeconfig` (dev) or
+**Secret file** credential with ID `farmer-dev-kubeconfig` (dev) or
 `staging-farmer-kubeconfig` (staging). The dev credential ID was recently switched to
-`gen2-dev-kubeconfig`; check `origin/develop` before copying ids.
+`farmer-dev-kubeconfig`; check `origin/develop` before copying ids.
 
 ---
 

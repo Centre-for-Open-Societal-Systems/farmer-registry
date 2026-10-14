@@ -37,6 +37,23 @@ class Patch:
 
 
 PATCHES = [
+    Patch(
+        "openg2p_registry_celery_worker/engine.py",
+        old="from sqlalchemy import create_engine\nfrom sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine\n",
+        new="from sqlalchemy import create_engine\nfrom sqlalchemy.pool import NullPool\nfrom sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine\n",
+        why="Import the non-pooling strategy for the worker's independent async task loops.",
+    ),
+    Patch(
+        "openg2p_registry_celery_worker/engine.py",
+        old="Engine._async_engine = create_async_engine(datasource, **_pool_kwargs(datasource))",
+        new="Engine._async_engine = create_async_engine(datasource, poolclass=NullPool)",
+        why=(
+            "rc.544 task modules own different event loops but share one async engine. "
+            "Reusing an asyncpg connection from another task loop fails with Future "
+            "attached to a different loop. NullPool gives each async session its own "
+            "connection; synchronous worker pooling remains unchanged."
+        ),
+    ),
     # rc.544 fixed every intake-policy call site to use the synchronous helper.
     # The old def -> async def overlay now returns a coroutine to SQLAlchemy
     # and breaks intake search, read-back and access checks. Leave it intact.

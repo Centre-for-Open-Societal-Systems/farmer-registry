@@ -58,12 +58,17 @@ jobs:
           helm repo add openg2p https://openg2p.github.io/openg2p-helm
           helm dependency update helm/openg2p-farmer-registry
       - name: lint the Gen2 development profile
-        run: helm lint helm/openg2p-farmer-registry -f helm/openg2p-farmer-registry/environments/dev-common.yaml --strict
-      - name: resolve both Commons RC artifacts for contract checks
+        run: helm lint helm/openg2p-farmer-registry -f helm/openg2p-farmer-registry/environments/dev-commons.yaml --strict
+      - name: resolve the deployed Commons artifact pair for contract checks
         run: |
-          VERSION=$(python -c "import yaml; print(yaml.safe_load(open('helm/openg2p-farmer-registry/environments/dev-common.yaml'))['sharedCommons']['chartVersion'])")
+          BASE_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('helm/openg2p-farmer-registry/environments/dev-commons.yaml'))['sharedCommons']['baseChartVersion'])")
+          SERVICES_VERSION=$(python -c "import yaml; print(yaml.safe_load(open('helm/openg2p-farmer-registry/environments/dev-commons.yaml'))['sharedCommons']['servicesChartVersion'])")
           mkdir -p .cache/gen2-charts
-          helm pull openg2p/openg2p-commons-base --version "$VERSION" --destination .cache/gen2-charts
-          helm pull openg2p/openg2p-commons-services --version "$VERSION" --destination .cache/gen2-charts
+          helm pull openg2p/openg2p-commons-base --version "$BASE_VERSION" --destination .cache/gen2-charts
+          helm pull openg2p/openg2p-commons-services --version "$SERVICES_VERSION" --destination .cache/gen2-charts
       - name: render and assert shared-service and browser contracts
         run: python -m pytest test/test_gen2_common_helm.py -q
+      - name: validate independent local Commons and Farmer projects
+        run: |
+          python local/gen2/stack.py validate
+          python -m unittest discover -s test -p test_gen2_local.py -v

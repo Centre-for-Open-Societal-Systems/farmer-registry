@@ -31,12 +31,14 @@ def environments(doc):
         yield container, {env["name"]: env.get("value") for env in container.get("env", [])}
 
 
-def validate(docs, release="farmer-registry", namespace="far", allow_examples=False):
+def validate(docs, release="farmer-registry", namespace="farmer", allow_examples=False):
     errors = []
+    if namespace == "commons":
+        errors.append("the registry namespace must be separate from shared commons")
     by_name = {(d.get("kind"), d.get("metadata", {}).get("name")): d for d in docs}
     alias = by_name.get(("Service", "commons-services-awe"), {})
-    if alias.get("spec", {}).get("externalName") != "commons-services-awe.common.svc.cluster.local":
-        errors.append("db-seed requires the chart-managed commons-services-awe alias to common")
+    if alias:
+        errors.append("the farmer chart must reuse, not recreate or adopt, the platform-owned AWE alias")
 
     def deployment_env(suffix):
         doc = by_name.get(("Deployment", f"{release}-{suffix}"), {})
@@ -50,15 +52,15 @@ def validate(docs, release="farmer-registry", namespace="far", allow_examples=Fa
     worker = deployment_env("celery-worker")
     ui = deployment_env("staff-portal-ui")
     expected = {
-        "REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME": "commons-postgresql.common.svc.cluster.local",
-        "REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL": "http://commons-services-iam-staff-portal-api.common.svc.cluster.local",
-        "REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL": "redis://commons-redis-master.common.svc.cluster.local:6379/0",
-        "REGISTRY_STAFF_PORTAL_API_AWE_BASE_URL": "http://commons-services-awe.common.svc.cluster.local",
-        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_API_URL": "http://commons-services-master-data-api.common.svc.cluster.local",
+        "REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME": "commons-postgresql.commons.svc.cluster.local",
+        "REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL": "http://commons-services-iam-staff-portal-api.commons.svc.cluster.local",
+        "REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL": "redis://commons-redis-master.commons.svc.cluster.local:6379/0",
+        "REGISTRY_STAFF_PORTAL_API_AWE_BASE_URL": "http://commons-services-awe.commons.svc.cluster.local",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_API_URL": "http://commons-services-master-data-api.commons.svc.cluster.local",
         "REGISTRY_STAFF_PORTAL_API_CSRF_ENABLED": "true",
         "REGISTRY_STAFF_PORTAL_API_KEYCLOAK_CLIENT_ID": f"{release}-staff-portal",
         "REGISTRY_STAFF_PORTAL_API_AUDIT_ENABLED": "true",
-        "REGISTRY_STAFF_PORTAL_API_AUDIT_MANAGER_URL": "http://commons-services-auditmanager.common.svc.cluster.local:80",
+        "REGISTRY_STAFF_PORTAL_API_AUDIT_MANAGER_URL": "http://commons-services-auditmanager.commons.svc.cluster.local:80",
         "NOTIFICATION_ENABLED": "false",
     }
     for name, value in expected.items():
@@ -68,14 +70,14 @@ def validate(docs, release="farmer-registry", namespace="far", allow_examples=Fa
         "REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED": "true",
         "REGISTRY_PARTNER_API_CONSENT_ENFORCEMENT_ENABLED": "true",
         "REGISTRY_PARTNER_API_CRYPTO_BACKEND": "partner-mgmt",
-        "REGISTRY_PARTNER_API_PARTNER_MGMT_API_URL": "http://commons-services-pm-partner-api.common.svc.cluster.local",
-        "REGISTRY_PARTNER_API_CONSENT_MANAGER_URL": "http://commons-services-cm-partner-api.common.svc.cluster.local",
-        "REGISTRY_PARTNER_API_AUDIT_MANAGER_URL": "http://commons-services-auditmanager.common.svc.cluster.local:80",
+        "REGISTRY_PARTNER_API_PARTNER_MGMT_API_URL": "http://commons-services-pm-partner-api.commons.svc.cluster.local",
+        "REGISTRY_PARTNER_API_CONSENT_MANAGER_URL": "http://commons-services-cm-partner-api.commons.svc.cluster.local",
+        "REGISTRY_PARTNER_API_AUDIT_MANAGER_URL": "http://commons-services-auditmanager.commons.svc.cluster.local:80",
     }.items():
         if partner.get(name) != value:
             errors.append(f"{name} does not match the Gen2 common security contract")
     for name, value in {
-        "REGISTRY_CELERY_WORKERS_AWE_BASE_URL": "http://commons-services-awe.common.svc.cluster.local",
+        "REGISTRY_CELERY_WORKERS_AWE_BASE_URL": "http://commons-services-awe.commons.svc.cluster.local",
         "REGISTRY_CELERY_WORKERS_AWE_ENABLED": "true",
         "REGISTRY_CELERY_WORKERS_AWE_DEFAULT_CALLBACK_URL": f"http://{release}-staff-portal-api.{namespace}.svc.cluster.local/awe/webhooks/decision",
         "REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID": f"{release}-staff-portal",
@@ -146,7 +148,7 @@ def validate(docs, release="farmer-registry", namespace="far", allow_examples=Fa
         for _, env in environments(doc):
             for name, value in env.items():
                 if (name.endswith("DB_HOSTNAME") or name in ("PGHOST", "MD_PGHOST", "MDS_PGHOST", "AWE_PGHOST")) and value:
-                    if value != "commons-postgresql.common.svc.cluster.local":
+                    if value != "commons-postgresql.commons.svc.cluster.local":
                         errors.append(f"{doc['metadata']['name']}: {name} points at the wrong PostgreSQL")
         for container, _ in environments(doc):
             for entry in container.get("env", []):
@@ -164,14 +166,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--release", default="farmer-registry")
-    parser.add_argument("--namespace", default="far")
+    parser.add_argument("--namespace", default="farmer")
     args = parser.parse_args()
     errors = validate(documents(args.manifest.read_text(encoding="utf-8")), args.release, args.namespace)
     if errors:
         for error in errors:
             print("FAIL:", error)
         return 1
-    print("Gen2 rendered manifest: common wiring, browser URLs, callbacks and seed safety OK")
+    print("Gen2 rendered manifest: farmer/commons wiring, browser URLs, callbacks and seed safety OK")
     return 0
 
 

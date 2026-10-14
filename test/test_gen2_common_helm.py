@@ -17,7 +17,7 @@ import yaml
 
 REPO = Path(__file__).resolve().parent.parent
 CHART = REPO / "helm" / "openg2p-farmer-registry"
-DEV = CHART / "environments" / "dev-common.yaml"
+DEV = CHART / "environments" / "dev-commons.yaml"
 SPEC = importlib.util.spec_from_file_location("gen2_validator", REPO / "ci/gen2/validate_manifest.py")
 validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
@@ -31,7 +31,7 @@ def helm():
     return executable
 
 
-def render(helm, *files, release="farmer-registry", namespace="far", extra=()):
+def render(helm, *files, release="farmer-registry", namespace="farmer", extra=()):
     args = [helm, "template", release, str(CHART), "-n", namespace]
     for file in files:
         args += ["-f", str(file)]
@@ -65,20 +65,22 @@ def test_gen2_render_matches_contract(rendered):
     assert validator.validate(rendered) == []
 
 
-def test_base_and_services_share_the_exact_rc_pin():
+def test_contract_matches_the_deployed_namespace_and_version_pair():
     defaults = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
     dev = yaml.safe_load(DEV.read_text(encoding="utf-8"))
     assert defaults["sharedCommons"] == dev["sharedCommons"] | {"enabled": False}
-    assert dev["sharedCommons"]["chartVersion"] == "2.3.4-rc.245"
-    assert dev["sharedCommons"]["namespace"] == "common"
+    assert dev["sharedCommons"]["baseChartVersion"] == "2.3.3"
+    assert dev["sharedCommons"]["servicesChartVersion"] == "2.3.4-rc.245"
+    assert dev["sharedCommons"]["namespace"] == "commons"
 
 
 def test_shared_contract_matches_both_published_commons_artifacts():
-    """CI downloads both RCs. Local runs can supply the same Helm pull cache."""
-    version = yaml.safe_load(DEV.read_text(encoding="utf-8"))["sharedCommons"]["chartVersion"]
+    """CI downloads the deployed version pair without upgrading shared services."""
+    contract = yaml.safe_load(DEV.read_text(encoding="utf-8"))["sharedCommons"]
     cache = Path(os.environ.get("COMMONS_CHART_CACHE", REPO / ".cache/gen2-charts"))
     values = {}
     for name in ("openg2p-commons-base", "openg2p-commons-services"):
+        version = contract["baseChartVersion" if name.endswith("base") else "servicesChartVersion"]
         path = cache / f"{name}-{version}.tgz"
         if not path.exists():
             if os.environ.get("CI"):
@@ -120,23 +122,21 @@ def test_namespace_local_master_data_secret_names_match_latest_commons(rendered)
         }
 
 
-def test_alias_only_exists_for_the_opt_in_dev_profile(helm):
-    for files in ((), (CHART / "environments/staging-legacy.yaml",)):
+def test_chart_does_not_recreate_any_platform_alias(helm):
+    for files in ((), (DEV,), (CHART / "environments/staging-legacy.yaml",)):
         docs = render(helm, *files)
         assert not any(d.get("kind") == "Service" and d["metadata"]["name"] == "commons-services-awe" for d in docs)
 
 
 def test_callback_follows_the_actual_release_namespace(helm):
-    docs = render(helm, DEV, release="farmer-two", namespace="far-two")
+    docs = render(helm, DEV, release="farmer-two", namespace="farmer-two")
     env = list(validator.environments(resource(docs, "Job", "farmer-two-db-seed")))[-1][1]
-    assert env["AWE_CALLBACK_CALLER_SERVICE"] == "http://farmer-two-staff-portal-api.far-two.svc.cluster.local/awe/webhooks/decision"
+    assert env["AWE_CALLBACK_CALLER_SERVICE"] == "http://farmer-two-staff-portal-api.farmer-two.svc.cluster.local/awe/webhooks/decision"
 
 
-def test_same_namespace_alias_is_rejected(helm):
-    result = subprocess.run([helm, "template", "farmer-registry", str(CHART), "-n", "common", "-f", str(DEV)],
-                            capture_output=True, text=True, encoding="utf-8")
-    assert result.returncode != 0
-    assert "sharedCommons.namespace must differ" in result.stderr
+def test_shared_namespace_is_not_a_registry_deploy_target(helm):
+    docs = render(helm, DEV, namespace="commons")
+    assert "the registry namespace must be separate from shared commons" in validator.validate(docs, namespace="commons")
 
 
 def test_live_short_names_cannot_override_the_tracked_common_wiring(helm, tmp_path):
@@ -148,8 +148,8 @@ def test_live_short_names_cannot_override_the_tracked_common_wiring(helm, tmp_pa
     docs = render(helm, live, DEV)
     staff = resource(docs, "Deployment", "farmer-registry-staff-portal-api")
     env = list(validator.environments(staff))[-1][1]
-    assert env["REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME"].endswith(".common.svc.cluster.local")
-    assert env["REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL"] == "redis://commons-redis-master.common.svc.cluster.local:6379/0"
+    assert env["REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME"].endswith(".commons.svc.cluster.local")
+    assert env["REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL"] == "redis://commons-redis-master.commons.svc.cluster.local:6379/0"
 
 
 @pytest.mark.parametrize("suffix,key,value", [
@@ -158,9 +158,9 @@ def test_live_short_names_cannot_override_the_tracked_common_wiring(helm, tmp_pa
     ("partner-api", "REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED", "false"),
     ("partner-api", "REGISTRY_PARTNER_API_CONSENT_ENFORCEMENT_ENABLED", "false"),
     ("celery-worker", "REGISTRY_CELERY_WORKERS_AWE_DEFAULT_CALLBACK_URL", "http://farmer-registry-staff-portal-api/awe/webhooks/decision"),
-    ("staff-portal-ui", "IAM_URL", "http://commons-services-iam-staff-portal-api.common.svc.cluster.local"),
+    ("staff-portal-ui", "IAM_URL", "http://commons-services-iam-staff-portal-api.commons.svc.cluster.local"),
     ("staff-portal-ui", "COOKIE_DOMAIN", ".wrong.invalid"),
-    ("staff-portal-ui", "KEYCLOAK_LOGOUT_URL", "http://commons-keycloak.common.svc.cluster.local/realms/staff/protocol/openid-connect/logout"),
+    ("staff-portal-ui", "KEYCLOAK_LOGOUT_URL", "http://commons-keycloak.commons.svc.cluster.local/realms/staff/protocol/openid-connect/logout"),
     ("staff-portal-ui", "APPLICATION_MNEMONIC", "another-registry-staff-portal"),
 ])
 def test_validator_rejects_broken_common_and_browser_wiring(rendered, suffix, key, value):
@@ -203,15 +203,15 @@ def test_public_ui_preserves_its_origin_and_ca_but_uses_common(helm, tmp_path):
     public = resource(docs, "Deployment", "farmer-registry-staff-portal-ui-public")
     env = list(validator.environments(public))[-1][1]
     assert env["APP_URL"] == "https://public-farmer.dev.test.openg2p.invalid"
-    assert env["MASTERDATA_BACKEND_API_URL"].endswith(".common.svc.cluster.local")
+    assert env["MASTERDATA_BACKEND_API_URL"].endswith(".commons.svc.cluster.local")
     assert validator.pod_spec(public)["volumes"][0]["configMap"]["name"] == "far-ca-bundle"
     assert validator.validate(docs) == []
     change_env(docs, "staff-portal-ui-public", "COOKIE_DOMAIN", ".wrong.invalid")
     assert any("public staff UI COOKIE_DOMAIN" in e for e in validator.validate(docs))
 
 
-@pytest.mark.parametrize("mode,ok", [("absent", True), ("owned", True),
-                                      ("unowned", False), ("wrong-target", False),
+@pytest.mark.parametrize("mode,ok", [("absent", False), ("owned", True),
+                                      ("unowned", True), ("wrong-target", False),
                                       ("missing-key", False), ("forbidden", False)])
 def test_namespace_preflight_is_read_only_and_fail_closed(tmp_path, mode, ok):
     bash = os.environ.get("BASH_BIN") or shutil.which("bash")
@@ -226,10 +226,11 @@ if [ "$1 $2" = 'get secret' ]; then
   printf present
 elif [ "$1 $2" = 'get service' ]; then
   case "$MODE" in
-    owned) printf 'commons-services-awe.common.svc.cluster.local|farmer-registry|far|Helm';;
-    unowned) printf 'commons-services-awe.common.svc.cluster.local|<no value>|<no value>|<no value>';;
-    wrong-target) printf 'commons-services-awe.commons.svc.cluster.local|farmer-registry|far|Helm';;
+    owned|unowned) printf 'ExternalName|commons-services-awe.commons.svc.cluster.local';;
+    wrong-target) printf 'ExternalName|commons-services-awe.common.svc.cluster.local';;
   esac
+elif [ "$1 $2" = 'get deployment' ]; then
+  exit 0
 else
   exit 64
 fi
@@ -237,12 +238,12 @@ fi
     mock.chmod(0o755)
     log = tmp_path / "requests.log"
     env = dict(os.environ, PATH=str(tmp_path) + os.pathsep + os.environ["PATH"],
-               KUBE_LOG=log.as_posix(), MODE=mode, HELM_NAMESPACE="far", HELM_RELEASE="farmer-registry")
+               KUBE_LOG=log.as_posix(), MODE=mode, HELM_NAMESPACE="farmer", HELM_RELEASE="farmer-registry")
     result = subprocess.run([bash, (REPO / "ci/gen2/preflight.sh").as_posix()], env=env,
                             capture_output=True, text=True, encoding="utf-8")
     assert (result.returncode == 0) == ok, result.stderr
     requests = log.read_text()
-    assert all(line.startswith("get ") and " -n far " in line for line in requests.splitlines())
+    assert all(line.startswith("get ") and " -n farmer " in line for line in requests.splitlines())
     assert " -o json" not in requests and " -o yaml" not in requests
     if ok:
         assert "commons-services-staff-portal" in requests
@@ -250,7 +251,9 @@ fi
 
 def test_jenkins_renders_and_upgrades_with_the_same_values():
     text = (REPO / "Jenkinsfile").read_text()
-    assert "? 'dev-common' : 'staging-legacy'" in text
+    assert "? 'dev-commons' : 'staging-legacy'" in text
+    assert 'HELM_NAMESPACE = "${env.BRANCH_NAME == \'staging\' ? \'far\' : \'farmer\'}"' in text
+    assert "host: dashboard-api.${HELM_NAMESPACE}.openg2p.test" not in text
     assert text.count('"\\$@" > /tmp/far-new-') == 1
     assert text.count('"\\$@" --timeout 20m') == 1
     assert "ci/gen2/preflight.sh" in text
@@ -262,3 +265,65 @@ def test_legacy_api_builds_use_the_shared_patcher():
         text = (REPO / "docker" / component / "Dockerfile").read_text()
         assert "COPY docker/patches/patch_platform.py" in text
         assert "async def _build_intake_policy_condition" not in text
+
+
+def test_dev_rbac_is_namespace_scoped_and_staging_is_preserved():
+    docs = validator.documents((REPO / "ci/k8s/farmer-deploy-rbac.yaml").read_text())
+    assert all(d["metadata"]["namespace"] == "farmer" for d in docs)
+    assert not any(d["kind"] in ("Namespace", "ClusterRole", "ClusterRoleBinding") for d in docs)
+    legacy = validator.documents((REPO / "ci/k8s/farmer-deploy-rbac-staging.yaml").read_text())
+    assert all(d["metadata"]["namespace"] == "far" for d in legacy)
+    text = (REPO / "ci/commons-services/Jenkinsfile").read_text()
+    assert "params.CONFIRM && params.ENVIRONMENT == 'dev'" in text
+    assert "Gen2 dev Commons is platform-owned in commons" in text
+
+
+@pytest.mark.parametrize("types,document_columns,exit_code", [
+    (["double precision", "real"], [{"data_type": "character varying", "is_nullable": "NO"}], 0),
+    (["character varying", "double precision"], [{"data_type": "character varying", "is_nullable": "NO"}], 1),
+    ([], [], 1), (["double precision"], [], 1),
+    (["double precision"], [{"data_type": "character varying", "is_nullable": "YES"}], 1),
+])
+def test_geo_schema_gate_queries_only_read_only_metadata(monkeypatch, types, document_columns, exit_code):
+    import asyncio
+    import sys
+    import types as modules
+
+    spec = importlib.util.spec_from_file_location("geo_schema_gate", REPO / "ci/gen2/check_geo_schema.py")
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    observed = {}
+
+    class Transaction:
+        async def __aenter__(self):
+            observed["inside_read_only"] = True
+
+        async def __aexit__(self, *exc):
+            observed["inside_read_only"] = False
+
+    class Connection:
+        def transaction(self, **kwargs):
+            assert kwargs == {"readonly": True}
+            return Transaction()
+
+        async def fetch(self, query):
+            assert observed["inside_read_only"]
+            assert query.lstrip().startswith("SELECT ")
+            assert "information_schema.columns" in query
+            if "event_type" in query:
+                return document_columns
+            return [{"table_name": "g2p_register_farmers", "column_name": "latitude", "data_type": t} for t in types]
+
+        async def close(self):
+            observed["closed"] = True
+
+    async def connect(**kwargs):
+        assert kwargs["host"] == "commons-postgresql.commons.svc.cluster.local"
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "asyncpg", modules.SimpleNamespace(connect=connect))
+    for key, value in {"HOSTNAME": "commons-postgresql.commons.svc.cluster.local",
+                       "DBNAME": "farmer_registry_test", "USERNAME": "test", "PASSWORD": "test-only"}.items():
+        monkeypatch.setenv("REGISTRY_STAFF_PORTAL_API_DB_" + key, value)
+    assert asyncio.run(gate.check()) == exit_code
+    assert observed["closed"]

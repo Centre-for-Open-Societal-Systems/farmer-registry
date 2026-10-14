@@ -2,7 +2,7 @@
 # Secrets/passwords do not belong in this file. Keep the existing full CA bundle
 # mounts from the live release, or provision them through the platform owner.
 # Cookie scope must be shared by the IAM and farmer browser origins; use distinct
-# Keycloak clients/application mnemonics for far/crop/live, NOT distinct cookies.
+# Keycloak clients/application mnemonics for farmer/crop/livestock, NOT distinct cookies.
 global:
   registryHostname: farmer.dev.example.org
   keycloakBaseUrl: https://keycloak.dev.example.org

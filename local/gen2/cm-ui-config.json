@@ -1,0 +1,10 @@
+{
+  "apiBaseUrl": "",
+  "keycloak": {
+    "url": "http://keycloak.localtest.me:8080",
+    "realm": "farmer",
+    "clientId": "consent-manager"
+  },
+  "adminRole": "CONSENT_MANAGER_ADMIN",
+  "approverRole": "CONSENT_MANAGER_APPROVER"
+}

@@ -1,0 +1,180 @@
+# Service images/contract from Commons Services 2.3.4-rc.245.
+# Local DB names retain the existing data; the server's names differ.
+x-pm-env: &pm-env
+  PARTNER_MANAGER_DB_DRIVER: postgresql+asyncpg
+  PARTNER_MANAGER_DB_HOSTNAME: postgres
+  PARTNER_MANAGER_DB_PORT: '5432'
+  PARTNER_MANAGER_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+  PARTNER_MANAGER_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+  PARTNER_MANAGER_DB_DBNAME: partner_management_db
+  PARTNER_MANAGER_NO_OF_WORKERS: '1'
+  PARTNER_MANAGER_AUTH_ENABLED: 'true'
+  PARTNER_MANAGER_AUTH_ADMIN_ROLE: partner_manager
+  PARTNER_MANAGER_AUTH_ADMIN_CLIENT_ID: commons-services-staff-portal
+  PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS: '["http://keycloak.localtest.me:8080/realms/farmer"]'
+  PARTNER_MANAGER_AUTH_DEFAULT_JWKS_URLS: '["http://keycloak.localtest.me:8080/realms/farmer/protocol/openid-connect/certs"]'
+  # iam-core partner auth reads COMMON_ settings in PM 1.0.2. The live
+  # Commons deployment supplies both prefixes for that reason.
+  COMMON_AUTH_DEFAULT_ISSUERS: '["http://keycloak.localtest.me:8080/realms/farmer"]'
+  COMMON_AUTH_DEFAULT_JWKS_URLS: '["http://keycloak.localtest.me:8080/realms/farmer/protocol/openid-connect/certs"]'
+  PARTNER_MANAGER_CRYPTO_ALLOWED_ALGORITHMS: '["RS256","ES256","EdDSA"]'
+  PARTNER_MANAGER_AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
+  PARTNER_MANAGER_AUDIT_MANAGER_URL: http://audit-manager:8000
+x-cm-env: &cm-env
+  CONSENT_MANAGER_DB_DRIVER: postgresql+asyncpg
+  CONSENT_MANAGER_DB_HOSTNAME: postgres
+  CONSENT_MANAGER_DB_PORT: '5432'
+  CONSENT_MANAGER_DB_USERNAME: ${POSTGRES_SUPERUSER:-postgres}
+  CONSENT_MANAGER_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+  CONSENT_MANAGER_DB_DBNAME: consent_manager_db
+  CONSENT_MANAGER_NO_OF_WORKERS: '1'
+  CONSENT_MANAGER_API_AUDIENCE: staff
+  CONSENT_MANAGER_AUTH_ENABLED: 'true'
+  CONSENT_MANAGER_AUTH_ISSUER: http://keycloak.localtest.me:8080/realms/farmer
+  CONSENT_MANAGER_AUTH_JWKS_URL: http://keycloak.localtest.me:8080/realms/farmer/protocol/openid-connect/certs
+  CONSENT_MANAGER_AUTH_ADMIN_ROLE: CONSENT_MANAGER_ADMIN
+  CONSENT_MANAGER_AUTH_APPROVER_ROLE: CONSENT_MANAGER_APPROVER
+  CONSENT_MANAGER_CRYPTO_BACKEND: partner-mgmt
+  CONSENT_MANAGER_PARTNER_MGMT_API_URL: http://pm-partner-api:8000
+  CONSENT_MANAGER_CM_SIGNING_KID: cm-demo-INSECURE
+  CONSENT_MANAGER_CM_SIGNING_IS_DEMO: 'true'
+  CONSENT_MANAGER_CM_SIGNING_P12_PATH: /app/secrets/cm_signing.p12
+  CONSENT_MANAGER_CM_SIGNING_P12_PASSWORD: openg2p
+  # Separate from registry intake approvals, which remain enabled.
+  CONSENT_MANAGER_AWE_ENABLED: 'false'
+  CONSENT_MANAGER_AWE_BASE_URL: http://awe:8000
+x-health: &health
+  test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping', timeout=5)"]
+  interval: 10s
+  timeout: 6s
+  retries: 18
+  start_period: 40s
+services:
+  kafka:
+    image: apache/kafka:3.9.0
+    profiles: [audit]
+    environment:
+      KAFKA_NODE_ID: '1'
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: '1'
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: '1'
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: '1'
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: '0'
+      KAFKA_HEAP_OPTS: -Xms256m -Xmx512m
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+    volumes: [kafka-data:/var/lib/kafka/data]
+    healthcheck:
+      test: [CMD-SHELL, '/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null']
+      interval: 10s
+      timeout: 10s
+      retries: 18
+    restart: unless-stopped
+  audit-manager:
+    image: openg2p/openg2p-audit-manager:1.2.0
+    profiles: [audit]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_NAME: audit_manager
+      DB_USER: ${POSTGRES_SUPERUSER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      CONFIG_PATH: /app/config/config.yaml
+    volumes: ['./audit-config.yaml:/app/config/config.yaml:ro']
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+  master-data-ui:
+    image: openg2p/master-data-ui:1.1.4-rc.104
+    environment:
+      BACKEND_URL: http://farmer-master-data-api:8000
+      IAM_URL: http://iam.farmer.localtest.me:8100
+      LOGIN_PROVIDER_ID: '1'
+      APPLICATION_MNEMONIC: master-data
+      COOKIE_DOMAIN: farmer.localtest.me
+      DEFAULT_LOCALE: en
+    ports: ['3110:3000']
+    restart: unless-stopped
+  pm-staff-api:
+    image: openg2p/partner-management-staff-portal-api:1.0.2
+    environment: *pm-env
+    ports: ['8050:8000']
+    healthcheck: *health
+    restart: unless-stopped
+  pm-partner-api:
+    image: openg2p/partner-management-partner-api:1.0.2
+    environment:
+      <<: *pm-env
+      PARTNER_MANAGER_AUTH_ENABLED: 'false'
+    ports: ['8051:8000']
+    healthcheck: *health
+    depends_on:
+      pm-staff-api:
+        condition: service_healthy
+    restart: unless-stopped
+  pm-ui:
+    image: openg2p/partner-management-staff-portal-ui:1.0.2
+    environment:
+      IAM_URL: http://iam.farmer.localtest.me:8100
+      STAFF_PORTAL_API_URL: http://pm-staff-api:8000
+      LOGIN_PROVIDER_ID: '1'
+      COOKIE_DOMAIN: farmer.localtest.me
+      REDIRECT_URL: http://pm.farmer.localtest.me:3050
+      KEYCLOAK_LOGOUT_URL: http://keycloak.localtest.me:8080/realms/farmer/protocol/openid-connect/logout
+    ports: ['3050:3000']
+    restart: unless-stopped
+  consent-manager-api:
+    image: openg2p/consent-manager-api:1.0.2
+    environment: *cm-env
+    volumes: ['./cm_signing_demo.p12:/app/secrets/cm_signing.p12:ro']
+    ports: ['8060:8000']
+    healthcheck: *health
+    restart: unless-stopped
+  cm-partner-api:
+    image: openg2p/consent-manager-api:1.0.2
+    environment:
+      <<: *cm-env
+      CONSENT_MANAGER_API_AUDIENCE: partner
+      # This audience verifies signed consent requests; it does not use staff
+      # Keycloak authentication. This matches the published chart.
+      CONSENT_MANAGER_AUTH_ENABLED: 'false'
+    volumes: ['./cm_signing_demo.p12:/app/secrets/cm_signing.p12:ro']
+    ports: ['8061:8000']
+    healthcheck: *health
+    depends_on:
+      consent-manager-api:
+        condition: service_healthy
+    restart: unless-stopped
+  cm-ui:
+    image: openg2p/consent-manager-ui:1.0.2
+    volumes: ['./cm-ui-config.json:/usr/share/nginx/html/config.json:ro']
+    ports: ['3060:8080']
+    healthcheck:
+      test: [CMD, wget, -q, --spider, 'http://127.0.0.1:8080/']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      consent-manager-api:
+        condition: service_healthy
+    restart: unless-stopped
+  master-data-seed:
+    image: openg2p/master-data-db-seed:1.1.4-rc.104
+    profiles: [seed]
+    entrypoint: [python, /seed/load_geo_pack.py]
+    command: [--pack, /openg2p-data/packs/ETH, --load, 'geo,codelists']
+    environment:
+      PGHOST: postgres
+      PGPORT: '5432'
+      MDS_DB: farmer_master_data_db
+      PGUSER: ${POSTGRES_SUPERUSER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    depends_on:
+      farmer-master-data-api:
+        condition: service_healthy
+    restart: 'no'

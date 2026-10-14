@@ -15,18 +15,19 @@ from openg2p_registry_farmer_extension.register_domain.services.domain_validatio
 
 
 class TestNormalizeCoordinates(unittest.TestCase):
-    """The platform stores coordinates as VARCHAR while the form submits floats;
-    asyncpg refused the float and every Location save died with SYS-ERR-001."""
+    """rc.544 uses Float columns; asyncpg rejects strings after validation."""
 
-    def test_floats_become_canonical_strings(self):
+    def test_floats_remain_numeric(self):
         record = {"latitude": 9.03, "longitude": 38.7469}
         normalize_coordinates(record)
-        self.assertEqual(record, {"latitude": "9.03", "longitude": "38.7469"})
+        self.assertEqual(record, {"latitude": 9.03, "longitude": 38.7469})
+        self.assertTrue(all(isinstance(value, float) for value in record.values()))
 
-    def test_numeric_strings_are_kept_as_strings(self):
+    def test_numeric_strings_become_floats(self):
         record = {"latitude": "9.0300000", "longitude": "-0.5"}
         normalize_coordinates(record)
-        self.assertEqual(record, {"latitude": "9.03", "longitude": "-0.5"})
+        self.assertEqual(record, {"latitude": 9.03, "longitude": -0.5})
+        self.assertTrue(all(isinstance(value, float) for value in record.values()))
 
     def test_blank_clears_and_absent_is_untouched(self):
         record = {"latitude": "", "name": "x"}

@@ -25,7 +25,7 @@ pipeline {
         // The dev box runs the registry in `farmer`, staging in `far`.
         HELM_NAMESPACE = "${env.BRANCH_NAME == 'staging' ? 'far' : 'farmer'}"
         HELM_CHART_DIR = "helm/openg2p-farmer-registry"
-        HELM_ENV_VALUES = "helm/openg2p-farmer-registry/environments/${env.BRANCH_NAME == 'develop' ? 'dev-common' : 'staging-legacy'}.yaml"
+        HELM_ENV_VALUES = "helm/openg2p-farmer-registry/environments/${env.BRANCH_NAME == 'develop' ? 'dev-commons' : 'staging-legacy'}.yaml"
     }
 
     stages {

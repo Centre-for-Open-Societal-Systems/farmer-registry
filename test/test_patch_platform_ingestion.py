@@ -38,11 +38,12 @@ RESPONSE_HELPER = pathlib.Path(
 def patched(tmp_path, monkeypatch, capsys):
     for relative, fixture in (
         (WORKER_APP, "celery_worker_app.py"),
+        (pathlib.Path("openg2p_registry_celery_worker/engine.py"), "celery_engine.py"),
         (INGEST_WORKER, "celery_ingest_data_worker.py"),
         (RESPONSE_HELPER, "partner_api_request_response_helper.py"),
     ):
         target = tmp_path / relative
-        target.parent.mkdir(parents=True)
+        target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(FIXTURES / fixture, target)
 
     monkeypatch.setenv("PATCH_PLATFORM_SITE_PACKAGES", str(tmp_path))
