@@ -12,6 +12,7 @@ class G2PSchemaMembershipDetails:
     cooperative_union_name: Optional[str] = None
     is_farmer_cluster_member: Optional[bool] = None
     farmer_cluster_role: Optional[FarmerClusterRoleEnum] = None
+    primary_commodity: Optional[str] = None
 
 
 class G2PRegisterSchemaMembershipDetails(G2PRegisterBaseSchema, G2PSchemaMembershipDetails):

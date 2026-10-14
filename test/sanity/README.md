@@ -19,22 +19,12 @@ the reference registry's versions at the same paths):
 |---|---|
 | `sanity/fixtures.py`  | the seeded record + the `g2p_register_farmers` tables |
 | `sanity/data_seed.py` | idempotent injection into `g2p_register_farmers` |
-| `tests/test_e2e_dci.py` | the seeded farmer's values are looked for anywhere in the rendered farmer record (the farmer DCI template nests them) |
+| `tests/test_e2e_dci.py` | the farmer DCI template nests demographics under `<scope>.demographic_info` |
 | `tests/test_e2e_change_request.py` | the register/history rows are verified in the farmer tables |
 
 Everything else (register id, DCI reg-type, search text, consent scopes, CR
 tab/section) is **configuration**, supplied as env by the Helm chart's `sanity.*`
 values — not baked here.
-
-## Inherited names
-
-`fixtures.py` is a contract with the inherited harness: keep the platform's
-names (`RECORD_INTERNAL_ID`, `RECORD_FUNCTIONAL_ID`, `RECORD_FOUNDATIONAL_ID`,
-`RECORD`, `cfg.register_id`, the `record_seeded` fixture) and change only the
-values. `tests/test_contract.py` in the base image enforces this.
-
-These names need a registry-platform release that includes the registry-neutral
-sanity names; bump `RP_VERSION` (scripts/bump-rp-version.sh) to one.
 
 ## Extending for another registry
 

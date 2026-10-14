@@ -15,7 +15,7 @@ class G2PRegisterDomainServicePovertyScore(G2PRegisterDomainService):
     def _validate_poverty_score(self, record: dict) -> None:
         score = as_float(record.get("poverty_score"))
         if score is not None and (score < 0 or score > 100):
-            validation_error("poverty_score must be between 0 and 100 when provided")
+            validation_error("Poverty Score must be between 0 and 100")
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
         _logger.info("Constructing search text for poverty score")

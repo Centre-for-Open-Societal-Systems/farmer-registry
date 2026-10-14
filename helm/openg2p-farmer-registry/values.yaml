@@ -70,23 +70,23 @@ registry:
   staffApi:
     image:
       repository: openg2p/openg2p-farmer-registry-staff-api
-      tag: 0.0.0-develop
+      tag: 0.0.0-rc.0
   partnerApi:
     image:
       repository: openg2p/openg2p-farmer-registry-partner-api
-      tag: 0.0.0-develop
+      tag: 0.0.0-rc.0
   celeryWorker:
     image:
       repository: openg2p/openg2p-farmer-registry-celery
-      tag: 0.0.0-develop
+      tag: 0.0.0-rc.0
   celeryBeat:
     image:
       repository: openg2p/openg2p-farmer-registry-celery
-      tag: 0.0.0-develop
+      tag: 0.0.0-rc.0
   dbSeed:
     image:
       repository: openg2p/openg2p-farmer-registry-db-seed
-      tag: 0.0.0-develop
+      tag: 0.0.0-rc.0
     # Demo data is OFF by default — an install creates no sample farmers or
     # photos unless asked. Both are opt-in from the Rancher form ("Load Sample
     # Data", "Load Sample Images" under DB Seed). NB these are `dbSeed.*`, not
@@ -145,7 +145,7 @@ registry:
     enabled: true
     image:
       repository: openg2p/openg2p-farmer-registry-sanity-tests
-      tag: 0.0.0-develop
+      tag: 0.0.0-rc.0
     regType: Farmer
     regRecordType: 'spdci-extensions-dci:Farmer'
     # farmer functional_record_id of the injected sanity record (see
@@ -194,7 +194,7 @@ registry:
     # docker/agent-portal-api/Dockerfile.
     image:
       repository: openg2p/openg2p-farmer-registry-agent-portal-api
-      tag: 0.0.0-develop
+      tag: 0.0.0-rc.0
     # ON by default: the Farmer Registry ships the agent portal as part of the
     # product. Set to false to remove it entirely.
     enabled: true

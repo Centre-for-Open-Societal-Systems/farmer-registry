@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 
 from openg2p_registry_core.schemas import (
@@ -5,16 +6,24 @@ from openg2p_registry_core.schemas import (
     G2PRegisterHistorySchema, G2PPersonHistorySchema, G2PGeoHistorySchema,
     G2PIntakeFormSchemaBase
 )
-from .address import G2PAddressLinesSchema
 from ..models.enums import (
     DisabilityTypeEnum,
     DisabilitySeverityEnum,
     EducationalLevelEnum,
+    FarmerImportSourceEnum,
     SourceOfIncomeEnum,
+    FarmerLandOwnershipEnum,
+    FarmerStateEnum,
 )
 
 class G2PSchemaFarmer:
-    
+
+    state: Optional[FarmerStateEnum] = None
+    import_source: Optional[FarmerImportSourceEnum] = None
+    is_duplicated: Optional[bool] = False
+    # "YYYY-MM-DD" in the Ethiopic calendar; a string because month 13
+    # (Pagumen) is not a valid date month. See services/ethiopian_calendar.py.
+    birth_date_ec: Optional[str] = None
     estimated_age: Optional[int] = None
     has_personal_phone: Optional[bool] = None
     disabled: Optional[bool] = None
@@ -23,11 +32,42 @@ class G2PSchemaFarmer:
     source_of_income: Optional[SourceOfIncomeEnum] = None
     source_of_income_other: Optional[str] = None
     language_spoken: Optional[str] = None
+    local_language: Optional[str] = None
     education_level: Optional[EducationalLevelEnum] = None
     national_id_masked: Optional[str] = None
-    main_crops: Optional[list[str]] = None  # Master Data CROP_COMMODITY codes
+    is_psnp_user: Optional[bool] = None
+    is_household_head: Optional[bool] = None
 
-class G2PRegisterSchemaFarmer(G2PRegisterBaseSchema, G2PPersonSchema, G2PGeoSchema, G2PAddressLinesSchema, G2PSchemaFarmer):
+    first_name_amh: Optional[str] = None
+    middle_name_amh: Optional[str] = None
+    last_name_amh: Optional[str] = None
+    first_name_om: Optional[str] = None
+    middle_name_om: Optional[str] = None
+    last_name_om: Optional[str] = None
+    father_first_name: Optional[str] = None
+    father_middle_name: Optional[str] = None
+    father_last_name: Optional[str] = None
+
+    enumerator_name: Optional[str] = None
+    enumerator_user_id: Optional[str] = None
+    data_collection_date: Optional[date] = None
+    enumerator_latitude: Optional[float] = None
+    enumerator_longitude: Optional[float] = None
+    enumerator_altitude: Optional[float] = None
+    enumerator_accuracy: Optional[float] = None
+
+    total_land_area: Optional[float] = None
+    total_land_owned_area: Optional[float] = None
+    total_land_rent_area: Optional[float] = None
+    total_land_crop_sharing_area: Optional[float] = None
+    land_ownership: Optional[FarmerLandOwnershipEnum] = None
+
+    region_name: Optional[str] = None
+    zone_name: Optional[str] = None
+    woreda_name: Optional[str] = None
+    kebele_name: Optional[str] = None
+
+class G2PRegisterSchemaFarmer(G2PRegisterBaseSchema, G2PPersonSchema, G2PGeoSchema, G2PSchemaFarmer):
     """
     Schema for Farmer register.
     Inherits fields from G2PRegisterBaseSchema, G2PPersonSchema, and G2PGeoSchema.
@@ -35,14 +75,19 @@ class G2PRegisterSchemaFarmer(G2PRegisterBaseSchema, G2PPersonSchema, G2PGeoSche
     """
 
 
-class G2PRegisterHistorySchemaFarmer(G2PRegisterHistorySchema, G2PPersonHistorySchema, G2PGeoHistorySchema):
+class G2PRegisterHistorySchemaFarmer(
+    G2PRegisterHistorySchema,
+    G2PPersonHistorySchema,
+    G2PGeoHistorySchema,
+    G2PSchemaFarmer,
+):
     """
     Schema for Farmer history.
     Inherits fields from G2PRegisterHistorySchema, G2PPersonHistorySchema, and G2PGeoHistorySchema.
-    Attributes specific to the Farmer domain are not included in the history schema as they are not expected to change over time.
+    Includes Farmer domain fields so approved changes remain visible in history.
     """
 
-class G2PIntakeFormSchemaFarmer(G2PIntakeFormSchemaBase, G2PRegisterBaseSchema, G2PPersonSchema, G2PGeoSchema, G2PAddressLinesSchema, G2PSchemaFarmer):
+class G2PIntakeFormSchemaFarmer(G2PIntakeFormSchemaBase, G2PRegisterBaseSchema, G2PPersonSchema, G2PGeoSchema, G2PSchemaFarmer):
     """
     Schema for Farmer intake form.
     Inherits fields from G2PRegisterBaseSchema, G2PPersonSchema, and G2PGeoSchema.

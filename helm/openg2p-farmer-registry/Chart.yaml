@@ -32,8 +32,8 @@ type: application
 #   the real version from git (one version per commit) and overrides it at
 #   publish time, in lockstep with the farmer images this chart references.
 #   Bumping it here only affects a local `helm package`/`helm install .`.
-version: 0.0.0-develop
-appVersion: "develop"
+version: 0.0.0-rc.0
+appVersion: "1.2.2-rc.544"
 
 keywords:
   - openg2p
@@ -53,14 +53,12 @@ maintainers:
 # deliberately. Aliased to `registry` so the overlay nests under a hyphen-free
 # key (.Values.registry.*).
 #
-# Since the platform moved to GitLab, openg2p-registry is pulled from the shared
-# `openg2p/charts` Helm registry (project 84460547, channel `stable`) rather than
-# the old openg2p-helm GitHub Pages index, which is frozen at the pre-move
-# versions. The project is public, so no credentials are needed to resolve it.
+# This RC is published in the pre-move OpenG2P Helm repository. Keep this
+# repository paired with rc.544; newer upstream development uses GitLab.
 dependencies:
   - name: openg2p-registry
     alias: registry
-    version: 0.0.0-develop.613
+    version: 1.2.2-rc.544
     repository: https://openg2p.github.io/openg2p-helm
 
 # Rancher catalog branding

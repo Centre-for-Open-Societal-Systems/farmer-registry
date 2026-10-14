@@ -13,11 +13,6 @@
 {% set first_place = first_farm.get("place", {}) %}
 {% set first_geo = first_place.get("geo", {}) %}
 {% set machineries = d.get("machineries_details", []) %}
-{# Crops the farmer mainly grows (Master Data CROP_COMMODITY codes), carried at
-   farmer level beside farm_details. Per-parcel crop_production rows are not
-   turned into records: the Farmer Registry keeps no crop records. #}
-{% set main_crops_in = d.get("main_crops") %}
-{% set main_crops = main_crops_in if main_crops_in is sequence and main_crops_in is not string and main_crops_in is not mapping else [] %}
 
 {% set gender_value = (farmer_demo.get("gender", "") or family_head_demo.get("gender", "")) | upper %}
 {% if gender_value == "MALE" %}
@@ -25,7 +20,7 @@
 {% elif gender_value == "FEMALE" %}
   {% set gender_value = "FEMALE" %}
 {% elif gender_value in ["OTHER", "OTHERS"] %}
-  {% set gender_value = "OTHER" %}
+  {% set gender_value = "OTHERS" %}
 {% else %}
   {% set gender_value = "UNKNOWN" %}
 {% endif %}
@@ -35,18 +30,14 @@
   {% set marital_status = "UNKNOWN" %}
 {% endif %}
 
-{% set source_of_income = "SOI_OTHERS" %}
-{# A farmer who declares main crops grows crops, whether or not the sender
-   also lists per-parcel crop_production rows. #}
+{% set source_of_income = "OTHERS" %}
 {% if farm_details %}
   {% set first_activity = (first_farm.get("farming_activities", []) | first) or {} %}
-  {% if first_activity.get("crop_production") or main_crops %}
-    {% set source_of_income = "SOI_CROP_PRODUCTION" %}
+  {% if first_activity.get("crop_production") %}
+    {% set source_of_income = "CROP_PRODUCTION" %}
   {% elif first_activity.get("animal_production") %}
-    {% set source_of_income = "SOI_LIVESTOCK_PRODUCTION" %}
+    {% set source_of_income = "LIVESTOCK_PRODUCTION" %}
   {% endif %}
-{% elif main_crops %}
-  {% set source_of_income = "SOI_CROP_PRODUCTION" %}
 {% endif %}
 
 {
@@ -69,8 +60,7 @@
       "has_personal_phone": false,
       "disabled": {{ "true" if family_head.get("is_disabled") else "false" }},
       "source_of_income": "{{ source_of_income }}",
-      "national_id_masked": "{{ farmer_identifier.get('identifier_value', '') }}",
-      "main_crops": {{ main_crops | reject("none") | map("string") | list | tojson }}
+      "national_id_masked": "{{ farmer_identifier.get('identifier_value', '') }}"
     }
   ],
   "farmer_location": [
@@ -86,7 +76,6 @@
       "household_head": "{{ (family_head_name.get('first_name', '') ~ ' ' ~ family_head_name.get('last_name', '')).strip() }}",
       "size_of_group": {{ family.get("group_size", 0) | int }},
       "number_of_children": {{ family_members | length }},
-      "number_of_elderly_members": 0,
       "number_of_female_members": 0,
       "number_of_male_members": 0,
       "other_land_owner": false
@@ -98,10 +87,7 @@
     {% set member_name = member_demo.get("name", {}) %}
     {% set member_identifier = member_demo.get("identifier", (member.get("member_identifier", []) | first) or {}) %}
     {% set member_gender = (member_demo.get("gender", member_demo.get("sex", "")) or "UNKNOWN") | upper %}
-    {% if member_gender == "OTHERS" %}
-      {% set member_gender = "OTHER" %}
-    {% endif %}
-    {% if member_gender not in ["MALE", "FEMALE", "OTHER", "UNKNOWN"] %}
+    {% if member_gender not in ["MALE", "FEMALE", "OTHERS", "UNKNOWN"] %}
       {% set member_gender = "UNKNOWN" %}
     {% endif %}
     {
@@ -116,9 +102,6 @@
       "birth_date": "{{ (member_demo.get('date_of_birth', member_demo.get('birth_date', '')) or '').split('T')[0] }}",
       "gender": "{{ member_gender }}",
       "is_disabled": {{ "true" if member.get("is_disabled") else "false" }},
-      "is_head": {{ "true" if member.get("is_head") else "false" }},
-      {% set member_relationship = member.get('relationship_to_the_head') or member.get('relationship_to_head') %}
-      "relationship_to_the_head": {{ (member_relationship | string | upper) | tojson if member_relationship else "null" }},
       "registration_date": "{{ (member.get('registration_date', family.get('registration_date', '')) or '').split('T')[0] }}"
     }{% if not loop.last %},{% endif %}
 {% endfor %}
@@ -145,7 +128,7 @@
     {
       "record_name": "{{ place.get('name', 'Farm') }}",
       "land_ownership_type": "OWNER",
-      "land_size": null,
+      "land_size": "",
       "unit": "HECTARE",
       "current_land_use": "AGRICULTURAL",
       "farming_type": "{{ land_farming_type }}",

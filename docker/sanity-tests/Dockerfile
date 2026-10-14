@@ -20,10 +20,12 @@
 # farmer images and the openg2p-registry chart dependency.
 #
 # Build context = repo root.
-ARG RP_VERSION=0.0.0-develop.613
+ARG RP_VERSION=1.2.2-rc.544
 FROM openg2p/openg2p-registry-sanity-tests:${RP_VERSION}
 
 COPY test/sanity/sanity/fixtures.py                /app/sanity/fixtures.py
 COPY test/sanity/sanity/data_seed.py               /app/sanity/data_seed.py
 COPY test/sanity/tests/test_e2e_dci.py             /app/tests/test_e2e_dci.py
 COPY test/sanity/tests/test_e2e_change_request.py  /app/tests/test_e2e_change_request.py
+
+COPY test/sanity/tests/test_e2e_intake.py /app/tests/test_e2e_intake.py

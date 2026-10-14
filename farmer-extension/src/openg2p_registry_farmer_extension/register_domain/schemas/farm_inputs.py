@@ -6,9 +6,13 @@ from openg2p_registry_core.schemas import G2PRegisterBaseSchema, G2PRegisterHist
 class G2PSchemaFarmInputs:
 
     fertilizer_use: Optional[bool] = None
+    amount_fertilizer_utilized: Optional[float] = None
     pesticide_use: Optional[bool] = None
+    amount_pesticide_utilized: Optional[float] = None
     insecticide_use: Optional[bool] = None
+    amount_insecticide_utilized: Optional[float] = None
     improved_seed_use: Optional[bool] = None
+    amount_improved_seed_utilized: Optional[float] = None
     water_source: Optional[str] = None
     access_to_machinery: Optional[bool] = None
     access_to_finance: Optional[bool] = None
