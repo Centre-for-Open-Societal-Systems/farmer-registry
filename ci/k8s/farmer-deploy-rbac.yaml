@@ -1,6 +1,6 @@
-# Let far:farmer-ci deploy farmer-registry into far on the dev cluster
-# (10.0.1.166). The Jenkinsfile's "Deploy (far namespace)" stage uses it on
-# develop builds, through the gen2-dev-kubeconfig credential.
+# Let farmer:farmer-ci deploy farmer-registry into farmer on the dev cluster
+# (10.0.1.58). The Jenkinsfile's "Deploy" stage uses it on develop builds,
+# through the farmer-dev-kubeconfig credential.
 #
 # The same grants crop:crop-ci has in crop: the built-in admin role in this one
 # namespace, plus the Istio routing the chart creates (VirtualServices), which
@@ -10,31 +10,35 @@
 # Apply once, as the cluster admin, on the dev box:
 #   sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl apply -f ci/k8s/farmer-deploy-rbac.yaml
 #
+# Staging (10.0.1.212) runs the same account in `far`. To re-create it there:
+#   sed 's/namespace: farmer$/namespace: far/' ci/k8s/farmer-deploy-rbac.yaml | \
+#     sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl apply -f -
+#
 # Then build the kubeconfig there, and upload it to Jenkins as a "Secret file"
-# credential with the ID gen2-dev-kubeconfig:
-#   k() { sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl -n far "$@"; }
+# credential with the ID farmer-dev-kubeconfig:
+#   k() { sudo KUBECONFIG=/etc/rancher/rke2/rke2.yaml kubectl -n farmer "$@"; }
 #   k get secret farmer-ci-token -o jsonpath='{.data.ca\.crt}' | base64 -d > /tmp/farmer-ci-ca.crt
-#   export KUBECONFIG=$HOME/gen2-dev-kubeconfig
-#   kubectl config set-cluster gen2-dev --server=https://10.0.1.166:6443 \
+#   export KUBECONFIG=$HOME/farmer-dev-kubeconfig
+#   kubectl config set-cluster farmer-dev --server=https://10.0.1.58:6443 \
 #     --certificate-authority=/tmp/farmer-ci-ca.crt --embed-certs=true
 #   kubectl config set-credentials farmer-ci \
 #     --token="$(k get secret farmer-ci-token -o jsonpath='{.data.token}' | base64 -d)"
-#   kubectl config set-context farmer-ci --cluster=gen2-dev --user=farmer-ci --namespace=far
+#   kubectl config set-context farmer-ci --cluster=farmer-dev --user=farmer-ci --namespace=farmer
 #   kubectl config use-context farmer-ci
-#   kubectl auth can-i list secrets -n far    # yes
+#   kubectl auth can-i list secrets -n farmer    # yes
 #   unset KUBECONFIG; rm /tmp/farmer-ci-ca.crt
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: farmer-ci
-  namespace: far
+  namespace: farmer
 ---
 apiVersion: v1
 kind: Secret
 metadata:
   name: farmer-ci-token
-  namespace: far
+  namespace: farmer
   annotations:
     kubernetes.io/service-account.name: farmer-ci
 type: kubernetes.io/service-account-token
@@ -43,11 +47,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: farmer-ci-admin
-  namespace: far
+  namespace: farmer
 subjects:
   - kind: ServiceAccount
     name: farmer-ci
-    namespace: far
+    namespace: farmer
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -57,7 +61,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: ci-deploy-istio
-  namespace: far
+  namespace: farmer
 rules:
   - apiGroups: ["networking.istio.io", "security.istio.io"]
     resources: ["*"]
@@ -67,11 +71,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: farmer-ci-istio
-  namespace: far
+  namespace: farmer
 subjects:
   - kind: ServiceAccount
     name: farmer-ci
-    namespace: far
+    namespace: farmer
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
