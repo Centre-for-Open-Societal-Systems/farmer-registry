@@ -6,7 +6,7 @@ const output=path.join(__dirname,'generated');
 const base='http://portal.farmer-upstream.localtest.me:3200';
 const form='a1a4d25a-1cd4-4356-abac-8782382649';
 (async()=>{
- const browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+ const browser=await chromium.launch({executablePath:process.env.CHROME_PATH,headless:true});
  try {
  const context=await browser.newContext(),page=await context.newPage();page.setDefaultTimeout(15000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
