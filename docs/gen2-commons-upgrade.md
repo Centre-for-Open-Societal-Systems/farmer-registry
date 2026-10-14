@@ -98,6 +98,12 @@ Read-only seed findings and remaining data-repair work are recorded separately
 in [gen2-db-seed-diagnosis.md](gen2-db-seed-diagnosis.md). A successful seed Job
 or smoke-only sanity suite is not evidence that data relationships are correct.
 
+The new dev connector's confirmed PM issuer/onboarding failures, repair order,
+and consolidation of PRs #88/#89 into the single #91 rollout are documented in
+[gen2-connector-diagnosis.md](gen2-connector-diagnosis.md). Resolve those shared
+PM prerequisites as well as the registry schema gate before expecting ODK
+ingestion to succeed.
+
 ## Configuration and CI precedence
 
 `Jenkinsfile` applies the exact same arguments when rendering and upgrading:

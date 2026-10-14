@@ -13,8 +13,8 @@ x-pm-env: &pm-env
   PARTNER_MANAGER_AUTH_ADMIN_CLIENT_ID: commons-services-staff-portal
   PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS: '["http://keycloak.localtest.me:8080/realms/farmer"]'
   PARTNER_MANAGER_AUTH_DEFAULT_JWKS_URLS: '["http://keycloak.localtest.me:8080/realms/farmer/protocol/openid-connect/certs"]'
-  # iam-core partner auth reads COMMON_ settings in PM 1.0.2. The live
-  # Commons deployment supplies both prefixes for that reason.
+  # Keep both prefixes consistent across PM image versions. The new dev
+  # image gives explicit PARTNER_MANAGER_AUTH_* values precedence over COMMON_.
   COMMON_AUTH_DEFAULT_ISSUERS: '["http://keycloak.localtest.me:8080/realms/farmer"]'
   COMMON_AUTH_DEFAULT_JWKS_URLS: '["http://keycloak.localtest.me:8080/realms/farmer/protocol/openid-connect/certs"]'
   PARTNER_MANAGER_CRYPTO_ALLOWED_ALGORITHMS: '["RS256","ES256","EdDSA"]'
