@@ -50,6 +50,25 @@ class Transactions(unittest.TestCase):
             cur.execute('SELECT count(*), min(value) FROM seed_repeat_probe')
             self.assertEqual(cur.fetchone(), (1, 'original'))
 
+    def test_reporting_optional_main_crops_on_both_schema_shapes(self):
+        # Execute the actual reporting SQL's lateral projection, not a copy.
+        sql = Path('/seed/reporting_views.sql').read_text(encoding='utf-8')
+        start = sql.index('CROSS JOIN LATERAL (\n    SELECT CASE WHEN jsonb_typeof')
+        stop = sql.index(') mc', start) + len(') mc')
+        projection = sql[start:stop]
+        with self.conn.cursor() as cur:
+            cur.execute('CREATE TEMP TABLE reporting_crop_probe(id int)')
+            cur.execute('INSERT INTO reporting_crop_probe VALUES(1)')
+            query = 'SELECT mc.main_crops, mc.main_crop_count FROM reporting_crop_probe f ' + projection
+            cur.execute(query)
+            self.assertEqual(cur.fetchone(), (None, None))
+            cur.execute('ALTER TABLE reporting_crop_probe ADD COLUMN main_crops jsonb')
+            for value, expected in [('[]', ([], 0)), ('["maize","teff"]', (["maize", "teff"], 2)),
+                                    ('"malformed-scalar"', (None, None))]:
+                cur.execute('UPDATE reporting_crop_probe SET main_crops=%s::jsonb', (value,))
+                cur.execute(query)
+                self.assertEqual(cur.fetchone(), expected)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -388,16 +388,18 @@ LEFT JOIN geo     g  ON g.farmer_id  = f.internal_record_id
 LEFT JOIN holding h  ON h.farmer_id  = f.internal_record_id
 LEFT JOIN member  m  ON m.farmer_id  = f.internal_record_id
 LEFT JOIN score   sc ON sc.farmer_id = f.internal_record_id
--- main_crops is a JSONB list; anything else (NULL, a stray scalar) reads as none
+-- main_crops is optional on COSS schemas. Read via row JSON so an absent
+-- physical column is treated as undeclared, not an upgrade failure.
+-- A JSONB list is expected; anything else (NULL, a stray scalar) reads as none
 -- rather than failing the refresh.
 CROSS JOIN LATERAL (
-    SELECT CASE WHEN jsonb_typeof(f.main_crops) = 'array' THEN f.main_crops END AS main_crops,
+    SELECT CASE WHEN jsonb_typeof((to_jsonb(f)->'main_crops')) = 'array' THEN (to_jsonb(f)->'main_crops') END AS main_crops,
            (SELECT string_agg(c, ', ' ORDER BY c)
               FROM jsonb_array_elements_text(
-                     CASE WHEN jsonb_typeof(f.main_crops) = 'array'
-                          THEN f.main_crops ELSE '[]'::jsonb END) AS c) AS main_crop_codes,
-           (CASE WHEN jsonb_typeof(f.main_crops) = 'array'
-                 THEN jsonb_array_length(f.main_crops) END)          AS main_crop_count
+                     CASE WHEN jsonb_typeof((to_jsonb(f)->'main_crops')) = 'array'
+                          THEN (to_jsonb(f)->'main_crops') ELSE '[]'::jsonb END) AS c) AS main_crop_codes,
+           (CASE WHEN jsonb_typeof((to_jsonb(f)->'main_crops')) = 'array'
+                 THEN jsonb_array_length((to_jsonb(f)->'main_crops')) END)          AS main_crop_count
 ) mc
 CROSS JOIN LATERAL (
     SELECT COALESCE(
