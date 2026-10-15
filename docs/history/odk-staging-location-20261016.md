@@ -89,3 +89,11 @@ onboarding, key registration and signed end-to-end acceptance pass.
 The Commons Services failed release describes an attempted change to an immutable
 Master Data Deployment selector. Current Commons workloads are ready. No broader
 Commons upgrade or recovery was attempted.
+
+## Follow-up: blocked basemap tiles
+
+The user's later screenshot reproduced a policy failure not established by the
+initial 200 tile responses. Public staging still suppresses tile Referer headers.
+Its ODK endpoint is served by a separate VM, not the staging Kubernetes Commons
+ODK installation. Dev is repaired; the [map repair runbook](../operations/odk-map-tiles.md)
+records the remaining server-access prerequisite and scoped staging correction.

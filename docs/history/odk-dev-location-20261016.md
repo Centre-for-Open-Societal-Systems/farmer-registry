@@ -36,3 +36,10 @@ functional behavior are verified. The staging measurements in the
 
 Reload the web form or download the new blank form in Collect. Existing
 submissions and form history should never be deleted to refresh clients.
+
+## Follow-up: blocked basemap tiles
+
+The later user report exposed a referrer-policy failure that the initial tile
+status checks did not establish. Dev now has a scoped Nginx correction, verified
+in Chrome and Firefox with origin-only tile Referer headers and rendered map
+screenshots. See the [map repair and staging access status](../operations/odk-map-tiles.md).

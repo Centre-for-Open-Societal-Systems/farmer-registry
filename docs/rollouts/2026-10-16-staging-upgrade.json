@@ -373,5 +373,35 @@
     "temporaryPublisherRemoved": true,
     "backupRoot": "dev:/var/backups/farmer-dev-odk-location-20261016/",
     "report": "docs/history/odk-dev-location-20261016.md"
+  },
+  "odkMapRepair": {
+    "report": "docs/operations/odk-map-tiles.md",
+    "rootCause": "same-origin Referrer-Policy suppresses tile Referer",
+    "dev": {
+      "host": "https://odk.commons-dev.oanstaging.com",
+      "applied": true,
+      "browsersPassed": [
+        "Chrome",
+        "Firefox"
+      ],
+      "originOnlyTileRefererVerified": true,
+      "allObservedVisibleTiles200": true,
+      "centralPolicyPreserved": true,
+      "backupRoot": "dev:/var/backups/farmer-odk-map-20261016/",
+      "temporaryBrowserAccountRemoved": true
+    },
+    "staging": {
+      "host": "https://odk-central.oanstaging.com",
+      "applied": false,
+      "accepted": false,
+      "owner": "EC2 odk-vm-2",
+      "centralVersion": "v2026.1.2",
+      "serverAccessRequired": true,
+      "centralApiCredentialsVerified": true,
+      "kubernetesTrialReverted": true,
+      "offlineHelperVerifiedAgainstPublishedSource": true,
+      "liveVmConfigurationInspected": false
+    },
+    "publicStagingAndKubernetesOdkAreDifferentInstallations": true
   }
 }

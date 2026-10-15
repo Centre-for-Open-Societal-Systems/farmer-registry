@@ -52,7 +52,7 @@ jobs:
       - name: ODK transform
         run: python tests/unit/test_odk_transform.py
       - name: ODK geography matches the shared COSS seed
-        run: python -m pytest tests/unit/test_odk_location_media.py tests/unit/test_odk_geo_compatibility.py tests/unit/test_shared_geo_migration.py -q
+        run: python -m pytest tests/unit/test_odk_location_media.py tests/unit/test_odk_geo_compatibility.py tests/unit/test_shared_geo_migration.py tests/unit/test_odk_map_policy.py -q
       - name: Independent Commons and Registry projects
         run: python local/upstream/stack.py validate
       - uses: azure/setup-helm@v4
