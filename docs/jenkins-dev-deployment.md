@@ -15,10 +15,16 @@ previously disabled branch discovery. A merge alone cannot deploy until this
 Jenkins job and its credentials are configured.
 
 Required Jenkins plugins include Pipeline, Git/branch-source, Credentials Binding,
-AWS Credentials and Timestamper. The build agent needs Git, Python 3 with venv,
-Bash, Docker and AWS CLI. The deployment agent labelled `vpn-agent2` needs Git,
-Python 3 with venv, Bash, Helm 3 and kubectl, plus connectivity to the new-dev
-Kubernetes API, package indexes and the OpenG2P Helm repository.
+AWS Credentials and Timestamper. The build agent needs Git, Bash, Docker and AWS
+CLI. The deployment agent labelled `vpn-agent2` needs Git, Bash, Docker, Helm 3
+and kubectl, plus connectivity to the new-dev Kubernetes API, Docker Hub, package
+indexes and the OpenG2P Helm repository. Both agents must allow Jenkins to run
+Docker with local bind mounts. Host Python, pip and venv packages are not required.
+
+Both stages build the Python 3.12 helper image from `ci/jenkins/Dockerfile`.
+Validation runs with the repository mounted read-only as the Jenkins user's UID.
+Deployment runs only the values/manifest guard in that container, without network
+access or a kubeconfig mount; Helm and kubectl retain the host's VPN connectivity.
 
 | Credential | Type and purpose |
 | --- | --- |
