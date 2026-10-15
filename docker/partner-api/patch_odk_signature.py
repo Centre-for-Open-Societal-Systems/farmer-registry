@@ -55,8 +55,9 @@ def patch(path):
     if source.count(OLD) != 1:
         raise RuntimeError("Platform ingestion changed; review ODK signature integration")
     result = source.replace(OLD, NEW)
-    if DEDUPE_OLD in result:
-        result = result.replace(DEDUPE_OLD, DEDUPE_NEW)
+    if result.count(DEDUPE_OLD) != 1:
+        raise RuntimeError("Platform ingestion dedupe changed; review integration")
+    result = result.replace(DEDUPE_OLD, DEDUPE_NEW)
     compile(result, str(path), "exec")
     path.write_text(result)
 

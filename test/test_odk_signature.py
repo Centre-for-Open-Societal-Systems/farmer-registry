@@ -61,7 +61,7 @@ def test_build_patch_rejects_drift_and_reruns(tmp_path):
     spec = importlib.util.spec_from_file_location("signature_patch", ROOT / "docker/partner-api/patch_odk_signature.py")
     patcher = importlib.util.module_from_spec(spec); spec.loader.exec_module(patcher)
     path = tmp_path / "service.py"
-    path.write_text("async def method():\n" + patcher.OLD)
+    path.write_text("class Service:\n    async def method(self):\n        if True:\n" + patcher.DEDUPE_OLD + patcher.OLD)
     patcher.patch(path); patcher.patch(path)
     assert "await verify_odk_signature(" in path.read_text()
     path.write_text("changed_platform = True\n")
