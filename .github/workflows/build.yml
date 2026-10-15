@@ -31,10 +31,16 @@ jobs:
       - name: COSS domain regression checks on the pinned platform
         if: matrix.component == 'staff-api'
         run: |
-          docker run --rm -v "$PWD:/repo:ro" -w /repo/farmer-extension \
+          docker run --rm -v "$PWD:/repo:ro" -e PYTHONPATH=/repo/farmer-extension/src -w /repo/tests/runtime \
             --entrypoint python coss/staff-api:ci -m unittest \
-            tests.test_domain_validation_utils tests.test_farmer_geo_sync \
-            tests.test_intake_record_image_urls tests.test_household_family_size -v
+            extension.test_domain_validation_utils extension.test_farmer_geo_sync \
+            extension.test_intake_record_image_urls extension.test_household_family_size -v
+      - name: Worker attribution runtime
+        if: matrix.component == 'celery'
+        run: docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python coss/celery:ci /repo/tests/runtime/odk_actor_worker_runtime.py
+      - name: Signed intake runtime
+        if: matrix.component == 'partner-api'
+        run: docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python coss/partner-api:ci /repo/tests/runtime/odk_signature_runtime.py
       - name: Seed transaction and rollback integration
         if: matrix.component == 'db-seed'
         run: |
@@ -50,4 +56,4 @@ jobs:
           test "$ready" = true
           docker run --rm --network seed-ci -v "$PWD:/repo:ro" \
             -e PGHOST=seed-ci-db -e PGDATABASE=coss_seed_test_ci -e PGUSER=postgres -e PGPASSWORD=local-test \
-            --entrypoint python3 coss/db-seed:ci /repo/test/test_seed_transaction.py
+            --entrypoint python3 coss/db-seed:ci /repo/tests/runtime/test_seed_transaction.py

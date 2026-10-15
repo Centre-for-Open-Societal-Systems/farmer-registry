@@ -204,3 +204,7 @@ local/upstream/generated/
 .ci-odk-transform.log
 .ci-services-venv/
 service-outcomes/
+
+# Operator exports and local acceptance artifacts never belong in Git.
+/private-exports/
+tests/e2e/local/generated/

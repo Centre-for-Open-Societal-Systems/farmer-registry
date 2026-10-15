@@ -24,7 +24,7 @@ the Master Data name, as before.
     python odk/build_location_media.py          # rewrite the lists
     python odk/build_location_media.py --check  # exit 1 if they are stale
 
-test/test_odk_location_media.py runs the check. Publish the rebuilt XLSForm and
+tests/unit/test_odk_location_media.py runs the check. Publish the rebuilt XLSForm and
 media together as a new version of the same form, after updating Master Data.
 """
 
