@@ -4,7 +4,7 @@
 
 Explicitly out of scope while the API-tier (`locust/api/`) Volume-Tier ×
 Pod-Scale matrix is the focus — see
-[`../../documentation/test-scenarios.md`](../../../celery/test-scenarios.md)
+[`../../../celery/test-scenarios.md`](../../../celery/test-scenarios.md)
 §1/§2. Revisit once that's done.
 
 When it's picked back up: measuring `partner-api /partner/ingest_data`

@@ -2,10 +2,10 @@
 """Second-stage output (staff-api only): fill
 locust/api/templates/staff-api/synthesize_templates/{isolated,blended}-capacity.csv
 from raw Locust *_stats.csv runs (Step 1 / Step 2 -- see
-../documentation/staff-api/test-scenarios.md §3/§7), applying SLOs and
+docs/testing/performance/staff-api/test-scenarios.md §3/§7), applying SLOs and
 computing PASS/FAIL for the curated set of headline endpoints. For the
 *full*, raw, uninterpreted measurements (every endpoint, no SLO/pass-fail
-judgement), see create_raw_report.py / ../documentation/staff-api/raw-report.md
+judgement), see create_raw_report.py / docs/testing/performance/staff-api/raw-report.md
 instead -- that's this script's raw-data counterpart, not something it
 depends on.
 

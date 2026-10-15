@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """First-stage output (staff-api only): walk locust/api/results/staff-api/ and
-emit ../documentation/staff-api/raw-report.md -- one markdown table per
+emit docs/testing/performance/staff-api/raw-report.md -- one markdown table per
 Ingress > Volume-Tier > Pod-Scale > Step > (Scenario, Step 1 only), straight
 from Locust's own *_stats.csv (Steps 1-2) / *_stats_history.csv (Step 3) / a
 hand-filled CSV (Step 4, db-sweep -- not Locust-fired). No filtering to a
 curated endpoint set, no SLO checks, no PASS/FAIL judgement -- every
 endpoint Locust actually measured, verbatim. That interpretation step is
 synthesize_report.py's job (-> the curated synthesize_templates/ CSVs) and
-ultimately documentation/staff-api/final-report.md's.
+ultimately docs/testing/performance/staff-api/final-report.md's.
 
 Which columns appear in each table is driven by the header row of the
 matching file under locust/api/templates/staff-api/raw_report_templates/
@@ -27,7 +27,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PERF_TESTING_DIR = SCRIPT_DIR.parent
 RESULTS_ROOT = PERF_TESTING_DIR / "locust" / "api" / "results" / "staff-api"
 RAW_TEMPLATES_DIR = PERF_TESTING_DIR / "locust" / "api" / "templates" / "staff-api" / "raw_report_templates"
-OUT_PATH = PERF_TESTING_DIR / "documentation" / "staff-api" / "raw-report.md"
+OUT_PATH = SCRIPT_DIR.parents[2] / "docs/testing/performance/staff-api/raw-report.md"
 
 INGRESS_TITLES = {"in-cluster": "In-Cluster", "end-to-end": "End-to-End"}
 

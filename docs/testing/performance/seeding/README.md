@@ -1,4 +1,4 @@
-> Workload assets now live in tests/performance/. Run commands from the repository root unless specified. Stored results are historical.
+> Workload assets now live in tests/performance/. Run commands from tests/performance/seeding/ unless specified. Stored results are historical.
 
 # Bulk seed generator — quick start
 
@@ -6,7 +6,7 @@ Generates realistic, high-volume `Farmer` register data (households, farmers,
 household members, lands, crops, livestock, farm inputs, membership details,
 and `*_history` twins) directly into PostgreSQL via `COPY`, for the Volume-
 Tiers defined in
-[`../documentation/seeding-design.md`](../seeding-design.md).
+[`../seeding-design.md`](../seeding-design.md).
 See that document for the design rationale (generation DAG, why fields are
 generator-computed instead of ORM-computed, search-anchor design, known
 simplifications and the one known upstream issue) — this file is just

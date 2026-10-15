@@ -1,9 +1,9 @@
-> Workload assets now live in tests/performance/. Run commands from the repository root unless specified. Stored results are historical.
+> Workload assets now live in tests/performance/. Run commands from tests/performance/locust/api/ unless specified. Stored results are historical.
 
 # Locust load-test assets (staff-api)
 
 5 working Locust flows against `staff-portal-api`, one per test scenario (see
-[`../../documentation/staff-api/test-scenarios.md`](../../staff-api/test-scenarios.md)
+[`../../staff-api/test-scenarios.md`](../../staff-api/test-scenarios.md)
 §4 for what each fires and why). `partner-api/` currently has only placeholder
 locustfiles (`ingest-pipeline/`, `search/`) — not yet built out to real request
 bodies.
@@ -23,7 +23,7 @@ bodies.
   (one value active per knob, the rest commented out — edit which line is
   uncommented rather than passing flags). `INGRESS` only *labels* results —
   point `STAFF_API_BASE` at the right host yourself (ClusterIP vs public
-  hostname); see [`../../documentation/environment-topology.md`](../../environment-topology.md) §5.
+  hostname); see [`../../environment-topology.md`](../../environment-topology.md) §5.
 - `locust-staff-api.sh` — fires the one staff-api Locust run implied by
   `env.sh`'s current knob settings.
 
@@ -51,7 +51,7 @@ export SEED_MANIFEST=...  # optional override; defaults to ../../seeding/seed_ma
 manifest at import time — `intake_create`/`cr_create` will fail loudly (empty
 list) if it's missing, since those flows need real seeded ids/anchors. Run
 the bulk seeder first (see
-[`../../documentation/seeding-design.md`](../../seeding-design.md)).
+[`../../seeding-design.md`](../../seeding-design.md)).
 
 ## Run
 
@@ -65,7 +65,7 @@ Edit `env.sh` — uncomment the one `INGRESS`, one `VOLUME_TIER`, one
 
 This fires the corresponding locustfile with `--csv` pointed at
 `results/staff-api/<ingress>/<volume_tier>/pod-<pod_scale>/<step>/[<scenario>/]`
-(matching [`../../documentation/staff-api/test-scenarios.md`](../../staff-api/test-scenarios.md)
+(matching [`../../staff-api/test-scenarios.md`](../../staff-api/test-scenarios.md)
 §3/§8's Volume-Tier × Pod-Scale × Step model — no date folder; a rerun
 overwrites the same cell unless you edit the script's `CSV_PREFIX`). It never
 passes `--headless`/`--autostart`, so it opens the web UI at
@@ -77,7 +77,7 @@ without one of those two flags.
 `locustfile.py` (prints a warning) since the combined blended-mix locustfile
 doesn't exist yet. `STEP=4-db-sweep` isn't Locust-fired at all — the script
 exits with an explanatory message (see
-[`../../documentation/staff-api/test-scenarios.md`](../../staff-api/test-scenarios.md)
+[`../../staff-api/test-scenarios.md`](../../staff-api/test-scenarios.md)
 §3 "`db-sweep`").
 
 For an ad-hoc one-off outside the `env.sh` knobs, invoke `locust` directly:
@@ -105,8 +105,8 @@ manifest via ConfigMap.
   which model produced each figure.
 - Locust CSVs feed the reporting pipeline: `../../scripts/create_raw_report.py`
   (first output — every endpoint, verbatim, into
-  `../../documentation/staff-api/raw-report.md`, using the column schemas in
+  `docs/testing/performance/staff-api/raw-report.md`, using the column schemas in
   `templates/staff-api/raw_report_templates/`) then
   `../../scripts/synthesize_report.py` (second output — curated headline
   endpoints + SLO/PASS-FAIL, into `templates/staff-api/synthesize_templates/`).
-  See [`../../documentation/staff-api/final-report.md`](../../staff-api/final-report.md).
+  See [`../../staff-api/final-report.md`](../../staff-api/final-report.md).

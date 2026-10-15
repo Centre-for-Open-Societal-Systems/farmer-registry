@@ -8,7 +8,7 @@ umask 077
 test "${HELM_NAMESPACE:-}" = far
 test "${HELM_RELEASE:-}" = farmer-registry
 STATE=$(mktemp -d)
-trap 'rm -rf "$STATE"; rm -f "/tmp/values-far-cicd-${BUILD_NUMBER}.yaml" "/tmp/far-values-current-${BUILD_NUMBER}.yaml" "/tmp/far-new-${BUILD_NUMBER}.yaml"' EXIT
+trap 'rm -rf "$STATE"' EXIT
 helm repo add openg2p-gitlab https://gitlab.com/api/v4/projects/84460547/packages/helm/stable --force-update
 helm repo update openg2p-gitlab
 # `update`, not `build`: Chart.lock is gitignored (it pins a
@@ -22,7 +22,7 @@ helm repo update openg2p-gitlab
 # Chart.yaml and rewrites the lock.
 helm dependency update ${HELM_CHART_DIR}
 
-cat > /tmp/values-far-cicd-${BUILD_NUMBER}.yaml <<EOF
+cat > $STATE/override.yaml <<EOF
 registry:
   staffApi:
     image:
@@ -73,13 +73,12 @@ EOF
 # wiring, cookie domain) and change only what this build owns.
 # The chart defaults render placeholder *.openg2p.org hosts, so
 # upgrading from the CI file alone would reset the live
-# environment to them. Only a missing release (a first install)
-# may go ahead without values; any other read failure stops here.
+# environment to them. An existing deployed release is mandatory.
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json"
 
-helm get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o yaml > /tmp/far-values-current-${BUILD_NUMBER}.yaml
+helm get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o yaml > $STATE/values.yaml
 docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
-docker run --rm --network none --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" -v "$STATE:$STATE:ro" -v "/tmp/far-values-current-${BUILD_NUMBER}.yaml:/private-values.yaml:ro" \
+docker run --rm --network none --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" -v "$STATE:$STATE:ro" -v "$STATE/values.yaml:/private-values.yaml:ro" \
   "coss-ci/validation:$IMAGE_TAG" python ci/environments.py staging --status "$STATE/status.json" --values /private-values.yaml
 
 # Never install placeholder defaults after a namespace or credential error.
@@ -87,18 +86,15 @@ docker run --rm --network none --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" -v 
 
 # Dry-run render of exactly what the upgrade below applies.
 helm template ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} \
-    -f /tmp/far-values-current-${BUILD_NUMBER}.yaml \
-    -f /tmp/values-far-cicd-${BUILD_NUMBER}.yaml > /tmp/far-new-${BUILD_NUMBER}.yaml
-echo "Rendered $(wc -l < /tmp/far-new-${BUILD_NUMBER}.yaml) lines to /tmp/far-new-${BUILD_NUMBER}.yaml"
+    -f "$STATE/values.yaml" \
+    -f "$STATE/override.yaml" > $STATE/rendered.yaml
+echo "Rendered $(wc -l < $STATE/rendered.yaml) lines to $STATE/rendered.yaml"
 
-# The hook Jobs (db-seed, iam-register, sanity, reporting views) delete their pod
-# when they give up, and its log goes with it: all helm reports
-# is BackoffLimitExceeded. Copy their logs while helm runs, and
-# print them if it fails.
+# Keep Helm output private; hook logs may contain credentials or submitted data.
 
 if ! helm upgrade ${HELM_RELEASE} ${HELM_CHART_DIR} -n ${HELM_NAMESPACE} \
-    -f /tmp/far-values-current-${BUILD_NUMBER}.yaml \
-    -f /tmp/values-far-cicd-${BUILD_NUMBER}.yaml --timeout 20m; then
+    -f "$STATE/values.yaml" \
+    -f "$STATE/override.yaml" --timeout 20m > "$STATE/upgrade.log" 2>&1; then
     echo 'Staging upgrade failed; inspect restricted Helm and hook logs.' >&2
     kubectl get jobs,pods -n "$HELM_NAMESPACE"
     exit 1

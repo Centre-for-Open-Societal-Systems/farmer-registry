@@ -29,7 +29,7 @@ include.
 ## Reports
 
 Once designed, this tier gets its own `raw-report.md`/`final-report.md`
-under `documentation/celery/`, shaped around whatever this tier's actual unit
+under `docs/testing/performance/celery/`, shaped around whatever this tier's actual unit
 of measurement turns out to be (queue depth over time, task latency
 percentiles, worker throughput) rather than the Ingress/Volume-Tier/
 Pod-Scale/Step/Scenario shape that fits staff-api's synchronous-API load
