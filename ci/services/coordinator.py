@@ -77,6 +77,8 @@ def configuration(path=MANIFEST):
         for field in ("name", "release", "namespace"):
             if not NAME.fullmatch(item[field]):
                 raise ValueError("Invalid component/release/namespace")
+        if item["namespace"] != "farmer":
+            raise ValueError("Farmer coordination must stay in the farmer namespace")
         if item["name"] in seen:
             raise ValueError("Duplicate component")
         seen.add(item["name"])

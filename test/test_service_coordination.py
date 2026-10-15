@@ -92,7 +92,16 @@ def test_branch_policy_and_real_config(component):
     upstream = coordinator.configuration()[0]
     assert upstream["repository"] == "https://github.com/OpenG2P/registry-connector.git"
     assert coordinator.branch("dev", upstream) == "develop"
-    assert len(coordinator.configuration()) == 5
+    configured = coordinator.configuration()
+    assert {item["name"] for item in configured} == {"registry-connector", "farmer-registry-dashboard"}
+    assert all(item["namespace"] == "farmer" for item in configured)
+
+
+def test_configuration_rejects_other_registry_ownership(tmp_path, component):
+    config = tmp_path / "components.yaml"
+    config.write_text(yaml.safe_dump({"components": [dict(component, namespace="livestock")]}))
+    with pytest.raises(ValueError, match="farmer namespace"):
+        coordinator.configuration(config)
 
 
 @pytest.mark.parametrize("failure", [coordinator.ServiceError("command-failed-docker"),

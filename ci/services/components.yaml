@@ -1,5 +1,5 @@
-# Configuration belongs to Farmer Registry; each source/release keeps its owner.
-# API repositories intentionally have no separate release: their Registry owns it.
+# Farmer Registry coordinates only its own services.
+# Its dashboard API stays in the existing Registry Helm release.
 components:
   - name: registry-connector
     repository: https://github.com/OpenG2P/registry-connector.git
@@ -28,25 +28,4 @@ components:
     chart: helm/farmer-registry-dashboard
     release: farmer-registry-dashboard
     namespace: farmer
-    imageValues: image
-  - name: livestock-registry-dashboard
-    repository: https://github.com/Centre-for-Open-Societal-Systems/oan_livestock_dashboard.git
-    dockerfile: Dockerfile
-    chart: helm/livestock-registry-dashboard
-    release: livestock-registry-dashboard
-    namespace: livestock
-    imageValues: image
-  - name: cropsown-registry-dashboard
-    repository: https://github.com/Centre-for-Open-Societal-Systems/oan_cropsown_dashboard.git
-    dockerfile: Dockerfile
-    chart: helm/cropsown-registry-dashboard
-    release: cropsown-registry-dashboard
-    namespace: crop
-    imageValues: image
-  - name: oan-dashboards
-    repository: https://github.com/Centre-for-Open-Societal-Systems/oan_dashboards.git
-    dockerfile: Dockerfile
-    chart: helm/oan-dashboards
-    release: oan-dashboards
-    namespace: commons
     imageValues: image

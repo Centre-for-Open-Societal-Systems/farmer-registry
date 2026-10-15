@@ -1,11 +1,14 @@
 # Coordinated services and Commons staff authentication
 
 Farmer Registry owns `ci/services/components.yaml`, the environment overrides,
-and the Jenkins coordination. Registry, connector, and dashboards retain separate
-Helm releases. The existing `dashboardApi` resources remain owned by the Registry
+and the Jenkins coordination for Farmer services only. Registry, its connector,
+and its dashboard frontend retain separate Helm releases. The existing
+`dashboardApi` resources remain owned by the Registry
 release, with their independently published image retained by its existing guard.
-No dashboard API is adopted by a new release. No Helm values are committed back
-to Git automatically.
+No dashboard API is adopted by a new release. Livestock, crop, and shared OAN
+dashboard releases are outside this pipeline; each registry owns its services.
+The optional-service configuration rejects namespaces other than `farmer`.
+No Helm values are committed back to Git automatically.
 
 ## Implementation and remaining inputs
 
@@ -27,8 +30,10 @@ literal simply because it appeared in an earlier rollout plan.
 Read-only live checks found IAM, Registry and effective AWE configuration already
 aligned. A fresh Registry service token reached AWE task statistics and listing
 with HTTP 200; missing-token calls returned 401. The public and internal JWKS
-contain identical realm keys. A fresh **browser** login and authorized approval
-of a synthetic intake remain acceptance gates. No business record was approved
+contain identical realm keys. A temporary Intake Validator completed a fresh
+browser login through Registry and IAM; its access token reached AWE statistics
+and task listing with HTTP 200. Authorized approval of a synthetic intake
+remains an acceptance gate. No business record was approved
 and the existing connector was not stopped, replaced or uninstalled.
 
 The connector source is `OpenG2P/registry-connector`, branch `develop`. Jenkins
@@ -47,11 +52,10 @@ isolated Celery queue, so replacement workers cannot consume old queued tasks.
 No old service code is copied into the replacement image. API/UI builds, eight
 adapter tests and isolated PostgreSQL schema/deduplication rehearsal passed.
 
-The actual per-registry dashboard repositories are `oan_farmerregistry_dashboard`,
-`oan_livestock_dashboard`, and `oan_cropsown_dashboard`. Their develop/staging heads
-currently have no Dockerfile or application code and are skipped. The existing
-`oan_dashboards` release remains in `commons`, with verified Secret-based Helm
-storage; Registry dashboard API resources keep their existing owners. Save
+The Farmer dashboard repository is `oan_farmerregistry_dashboard`. Its
+develop/staging heads currently have no Dockerfile or application code and are
+skipped. The Farmer dashboard API remains in the existing Farmer Registry release,
+with its independently published image retained. Save
 reviewed, nonsecret overrides as `ci/services/dev/<component>.yaml` and separately
 as `ci/services/staging/<component>.yaml`. Every file needs:
 
@@ -241,7 +245,7 @@ identity allowlists, issuer/JWKS/audience prerequisites, isolated storage and
 retirement preservation. Live ingestion, authorization, hook rehearsals and
 Jenkins execution remain required rollout evidence.
 
-The complete Linux container validation suite passed 265 tests and 57 subtests.
+The complete Linux container validation suite passed 266 tests and 57 subtests.
 The ODK transform and deployment shell harness passed on Bash 4.3, 5.2 and 5.3.
 Both Jenkinsfiles passed the live Jenkins Declarative Pipeline validator. The
 actual upstream chart and locked dependencies rendered six preparation resources;
