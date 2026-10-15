@@ -95,8 +95,9 @@ focused upgrades. Intake and ingested change requests now persist ODK's
 `survey_metadata.enumerator_name`, falling back to `__system.submitterName`, as
 `created_by`; the form's Enumerator section uses the same precedence. This
 display attribution does not confer Registry roles or approval permissions.
-The live pipeline's configured `farmer-partner` is absent from Partner Management,
-so its migration also requires real partner onboarding before activation. A separate
+The live pipeline's configured `farmer-partner` was absent from Partner Management.
+Its public key has now been submitted through native onboarding; partner and
+request status are `created`, pending approval after old ingestion stops. A separate
 synthetic partner was onboarded through PM's API for the test and then disabled.
 The named live approver approved through AWE. Registry's proxy statistics and
 task listing also returned 200 with its required CSRF header; the initial proxy
@@ -226,8 +227,8 @@ or decoded JWT is not evidence of these authorization checks.
    pipelines. Save a new immutable backup directory after pausing and use its
    hash for acceptance/retirement; retirement rejects a changed old Helm revision.
    Do not run both schedulers. Enable the replacement through its
-   reviewed upstream Helm values only after those checks. Activation and format
-   conversion cannot be scripted correctly until upstream code is inspected.
+   reviewed upstream Helm values only after those checks. Preparation never performs activation. Signing, final checkpoint reconciliation
+   and a rehearsed rollback are required before the separate handoff.
 
 5. Submit a synthetic ODK record. Verify every attachment in Registry, replay the
    same submission and prove duplicate prevention, verify Registry intake and
@@ -287,8 +288,16 @@ with the built replacement API. Schema reruns, injected DDL rollback/recovery,
 original-column row checksums and duplicate-send suppression all passed. Existing
 database/configuration were read only. The checked-in dev values are preparation
 values: API/worker/UI at zero replicas, beat/consumer disabled, ingress disabled,
-and database name `farmer_connector_v2`. Provision and verify the DB Secret before
-activation; the prepared manifest does not create it or claim ingestion readiness.
+and database name `farmer_connector_v2`.
+The separate `helm/farmer-connector-credentials` chart now owns retained
+`farmer-connector-v2-db` and `farmer-connector-v2-signing` Secrets. It generates
+credentials once, refuses incomplete existing credentials or foreign ownership,
+and retained both credentials during a live rerun at revision 2. Private key
+material never entered Git or logs. The isolated database was created with its
+own ordinary app role and restored from the protected snapshot; all migrated
+definitions are paused. A one-off schema Job using only that app Secret ran the
+replacement image's schema/migrations twice successfully. It does not start
+ingestion or access the old connector database.
 
 Local regression tests cover branch/network classification, exact commit and
 digest selection, independent failures, Helm mutation ordering/race prevention,
@@ -301,20 +310,48 @@ hooks are enabled. This is a paused preparation, not a completed connector
 cutover. API digest is `sha256:1c7679e23b54b00add4635dbb128d9d9cebaff202509867b0bf19febd3953b43`;
 UI digest is `sha256:47e8af1b2ea1dc9d0c872e0682349bddf10654151bfc0594bcfa898acb3f3e46`.
 Both are built from the pinned connector commit above. The selected permanent
-partner is `farmer-partner`, with a new key pair; onboarding, isolated database
-provisioning and the final checkpoint handoff still precede activation.
+partner is `farmer-partner`, with its new key pair. Signing configuration, partner
+approval and the final checkpoint handoff still precede activation.
 
-The Linux container validation suite passed 312 tests and 57 subtests, including
+The latest successful coordinated run is
+[`farmer-registry-services-dev/7`](https://jenkins.oanstaging.com/job/farmer-registry-services-dev/7/),
+from Farmer commit `b81457457337a20315fbaf7877d9bc01cd28faf0`.
+It deployed the paused replacement at revision 4 and the independent dashboard
+API image into Farmer Registry revision 15, preserving other resources. Connector
+API digest: `sha256:ebd38ab7a29b09c28fc994c6d1a7c4c583518be785fd2147b18503f208328e28`;
+UI digest: `sha256:741e5c2e43d698f15d6f9d5c8e38240e53c0588a1afe7e8fccf5fdac96e657f6`.
+Dashboard API source is `85fd0a3c251855ee48b9654fa5c8d2cf30d7bc81`, digest
+`sha256:81f8e87f8b749ddf706671902e2ef356a0b053d989863f6b69386abf02a7fa71`.
+The frontend was skipped for missing application files. A PostgreSQL rehearsal
+startup race was removed by waiting for its final TCP listener instead of the
+temporary initialization socket. Full private snapshot restore, app-role schema
+reruns, rollback recovery and original-data checks passed again locally.
+
+A subsequent synthetic submission exercised the deployed worker without a
+one-off worker invocation. ODK's collector name persisted in both intake
+`created_by` and Enumerator fields and was visible on the actual intake screen.
+Fresh Registry portal task statistics/listing and both authorized approval stages
+returned 200/SUCCESS with the required CSRF header. The record reached the
+Register with photo, land certificate and geography intact. A second connector
+poll fetched zero records with one ingestion run and one idempotency key. The
+temporary ODK account was removed, its form closed and its partner disabled.
+Change-request attribution is covered separately by tests of the actual built
+worker; this live ODK mapping creates intakes, so it is not evidence of a live
+ODK update/change-request route.
+
+The Linux container validation suite passed 314 tests and 57 subtests, including
 ODK collector attribution and the embedded API ownership/deployment guards. Three
 additional tests exercised the actual built intake/change-request workers and
-patch reruns without network access. Nine connector adapter tests passed against the built image.
+patch reruns without network access. Three Helm/OpenSSL credential-chart tests
+passed. Nine connector adapter tests passed against the built image.
 The ODK transform and deployment shell harness passed on Bash 4.3, 5.2 and 5.3.
 Both Jenkinsfiles passed the live Jenkins Declarative Pipeline validator. The
 actual upstream chart and locked dependencies rendered six preparation resources;
 guards confirmed separate storage, no active ingestion and no ingress. The helper
 image's Python/Git/Docker/AWS/Helm tools were verified, including Docker access as
-a non-root UID. Optional setup-hook rehearsal, image publication, deployed-runtime
-acceptance and staging readiness must still be recorded separately.
+a non-root UID. Staging identity/configuration remains unverified and staging
+deployment stays disabled. Connector activation/retirement still requires the
+checkpoint, signing and rollback acceptance gates above.
 
 Postman also ran the two anonymous AWE calls with one passing 401 assertion per
 request. This installed CLI returns exit 1 for HTTP 401 even with passing tests;
