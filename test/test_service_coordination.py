@@ -36,7 +36,7 @@ def component():
 
 
 def record(component):
-    return {"commit": SHA, "repository": ECR + "/openg2p/" + component["name"],
+    return {"commit": SHA, "repository": ECR + "/" + component.get("imageRepository", "openg2p/" + component["name"]),
             "tag": SHA[:12], "digest": DIGEST, "chartHash": "c" * 64, "outcome": "built"}
 
 
@@ -93,15 +93,123 @@ def test_branch_policy_and_real_config(component):
     assert upstream["repository"] == "https://github.com/OpenG2P/registry-connector.git"
     assert coordinator.branch("dev", upstream) == "develop"
     configured = coordinator.configuration()
-    assert {item["name"] for item in configured} == {"registry-connector", "farmer-registry-dashboard"}
+    assert {item["name"] for item in configured} == {"registry-connector", "farmer-registry-dashboard", "farmer-registry-dashboard-api"}
     assert all(item["namespace"] == "farmer" for item in configured)
 
 
 def test_configuration_rejects_other_registry_ownership(tmp_path, component):
     config = tmp_path / "components.yaml"
-    config.write_text(yaml.safe_dump({"components": [dict(component, namespace="livestock")]}))
+    config.write_text(yaml.safe_dump({"cossAddons": {"components": [dict(component, namespace="livestock")]}}))
     with pytest.raises(ValueError, match="farmer namespace"):
         coordinator.configuration(config)
+
+
+@pytest.mark.parametrize("field,value", [("release", "commons-services"), ("namespace", "commons"),
+                                        ("imageValues", "registry.staffApi.image"),
+                                        ("repository", "https://github.com/example/other.git")])
+def test_embedded_api_cannot_adopt_other_owners_or_image_values(tmp_path, field, value):
+    api = copy.deepcopy(coordinator.configuration()[-1])
+    api[field] = value
+    config = tmp_path / "values.yaml"
+    config.write_text(yaml.safe_dump({"cossAddons": {"components": [api]}}))
+    with pytest.raises(ValueError):
+        coordinator.configuration(config)
+
+
+def test_service_catalogue_is_owned_by_helm_and_hash_covers_repositories(tmp_path, monkeypatch):
+    assert coordinator.MANIFEST == ROOT / "helm/openg2p-farmer-registry/values.yaml"
+    assert not (ROOT / "ci/services/components.yaml").exists()
+    values = yaml.safe_load(coordinator.MANIFEST.read_text())
+    path = tmp_path / "values.yaml"
+    path.write_text(yaml.safe_dump(values))
+    monkeypatch.setattr(coordinator, "MANIFEST", path)
+    original = coordinator.configuration_hash()
+    values["dashboardApi"]["replicas"] = 4
+    path.write_text(yaml.safe_dump(values))
+    assert coordinator.configuration_hash() == original
+    values["cossAddons"]["components"][0]["repository"] = "https://github.com/example/changed.git"
+    path.write_text(yaml.safe_dump(values))
+    assert coordinator.configuration_hash() != original
+
+
+@pytest.mark.parametrize("mutation", ["none", "worker", "secret", "route", "job", "remove", "database"])
+def test_dashboard_api_guard_preserves_every_other_resource(mutation):
+    api = deployment("farmer-registry-dashboard-api")
+    worker = deployment("farmer-registry-celery-worker")
+    secret = {"kind": "Secret", "metadata": {"name": "farmer-registry"}, "data": {"password": "fixture"}}
+    route = {"kind": "VirtualService", "metadata": {"name": "farmer-registry"}, "spec": {"hosts": ["unchanged.example"]}}
+    before = [api, worker, secret, route]
+    after = copy.deepcopy(before)
+    image = "api:new@" + DIGEST
+    coordinator.pod(after[0])["containers"][0]["image"] = image
+    if mutation == "worker":
+        coordinator.pod(after[1])["containers"][0]["image"] = image
+    elif mutation == "secret":
+        after[2]["data"]["password"] = "changed"
+    elif mutation == "route":
+        after[3]["spec"]["hosts"] = ["changed.example"]
+    elif mutation == "job":
+        after.append({"kind": "Job", "metadata": {"name": "setup"}})
+    elif mutation == "remove":
+        after.pop()
+    elif mutation == "database":
+        coordinator.pod(after[0])["containers"][0]["env"][0]["valueFrom"]["secretKeyRef"]["name"] = "another-db"
+    if mutation == "none":
+        coordinator.guard_dashboard_api(before, after, image)
+    else:
+        with pytest.raises(coordinator.ServiceError):
+            coordinator.guard_dashboard_api(before, after, image)
+
+
+def test_embedded_api_deploy_uses_parent_chart_filters_jobs_and_keeps_registry_owner(tmp_path, monkeypatch):
+    component = coordinator.configuration()[-1]
+    monkeypatch.setattr(coordinator, "ROOT", tmp_path)
+    source = tmp_path / "api-source"
+    source.mkdir()
+    (source / "Dockerfile").write_text("FROM example:pin\n")
+    chart = tmp_path / component["chart"]
+    chart.mkdir(parents=True)
+    (chart / "Chart.yaml").write_text("apiVersion: v2\nname: farmer\nversion: 1.0.0\n")
+    values = tmp_path / "ci/services/dev/farmer-registry-dashboard-api.yaml"
+    values.parent.mkdir(parents=True)
+    values.write_text("_coordination:\n  namespace: farmer\n")
+    built = record(component)
+    built["chartHash"] = coordinator.chart_hash(chart)
+    image = coordinator.artifact(component, built, ECR)
+    before = [deployment("farmer-registry-dashboard-api"), deployment("farmer-registry-celery-worker")]
+    after = copy.deepcopy(before)
+    coordinator.pod(after[0])["containers"][0]["image"] = image
+    state = {"upgraded": False, "calls": []}
+    monkeypatch.setattr(coordinator, "checkout", lambda *a, **kw: SHA)
+    def run(args):
+        state["calls"].append(args)
+        if args[:2] == ["helm", "list"]:
+            return '[{"name":"farmer-registry"}]'
+        if args[:2] == ["helm", "status"]:
+            return json.dumps({"name": "farmer-registry", "namespace": "farmer", "version": 13 if state["upgraded"] else 12,
+                               "info": {"status": "deployed"}})
+        if args[:3] == ["helm", "get", "manifest"]:
+            return yaml.safe_dump_all(after if state["upgraded"] else before)
+        if args[:3] == ["helm", "get", "values"]:
+            return "dashboardApi:\n  enabled: true\n"
+        if args[:2] in (["helm", "template"], ["helm", "upgrade"]):
+            assert args[2] == "farmer-registry" and args[3] == str(chart)
+            assert "--no-hooks" in args and "--post-renderer" in args
+            renderer = Path(args[args.index("--post-renderer") + 1])
+            filtered = subprocess.run([sys.executable, str(renderer)], input=yaml.safe_dump_all(after + [{"kind": "Job"}]),
+                                      text=True, capture_output=True, check=True)
+            assert coordinator.docs(filtered.stdout) == after
+            selected = yaml.safe_load(Path(args[args.index("-f") + 1]).read_text())
+            assert selected["dashboardApi"]["enabled"] is True
+            assert selected["dashboardApi"]["image"]["repository"] == ECR + "/openg2p/farmer-registry/dashboard-api"
+            if args[1] == "upgrade":
+                state["upgraded"] = True
+            return yaml.safe_dump_all(after)
+        if args[:3] in (["helm", "dependency", "build"], ["helm", "repo", "add"]):
+            return ""
+        pytest.fail("Unexpected command")
+    assert coordinator.deploy(component, "dev", built, source, ECR, run) == 13
+    assert not any("uninstall" in call or "delete" in call for call in state["calls"])
 
 
 @pytest.mark.parametrize("failure", [coordinator.ServiceError("command-failed-docker"),

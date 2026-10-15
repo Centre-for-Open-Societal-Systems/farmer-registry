@@ -1,10 +1,15 @@
 # Coordinated services and Commons staff authentication
 
-Farmer Registry owns `ci/services/components.yaml`, the environment overrides,
+Farmer Registry owns `helm/openg2p-farmer-registry/values.yaml`'s
+`cossAddons.components` catalogue, the environment overrides,
 and the Jenkins coordination for Farmer services only. Registry, its connector,
 and its dashboard frontend retain separate Helm releases. The existing
 `dashboardApi` resources remain owned by the Registry
-release, with their independently published image retained by its existing guard.
+release. Optional API builds come from
+`Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api`; a strict guard
+permits only its image to change, preserving all other persistent resources and
+suppressing hooks and normal setup Jobs. The catalogue is consumed directly by
+Jenkins, with no duplicate CI repository list.
 No dashboard API is adopted by a new release. Livestock, crop, and shared OAN
 dashboard releases are outside this pipeline; each registry owns its services.
 The optional-service configuration rejects namespaces other than `farmer`.
@@ -80,7 +85,16 @@ The ordinary full Registry pipeline retains its own setup/acceptance requirement
 Live acceptance used the built replacement connector against an isolated Docker
 database and a separate ODK project, with no scheduler. The Registry worker fix
 was exercised in its built image for that one ingestion ID via SSH service routing;
-this is runtime verification, not evidence that either image is already deployed.
+this established ingestion acceptance before the worker rollout. Subsequently,
+Jenkins `farmer-registry-worker-auth-dev/3` deployed the worker authentication fix
+at Registry revision 12. Build 4 deployed the ODK attribution correction at
+revision 13 from Farmer commit `68c1161bb2578137729a00b98dedba8bfcc4aae2`, with
+worker digest `sha256:3ab041adc96a13d43841e85d0f30b94d1bf38cb36e5e2e6c18ce46591f21d39f`.
+The installed worker passed the ODK actor check. No setup Jobs ran in these
+focused upgrades. Intake and ingested change requests now persist ODK's
+`survey_metadata.enumerator_name`, falling back to `__system.submitterName`, as
+`created_by`; the form's Enumerator section uses the same precedence. This
+display attribution does not confer Registry roles or approval permissions.
 The live pipeline's configured `farmer-partner` is absent from Partner Management,
 so its migration also requires real partner onboarding before activation. A separate
 synthetic partner was onboarded through PM's API for the test and then disabled.
@@ -91,7 +105,8 @@ task listing also returned 200 with its required CSRF header; the initial proxy
 The Farmer dashboard repository is `oan_farmerregistry_dashboard`. Its
 develop/staging heads currently have no Dockerfile or application code and are
 skipped. The Farmer dashboard API remains in the existing Farmer Registry release,
-with its independently published image retained. Save
+with independent image builds and an image-only deployment guard. Its existing
+live contract passed Postman with 17 requests and 50 assertions, exit 0. Save
 reviewed, nonsecret overrides as `ci/services/dev/<component>.yaml` and separately
 as `ci/services/staging/<component>.yaml`. Every file needs:
 
@@ -279,12 +294,20 @@ Local regression tests cover branch/network classification, exact commit and
 digest selection, independent failures, Helm mutation ordering/race prevention,
 identity allowlists, issuer/JWKS/audience prerequisites, isolated storage and
 retirement preservation. Live ingestion and native AWE authorization passed for
-the synthetic record. Enabled-hook rehearsals and Jenkins deployment execution
-remain required rollout evidence.
+the synthetic record. Jenkins `farmer-registry-services-dev/3` deployed the
+replacement at revision 1 with API/worker/UI at zero replicas, beat/consumer and
+ingress disabled. It ran the app-role schema/rerun/failure rehearsal; no setup
+hooks are enabled. This is a paused preparation, not a completed connector
+cutover. API digest is `sha256:1c7679e23b54b00add4635dbb128d9d9cebaff202509867b0bf19febd3953b43`;
+UI digest is `sha256:47e8af1b2ea1dc9d0c872e0682349bddf10654151bfc0594bcfa898acb3f3e46`.
+Both are built from the pinned connector commit above. The selected permanent
+partner is `farmer-partner`, with a new key pair; onboarding, isolated database
+provisioning and the final checkpoint handoff still precede activation.
 
-The Linux container validation suite passed 274 tests and 57 subtests. Seventeen
-focused worker authentication/deployment guard tests passed after adding the
-worker-only rollout guard. Nine connector adapter tests passed against the built image.
+The Linux container validation suite passed 312 tests and 57 subtests, including
+ODK collector attribution and the embedded API ownership/deployment guards. Three
+additional tests exercised the actual built intake/change-request workers and
+patch reruns without network access. Nine connector adapter tests passed against the built image.
 The ODK transform and deployment shell harness passed on Bash 4.3, 5.2 and 5.3.
 Both Jenkinsfiles passed the live Jenkins Declarative Pipeline validator. The
 actual upstream chart and locked dependencies rendered six preparation resources;

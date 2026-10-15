@@ -20,7 +20,7 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-MANIFEST = ROOT / "ci/services/components.yaml"
+MANIFEST = ROOT / "helm/openg2p-farmer-registry/values.yaml"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
@@ -71,7 +71,7 @@ def image_specs(component):
 
 
 def configuration(path=MANIFEST):
-    items = yaml.safe_load(path.read_text(encoding="utf-8"))["components"]
+    items = yaml.safe_load(path.read_text(encoding="utf-8"))["cossAddons"]["components"]
     seen = set()
     for item in items:
         for field in ("name", "release", "namespace"):
@@ -84,9 +84,26 @@ def configuration(path=MANIFEST):
         seen.add(item["name"])
         if not re.fullmatch(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git", item["repository"]):
             raise ValueError("Expected a credential-free GitHub repository URL")
-        if item["release"] in ("commons", "commons-services", "farmer-connector", "farmer-registry"):
+        embedded = item.get("kind") == "registry-dashboard-api"
+        if embedded and any(item.get(key) != value for key, value in {
+            "name": "farmer-registry-dashboard-api", "release": "farmer-registry",
+            "repository": "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api.git",
+            "chart": "helm/openg2p-farmer-registry", "imageValues": "dashboardApi.image",
+            "imageRepository": "openg2p/farmer-registry/dashboard-api",
+        }.items()):
+            raise ValueError("Dashboard API must retain its Farmer chart ownership")
+        if item["release"] in ("commons", "commons-services", "farmer-connector") or (item["release"] == "farmer-registry" and not embedded):
             raise ValueError("Optional service must not adopt an existing shared/Registry/old connector release")
+        if item.get("imageRepository") and not re.fullmatch(r"openg2p/[a-z0-9/-]+", item["imageRepository"]):
+            raise ValueError("Invalid image repository")
     return items
+
+
+def configuration_hash():
+    # Chart values are the sole service catalogue; unrelated chart settings do
+    # not invalidate an otherwise identical service promotion record.
+    addons = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["cossAddons"]
+    return hashlib.sha256(json.dumps(addons, sort_keys=True).encode()).hexdigest()
 
 
 def branch(environment, component):
@@ -128,7 +145,8 @@ def checkout(component, environment, destination, run=command, commit=None):
 
 def layout(component, source):
     dockerfile = relative_file(source, component["dockerfile"])
-    chart = relative_file(source, component["chart"])
+    chart_root = ROOT if component.get("kind") == "registry-dashboard-api" else source
+    chart = relative_file(chart_root, component["chart"])
     if not dockerfile.is_file() or not (chart / "Chart.yaml").is_file():
         raise SkipService("missing-application-files")
     if not component.get("imageValues"):
@@ -154,7 +172,8 @@ def chart_hash(chart):
 
 def build_image(component, role, spec, commit, source, registry, run, tag=None):
     suffix = "-" + role if component.get("images") else ""
-    repository = registry + "/openg2p/" + component["name"] + suffix
+    repository_name = component.get("imageRepository", "openg2p/" + component["name"] + suffix)
+    repository = registry + "/" + repository_name
     tag = tag or commit[:12]
     image = repository + ":" + tag
     upstream_image = image + "-upstream" if spec.get("overlay") else image
@@ -182,7 +201,7 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
         raise ServiceError("missing-pushed-digest")
     digest = matches[0]
     published = run(["aws", "ecr", "describe-images", "--region", "ap-south-1",
-                  "--repository-name", "openg2p/" + component["name"] + suffix,
+                  "--repository-name", repository_name,
                   "--image-ids", "imageDigest=" + digest, "--query", "imageDetails[0].imageDigest",
                   "--output", "text"]).strip()
     if published != digest:
@@ -292,6 +311,33 @@ def paused_connector(manifest):
             raise ServiceError("connector-job-requires-rehearsal")
 
 
+def guard_dashboard_api(before, after, image):
+    """An embedded API update may change only its image in the Registry release."""
+    def index(items):
+        result = {}
+        for item in items:
+            if item["kind"] == "Job":
+                continue
+            key = item["kind"], item["metadata"]["name"]
+            if key in result or item["metadata"].get("namespace", "farmer") != "farmer":
+                raise ServiceError("dashboard-api-resource-identity-changed")
+            result[key] = copy.deepcopy(item)
+        return result
+    if any(item["kind"] == "Job" for item in after):
+        raise ServiceError("dashboard-api-must-not-run-setup-jobs")
+    old, new = index(before), index(after)
+    key = "Deployment", "farmer-registry-dashboard-api"
+    if set(old) != set(new) or key not in old:
+        raise ServiceError("dashboard-api-existing-ownership-required")
+    previous = pod(old[key]).get("containers", [])
+    current = pod(new[key]).get("containers", [])
+    if len(previous) != 1 or len(current) != 1 or current[0].get("image") != image:
+        raise ServiceError("dashboard-api-pinned-image-required")
+    current[0]["image"] = previous[0]["image"]
+    if old != new:
+        raise ServiceError("dashboard-api-would-change-unrelated-resources")
+
+
 def isolated_connector(old, new, settings):
     def databases(manifest, variable):
         return {e.get("value") for d in manifest for c in pod(d).get("containers", [])
@@ -316,7 +362,7 @@ def artifact(component, record, registry):
     if not SHA.fullmatch(record.get("commit", "")) or not DIGEST.fullmatch(record.get("digest", "")):
         raise ServiceError("invalid-promotion-artifact")
     suffix = "-" + next(iter(image_specs(component))) if component.get("images") else ""
-    if record.get("repository") != registry + "/openg2p/" + component["name"] + suffix:
+    if record.get("repository") != registry + "/" + component.get("imageRepository", "openg2p/" + component["name"] + suffix):
         raise ServiceError("promotion-repository-mismatch")
     expected_tag = record["commit"][:12]
     if record.get("overlayHashes"):
@@ -376,6 +422,7 @@ def deploy(component, environment, record, source, registry, run=command):
     overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
     settings = overrides.pop("_coordination", {})
     release, namespace = component["release"], component["namespace"]
+    embedded = component.get("kind") == "registry-dashboard-api"
     if settings.get("namespace") != namespace:
         raise ServiceError("environment-namespace-not-verified")
     args = ["-n", namespace]
@@ -408,9 +455,21 @@ def deploy(component, environment, record, source, registry, run=command):
         path.chmod(0o600)
         run(["helm", "repo", "add", "openg2p", "https://openg2p.github.io/openg2p-helm"])
         run(["helm", "dependency", "build", str(chart)])
+        render_options = []
+        if embedded:
+            # The parent chart contains regular revision-named setup Jobs as
+            # well as hooks. Suppress both for an API image-only deployment.
+            renderer = Path(state) / "without-jobs"
+            renderer.write_text("#!" + sys.executable + "\nimport sys,yaml\n"
+                                "yaml.safe_dump_all([d for d in yaml.safe_load_all(sys.stdin) if d and d.get('kind') != 'Job'],sys.stdout)\n")
+            renderer.chmod(0o700)
+            render_options = ["--no-hooks", "--post-renderer", str(renderer)]
         after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
-                          "--dry-run=server", *(["--is-upgrade"] if status else [])]))
-        guard(before, after, namespace, images.values(), release)
+                          "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
+        if embedded:
+            guard_dashboard_api(before, after, images["main"])
+        else:
+            guard(before, after, namespace, images.values(), release)
         if component.get("kind") == "connector":
             from connector_cutover import verify_backup
             backup_dir = os.environ.get("CONNECTOR_BACKUP_DIRECTORY")
@@ -423,7 +482,7 @@ def deploy(component, environment, record, source, registry, run=command):
             paused_connector(after)
         # New or changed hooks require an isolated rehearsal rather than running
         # unreviewed migrations/setup jobs during an optional image deployment.
-        old_hooks = docs(run(["helm", "get", "hooks", release, *args])) if status else []
+        old_hooks = docs(run(["helm", "get", "hooks", release, *args])) if status and not embedded else []
         hooks = [d for d in after if d.get("metadata", {}).get("annotations", {}).get("helm.sh/hook")]
         if hooks or old_hooks:
             rehearsal(component, environment, record, overrides)
@@ -434,11 +493,15 @@ def deploy(component, environment, record, source, registry, run=command):
         elif json.loads(run(["helm", "list", *args, "--all", "--filter", "^" + release + "$", "-o", "json"])):
             raise ServiceError("release-appeared-during-preflight")
         run(["helm", "upgrade", release, str(chart), *args, "-f", str(path),
-             *(["--install"] if status is None else []), "--atomic", "--wait", "--wait-for-jobs", "--timeout", "10m"])
+             *render_options, *(["--install"] if status is None else []), "--atomic", "--wait", "--wait-for-jobs", "--timeout", "10m"])
     final = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
     if final.get("info", {}).get("status") != "deployed":
         raise ServiceError("release-not-deployed")
-    guard(before, docs(run(["helm", "get", "manifest", release, *args])), namespace, images.values(), release)
+    final_manifest = docs(run(["helm", "get", "manifest", release, *args]))
+    if embedded:
+        guard_dashboard_api(before, final_manifest, images["main"])
+    else:
+        guard(before, final_manifest, namespace, images.values(), release)
     return final["version"]
 
 
@@ -507,7 +570,7 @@ def main():
     previous = json.loads(args.input.read_text(encoding="utf-8")) if args.input else {}
     if args.action == "deploy" or args.environment == "staging":
         expected = "dev" if args.action == "build" or args.environment == "dev" else "staging"
-        if previous.get("environment") != expected or previous.get("configHash") != hashlib.sha256(MANIFEST.read_bytes()).hexdigest():
+        if previous.get("environment") != expected or previous.get("configHash") != configuration_hash():
             parser.error("Release requires the matching build/deployment manifest")
     if args.environment == "staging":
         if not args.acceptance:
@@ -530,7 +593,7 @@ def main():
                              previous.get("components", {}), Path(work))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({"environment": args.environment,
-                                      "configHash": hashlib.sha256(MANIFEST.read_bytes()).hexdigest(),
+                                      "configHash": configuration_hash(),
                                       "components": records}, indent=2) + "\n", encoding="utf-8")
     return 2 if any(r["outcome"] == "failed" for r in records.values()) else 0
 
