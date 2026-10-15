@@ -9,8 +9,13 @@ failure; optional services release independently and failures mark Jenkins unsta
 The [rollout manifest](../rollouts/2026-10-16-staging-upgrade.json) records current
 implementation and execution status. Historical revision 36 / connector revision 3
 are inspection findings, not permission to assume the cluster is still unchanged.
-Refresh remote refs and live inventories before review. No live upgrade, restore,
-ODK publication, approval or connector activation was performed in this session.
+Refresh remote refs and live inventories before review. The [ODK location update](../history/odk-staging-location-20261016.md) is published
+as form 1.0.5. Registry and legacy connector revisions remain 36 and 3. The latest
+inspection found incompatible shared geography and missing Farmer partner
+registration; do not enter maintenance or authorize deployment until those
+prerequisites and the remaining rehearsals pass. The user authorized preparation
+of a [shared-geography repair proposal](staging-geography-review.md) for review;
+that separate proposal has not been applied.
 
 ## Fixed environment contract
 
