@@ -1,6 +1,7 @@
 """Safety properties for upgrading the existing new-dev release."""
 import copy
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,58 @@ deployment = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deployment)
 ECR = "379220350808.dkr.ecr.ap-south-1.amazonaws.com"
 TAG = "abcdef012345"
+
+
+def helm_status(state="deployed", revision=5):
+    return {"name": "farmer-registry", "namespace": "farmer", "version": revision,
+            "info": {"status": state}}
+
+
+@pytest.mark.parametrize("state", ["deployed", "failed"])
+def test_release_accepts_stable_upgrade_states(state):
+    assert deployment.release_status(helm_status(state)) == state
+
+
+@pytest.mark.parametrize("state", ["pending-install", "pending-upgrade", "pending-rollback",
+                                  "uninstalling", "uninstalled", "superseded", "unknown", None])
+def test_release_blocks_unstable_or_missing_state(state):
+    with pytest.raises(ValueError, match="resolve Helm state"):
+        deployment.release_status(helm_status(state))
+
+
+@pytest.mark.parametrize("key,value", [("name", "other"), ("namespace", "commons"),
+                                     ("version", 0), ("version", None), ("version", True)])
+def test_release_identity_and_revision_required(key, value):
+    status = helm_status()
+    status[key] = value
+    with pytest.raises(ValueError):
+        deployment.release_status(status)
+
+
+def test_failed_release_is_not_successful_completion():
+    with pytest.raises(ValueError):
+        deployment.release_status(helm_status("failed"), require_deployed=True)
+    assert deployment.release_status(helm_status(), require_deployed=True) == "deployed"
+
+
+@pytest.mark.parametrize("current", [helm_status("failed", 6), helm_status("deployed", 5),
+                                   helm_status("pending-upgrade", 6)])
+def test_release_changes_during_preflight_are_rejected(current):
+    with pytest.raises(ValueError):
+        deployment.unchanged_release(helm_status("failed"), current)
+
+
+def test_unchanged_failed_release_can_proceed_to_upgrade():
+    deployment.unchanged_release(helm_status("failed"), helm_status("failed"))
+
+
+@pytest.mark.parametrize("state,mode", [("deployed", "normal"), ("failed", "recovery")])
+def test_upgrade_mode_stdout_is_safe_for_shell_capture(tmp_path, monkeypatch, capsys, state, mode):
+    status = tmp_path / "status.json"
+    status.write_text(json.dumps(helm_status(state)), encoding="utf-8")
+    monkeypatch.setattr(deployment.sys, "argv", ["deployment.py", "upgrade-mode", str(status)])
+    deployment.main()
+    assert capsys.readouterr().out == mode + "\n"
 
 
 def workload(kind, suffix, image, env=None):

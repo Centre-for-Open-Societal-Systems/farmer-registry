@@ -144,12 +144,38 @@ def validate(before, after, registry, tag):
                     raise ValueError(f"Demo/geography loader enabled: {key}/{e['name']}")
 
 
+def release_status(status, require_deployed=False):
+    if status.get("name") != RELEASE or status.get("namespace") != "farmer":
+        raise ValueError("Expected farmer-registry in namespace farmer")
+    revision = status.get("version")
+    if type(revision) is not int or revision < 1:
+        raise ValueError("Expected a positive Helm release revision")
+    state = status.get("info", {}).get("status")
+    allowed = ("deployed",) if require_deployed else ("deployed", "failed")
+    if state not in allowed:
+        # Do not print arbitrary Helm descriptions, which may contain private data.
+        known = state if state in ("pending-install", "pending-upgrade", "pending-rollback",
+                                  "uninstalling", "uninstalled", "superseded", "failed") else "unknown"
+        raise ValueError(f"Helm revision {revision} is {known}; resolve Helm state first")
+    return state
+
+
+def unchanged_release(before, current):
+    if (release_status(before), before["version"]) != (release_status(current), current["version"]):
+        raise ValueError("Helm revision/state changed during preflight; rerun against the latest release")
+
+
 def main():
     action, *args = sys.argv[1:]
-    if action == "status":
+    if action in ("status", "complete", "upgrade-mode"):
         status = load(args[0])
-        if status.get("name") != RELEASE or status.get("namespace") != "farmer" or status.get("info", {}).get("status") != "deployed":
-            raise ValueError("Expected the deployed farmer-registry release in farmer; resolve Helm state first")
+        state = release_status(status, require_deployed=action == "complete")
+        if action == "upgrade-mode":
+            print("recovery" if state == "failed" else "normal")
+            return
+        print(f"Helm revision {status['version']}: {state}")
+    elif action == "unchanged":
+        unchanged_release(load(args[0]), load(args[1]))
     elif action == "prepare":
         result = prepare(load(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"])
         Path(args[2]).write_text(yaml.safe_dump(result, sort_keys=False), encoding="utf-8")

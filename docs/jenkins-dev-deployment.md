@@ -59,8 +59,20 @@ credentials must allow those repositories. Never put credentials in Git.
   Secret references, changed routing/storage, and incorrect commit images.
   A rejected change requires an explicit reviewed migration, not bypassing the guard.
 
-Helm runs with `--atomic --wait --wait-for-jobs`, followed by rollout and schema
-checks. Atomic rollback covers a failed Helm upgrade, **not database changes**
+Helm accepts an existing release in `deployed` or `failed` state. Pending,
+uninstalling, unknown and missing states block deployment. The log shows the
+revision and state without exposing the Helm description. The revision/state are
+checked again immediately before upgrade; a changed release requires a fresh run.
+
+Normal upgrades from `deployed` use `--atomic --wait --wait-for-jobs`. Recovery
+from `failed` retains all schema, preservation and sanity checks, but omits
+`--atomic`: Helm could otherwise restore an older successful revision whose
+resources/configuration differ from the failed revision being recovered. A failed
+recovery stays failed for operator diagnosis; Jenkins does not edit Helm Secrets,
+delete the release or automatically roll back. Success requires Helm to report
+`deployed`, followed by rollout, manifest and schema checks.
+
+Atomic rollback covers a failed normal Helm upgrade, **not database changes**
 performed by seed hooks. Post-upgrade checks can also fail after Helm succeeds;
 investigate before retrying. Keep the operator's database backup/recovery process.
 Private values and rendered manifests are temporary, are not archived, and are
