@@ -12,13 +12,22 @@ CHART=helm/openg2p-farmer-registry
 STATE=$(mktemp -d)
 trap 'rm -rf "$STATE"' EXIT
 
+# Python dependencies live in Docker on both agents; host Helm/kubectl keep the
+# existing VPN access. The helper receives no kubeconfig or Docker socket.
+guard() {
+  docker run --rm --network none --user "$(id -u):$(id -g)" \
+    -e ECR_REGISTRY -e IMAGE_TAG \
+    -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
+    "coss-ci/validation:$IMAGE_TAG" python ci/jenkins/deployment.py "$@"
+}
+
 # Reading an existing release is mandatory; never install placeholder defaults
 # after a credential, namespace or context mistake. Private manifests stay local.
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json"
-python ci/jenkins/deployment.py status "$STATE/status.json"
+guard status "$STATE/status.json"
 helm get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/values.json"
 helm get manifest "$HELM_RELEASE" -n "$HELM_NAMESPACE" > "$STATE/before.yaml"
-python ci/jenkins/deployment.py prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
+guard prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
 
 # This gate includes all 36 intake/register/history coordinate columns and the
 # document-history field. Migrations remain explicit backed-up operator actions.
@@ -29,7 +38,7 @@ helm dependency update "$CHART"
 helm lint "$CHART" --strict -f "$STATE/values.yaml" > "$STATE/lint.log"
 helm template "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
   -f "$STATE/values.yaml" > "$STATE/after.yaml"
-python ci/jenkins/deployment.py validate "$STATE/before.yaml" "$STATE/after.yaml"
+guard validate "$STATE/before.yaml" "$STATE/after.yaml"
 
 # The chart's secret lookups run against the cluster during upgrade. Do not
 # kubectl-apply the offline template: its generated Secret values are previews.
@@ -48,7 +57,7 @@ done
 helm get manifest "$HELM_RELEASE" -n "$HELM_NAMESPACE" > "$STATE/deployed.yaml"
 printf '\n---\n' >> "$STATE/deployed.yaml"
 helm get hooks "$HELM_RELEASE" -n "$HELM_NAMESPACE" >> "$STATE/deployed.yaml"
-python ci/jenkins/deployment.py validate "$STATE/before.yaml" "$STATE/deployed.yaml"
+guard validate "$STATE/before.yaml" "$STATE/deployed.yaml"
 kubectl exec -i -n farmer deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
   python3 - < ci/gen2/check_geo_schema.py
 echo "Deployed Registry commit $IMAGE_TAG to farmer; Commons and farmer-connector releases were not upgraded."

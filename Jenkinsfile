@@ -27,14 +27,10 @@ pipeline {
                 }
                 sh '''
                     set -eu
-                    python3 -m venv .ci-venv
-                    .ci-venv/bin/pip install --quiet -r ci/jenkins/requirements.txt
-                    .ci-venv/bin/python -m pytest -q test/test_rp_pin_lockstep.py \
-                      test/test_jenkins_deployment.py test/test_pm_manifest.py \
-                      test/test_odk_location_media.py test/test_odk_geo_compatibility.py \
-                      test/test_shared_geo_migration.py farmer-extension/tests/test_metadata_effective_layer.py
-                    .ci-venv/bin/python odk/test_transform.py > .ci-odk-transform.log
-                    bash -n ci/jenkins/deploy-dev.sh
+                    docker build -t "coss-ci/validation:$IMAGE_TAG" ci/jenkins
+                    docker run --rm --user "$(id -u):$(id -g)" \
+                      -v "$PWD:/repo:ro" "coss-ci/validation:$IMAGE_TAG" \
+                      bash ci/jenkins/validate.sh
                 '''
             }
         }
@@ -96,9 +92,7 @@ pipeline {
                     withCredentials([file(credentialsId: 'farmer-dev-kubeconfig', variable: 'KUBECONFIG')]) {
                         sh '''
                             set -eu
-                            python3 -m venv .ci-venv
-                            .ci-venv/bin/pip install --quiet PyYAML==6.0.2
-                            export PATH="$PWD/.ci-venv/bin:$PATH"
+                            docker build -t "coss-ci/validation:$IMAGE_TAG" ci/jenkins
                             bash ci/jenkins/deploy-dev.sh
                         '''
                     }

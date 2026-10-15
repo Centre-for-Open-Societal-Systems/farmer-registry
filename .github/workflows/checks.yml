@@ -26,6 +26,10 @@ jobs:
         run: |
           python -m pytest test/test_jenkins_deployment.py -q
           bash -n ci/jenkins/deploy-dev.sh
+      - name: Jenkins Python container
+        run: |
+          docker build -t coss-ci/validation:check ci/jenkins
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" coss-ci/validation:check bash ci/jenkins/validate.sh
       - name: ODK transform
         run: python odk/test_transform.py
       - name: ODK geography matches the shared COSS seed
