@@ -84,8 +84,9 @@ this is runtime verification, not evidence that either image is already deployed
 The live pipeline's configured `farmer-partner` is absent from Partner Management,
 so its migration also requires real partner onboarding before activation. A separate
 synthetic partner was onboarded through PM's API for the test and then disabled.
-The named live approver could approve through AWE, but Registry's approval proxy
-returned `G2P-AUT-403`; portal permission readiness remains a cutover gate.
+The named live approver approved through AWE. Registry's proxy statistics and
+task listing also returned 200 with its required CSRF header; the initial proxy
+403 was the test omitting that header, not missing approver roles.
 
 The Farmer dashboard repository is `oan_farmerregistry_dashboard`. Its
 develop/staging heads currently have no Dockerfile or application code and are
@@ -278,8 +279,8 @@ Local regression tests cover branch/network classification, exact commit and
 digest selection, independent failures, Helm mutation ordering/race prevention,
 identity allowlists, issuer/JWKS/audience prerequisites, isolated storage and
 retirement preservation. Live ingestion and native AWE authorization passed for
-the synthetic record. Portal approval permissions, enabled-hook rehearsals and
-Jenkins deployment execution remain required rollout evidence.
+the synthetic record. Enabled-hook rehearsals and Jenkins deployment execution
+remain required rollout evidence.
 
 The Linux container validation suite passed 274 tests and 57 subtests. Seventeen
 focused worker authentication/deployment guard tests passed after adding the

@@ -31,6 +31,20 @@ def test_worker_image_and_verified_token_url_are_the_only_allowed_changes():
     rollout.guard(before, after, "new@sha256:tested")
 
 
+def test_postgres_checker_may_inherit_only_the_same_verified_token_url():
+    before, after = manifests()
+    checker = {"name": "postgres-checker", "image": "checker:v1",
+               "env": [{"name": rollout.TOKEN_NAME, "value": "http://commons-keycloak/realms/staff/token"}]}
+    before[0]["spec"]["template"]["spec"]["initContainers"] = [checker]
+    updated = copy.deepcopy(checker)
+    updated["env"][0]["value"] = rollout.TOKEN_URL
+    after[0]["spec"]["template"]["spec"]["initContainers"] = [updated]
+    rollout.guard(before, after, "new@sha256:tested")
+    updated["image"] = "unreviewed:v2"
+    with pytest.raises(ValueError):
+        rollout.guard(before, after, "new@sha256:tested")
+
+
 @pytest.mark.parametrize("mutation", ["secret", "dashboard", "storage", "credential-reference", "removal", "job", "issuer", "namespace"])
 def test_worker_rollout_rejects_unrelated_changes(mutation):
     before, after = manifests()

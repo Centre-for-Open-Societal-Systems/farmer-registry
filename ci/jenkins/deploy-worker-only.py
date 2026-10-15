@@ -46,11 +46,22 @@ def guard(before, after, image):
     if len(previous) != 1 or len(current) != 1 or current[0]["image"] != image:
         raise ValueError("Expected exactly the pinned worker image")
     current[0]["image"] = previous[0]["image"]
-    old_env = {e["name"]: e for e in previous[0].get("env", [])}
-    new_env = {e["name"]: e for e in current[0].get("env", [])}
-    if new_env.get(TOKEN_NAME) != {"name": TOKEN_NAME, "value": TOKEN_URL} or TOKEN_NAME not in old_env:
-        raise ValueError("Expected the verified Commons staff token URL")
-    current[0]["env"] = [old_env[TOKEN_NAME] if e["name"] == TOKEN_NAME else e for e in current[0]["env"]]
+    def normalize_token_url(previous_container, current_container, required=False):
+        old_env = {e["name"]: e for e in previous_container.get("env", [])}
+        new_env = {e["name"]: e for e in current_container.get("env", [])}
+        if TOKEN_NAME not in old_env and TOKEN_NAME not in new_env and not required:
+            return
+        if new_env.get(TOKEN_NAME) != {"name": TOKEN_NAME, "value": TOKEN_URL} or TOKEN_NAME not in old_env:
+            raise ValueError("Expected the verified Commons staff token URL")
+        current_container["env"] = [old_env[TOKEN_NAME] if e["name"] == TOKEN_NAME else e for e in current_container["env"]]
+    normalize_token_url(previous[0], current[0], required=True)
+    # The pinned postgres-checker init container inherits the same envVars.
+    old_init = old[WORKER]["spec"]["template"]["spec"].get("initContainers", [])
+    new_init = new[WORKER]["spec"]["template"]["spec"].get("initContainers", [])
+    if len(old_init) != len(new_init):
+        raise ValueError("Worker init containers changed")
+    for previous_container, current_container in zip(old_init, new_init):
+        normalize_token_url(previous_container, current_container)
     if old != new:
         raise ValueError("Worker-only rollout would change unrelated resources or configuration")
 
@@ -81,6 +92,7 @@ def main():
     worker.setdefault("image", {}).update(repository=repository, tag=tag + "@" + digest)
     worker.setdefault("envVars", {})[TOKEN_NAME] = TOKEN_URL
     chart = ROOT / "helm/openg2p-farmer-registry"
+    command(["helm", "repo", "add", "openg2p", "https://openg2p.github.io/openg2p-helm"])
     command(["helm", "dependency", "build", str(chart)])
     with tempfile.TemporaryDirectory(prefix="farmer-worker-rollout-") as work:
         work = Path(work)
@@ -120,6 +132,9 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except ValueError as exc:
+        print("Worker-only rollout stopped: " + str(exc), file=sys.stderr)
+        raise SystemExit(1)
     except Exception:
         print("Worker-only rollout stopped; private configuration withheld", file=sys.stderr)
         raise SystemExit(1)
