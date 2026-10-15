@@ -160,6 +160,17 @@ def effective_widgets(section_id):
 
 
 class TestEffectiveLayer(unittest.TestCase):
+    def test_family_size_is_hidden_in_both_household_forms(self):
+        for section in (
+            "farmer_household_household_information_section_01",
+            "household_household_household_information_section_01",
+        ):
+            with self.subTest(section=section):
+                widgets = effective_widgets(section)
+                self.assertNotIn("size_of_group", widgets)
+                self.assertIn("number_of_male_members", widgets)
+                self.assertIn("number_of_female_members", widgets)
+
     def test_every_seed_file_is_parseable(self):
         """A malformed escape makes psql store nothing and the form render empty."""
         self.assertTrue(_base_sections(), "no base sections parsed")
@@ -254,7 +265,7 @@ class TestEffectiveLayer(unittest.TestCase):
             / "docker"
             / "staff-ui"
             / "assets"
-            / "intake-photo-widget.css"
+            / "coss-intake.js"
         ).read_text(encoding="utf-8")
         selector = f".header-section-widget-{PHOTO_WIDGET_ID}"
         self.assertIn(f"{selector} .hdr-info", css)

@@ -6,6 +6,7 @@
 # Example inside local postgres: PGDATABASE=farmer_registry_db PGUSER=postgres \
 #   bash /tmp/migrate-rp-geo-columns.sh /tmp/farmer-geo-backup
 set -euo pipefail
+umask 077
 : "${PGDATABASE:?Set PGDATABASE to the farmer registry database}"
 backup=${1:?Pass a new backup directory}
 remaining=$(psql -X -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND data_type IN ('text','character varying') AND column_name IN ('latitude','longitude','altitude') AND table_name ~ '^g2p_(register_|register_history_|intake_form_)(farmers|households|household_members|lands)$'")

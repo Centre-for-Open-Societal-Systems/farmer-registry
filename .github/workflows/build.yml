@@ -1,0 +1,37 @@
+name: Build COSS images
+
+on:
+  pull_request:
+  push:
+    branches: [develop, feat/gen2-common-rc245]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [staff-api, partner-api, celery, db-seed, sanity-tests, staff-ui]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/${{ matrix.component }}/Dockerfile
+          push: false
+          load: true
+          tags: coss/${{ matrix.component }}:ci
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+      - name: COSS domain regression checks on the pinned platform
+        if: matrix.component == 'staff-api'
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo/farmer-extension \
+            --entrypoint python coss/staff-api:ci -m unittest \
+            tests.test_domain_validation_utils tests.test_farmer_geo_sync \
+            tests.test_intake_record_image_urls tests.test_household_family_size -v

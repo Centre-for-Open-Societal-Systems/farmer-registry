@@ -4,15 +4,23 @@ description: |
   OpenG2P Farmer Registry — a thin, branded package over the shared
   openg2p-registry chart published by the registry platform.
 
-  The openg2p-registry dependency provides the core registry workloads,
-  identity wiring and seed jobs. This chart supplies farmer values, images
-  and metadata, and owns the dashboard API and farmer reporting layer:
+  This chart owns NO service templates. It declares openg2p-registry as a pinned
+  dependency and supplies the farmer values overlay (variant identity, hostname,
+  the farmer-built images, seed toggles and the farmer sanity suite). Every
+  deployment, service, ingress, keycloak/iam wiring and the db-seed machinery
+  come from the openg2p-registry subchart.
 
-    dashboard-api.yaml                 read-only chart-data API
-    analytics-jobs.yaml                bulk-sample + reporting-views Jobs
-    reporting-views-refresh.yaml       materialized-view refresh CronJob
+  It does own the ANALYTICS layer, in templates/ — because the reporting views
+  and dashboards are written against the farmer schema and the platform has no
+  concept of them:
+
+    analytics-jobs.yaml                reporting-views + dashboard-import Jobs
+    reporting-views-refresh.yaml       CronJob refreshing the materialized views
+    dashboard-bundle-configmap.yaml    ships fr-dashboards.zip into the cluster
     maps-content-configmap.yaml        maps content for G2P Insights
     _maps-content.tpl                  its name helper
+    _mds-api-env.tpl                   Master Data API env (MDS_*) for the Jobs
+    superset-service-account-secret.yaml
 
   Hook weights order these above the sanity suite (25), so rebuilding the views
   cannot change what the sanity tests asserted against.
@@ -24,8 +32,8 @@ type: application
 #   the real version from git (one version per commit) and overrides it at
 #   publish time, in lockstep with the farmer images this chart references.
 #   Bumping it here only affects a local `helm package`/`helm install .`.
-version: 0.0.0-develop
-appVersion: "develop"
+version: 0.0.0-rc.0
+appVersion: "1.2.2-rc.544"
 
 keywords:
   - openg2p
@@ -45,10 +53,8 @@ maintainers:
 # deliberately. Aliased to `registry` so the overlay nests under a hyphen-free
 # key (.Values.registry.*).
 #
-# Since the platform moved to GitLab, openg2p-registry is pulled from the shared
-# `openg2p/charts` Helm registry (project 84460547, channel `stable`) rather than
-# the old openg2p-helm GitHub Pages index, which is frozen at the pre-move
-# versions. The project is public, so no credentials are needed to resolve it.
+# This RC is published in the pre-move OpenG2P Helm repository. Keep this
+# repository paired with rc.544; newer upstream development uses GitLab.
 dependencies:
   - name: openg2p-registry
     alias: registry

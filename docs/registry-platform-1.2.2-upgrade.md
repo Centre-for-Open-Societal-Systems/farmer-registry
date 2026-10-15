@@ -30,21 +30,26 @@ Restart the API, worker and beat containers with the rebuilt images afterward so
 their database connections do not retain prepared statements for the old types.
 Do not reset volumes or rerun seed jobs.
 
-The old intake-policy `def` to `async def` patch must also be removed: rc.544
+Legacy patched stacks must also remove the old intake-policy `def` to `async def` patch: rc.544
 already corrected every call site to call the synchronous helper. Keeping that
 patch makes search and access checks pass a coroutine to SQLAlchemy.
 
 Verification
 ------------
 
-Run `test/verify_rc544_intake.py` inside the rebuilt staff-api image against a
-disposable restored database selected by `REGISTRY_STAFF_PORTAL_API_DB_DBNAME`.
-Its name must end in `_test`. It reads every domain model, saves and reads back
-the Household section's No selection, searches submissions, and verifies that a
-denying data policy excludes records. It creates a draft only in the test DB.
-Use `--read-only` against the running database to check model reads, listing and
-policy filtering without creating a draft. A seeded Farmer form is required.
+Run `ci/gen2/check_geo_schema.py` in the existing staff API environment. It uses
+the pod's existing credentials and schema SELECTs in a read-only transaction;
+it must report all 36 expected coordinate columns and document-history
+`event_type`. It does not import application startup hooks or create drafts.
+The older `test/verify_rc544_intake.py` harness is not included in the adopted
+upstream layout; do not treat it as an available verification command.
 
-Also run the platform patch/pin tests and the staff-UI bundle/upload checks.
+Also run the RC pin and effective metadata tests and the local trial's API and
+staff-UI checks documented in `local/upstream/README.md`.
 Browser testing should cover the intake listing, Household save, existing
 submission read-back, farmer search, and photo/certificate uploads.
+
+The dev schema repair completed on 2026-10-15 and the continuation reverified
+36 Float-compatible columns plus non-null document-history `event_type`.
+See [current continuation evidence](odk-geography-rollout.md). Do not rerun a
+successful migration or claim full intake compatibility from schema checks alone.

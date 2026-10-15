@@ -1,0 +1,24 @@
+{
+  "application_mnemonic": "__APPLICATION_MNEMONIC__",
+  "application_url": "__APPLICATION_URL__",
+  "application_description": "__APPLICATION_DESCRIPTION__",
+  "icon_base64": "",
+  "width": 80,
+  "order": 5,
+  "active": true,
+  "permissions": [],
+  "roles": [
+    {
+      "role_mnemonic": "AWE_ADMIN",
+      "role_description": "AWE administrator \u2014 policies, cancellations, and retries.",
+      "active": true,
+      "permissions": []
+    },
+    {
+      "role_mnemonic": "AWE_VIEWER",
+      "role_description": "AWE viewer \u2014 read-only policies, requests, deliveries, and audit.",
+      "active": true,
+      "permissions": []
+    }
+  ]
+}

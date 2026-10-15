@@ -2,7 +2,7 @@
 
 odk/build_location_media.py generates the form's region / zone / woreda
 choice lists and media/KebeleList.csv from
-docker/db-seed/seed-data/geo/geo_level_values.json, the hierarchy Master Data
+local/upstream/assets/geo/ethiopia_geo_seed.sql.gz, the hierarchy Master Data
 is seeded with. If they drift, an agent can pick a kebele Master Data does not
 know (the ingest then has no location), or cannot pick one it does.
 """
@@ -10,6 +10,9 @@ know (the ingest then has no location), or cannot pick one it does.
 import csv
 import importlib.util
 import pathlib
+import json
+
+from jinja2 import Environment
 
 import pytest
 
@@ -47,6 +50,31 @@ def test_every_kebele_pads_to_a_master_data_id():
     sent = {f"kebele-ET{int(row['name']):012d}" for row in rows}
     assert len(rows) == len(LEVELS["kebele"]) == 19535
     assert sent == master_data
+
+
+def test_every_woreda_round_trips_through_the_actual_transform():
+    template = Environment().from_string((ODK / 'templates/farmer_transform.j2').read_text(encoding='utf-8'))
+    for code in LEVELS['woreda']:
+        rendered = json.loads(template.render(data={'basic_info': {'locale_info': {
+            'woreda': str(int(code)), 'kebele': 'other'}}}))
+        assert rendered['fr_farmer_location'][0]['geo_lowest_level_value_id'] == 'woreda-ET' + code
+
+
+def test_kebele_csv_filter_columns_and_unique_choice_names():
+    with build_location_media.KEBELES.open(encoding='utf-8') as stream:
+        reader = csv.DictReader(stream)
+        assert reader.fieldnames == ['list_name', 'name', 'label', 'region', 'zone', 'woreda']
+        rows = list(reader)
+    assert len({r['name'] for r in rows}) == len(rows)
+    for row in rows:
+        if row['name'] == 'other':
+            continue
+        code = f"{int(row['name']):012d}"
+        name, woreda = LEVELS['kebele'][code]
+        zone = LEVELS['woreda'][woreda][1]
+        region = LEVELS['zone'][zone][1]
+        assert row['label'] == name
+        assert (row['woreda'], row['zone'], row['region']) == tuple(str(int(v)) for v in (woreda, zone, region))
 
 
 def test_regions_carry_their_translations(workbook):

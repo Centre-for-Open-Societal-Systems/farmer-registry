@@ -8,23 +8,30 @@
 # registry Helm release and therefore survive `helm uninstall`).
 #
 # What it does, in order:
-#   1. helm uninstall <release>            (registry workloads, services,
+#   1. Remove this registry's Superset     (dashboards/charts/datasets + the
+#      dashboards                           database connection, which live in
+#                                           the SHARED Superset release and so
+#                                           survive `helm uninstall`. Runs FIRST,
+#                                           while `helm get values` can still be
+#                                           read for the connection name. A no-op
+#                                           unless this variant ships dashboards.)
+#   2. helm uninstall <release>            (registry workloads, services,
 #                                           helm-owned secrets & configmaps)
-#   2. Delete leftover Jobs + their Pods   (helm hook jobs like db-seed,
+#   3. Delete leftover Jobs + their Pods   (helm hook jobs like db-seed,
 #                                           keycloak-init, postgres-init, and the
 #                                           sanity jobs (pm-seed, cm-seed, sanity)
 #                                           keep themselves around via
 #                                           hook-delete-policy: before-hook-creation)
-#   3. Sweep leftover Secrets/ConfigMaps   (label: app.kubernetes.io/instance)
-#   4. Drop Postgres databases + roles     (via `kubectl exec` into
+#   4. Sweep leftover Secrets/ConfigMaps   (label: app.kubernetes.io/instance)
+#   5. Drop Postgres databases + roles     (via `kubectl exec` into
 #                                           commons-postgresql-0)
-#   5. Delete this registry's IAM rows     (staff_portal_applications +
+#   6. Delete this registry's IAM rows     (staff_portal_applications +
 #                                           staff_roles / permissions / mappings
 #                                           for mnemonic <release>-staff-portal,
 #                                           in the IAM DB inside the same
 #                                           commons-postgresql instance)
-#   6. Delete PVCs by label                (app.kubernetes.io/instance)
-#   7. Delete PVs still bound to those PVCs
+#   7. Delete PVCs by label                (app.kubernetes.io/instance)
+#   8. Delete PVs still bound to those PVCs
 #      (typically `Released` PVs created with reclaimPolicy=Retain)
 #
 # NOT removed (by design): the sanity e2e seeds a SHARED, persistent test partner
@@ -33,6 +40,13 @@
 # not in this registry's release or DBs — and are intentionally left in place:
 # PARTNER_CM_SANITY is shared with the Consent Manager's own sanity, and CM
 # partner-delete is soft (audit integrity). Remove them via PM/CM if desired.
+#
+# Refuses to start while a Helm operation on the release is still running
+# (status pending-install / pending-upgrade / pending-rollback, or a Rancher
+# helm-operation-* pod in cattle-system targeting it): hook Jobs that operation
+# creates after the job cleanup would be left behind. Wait, or pass --force.
+# After the job cleanup it re-checks for late hook Jobs/Pods SWEEP_CHECKS times
+# (env, default 3), SWEEP_INTERVAL seconds apart (env, default 10).
 #
 # Requires: kubectl (cluster admin), helm, bash 4+.
 #
@@ -44,8 +58,13 @@
 #       [--postgres-namespace <ns>]   (default: same as --namespace)
 #       [--iam-db <name>]             (default: iam; IAM staff-portal DB to clean)
 #       [--keep-iam]                  (do NOT delete this registry's IAM rows)
+#       [--keep-dashboards]           (do NOT remove this registry's Superset assets)
+#       [--superset-release <name>]   (default: commons-services)
+#       [--superset-namespace <ns>]   (default: same as --namespace)
+#       [--superset-db-name <name>]   (default: read from the release's values)
 #       [--keep-pvs]                  (delete PVCs but not PVs)
 #       [--dry-run]                   (print actions, change nothing)
+#       [--force]                     (run even while a Helm operation on the release is in progress)
 #       [--yes]                       (skip interactive confirmation)
 #
 # EXAMPLES:
@@ -70,8 +89,20 @@ KEEP_IAM=false
 KEEP_PVS=false
 DRY_RUN=false
 ASSUME_YES=false
+FORCE=false
+# Late-hook sweep after the job cleanup (env-overridable).
+SWEEP_CHECKS="${SWEEP_CHECKS:-3}"
+SWEEP_INTERVAL="${SWEEP_INTERVAL:-10}"
+# Superset is a SHARED release (commons-services), not part of this registry.
+# SUPERSET_DB_NAME is auto-read from the release's own values below; the flag is
+# only needed when the release is already gone.
+SUPERSET_RELEASE="commons-services"
+SUPERSET_NAMESPACE=""
+SUPERSET_DB_NAME=""
+KEEP_DASHBOARDS=false
+
 # ---------- cli ----------
-usage() { sed -n '2,/^set -euo pipefail/{ /^set -euo pipefail/d; p; }' "$0"; exit 1; }
+usage() { sed -n '2,78p' "$0"; exit 1; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -81,9 +112,14 @@ while [[ $# -gt 0 ]]; do
     --postgres-namespace) POSTGRES_NAMESPACE="$2"; shift 2 ;;
     --iam-db)            IAM_DB="$2";            shift 2 ;;
     --keep-iam)          KEEP_IAM=true;          shift ;;
+    --keep-dashboards)   KEEP_DASHBOARDS=true;   shift ;;
+    --superset-release)  SUPERSET_RELEASE="$2";  shift 2 ;;
+    --superset-namespace) SUPERSET_NAMESPACE="$2"; shift 2 ;;
+    --superset-db-name)  SUPERSET_DB_NAME="$2";  shift 2 ;;
     --keep-pvs)          KEEP_PVS=true;          shift ;;
     --dry-run)           DRY_RUN=true;           shift ;;
     --yes|-y)            ASSUME_YES=true;        shift ;;
+    --force)             FORCE=true;             shift ;;
     -h|--help)           usage ;;
     *) echo "Unknown argument: $1"; usage ;;
   esac
@@ -91,6 +127,9 @@ done
 
 [[ -z "$NAMESPACE" ]] && { echo "ERROR: --namespace is required"; exit 1; }
 [[ -z "$POSTGRES_NAMESPACE" ]] && POSTGRES_NAMESPACE="$NAMESPACE"
+[[ "$SWEEP_CHECKS" =~ ^[0-9]+$ && "$SWEEP_INTERVAL" =~ ^[0-9]+$ ]] \
+  || { echo "ERROR: SWEEP_CHECKS and SWEEP_INTERVAL must be non-negative integers"; exit 1; }
+[[ -z "$SUPERSET_NAMESPACE" ]] && SUPERSET_NAMESPACE="$NAMESPACE"
 
 # ---------- derived: DB / user names (templated exactly like values.yaml) ----------
 # values.yaml:
@@ -179,6 +218,102 @@ kexec_psql_capture() {
     | tr -d '[:space:]' || true
 }
 
+# ---------- in-progress Helm operation guard ----------
+# Uninstalling while `helm install/upgrade` of this release is still running its
+# hooks races it: the job cleanup runs, then the still-running operation creates
+# the next hook Job (db-seed, ...), which nobody deletes and whose pod retries
+# forever. Rancher runs that as `helm install --timeout=10m0s` in a cattle-system
+# helm-operation-* pod, so check Helm's own status AND those pods. Returns 0 (and
+# prints what is running) when an operation is in progress.
+helm_operation_in_progress() {
+  local busy=1 status ops
+  status=$(helm -n "$NAMESPACE" status "$RELEASE" -o json 2>/dev/null \
+    | jq -r '.info.status // empty' 2>/dev/null || true)
+  case "$status" in
+    pending-install|pending-upgrade|pending-rollback)
+      _red "  Helm release '$RELEASE' is in status '$status' — an operation on it is still running"
+      busy=0 ;;
+  esac
+  # Best effort: if cattle-system is absent or not readable, this finds nothing.
+  # Matches Running helm-operation-* pods whose container command/args carry
+  # --namespace=NS (or -n NS / --namespace NS) and the release name as a token.
+  ops=$(kubectl -n cattle-system get pod -o json 2>/dev/null \
+    | jq -r --arg ns "$NAMESPACE" --arg rel "$RELEASE" '
+        .items[]
+        | select(.metadata.name | startswith("helm-operation-"))
+        | select(.status.phase == "Running")
+        | ([(.spec.containers // [])[] | (.command // []) + (.args // [])] | add // []) as $argv
+        | ([$argv[] | splits("[\\s=\"\\x27]+")] | map(select(. != ""))) as $t
+        | select(any(range(0; ($t | length) - 1); ($t[.] == "--namespace" or $t[.] == "-n") and $t[. + 1] == $ns))
+        | select(any($t[]; . == $rel))
+        | "\(.metadata.name): \($argv | join(" ") | .[0:300])"' 2>/dev/null || true)
+  if [[ -n "$ops" ]]; then
+    _red "  Rancher Helm operation(s) still running in cattle-system for '$RELEASE' (namespace '$NAMESPACE'):"
+    printf '%s\n' "$ops" | sed 's/^/    /'
+    busy=0
+  fi
+  return "$busy"
+}
+
+# ---------- late-hook sweep ----------
+# This release's Jobs/Pods still present (and not already terminating): Jobs and
+# Pods by the instance label, plus Jobs named "<release>-*" (hook Jobs without the
+# standard labels). Pods owned by something other than a Job (e.g. a ReplicaSet)
+# are left out — deleting them would only churn a controller.
+late_hook_objects() {
+  {
+    kubectl -n "$NAMESPACE" get job,pod -l "app.kubernetes.io/instance=$RELEASE" -o json 2>/dev/null \
+      | jq -r '.items[]
+          | select(.metadata.deletionTimestamp == null)
+          | select(.kind == "Job" or ((.metadata.ownerReferences // []) | all(.kind == "Job")))
+          | "\(.kind | ascii_downcase)/\(.metadata.name)"' 2>/dev/null || true
+    kubectl -n "$NAMESPACE" get job -o json 2>/dev/null \
+      | jq -r --arg p "${RELEASE}-" '.items[]
+          | select(.metadata.deletionTimestamp == null)
+          | select(.metadata.name | startswith($p))
+          | "job/\(.metadata.name)"' 2>/dev/null || true
+  } | sort -u
+}
+
+# Re-check a few times after the job cleanup and delete late arrivals: a Helm
+# operation still running hooks (under --force, or one the guard could not see)
+# creates the next hook Job AFTER the cleanup, and it would otherwise be left with
+# its pod retrying forever. Runs before the DB drop so such pods are gone first.
+late_hook_sweep() {
+  local i found total=0 last_found=false
+  if [[ "$DRY_RUN" == true ]]; then
+    echo "  late-hook sweep: would re-check ${SWEEP_CHECKS}x, ${SWEEP_INTERVAL}s apart, and delete any Jobs/Pods of '$RELEASE' that appear"
+    found=$(late_hook_objects)
+    if [[ -n "$found" ]]; then
+      echo "  present now (deleted by the cleanup above, or by the sweep if they reappear):"
+      printf '%s\n' "$found" | sed 's/^/    /'
+    fi
+    return 0
+  fi
+  for ((i = 1; i <= SWEEP_CHECKS; i++)); do
+    sleep "$SWEEP_INTERVAL"
+    found=$(late_hook_objects)
+    if [[ -z "$found" ]]; then
+      echo "  late-hook sweep check $i/$SWEEP_CHECKS: nothing new"
+      last_found=false
+      continue
+    fi
+    _yellow "  late-hook sweep check $i/$SWEEP_CHECKS: found"
+    printf '%s\n' "$found" | sed 's/^/    /'
+    total=$((total + $(grep -c . <<<"$found")))
+    last_found=true
+    run "kubectl -n '$NAMESPACE' delete $(tr '\n' ' ' <<<"$found") --ignore-not-found --cascade=foreground --wait=true --timeout=2m"
+  done
+  if (( total > 0 )); then
+    _yellow "  late-hook sweep deleted $total object(s) — a Helm operation was still creating hooks"
+    if [[ "$last_found" == true ]]; then
+      _yellow "  (found on the last check — more may follow; check 'kubectl -n cattle-system get pod | grep helm-operation' and re-run)"
+    fi
+  else
+    _green "  late-hook sweep: no late Jobs/Pods"
+  fi
+}
+
 # ---------- pre-flight ----------
 _blue "==> Pre-flight checks"
 
@@ -227,6 +362,135 @@ else
   HELM_RELEASE_EXISTS=false
 fi
 
+# Refuse to race an in-progress install/upgrade/rollback (see helm_operation_in_progress).
+if helm_operation_in_progress; then
+  if [[ "$FORCE" == true ]]; then
+    _yellow "  --force: continuing anyway; hook Jobs it creates later are removed only if the late-hook sweep sees them"
+  else
+    _red "  Refusing to uninstall '$RELEASE' while a Helm operation on it is in progress."
+    _red "  Wait for it to finish (helm status no longer pending-*, helm-operation pod gone), then re-run — or pass --force."
+    exit 2
+  fi
+else
+  _green "  No Helm operation in progress for '$RELEASE'"
+fi
+
+# Superset connection name: read from the release's own values so the caller does
+# not have to know it. Only possible while the release still exists — hence the
+# dashboard step runs before `helm uninstall`. --superset-db-name overrides, and
+# is the escape hatch when the release is already gone.
+if [[ "$KEEP_DASHBOARDS" == false && -z "$SUPERSET_DB_NAME" && "$HELM_RELEASE_EXISTS" == true ]]; then
+  SUPERSET_DB_NAME=$(helm -n "$NAMESPACE" get values "$RELEASE" -a -o json 2>/dev/null \
+    | jq -r '.analytics.dashboards.supersetDatabaseName // empty' 2>/dev/null || true)
+fi
+
+# Fall back to this registry's own connection name when the release is already
+# gone — which is the COMMON case, not the exotic one: uninstalling from Rancher,
+# or running `helm uninstall` before this script, removes the release and with it
+# the only place the name was being read from. The step then skipped quietly and
+# left the dashboards, charts, datasets and the database connection behind in the
+# shared Superset, where the next install silently adopted them.
+#
+# This script belongs to ONE registry, so it knows its own name. --superset-db-name
+# still overrides, for a deployment that renamed the connection.
+if [[ "$KEEP_DASHBOARDS" == false && -z "$SUPERSET_DB_NAME" ]]; then
+  SUPERSET_DB_NAME="FR"
+  _yellow "  Superset connection: release gone, assuming '$SUPERSET_DB_NAME' (override with --superset-db-name)"
+fi
+
+# Locate the shared Superset pod. Its app context is already configured in-pod, so
+# the cleanup runs there rather than re-plumbing Superset's config/secrets here.
+SUPERSET_POD=""
+if [[ "$KEEP_DASHBOARDS" == false && -n "$SUPERSET_DB_NAME" ]] \
+   && kubectl get ns "$SUPERSET_NAMESPACE" >/dev/null 2>&1; then
+  SUPERSET_POD=$(kubectl get pod -n "$SUPERSET_NAMESPACE" \
+    -l "app.kubernetes.io/instance=$SUPERSET_RELEASE,app.kubernetes.io/name=superset" \
+    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+  # Fallback: by name. Exclude the -worker- pod, which has no web app context.
+  if [[ -z "$SUPERSET_POD" ]]; then
+    SUPERSET_POD=$(kubectl get pod -n "$SUPERSET_NAMESPACE" --no-headers 2>/dev/null \
+      | awk -v p="^${SUPERSET_RELEASE}-superset-" '$1 ~ p && $1 !~ /worker/ && $3 == "Running" {print $1; exit}' || true)
+  fi
+fi
+
+if [[ "$KEEP_DASHBOARDS" == true ]]; then
+  _yellow "  Superset dashboards: skipped (--keep-dashboards)"
+elif [[ -z "$SUPERSET_DB_NAME" ]]; then
+  _yellow "  Superset dashboards: no connection name found (analytics disabled, or release gone — use --superset-db-name)"
+elif [[ -z "$SUPERSET_POD" ]]; then
+  _yellow "  Superset dashboards: Superset pod not found in '$SUPERSET_NAMESPACE' — step will be skipped"
+else
+  _green "  Found Superset pod: $SUPERSET_POD (namespace: $SUPERSET_NAMESPACE, connection: '$SUPERSET_DB_NAME')"
+fi
+
+# Remove everything hanging off THIS registry's Superset database connection.
+# mode=report prints what would go (used for the preview and --dry-run); mode=delete
+# commits. Runs inside the Superset pod so SQLAlchemy handles the relationships —
+# safer than deleting metadata rows out from under Superset with psql.
+superset_cleanup() {
+  local mode="$1" out
+  out=$(kubectl exec -n "$SUPERSET_NAMESPACE" -i "$SUPERSET_POD" -c superset -- \
+          env SUPERSET_DB_NAME="$SUPERSET_DB_NAME" SUPERSET_CLEAN_MODE="$mode" python - <<'PY' 2>&1 || true
+import os, sys
+from superset.app import create_app
+with create_app().app_context():
+    from superset import db
+    from superset.models.core import Database
+    from superset.models.slice import Slice
+    from superset.connectors.sqla.models import SqlaTable
+
+    name = os.environ["SUPERSET_DB_NAME"]
+    commit = os.environ.get("SUPERSET_CLEAN_MODE") == "delete"
+
+    database = db.session.query(Database).filter_by(database_name=name).one_or_none()
+    if database is None:
+        print("[superset] no connection named %r — nothing to remove" % name)
+        sys.exit(0)
+
+    datasets = db.session.query(SqlaTable).filter_by(database_id=database.id).all()
+    ds_ids = [d.id for d in datasets]
+    charts = (db.session.query(Slice)
+              .filter(Slice.datasource_id.in_(ds_ids),
+                      Slice.datasource_type == "table").all()) if ds_ids else []
+    ours = {c.id for c in charts}
+
+    # Only take a dashboard when EVERY chart on it is ours. In a shared Superset a
+    # dashboard mixing another tenant's charts must survive, minus our charts.
+    candidates, shared = {}, []
+    for c in charts:
+        for d in c.dashboards:
+            candidates[d.id] = d
+    mine = []
+    for d in candidates.values():
+        (mine if all(s.id in ours for s in d.slices) else shared).append(d)
+
+    print("[superset] connection %r: %d dashboard(s), %d chart(s), %d dataset(s)"
+          % (name, len(mine), len(charts), len(datasets)))
+    for d in shared:
+        print("[superset]   KEPT (shared with other charts): dashboard %s %r"
+              % (d.id, d.dashboard_title))
+    if not commit:
+        sys.exit(0)
+
+    for d in mine:
+        db.session.delete(d)
+    for c in charts:
+        db.session.delete(c)
+    for t in datasets:
+        db.session.delete(t)
+    db.session.delete(database)
+    db.session.commit()
+    print("[superset] removed")
+PY
+  )
+  if printf '%s\n' "$out" | grep -qE '^\[superset\]'; then
+    printf '%s\n' "$out" | grep -E '^\[superset\]' | sed 's/^/  /'
+  else
+    _yellow "  (Superset cleanup produced no result — dashboards left in place)"
+    printf '%s\n' "$out" | tail -4 | sed 's/^/    /'
+  fi
+}
+
 # ---------- show the blast radius ----------
 _blue "==> Resources to be deleted"
 
@@ -239,6 +503,14 @@ if [[ "$KEEP_IAM" == true ]]; then
   echo "IAM rows:           (skipped — --keep-iam)"
 else
   echo "IAM rows:           mnemonic '$IAM_APP_MNEMONIC' in DB '$IAM_DB' (staff_portal_applications + roles/permissions/mappings)"
+fi
+if [[ "$KEEP_DASHBOARDS" == true ]]; then
+  echo "Superset assets:    (skipped — --keep-dashboards)"
+elif [[ -n "$SUPERSET_POD" ]]; then
+  echo "Superset assets:    connection '$SUPERSET_DB_NAME' in $SUPERSET_RELEASE ($SUPERSET_NAMESPACE):"
+  superset_cleanup report
+else
+  echo "Superset assets:    (none — no Superset pod / connection name resolved)"
 fi
 echo
 
@@ -300,30 +572,59 @@ if [[ "$ASSUME_YES" == false && "$DRY_RUN" == false ]]; then
   fi
 fi
 
-# ========== STEP 1: helm uninstall ==========
-_blue "==> [1/7] Helm uninstall"
+# ========== STEP 1: remove this registry's Superset dashboards ==========
+# The analytics job imports dashboards into the SHARED Superset — a different Helm
+# release — so `helm uninstall` never touches them. Left behind, the dashboards,
+# their charts and datasets, and the connection pointing at the registry DB we are
+# about to drop all survive, and the next install inherits stale, broken tiles.
+#
+# Scope is the Superset *database connection* this registry owns (analytics.
+# dashboards.supersetDatabaseName). Every asset the bundle imports hangs off it,
+# and each tenant in a shared Superset has its own, so nothing else is touched.
+# Runs BEFORE `helm uninstall` because the connection name is read from the
+# release's values — and there is nothing to gain from doing it later.
+_blue "==> [1/8] Remove Superset dashboards"
+if [[ "$KEEP_DASHBOARDS" == true ]]; then
+  _yellow "  (skipped — --keep-dashboards)"
+elif [[ -z "$SUPERSET_DB_NAME" ]]; then
+  echo "  (skipped — no Superset connection name; analytics disabled or release already gone)"
+elif [[ -z "$SUPERSET_POD" ]]; then
+  echo "  (skipped — Superset pod not reachable in namespace '$SUPERSET_NAMESPACE')"
+elif [[ "$DRY_RUN" == true ]]; then
+  echo "  Would remove, from Superset connection '$SUPERSET_DB_NAME':"
+  superset_cleanup report
+else
+  superset_cleanup delete
+fi
+
+# ========== STEP 2: helm uninstall ==========
+_blue "==> [2/8] Helm uninstall"
 if [[ "$HELM_RELEASE_EXISTS" == true ]]; then
   run "helm uninstall '$RELEASE' -n '$NAMESPACE' --wait --timeout 5m || true"
 else
   echo "  (skipped — release not present)"
 fi
 
-# ========== STEP 2: delete leftover Jobs (and their Pods) ==========
+# ========== STEP 3: delete leftover Jobs (and their Pods) ==========
 # Helm hook Jobs (db-seed post-install, keycloak-init, postgres-init) are created
 # with `helm.sh/hook-delete-policy: before-hook-creation`, which means they are
 # NOT cleaned up by `helm uninstall`. We delete them explicitly here — BEFORE
 # dropping the DBs, so their Pods close their Postgres connections cleanly.
-_blue "==> [2/7] Delete leftover Jobs and their Pods"
+_blue "==> [3/8] Delete leftover Jobs and their Pods"
 if [[ "$NAMESPACE_EXISTS" == true ]]; then
   run "kubectl -n '$NAMESPACE' delete job -l 'app.kubernetes.io/instance=$RELEASE' --ignore-not-found --wait=true --timeout=2m"
   # Orphan pods (completed/failed) that a Job left behind after TTL etc.
   run "kubectl -n '$NAMESPACE' delete pod -l 'app.kubernetes.io/instance=$RELEASE' --ignore-not-found --field-selector=status.phase!=Running"
+
+  # Late-hook sweep: catch hook Jobs/Pods a still-running Helm operation created
+  # after the deletes above (see late_hook_sweep).
+  late_hook_sweep
 else
   echo "  (skipped — namespace '$NAMESPACE' not present)"
 fi
 
-# ========== STEP 3: sweep leftover Secrets & ConfigMaps ==========
-_blue "==> [3/7] Sweep leftover Secrets / ConfigMaps"
+# ========== STEP 4: sweep leftover Secrets & ConfigMaps ==========
+_blue "==> [4/8] Sweep leftover Secrets / ConfigMaps"
 if [[ "$NAMESPACE_EXISTS" == true ]]; then
   run "kubectl -n '$NAMESPACE' delete secret    -l 'app.kubernetes.io/instance=$RELEASE' --ignore-not-found"
   run "kubectl -n '$NAMESPACE' delete configmap -l 'app.kubernetes.io/instance=$RELEASE' --ignore-not-found"
@@ -331,8 +632,8 @@ else
   echo "  (skipped — namespace '$NAMESPACE' not present)"
 fi
 
-# ========== STEP 4: drop Postgres DBs & roles ==========
-_blue "==> [4/7] Drop Postgres databases and roles"
+# ========== STEP 5: drop Postgres DBs & roles ==========
+_blue "==> [5/8] Drop Postgres databases and roles"
 if [[ "$PG_POD_FOUND" == true ]]; then
   for db in "$REGISTRY_DB" "$IDGEN_DB" "$AWE_DB"; do
     echo "  - Database: $db"
@@ -352,13 +653,13 @@ else
   echo "  (skipped — commons-postgresql pod not reachable; if Postgres is already gone, DBs are gone too)"
 fi
 
-# ========== STEP 5: clean this registry's IAM rows ==========
+# ========== STEP 6: clean this registry's IAM rows ==========
 # IAM no longer seeds registry data — each registry self-registers its tile +
 # roles/permissions into IAM at install time (keyed by application_mnemonic =
 # <release>-staff-portal). `helm uninstall` does not touch IAM, so remove those
 # rows here (child rows first). Targeted strictly by this release's mnemonic, so
 # it never affects other registries or the keycloak/minio/superset singletons.
-_blue "==> [5/7] Clean IAM staff-portal rows"
+_blue "==> [6/8] Clean IAM staff-portal rows"
 if [[ "$KEEP_IAM" == true ]]; then
   _yellow "  (skipped — --keep-iam)"
 elif [[ "$PG_POD_FOUND" != true ]]; then
@@ -385,21 +686,21 @@ else
   fi
 fi
 
-# ========== STEP 6: PVCs ==========
-_blue "==> [6/7] Delete PVCs"
+# ========== STEP 7: PVCs ==========
+_blue "==> [7/8] Delete PVCs"
 if [[ "$NAMESPACE_EXISTS" == true ]]; then
   run "kubectl -n '$NAMESPACE' delete pvc -l 'app.kubernetes.io/instance=$RELEASE' --ignore-not-found"
 else
-  echo "  (skipped — namespace '$NAMESPACE' not present; any orphan PVs handled in step 7)"
+  echo "  (skipped — namespace '$NAMESPACE' not present; any orphan PVs handled in step 6)"
 fi
 
-# ========== STEP 7: PVs ==========
-_blue "==> [7/7] Delete PVs"
+# ========== STEP 8: PVs ==========
+_blue "==> [8/8] Delete PVs"
 if [[ "$KEEP_PVS" == true ]]; then
   _yellow "  (skipped — --keep-pvs)"
 else
   # Any PV that still references a PVC in $NAMESPACE labeled with our release.
-  # After step 6 the PVCs are gone, so rely on claimRef.
+  # After step 4 the PVCs are gone, so rely on claimRef.
   pv_list=$(kubectl get pv -o json 2>/dev/null | \
     jq -r --arg ns "$NAMESPACE" --arg rel "$RELEASE" \
       '.items[] | select(.spec.claimRef.namespace==$ns) | select(.status.phase=="Released" or .status.phase=="Failed") | .metadata.name' \
