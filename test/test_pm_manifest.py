@@ -31,7 +31,7 @@ def manifests():
                 **pm["staffPortalUi"]["envVars"],
                 "IAM_URL": "http://commons-services-iam-staff-portal-api",
                 "STAFF_PORTAL_API_URL": "http://commons-services-pm-staff-portal-api",
-                "REDIRECT_URL": "https://partner-management.commons-dev.oanstaging.com"}),
+                "REDIRECT_URL": "https://partner-management-development.oanstaging.com"}),
             route("commons-services-pm-staff-portal-api", pm["staffPortalApi"]["istio"]["virtualservice"]["host"]),
             route("commons-services-iam-staff-portal-api", guard.IAM_HOST)]
 
