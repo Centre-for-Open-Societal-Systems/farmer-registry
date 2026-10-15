@@ -134,6 +134,19 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     if migrate_identity:
         merge(values, identity_overlay(environment))
     if environment == "staging":
+        # rc.544 stopped emitting legacy MDS DB settings and two UI toggles.
+        # Carry their exact installed values/Secret refs through the owning
+        # values, without hardcoding private configuration or relaxing validate.
+        for component, (_, suffix, _) in COMPONENTS.items():
+            previous = old.get(("Deployment", RELEASE + "-" + suffix), {})
+            for variables in envs(previous).values():
+                for name, item in variables.items():
+                    if "_MASTER_DATA_DB_" not in name and not (
+                        component == "staffUi" and name in ("PAGE_SIZE", "PARTNER_IMPORT_EXPORT_ENABLE")
+                    ):
+                        continue
+                    target = "envVarsFrom" if "valueFrom" in item else "envVars"
+                    config[component].setdefault(target, {})[name] = copy.deepcopy(item.get("valueFrom", item.get("value")))
         if not images:
             raise ValueError("Staging requires a tested image set pinned by digest")
         merge(values, identity_overlay("staging"))

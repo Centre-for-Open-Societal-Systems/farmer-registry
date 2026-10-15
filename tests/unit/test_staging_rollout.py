@@ -228,6 +228,36 @@ def test_preparation_preserves_staging_database_and_awe_callback(evidence):
     with pytest.raises(ValueError): deployment.prepare(values, before, ECR, SHA[:12], environment="dev")
 
 
+@pytest.mark.parametrize("component,suffix,prefix", [
+    ("staffApi", "staff-portal-api", "REGISTRY_STAFF_PORTAL_API"),
+    ("partnerApi", "partner-api", "REGISTRY_PARTNER_API"),
+    ("celeryWorker", "celery-worker", "REGISTRY_CELERY_WORKERS"),
+])
+def test_staging_retains_installed_legacy_mds_secret_references(evidence, component, suffix, prefix):
+    before, _, images = release_manifests(evidence)
+    previous = next(d for d in before if d["metadata"]["name"] == "farmer-registry-" + suffix)
+    reference = {"secretKeyRef": {"name": "existing-mds-db", "key": "password"}}
+    deployment.pod(previous)["containers"][0]["env"] = [
+        {"name": prefix + "_MASTER_DATA_DB_PASSWORD", "valueFrom": reference},
+        {"name": prefix + "_MASTER_DATA_DB_DBNAME", "value": "existing_mds"},
+    ]
+    values = {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}
+    prepared = deployment.prepare(values, before, ECR, SHA[:12], environment="staging", images=images)
+    assert prepared["registry"][component]["envVarsFrom"][prefix + "_MASTER_DATA_DB_PASSWORD"] == reference
+    assert prepared["registry"][component]["envVars"][prefix + "_MASTER_DATA_DB_DBNAME"] == "existing_mds"
+    assert "registry" not in values
+
+
+def test_staging_retains_installed_ui_options(evidence):
+    before, _, images = release_manifests(evidence)
+    ui = next(d for d in before if d["metadata"]["name"].endswith("-staff-portal-ui"))
+    deployment.pod(ui)["containers"][0]["env"] = [
+        {"name": "PAGE_SIZE", "value": "25"}, {"name": "PARTNER_IMPORT_EXPORT_ENABLE", "value": "true"}]
+    prepared = deployment.prepare({"global": {"registryHostname": "farmer-registry.oanstaging.com"}},
+                                  before, ECR, SHA[:12], environment="staging", images=images)
+    assert prepared["registry"]["staffUi"]["envVars"] == {"PAGE_SIZE": "25", "PARTNER_IMPORT_EXPORT_ENABLE": "true"}
+
+
 def test_persistent_manifest_hash_binds_storage_config_and_routes(baseline):
     manifest = baseline[2]
     expected = staging.manifest_hash(manifest)
