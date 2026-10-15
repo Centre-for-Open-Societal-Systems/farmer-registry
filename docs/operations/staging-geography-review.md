@@ -1,9 +1,10 @@
 # Staging shared-geography repair proposal
 
-This proposal is **prepared for review, not approved or applied**. The user
-extended the Farmer task to preparation of a separately reviewed shared repair.
+The user approved this repair after review, and it was **applied and verified**
+on 16 October 2026. The user had first requested a separately reviewed proposal.
 Farmer's published ODK version 1.0.5 already uses canonical seed choices; the
-Registry/connector cutover remains gated on geography and partner readiness.
+Registry/connector cutover remains gated on legacy Farmer geography references,
+partner readiness and the remaining enabled-hook acceptance checks.
 
 ## Proposed change and scope
 
@@ -100,3 +101,37 @@ review covers the index replacement, every shared consumer, unresolved Farmer
 records, owning Commons configuration, fresh backups, rehearsed recovery and a
 shared maintenance window. The broader Commons immutable-selector repair is a
 separate change.
+
+
+## Authorized execution
+
+Fresh full dumps of Master Data, Farmer, Crop and Livestock were taken under
+`/var/backups/farmer-staging-20261016-approved-geo/`. Checksums were verified and
+the fresh Master Data dump was restored in isolation. A guarded inverse restored
+the captured catalog fields and original global unique index; inverse rerun and
+forward reapplication passed before live execution.
+
+The reviewed live SQL committed atomically. All 21,053 canonical IDs, names and
+parents were verified; unrelated fields and rows across all seven Master Data
+tables were preserved. No registry domain records were changed. The transaction's
+catalog write lock kept the update consistent while readers and ODK collection
+remained available. The journal and guarded inverse are under
+`/var/lib/registry-coordination/farmer-staging-20261016-approved-geo/`.
+
+API acceptance uncovered an independent credential mismatch. The installed
+Master Data Deployment referenced `master-data/master-data-db-user`, which
+failed database authentication. The dedicated Secret
+`master-data-db-user/master-data-db-user-password` connected successfully.
+Commons Services' existing owning Helm values and rendered manifest already
+reference that dedicated Secret; the failed immutable-selector upgrade had not
+applied it to the live Deployment. A resource-version-guarded patch applied
+**only that one desired environment reference**, preserving every other spec
+field. The rolling update completed with one ready replica. No database password
+or Secret data was rotated, and the broader failed Commons release was not
+upgraded. Four authenticated geography API requests then passed, checking all
+levels, regions, and formerly broken Addis Ababa/Jimma child paths against the
+canonical IDs, labels and parents. Signature, issuer and CSRF checks stayed on.
+
+The remaining invalid Farmer selections are separate from this catalog repair.
+Read-only provenance checks identify seeded Kamuntu demo locations; no domains
+were rewritten or assigned invented Ethiopian locations.

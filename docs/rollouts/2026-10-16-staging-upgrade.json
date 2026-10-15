@@ -1,7 +1,7 @@
 {
   "environment": "staging",
   "namespace": "far",
-  "status": "odk-location-fix-published-registry-cutover-blocked",
+  "status": "canonical-odk-live-dev-and-staging-shared-catalog-repaired-farmer-cutover-pending",
   "branch": "feat/staging-rc544-signed-intake",
   "source": {
     "maintainedBase": "667b8fbbc2a55262c1e9c291e33b7bcb565be1dd",
@@ -20,7 +20,14 @@
     "pullRequestDraft": true,
     "odkLocationFixCommit": "6c52951",
     "stagingPreservationFixCommit": "8997f66",
-    "sharedGeographyReviewCommit": "85303af"
+    "sharedGeographyReviewCommit": "85303af",
+    "pullRequestBase": "develop",
+    "promotionPath": [
+      "change branch",
+      "develop",
+      "staging"
+    ],
+    "directFeatureToStagingPromotionAllowed": false
   },
   "target": {
     "platform": "1.2.2-rc.544",
@@ -114,8 +121,7 @@
     "unsignedLegacyMustNotResume": true
   },
   "executionBlockers": [
-    "Shared staging catalog differs in 2489 rows (289 parents, 2201 labels); the plan prohibits changing it during this Farmer-only rollout",
-    "2187 existing Farmer geography references have no canonical target and require reviewed reconciliation",
+    "1537 seeded Farmer records retain unmatched fictitious Kamuntu selections; derived views account for another 650 reference occurrences; record-change approval is separate from the catalog repair",
     "Staging farmer-partner registration and signing keys are absent",
     "Enabled external-hook rehearsals and live Registry acceptance remain incomplete; manifest preservation and isolated schema/seed/reporting rehearsals now pass"
   ],
@@ -127,7 +133,7 @@
       "exitCode": 0,
       "testHarness": "Linux validation with Helm 3.19.0; staff UI asset test unavailable"
     },
-    "documentationLinks": "passed, 41 files",
+    "documentationLinks": "passed, 42 files",
     "environmentContracts": "dev and staging passed",
     "pythonSyntaxAndErrorChecks": "passed",
     "gitWhitespaceCheck": "passed",
@@ -213,13 +219,18 @@
       "installedResources": 33,
       "removed": [],
       "changedSelectors": []
+    },
+    "sharedCanonicalCatalog": "live applied and verified; authenticated API readback passed",
+    "promotionPathGuard": {
+      "developSourceAccepted": true,
+      "featureSourceRejected": true
     }
   },
   "runbook": "docs/operations/staging-upgrade.md",
   "sharedGeographyReview": {
     "preparationAuthorized": true,
-    "liveApplyAuthorized": false,
-    "liveApplied": false,
+    "liveApplyAuthorized": true,
+    "liveApplied": true,
     "runbook": "docs/operations/staging-geography-review.md",
     "proposal": {
       "environment": "staging",
@@ -304,6 +315,63 @@
       "path": "staging:/var/lib/registry-coordination/farmer-staging-20261016-geography-review/",
       "sha256": "6ed25b41ebc83ebd2c1d7b0fa0b13fb355eb75fc14f71a3e893d69ac3394f369",
       "filesVerified": 7
+    },
+    "liveEvidence": {
+      "userApprovedApply": true,
+      "scope": "Reviewed canonical catalog rows and mnemonic index; no domain record updates",
+      "reference": "User: Let go aheah then",
+      "state": "applied-and-verified",
+      "startedAt": "2026-10-15T22:48:28.875523+00:00",
+      "completedAt": "2026-10-15T22:48:34.232490+00:00",
+      "unrelatedTablesAndFieldsPreserved": true,
+      "canonicalRows": 21053
+    },
+    "freshBackupRoot": "staging:/var/backups/farmer-staging-20261016-approved-geo/",
+    "recoveryJournal": "staging:/var/lib/registry-coordination/farmer-staging-20261016-approved-geo/",
+    "freshDumpRehearsal": {
+      "liveApply": false,
+      "restoredMasterDataDumpSha256": "101ab56ec843a53674291d9423503df8285b9ce601a20e992b89433b3b3383be",
+      "fullDumpRestored": true,
+      "unreviewedDriftRejectedAtomically": true,
+      "unrelatedRowsFieldsAndIdsPreserved": true,
+      "inverseRecoveryAndRerun": true,
+      "exactCanonicalCatalog": true,
+      "idempotentRerun": true,
+      "isolatedNetwork": true,
+      "tablesPreserved": 7,
+      "catalogRows": 21053
+    },
+    "apiAcceptance": {
+      "authenticatedRequests": 4,
+      "canonicalNamesParentsAndIdsVerified": true,
+      "issuer": "https://keycloak.oanstaging.com/realms/staff",
+      "csrfChecksEnabled": true
+    },
+    "masterDataCredentialReferenceFix": {
+      "owningRelease": "commons-services",
+      "owningHelmValuesAlreadyCorrect": true,
+      "desiredHelmManifestDatabaseReferenceApplied": true,
+      "changedEnvironmentReferences": 1,
+      "otherSpecFieldsPreserved": true,
+      "databasePasswordNotRotated": true,
+      "masterDataReadyReplicas": 1,
+      "completedAt": "2026-10-15T22:57:33.085326+00:00",
+      "broaderCommonsReleaseRecovery": false
     }
+  },
+  "devOdkUpdate": {
+    "publishedVersion": "1.0.5",
+    "state": "open",
+    "submissionsPreserved": 2,
+    "submissionXmlAndAttachmentsUnchanged": true,
+    "mediaMatchesRepository": true,
+    "versionsRetained": [
+      "1.0.5",
+      "1.0.4"
+    ],
+    "host": "https://odk.commons-dev.oanstaging.com",
+    "temporaryPublisherRemoved": true,
+    "backupRoot": "dev:/var/backups/farmer-dev-odk-location-20261016/",
+    "report": "docs/history/odk-dev-location-20261016.md"
   }
 }

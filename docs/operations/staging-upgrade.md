@@ -1,6 +1,8 @@
 # Farmer staging RC upgrade and signed ODK cutover
 
-The migration branch combines the maintained RC source with staging history.
+Changes land in `develop` first. Promote the accepted `develop` branch into
+`staging`; do not merge a feature branch directly into `staging`. The migration
+branch includes the reviewed staging history, but its PR targets `develop`.
 This procedure upgrades only Farmer in `far`, through the existing
 `Gen2-Package/farmer-registry` multibranch job. Merging into `staging` validates;
 `DEPLOY_STAGING=false` remains the default. Registry deployment is fatal on
@@ -11,11 +13,12 @@ implementation and execution status. Historical revision 36 / connector revision
 are inspection findings, not permission to assume the cluster is still unchanged.
 Refresh remote refs and live inventories before review. The [ODK location update](../history/odk-staging-location-20261016.md) is published
 as form 1.0.5. Registry and legacy connector revisions remain 36 and 3. The latest
-inspection found incompatible shared geography and missing Farmer partner
+inspection found legacy Farmer geography references and missing Farmer partner
 registration; do not enter maintenance or authorize deployment until those
-prerequisites and the remaining rehearsals pass. The user authorized preparation
-of a [shared-geography repair proposal](staging-geography-review.md) for review;
-that separate proposal has not been applied.
+prerequisites and the remaining rehearsals pass. The separately reviewed
+[shared-geography repair](staging-geography-review.md) was authorized and applied.
+Master Data now matches the canonical seed; the credential reference blocking
+its API was corrected to the owning Commons Helm values.
 
 ## Fixed environment contract
 
@@ -52,7 +55,10 @@ survive, and its image must match the accepted staff-UI digest.
 1. Refresh the cached develop/staging refs and inspect their diff. Rebase/merge the
    migration branch as needed; review every staging-specific resolution. The
    cached staging-only commits contained merges, without an additional source diff.
-   Open and review a migration PR targeting staging. Do not enable deployment on merge.
+   Open and review the change PR targeting `develop`. After develop validation
+   and acceptance, open the promotion PR from `develop` to `staging`. The PR
+   check rejects another source branch for staging. Do not enable staging
+   deployment on merge. Develop retains its existing automatic dev deployment.
 2. On a trusted staging host, bind the staging kubeconfig and set
    `KUBECONFIG_CREDENTIAL=staging-farmer-kubeconfig`. Inventory both Helm releases,
    manifests, hooks, exact effective values and revisions. Keep a private journal

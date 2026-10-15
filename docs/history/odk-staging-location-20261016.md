@@ -52,7 +52,18 @@ operator's protected workspace. The draft was published through Central's API;
 no direct ODK database edits were made. Collect clients must get the new blank
 form; browser users should reload the form.
 
-## Registry cutover blocker
+## Subsequent approved repair
+
+The shared catalog repair was subsequently approved and applied, including the
+reviewed mnemonic index change. A fresh-dump restore and inverse recovery passed
+before live execution. An independent stale Master Data database Secret
+reference was corrected to the owning Helm configuration; authenticated
+geography API readback now passes. See the
+[execution record](../operations/staging-geography-review.md#authorized-execution).
+The historical findings below explain the repair. Unresolved seeded Farmer
+references remain separate from the corrected shared catalog.
+
+## Registry cutover findings
 
 Read-only inspection of staging Master Data found all 21,053 canonical IDs, but
 2,489 rows differ from canonical data: 289 parent relationships and 2,201 display
