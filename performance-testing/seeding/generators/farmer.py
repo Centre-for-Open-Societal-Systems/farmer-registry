@@ -16,10 +16,8 @@ from search_anchors import embed_anchor, next_anchor
 
 DISABILITY_TYPES = ["VISION", "HEARING", "MOBILITY", "COGNITION", "SELF_CARE", "COMMUNICATION"]
 DISABILITY_SEVERITIES = ["NO_DIFFICULTY", "SOME_DIFFICULTY", "A_LOT_OF_DIFFICULTY", "CANNOT_DO_AT_ALL"]
-SOURCES_OF_INCOME = ["SOI_CROP_PRODUCTION", "SOI_LIVESTOCK_PRODUCTION", "SOI_GOVERNMENT_NGO_SUPPORT", "SOI_OTHERS"]
+SOURCES_OF_INCOME = ["CROP_PRODUCTION", "LIVESTOCK_PRODUCTION", "GOVERNMENT_NGO_SUPPORT", "OTHERS"]
 LANGUAGES_SPOKEN = ["ENGLISH", "HINDI", "SPANISH", "FRENCH"]
-# Declared main crops: Master Data CROP_COMMODITY codes (ETH agriculture pack).
-MAIN_CROPS = ["CROP_TEFF", "CROP_WHEAT", "CROP_MAIZE", "CROP_SORGHUM", "CROP_BARLEY", "CROP_FABA_BEAN"]
 
 REGISTER_MNEMONIC = "Farmer"
 
@@ -44,7 +42,8 @@ def generate(household_row: dict, anchors: list[str]) -> dict:
         "source_of_income_other": None,
         "language_spoken": random.choice(LANGUAGES_SPOKEN),
         "national_id_masked": fake.numerify("***###" + "####"),
-        "main_crops": random.sample(MAIN_CROPS, random.randint(1, 3)),
+        "state": "APPROVED",
+        "import_source": "IMPORT_FILE",
     })
 
     row["record_name"] = " ".join(

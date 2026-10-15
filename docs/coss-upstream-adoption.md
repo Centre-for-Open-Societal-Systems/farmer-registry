@@ -43,15 +43,27 @@ secrets. CI no longer automatically deploys this repository through Jenkins.
   preservation; COSS Region/Zone/Woreda/Kebele selection and readback; uppercase
   GC/EC; two distinct certificates with names, downloaded content, replacement,
   cancellation, failed-save preservation and removal with matching Yes/No flags.
+- Family Size is hidden in Farmer and Household intake metadata. The domain
+  service calculates male + female totals; children and parents are not added
+  again. Browser save/edit/reopen verifies totals of 5 and 6. A separate seed
+  migration preserves the checksums of previously applied metadata.
 - Browser draft approval through AWE: photo, Kebele and both certificate states
   remain intact after promotion into the registry.
-- PR integration checks: RC pins and effective metadata (21 tests, 55 subtests),
-  26 domain regressions in the pinned runtime, ODK transform rendering, Compose
+- PR integration checks: RC pins and effective metadata (22 tests, 57 subtests),
+  35 domain regressions in the pinned runtime, ODK transform rendering, Compose
   validation, and Helm lint/render.
 
 ODK is mapped to the same Farmer intake approval policy, but the old patched
 stack's passing ODK result does not establish end-to-end behavior on this RC
 adoption. Do not copy the previous PR's 13/13 claim into this version's evidence.
+
+Performance-testing files remain identical to the PR base; this change adds no
+performance tests or performance CI jobs.
+
+The 2026-10-15 read-only SSH recheck confirms that dev ODK downloads succeed but
+registry still rejects the unregistered partner. PM issuer configuration and
+schema prerequisites remain unresolved; the Farmer AWE policy is configured.
+See the dated [connector evidence](gen2-connector-diagnosis.md#read-only-recheck-2026-10-15-0335-0336-utc).
 
 ## Deployment work before rollout
 

@@ -34,4 +34,4 @@ jobs:
           docker run --rm -v "$PWD:/repo:ro" -w /repo/farmer-extension \
             --entrypoint python coss/staff-api:ci -m unittest \
             tests.test_domain_validation_utils tests.test_farmer_geo_sync \
-            tests.test_intake_record_image_urls -v
+            tests.test_intake_record_image_urls tests.test_household_family_size -v

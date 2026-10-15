@@ -47,6 +47,31 @@ still `character varying`, and `g2p_register_document_history.event_type` is
 absent. These are later intake/promotion blockers, separate from the current
 partner rejection.
 
+## Read-only recheck: 2026-10-15 03:35-03:36 UTC
+
+The scheduled worker still fetches one ODK submission and downloads both
+attachments with HTTP 200. Registry returns HTTP 200 with
+`[REGP-ERR-001] PARTNER_NOT_REGISTERED`; each observed poll reports
+`fetched: 1, success: 0, failed: 1`. Partner API logs confirm the same rejection.
+
+Read-only database transactions found neither partner ID above in `pm_partners`
+and zero `incoming_raw_data` messages with the connector's `farmer_profile:`
+prefix. PM's running environment still has the conflicting internal/public
+issuer values described above. This recheck did not request a fresh token or
+repeat the authenticated PM probe.
+
+`FARMER_ODK_MODEL` maps to Farmer intake form
+`a1a4d25a-1cd4-4356-abac-8782382649`. Its AWE policy is configured as
+`registry.intake_form.farmer` (type `registry.intake_form`). Approval is attached,
+but no ODK message has reached ingestion to initiate it. The local pinned RC
+worker calls intake finalization after saving sections; that code inspection
+is not evidence of a successful server ODK approval.
+
+The schema prerequisites are also unchanged: 24 register/history coordinate
+columns remain `character varying`, and document history lacks `event_type`.
+All commands were read-only; no configuration changes, onboarding, submissions,
+replays or migrations were performed.
+
 ## Operator repair sequence
 
 These are pending server operations, not actions performed during diagnosis.
@@ -80,7 +105,7 @@ Keep the existing Commons Base 2.3.3 / Services 2.3.4-rc.245 releases.
    gate again; PR #91 deliberately blocks deployment while the schema is old.
 4. Deploy PR #91 after the documented prerequisites and existing seed-data
    repairs are satisfied. Its registry changes include numeric coordinate
-   normalization and the worker async connection fix validated locally.
+   normalization and the pinned RC worker, validated with local intake approval.
 5. Check whether the scheduled poll has already delivered the source event
    before replaying it. If it has not, replay one corresponding DLQ entry;
    avoid bulk replay of repeated entries for the same event. Verify one registry
@@ -90,7 +115,7 @@ Keep the existing Commons Base 2.3.3 / Services 2.3.4-rc.245 releases.
 
 The legacy `/partner/ingest_data` route does not cryptographically verify its
 envelope signature. Partner onboarding fixes sender eligibility; it does not
-add signature verification. See [local acceptance limits](../local/gen2/acceptance.md#limits).
+add signature verification. See [current acceptance limits](../local/upstream/README.md#evidence-and-remaining-work).
 
 ## One Farmer PR
 

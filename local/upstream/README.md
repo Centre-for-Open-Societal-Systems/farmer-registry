@@ -105,6 +105,11 @@ Verified on 2026-10-15:
   certificates on two land rows, filenames and downloadable contents; and
   certificate replacement, cancellation, failed-save preservation and removal
   with the corresponding Yes/No flag.
+- Family Size browser acceptance: the field is absent, male + female counts
+  save 2 + 3 = 5, editing to 2 + 4 updates the total to 6, and reopening retains
+  the counts. Run `node local/upstream/browser_family_size.cjs` with the same
+  Playwright settings below. Domain checks cover blank/zero counts, stale client
+  totals, negative counts, children and parents.
 - Browser-draft approval acceptance: **1 passed** through real AWE. The resulting
   registry farmer retained the photo and Kebele; both land rows retained their
   exact certificate references and flags, including the removed certificate.
