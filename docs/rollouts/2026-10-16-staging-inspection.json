@@ -1,0 +1,32 @@
+{
+  "inspection": "read-only SSH through Jenkins vpn-agent2",
+  "host": "52.66.116.220",
+  "namespace": "far",
+  "registry": {
+    "release": "farmer-registry",
+    "revision": 36,
+    "status": "deployed",
+    "imageCommit": "0ee17a2874fb3035126d2a4b91a9190fc4c7ac47",
+    "database": "farmer_registry_far"
+  },
+  "connector": {
+    "release": "farmer-connector",
+    "revision": 3,
+    "status": "deployed",
+    "database": "farmer_connector_far",
+    "imageTag": "47f23f92e2ed",
+    "replacementEnabled": false
+  },
+  "identity": {
+    "discoveryIssuer": "https://keycloak.oanstaging.com/realms/staff",
+    "registryGlobalIssuerValue": "http://commons-keycloak.commons.svc.cluster.local:80/realms/staff",
+    "effectiveAuthenticationAcceptance": "not performed"
+  },
+  "commonsServices": {
+    "revision": 12,
+    "status": "failed",
+    "inspectedDeploymentsReady": true,
+    "repairPerformed": false
+  },
+  "mutationsPerformed": false
+}

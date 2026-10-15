@@ -1,48 +1,30 @@
 # Farmer Registry
 
-This COSS distribution adopts the upstream Farmer layout on registry-platform
-**1.2.2-rc.544**, with
-separate Commons Base, Commons Services and Registry Compose projects.
-See [the trial architecture and runbook](local/upstream/README.md) for ownership,
-startup, validation and remaining limitations. See the
-[adoption and rollout notes](docs/coss-upstream-adoption.md) before deployment.
+COSS Farmer Registry extends OpenG2P Registry with farmer, household, land, crop,
+livestock, membership and intake metadata. Dev uses platform **1.2.2-rc.544**;
+staging retains its separately managed legacy platform.
 
-An installable **Farmer Registry** built as a thin extension of the OpenG2P
-[registry platform](https://github.com/OpenG2P/registry-platform). Under the
-inverted build model the platform publishes the runnable base images and the
-`openg2p-registry` Helm chart; this repo adds **only** the farmer domain on top.
+Start with the [documentation index](docs/README.md).
 
-## What this repo owns
+| Directory | Purpose |
+| --- | --- |
+| farmer-extension/ | Installable farmer domain package and seed metadata |
+| docker/ | Application images and build-time platform patches |
+| helm/ | Owning charts and explicit dev/staging configuration |
+| integrations/registry-connector/ | Upstream connector runtime adapters |
+| ci/ | Environment pipelines, build, validation and deployment helpers |
+| scripts/operations/ | Backup, migration, identity and recovery commands |
+| tests/ | Unit, runtime, integration, end-to-end and performance suites |
+| local/ | Isolated local development stack |
+| odk/ | XLSForm, media, mapping and legacy integration assets |
+| docs/ | Guides, operations and historical evidence |
 
-| Path | Purpose |
-|---|---|
-| `farmer-extension/` | The farmer domain package — models, schemas, services, seed metadata (registers, AWE policy, DCI templates) |
-| `docker/` | Thin Dockerfiles (`FROM openg2p/openg2p-registry-*` + `pip install farmer-extension`) selected at runtime by `REGISTRY_EXTENSION_MODULE` (Option C) |
-| `helm/openg2p-farmer-registry/` | A thin wrapper chart: pins `openg2p-registry`, supplies farmer values and owns farmer analytics templates |
-| `test/sanity/` | The farmer **field-specific** sanity tests (Set 2); the harness + generic tests are inherited from the platform sanity image |
+For local verification:
 
-The `openg2p-registry` base image tag (`RP_VERSION` in each Dockerfile) and the
-chart dependency version in `helm/openg2p-farmer-registry/Chart.yaml` are **hardcoded and
-pinned together**. The farmer images and the wrapper chart are versioned in
-lockstep by CI (one version per commit).
-
-To see which RC version it would pick, run `./scripts/bump-rp-version.sh -n` (dry-run,
-writes nothing); `-h` prints help. To apply, run `./scripts/bump-rp-version.sh`
-(latest published version) or `./scripts/bump-rp-version.sh <version>` — it updates
-the Dockerfiles and the chart dependency together, so they can never drift. A CI
-check (`test/test_rp_pin_lockstep.py`) fails the build if they ever do.
-
-## Deploy
-
-For the existing COSS new-dev server, use the [Jenkins deployment guide](docs/jenkins-dev-deployment.md). Merged `develop` builds publish six commit-tagged images and upgrade the existing release. The generic installation below requires published image overrides and is not the new-dev upgrade procedure.
-
-```bash
-helm repo add openg2p https://openg2p.github.io/openg2p-helm
-helm dependency build ./helm/openg2p-farmer-registry
-helm install farmer-registry ./helm/openg2p-farmer-registry \
-  --set global.registryHostname=farmer-registry.example.org
+```sh
+python -m pip install -r ci/validation/requirements.txt
+python -m pytest
 ```
 
-Set `registry.sanity.runE2e=true` to run the end-to-end sanity suite after install.
-
-See the deployment & extension docs at [docs.openg2p.org](https://docs.openg2p.org).
+See [testing](docs/testing/README.md), [local development](docs/development/local-stack.md),
+and [delivery](docs/operations/README.md) for complete workflows.

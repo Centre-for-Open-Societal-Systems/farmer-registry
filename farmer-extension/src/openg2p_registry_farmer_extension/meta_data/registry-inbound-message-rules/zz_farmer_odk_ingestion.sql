@@ -17,7 +17,7 @@
 -- These are the rows odk/setup_farmer_odk_connector.sql defines, with the same
 -- ids, so an environment seeded by hand and one seeded here agree; db-seed now
 -- applies them on every deploy. The partner itself lives in Master Data, which
--- db-seed does not write: see ci/connector/README.md, "Register the partner".
+-- db-seed does not write: see integrations/registry-connector/README.md, "Register the partner".
 --
 -- Every row is upserted on its fixed id, so a re-run changes nothing.
 

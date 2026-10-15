@@ -21,6 +21,7 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts/operations/connector"))
 MANIFEST = ROOT / "helm/openg2p-farmer-registry/values.yaml"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -71,7 +72,9 @@ def image_specs(component):
                                                "imageValues": [component["imageValues"]]}}
 
 
-def configuration(path=MANIFEST):
+def configuration(path=MANIFEST, environment="dev"):
+    if environment not in ("dev", "staging"):
+        raise ValueError("Unknown environment")
     items = yaml.safe_load(path.read_text(encoding="utf-8"))["cossAddons"]["components"]
     seen = set()
     for item in items:
@@ -97,6 +100,10 @@ def configuration(path=MANIFEST):
             raise ValueError("Optional service must not adopt an existing shared/Registry/old connector release")
         if item.get("imageRepository") and not re.fullmatch(r"openg2p/[a-z0-9/-]+", item["imageRepository"]):
             raise ValueError("Invalid image repository")
+    if environment == "staging":
+        items = copy.deepcopy(items)
+        for item in items:
+            item["namespace"] = "far"
     return items
 
 
@@ -159,7 +166,7 @@ def layout(component, source):
     if chart_metadata.get("dependencies") and not (chart / "Chart.lock").is_file():
         raise ServiceError("chart-dependencies-not-locked")
     if component.get("kind") == "connector":
-        module_spec = importlib.util.spec_from_file_location("connector_chart_signing", ROOT / "ci/connector/chart_signing.py")
+        module_spec = importlib.util.spec_from_file_location("connector_chart_signing", ROOT / "scripts/operations/connector/chart_signing.py")
         module = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(module)
         module.apply(chart)
@@ -194,11 +201,13 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
              "--label", "org.opencontainers.image.revision=" + commit,
              "--label", "org.openg2p.overlay.sha256=" + chart_hash(overlay),
              "-t", image, str(overlay)])
-        if (overlay / "test_media.py").is_file():
+        runtime_test = ROOT / "tests/runtime/test_connector_media.py"
+        rehearsal = ROOT / "scripts/operations/connector/rehearse.py"
+        if runtime_test.is_file():
             run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "python",
-                 "-v", str(overlay / "test_media.py") + ":/tests/test_media.py:ro", image, "/tests/test_media.py"])
-        if (overlay / "rehearse.py").is_file():
-            rehearsal_result = json.loads(run([sys.executable, str(overlay / "rehearse.py"), image]).strip().splitlines()[-1])
+                 "-v", str(runtime_test) + ":/tests/test_media.py:ro", image, "/tests/test_media.py"])
+        if rehearsal.is_file():
+            rehearsal_result = json.loads(run([sys.executable, str(rehearsal), image]).strip().splitlines()[-1])
             if not all(rehearsal_result.get(name) is True for name in ("schemaRerun", "failedDdlRolledBack", "failureRecovery", "duplicateSentOnce", "failedBoundaryRetried", "rollbackReconciled", "pollTimestampPersisted", "isolatedDatabases")):
                 raise ServiceError("connector-schema-rehearsal-failed")
     pushed = run(["docker", "push", image])
@@ -423,7 +432,7 @@ def image_artifacts(component, record, registry):
 
 
 def rehearsal(component, environment, record, overrides):
-    path = ROOT / "ci/services" / environment / "rehearsals" / (component["name"] + ".json")
+    path = ROOT / "helm/environments" / environment / "services/rehearsals" / (component["name"] + ".json")
     if not path.is_file():
         raise ServiceError("hook-rehearsal-required")
     review = json.loads(path.read_text(encoding="utf-8"))
@@ -449,7 +458,7 @@ def deploy(component, environment, record, source, registry, run=command):
         raise ServiceError("promotion-chart-mismatch")
     # Every environment must have reviewed configuration. Missing config leaves
     # existing deployments untouched; defaults must never select a namespace/IdP.
-    values_file = ROOT / "ci/services" / environment / (component["name"] + ".yaml")
+    values_file = ROOT / "helm/environments" / environment / "services" / (component["name"] + ".yaml")
     if not values_file.is_file():
         raise SkipService("missing-environment-values")
     overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
@@ -626,7 +635,7 @@ def main():
                 if acceptance.get("images", {}).get(name) != expected_digests:
                     parser.error("Acceptance does not cover every promoted digest")
     with tempfile.TemporaryDirectory(prefix="registry-services-") as work:
-        records = coordinate(configuration(), args.action, args.environment, args.registry,
+        records = coordinate(configuration(environment=args.environment), args.action, args.environment, args.registry,
                              previous.get("components", {}), Path(work))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({"environment": args.environment,

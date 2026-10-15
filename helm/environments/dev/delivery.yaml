@@ -1,0 +1,11 @@
+# CI environment contract, not a Helm values overlay. Contains no credentials.
+environment: dev
+namespace: farmer
+release: farmer-registry
+kubeconfigCredential: farmer-dev-kubeconfig
+registryHostname: farmer-registry-development.oanstaging.com
+staffIssuer: https://keycloak-development.oanstaging.com/realms/staff
+connectorRelease: farmer-registry-connector
+registryDatabase: farmer_registry
+connectorDatabase: farmer_connector_v2
+platform: 1.2.2-rc.544
