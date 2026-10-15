@@ -31,7 +31,15 @@ def apply(database, files):
                 existing = cur.fetchone()
                 if existing:
                     if existing[0] != digest:
-                        raise RuntimeError(f"Changed applied seed {key}: use an explicit migration or reset the trial")
+                        # Narrow migration for the rerunnable baseline inserts:
+                        # the only permitted change adds DO NOTHING on conflicts.
+                        legacy = text.replace("\nON CONFLICT DO NOTHING;", ";")
+                        if legacy == text or hashlib.sha256(legacy.encode()).hexdigest() != existing[0]:
+                            raise RuntimeError(f"Changed applied seed {key}: use an explicit migration or reset the trial")
+                        cur.execute(text)
+                        cur.execute("UPDATE coss_trial_seed_ledger SET sha256=%s WHERE path=%s", (digest, key))
+                        print("rerunnable baseline migration", database, key, flush=True)
+                        continue
                     print("unchanged", database, key, flush=True)
                     continue
                 print("apply", database, key, flush=True)

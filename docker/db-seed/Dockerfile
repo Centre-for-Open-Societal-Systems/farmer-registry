@@ -21,8 +21,9 @@
 #   platform failure. The entrypoint keeps the HOOK; the variant supplies the
 #   loader.
 #
-# The entrypoint (inherited) reads /seed/* at container-run time; behaviour is
-# toggled entirely via env from the Helm Job.
+# The COSS transactional entrypoint reads /seed/* at container-run time and
+# reuses the upstream geo-widget/template loaders. Demo and shared geography
+# imports require separate operator workflows; this deployment job rejects them.
 #
 # Build context = repo root (so farmer-extension/ and docker/db-seed/ are both
 # reachable).
@@ -60,3 +61,7 @@ COPY docker/db-seed/reporting_views.sql        /seed/reporting_views.sql
 # hand-written, and which column names are organisations rather than people.
 COPY docker/db-seed/reporting.yaml            /seed/reporting.yaml
 RUN chmod +x /seed/generate_fr_bulk_sample.py
+
+# Keep upstream loaders, but propagate SQL failures and commit metadata per DB.
+COPY docker/db-seed/seed.py /seed/coss_seed.py
+ENTRYPOINT ["python3", "/seed/coss_seed.py"]
