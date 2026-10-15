@@ -24,6 +24,8 @@ from openg2p_connector_service.database import get_engine
 from openg2p_connector_service.models import Base,ConnectorDefinition,IngestionRun,IdempotencyKey
 from openg2p_connector_service import db_migrations
 from openg2p_connector_service.services.ingestion_service import IngestionService
+from coss_connector import utc_timestamps
+from openg2p_connector_service.worker import _poll_async
 
 async def main():
  engine=get_engine()
@@ -73,7 +75,22 @@ async def main():
    assert await session.scalar(select(func.count()).select_from(IngestionRun).where(IngestionRun.connector_id=='synthetic-rehearsal'))==1
    assert await session.scalar(select(func.count()).select_from(IdempotencyKey).where(IdempotencyKey.connector_id=='synthetic-rehearsal'))==1
    assert second.redelivery_count==1
- print(json.dumps({'schemaRerun':True,'failedDdlRolledBack':True,'failureRecovery':True,'duplicateSentOnce':True,'isolatedDatabases':True,'restoredSnapshot':bool(snapshots),'existingDataPreserved':bool(snapshots)}))
+ # Exercise the real worker's timestamp assignment/commit, not only the
+ # ingestion service. Upstream writes aware UTC into a naive timestamp column.
+ class EmptyTransport:
+  async def fetch(self,connector):
+   if False: yield None
+ async with factory() as session:
+  session.add(ConnectorDefinition(connector_id='synthetic-poll-clock',name='Synthetic Poll Clock',platform='odk_central',transport_type='odk_central',paused=False,enabled=True,auth_type='none'))
+  await session.commit()
+ with patch('openg2p_connector_service.worker.get_transport',return_value=EmptyTransport()):
+  for attempt in range(2):
+   result=await _poll_async('synthetic-poll-clock')
+   assert result['fetched']==0 and 'poll_error' not in result
+ async with factory() as session:
+  polled=await session.get(ConnectorDefinition,'synthetic-poll-clock')
+  assert polled.last_poll_at is not None and polled.last_poll_status=='SUCCESS'
+ print(json.dumps({'schemaRerun':True,'failedDdlRolledBack':True,'failureRecovery':True,'duplicateSentOnce':True,'pollTimestampPersisted':True,'isolatedDatabases':True,'restoredSnapshot':bool(snapshots),'existingDataPreserved':bool(snapshots)}))
  await engine.dispose()
 asyncio.run(main())
 '''

@@ -107,6 +107,18 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(route['queue'].name, 'farmer-registry-connector-v2')
         self.assertNotEqual(route['queue'].name, 'celery')
 
+    def test_poll_clock_is_stored_as_naive_utc_without_changing_existing_values(self):
+        from datetime import datetime, timedelta, timezone
+        from coss_connector import utc_timestamps  # noqa: F401
+        connector = ConnectorDefinition()
+        connector.last_poll_at = datetime(2026, 10, 15, 12, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        self.assertEqual(connector.last_poll_at, datetime(2026, 10, 15, 6, 30))
+        existing = datetime(2026, 10, 14, 9, 15)
+        connector.last_poll_at = existing
+        self.assertEqual(connector.last_poll_at, existing)
+        connector.last_poll_at = None
+        self.assertIsNone(connector.last_poll_at)
+
 
 if __name__ == "__main__":
     unittest.main()

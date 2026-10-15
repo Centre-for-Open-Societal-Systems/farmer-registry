@@ -52,6 +52,18 @@ isolated Celery queue, so replacement workers cannot consume old queued tasks.
 No old service code is copied into the replacement image. API/UI builds, eight
 adapter tests and isolated PostgreSQL schema/deduplication rehearsal passed.
 
+Live polling exposed an upstream clock/schema mismatch: the worker assigns an
+aware UTC timestamp to its naive `last_poll_at` column. The connector adapter
+normalizes this one field to naive UTC, preserving existing stored values. The
+rehearsal now runs the real poll worker twice and requires timestamp persistence.
+
+The pinned Registry worker also omitted the bearer token when automatically
+finalizing ingested intake. The Farmer Celery image now applies a small,
+build-time checked change to that exact call and obtains a cached client
+credentials token from its configured AWE token URL. Missing credentials or token
+errors stop finalization. Public token routing stays in the owning identity values;
+issuer, signature, TLS and approval authorization checks remain enabled.
+
 The Farmer dashboard repository is `oan_farmerregistry_dashboard`. Its
 develop/staging heads currently have no Dockerfile or application code and are
 skipped. The Farmer dashboard API remains in the existing Farmer Registry release,
@@ -245,7 +257,9 @@ identity allowlists, issuer/JWKS/audience prerequisites, isolated storage and
 retirement preservation. Live ingestion, authorization, hook rehearsals and
 Jenkins execution remain required rollout evidence.
 
-The complete Linux container validation suite passed 266 tests and 57 subtests.
+The Linux container validation suite passed 273 tests and 57 subtests; an
+additional finalizer integration test also passed in the focused eight-test worker
+authentication suite. Nine connector adapter tests passed against the built image.
 The ODK transform and deployment shell harness passed on Bash 4.3, 5.2 and 5.3.
 Both Jenkinsfiles passed the live Jenkins Declarative Pipeline validator. The
 actual upstream chart and locked dependencies rendered six preparation resources;

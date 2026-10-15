@@ -3,6 +3,7 @@ import runpy
 import sys
 
 from . import odk_media  # noqa: F401
+from . import utc_timestamps  # noqa: F401
 from .celery_config import configure
 from openg2p_connector_service.worker import celery_app
 
