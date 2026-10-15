@@ -25,6 +25,13 @@ guard() {
 # after a credential, namespace or context mistake. Private manifests stay local.
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json"
 guard status "$STATE/status.json"
+MODE=$(guard upgrade-mode "$STATE/status.json")
+UPGRADE_FLAGS=()
+if [[ "$MODE" == normal ]]; then
+  UPGRADE_FLAGS+=(--atomic)
+else
+  echo 'Recovering a failed release with all preflight gates. Automatic rollback is disabled to avoid restoring an older successful revision.'
+fi
 helm get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/values.json"
 helm get manifest "$HELM_RELEASE" -n "$HELM_NAMESPACE" > "$STATE/before.yaml"
 guard prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
@@ -40,17 +47,23 @@ helm template "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
   -f "$STATE/values.yaml" > "$STATE/after.yaml"
 guard validate "$STATE/before.yaml" "$STATE/after.yaml"
 
+# Another operator may have changed the release while images/chart were checked.
+helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/current-status.json"
+guard unchanged "$STATE/status.json" "$STATE/current-status.json"
+
 # The chart's secret lookups run against the cluster during upgrade. Do not
 # kubectl-apply the offline template: its generated Secret values are previews.
 if ! helm upgrade "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
-  -f "$STATE/values.yaml" --atomic --wait --wait-for-jobs --timeout 20m \
+  -f "$STATE/values.yaml" "${UPGRADE_FLAGS[@]}" --wait --wait-for-jobs --timeout 20m \
   > "$STATE/upgrade.log" 2>&1; then
-  echo 'Registry Helm upgrade failed; atomic rollback requested. Inspect Helm history and seed/sanity pod logs with the deployment credentials.' >&2
+  echo "Registry Helm upgrade failed (mode: $MODE). Inspect Helm history and seed/sanity pod logs with the deployment credentials." >&2
   # Print status only; manifests and raw seed logs may contain credentials/data.
   helm history "$HELM_RELEASE" -n "$HELM_NAMESPACE" --max 3
   kubectl get jobs,pods -n "$HELM_NAMESPACE"
   exit 1
 fi
+helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/final-status.json"
+guard complete "$STATE/final-status.json"
 for component in staff-portal-api partner-api staff-portal-ui celery-worker celery-beat-producer; do
   kubectl rollout status "deployment/$HELM_RELEASE-$component" -n "$HELM_NAMESPACE" --timeout=180s
 done
