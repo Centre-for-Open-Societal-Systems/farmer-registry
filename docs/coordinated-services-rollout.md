@@ -15,7 +15,7 @@ dashboard releases are outside this pipeline; each registry owns its services.
 The optional-service configuration rejects namespaces other than `farmer`.
 No Helm values are committed back to Git automatically.
 
-## Implementation and remaining inputs
+## Implementation and dev rollout
 
 The root Jenkins pipeline builds optional services on `develop`, records source
 commits and pushed image digests, and upgrades them independently after Registry.
@@ -42,8 +42,8 @@ approval stages under the unchanged live Farmer policy (201) and reached the
 Register; photo, land certificate and geography were retained. The non-assignee
 temporary validator received 403 and a master-realm token received 401. Temporary
 Keycloak and ODK accounts were removed, the synthetic form closed and its test
-partner disabled. No existing business record was approved. The old connector
-remains running and has not been replaced or uninstalled.
+partner disabled. No existing business record was approved. The replacement is now active in dev; the old release was retired after the
+signed ingestion, approval, backup and checkpoint checks described below.
 
 The connector source is `OpenG2P/registry-connector`, branch `develop`. Jenkins
 resolves that branch once, fetches the exact commit into a temporary checkout,
@@ -58,7 +58,7 @@ around its polling/checkpoint implementation. It transfers referenced files into
 Registry's existing File contract and aborts before yielding/checkpoint advancement
 on missing, failed or oversized attachments. The API, worker and beat share an
 isolated Celery queue, so replacement workers cannot consume old queued tasks.
-No old service code is copied into the replacement image. API/UI builds, nine
+No old service code is copied into the replacement image. API/UI builds, ten
 adapter tests and isolated PostgreSQL schema/deduplication rehearsal passed.
 
 Live polling exposed an upstream clock/schema mismatch: the worker assigns an
@@ -95,10 +95,11 @@ focused upgrades. Intake and ingested change requests now persist ODK's
 `survey_metadata.enumerator_name`, falling back to `__system.submitterName`, as
 `created_by`; the form's Enumerator section uses the same precedence. This
 display attribution does not confer Registry roles or approval permissions.
-The live pipeline's configured `farmer-partner` was absent from Partner Management.
-Its public key has now been submitted through native onboarding; partner and
-request status are `created`, pending approval after old ingestion stops. A separate
-synthetic partner was onboarded through PM's API for the test and then disabled.
+The live pipeline's `farmer-partner` was onboarded through Partner Management
+with a newly generated RSA key pair. Its public key was approved only after
+all old connector processes stopped. The private key remains in the retained
+`farmer-connector-v2-signing` Secret; no private material entered Git or logs.
+Earlier synthetic partners were disabled; the permanent partner remains active.
 The named live approver approved through AWE. Registry's proxy statistics and
 task listing also returned 200 with its required CSRF header; the initial proxy
 403 was the test omitting that header, not missing approver roles.
@@ -280,79 +281,105 @@ digest with no rebuild. Missing branches/application files preserve existing
 services; genuine failures continue independent components and mark unstable.
 The staging coordinator does not deploy Registry or remove the old connector.
 
-The initial protected snapshot is retained on new dev at
-`/var/backups/farmer-connector-20261015-before-replacement/snapshot-validated`.
-Its custom-format dump is 201,326,775 bytes. A protected local copy was verified
-against its SHA256, fully restored into an isolated Docker PostgreSQL, and tested
-with the built replacement API. Schema reruns, injected DDL rollback/recovery,
-original-column row checksums and duplicate-send suppression all passed. Existing
-database/configuration were read only. The checked-in dev values are preparation
-values: API/worker/UI at zero replicas, beat/consumer disabled, ingress disabled,
-and database name `farmer_connector_v2`.
-The separate `helm/farmer-connector-credentials` chart now owns retained
-`farmer-connector-v2-db` and `farmer-connector-v2-signing` Secrets. It generates
-credentials once, refuses incomplete existing credentials or foreign ownership,
-and retained both credentials during a live rerun at revision 2. Private key
-material never entered Git or logs. The isolated database was created with its
-own ordinary app role and restored from the protected snapshot; all migrated
-definitions are paused. A one-off schema Job using only that app Secret ran the
-replacement image's schema/migrations twice successfully. It does not start
-ingestion or access the old connector database.
+The initial protected snapshot is retained at
+`/var/backups/farmer-connector-20261015-before-replacement/snapshot-validated`
+(SHA256 `c4cdb2bb37049b00470994d6443ec9b562c3548d267b27df3bb1e0a6eddd48c1`).
+Its full 201,326,775-byte dump was restored and rehearsed in isolated PostgreSQL.
+The final stopped-source snapshot is
+`/var/backups/farmer-connector-20261015-final-paused/snapshot`
+(SHA256 `261ca69a23e704d7c80b25a2420ad955eba6063323ceaf88f7e9d2f6e2c3270c`).
+All four restored tables matched the frozen source before the replacement's
+pipeline was paused. No old successful runs or previously accepted partner records
+existed to reconcile. The old shared queue was empty, with no active, reserved or
+scheduled Farmer tasks; no shared queue was purged.
 
-Local regression tests cover branch/network classification, exact commit and
-digest selection, independent failures, Helm mutation ordering/race prevention,
-identity allowlists, issuer/JWKS/audience prerequisites, isolated storage and
-retirement preservation. Live ingestion and native AWE authorization passed for
-the synthetic record. Jenkins `farmer-registry-services-dev/3` deployed the
-replacement at revision 1 with API/worker/UI at zero replicas, beat/consumer and
-ingress disabled. It ran the app-role schema/rerun/failure rehearsal; no setup
-hooks are enabled. This is a paused preparation, not a completed connector
-cutover. API digest is `sha256:1c7679e23b54b00add4635dbb128d9d9cebaff202509867b0bf19febd3953b43`;
-UI digest is `sha256:47e8af1b2ea1dc9d0c872e0682349bddf10654151bfc0594bcfa898acb3f3e46`.
-Both are built from the pinned connector commit above. The selected permanent
-partner is `farmer-partner`, with its new key pair. Signing configuration, partner
-approval and the final checkpoint handoff still precede activation.
+The final pre-retirement snapshot is
+`/var/backups/farmer-connector-20261015-before-retirement/snapshot`
+(SHA256 `e535a6c23f1edb5c9d30967ec3150af237aff1331a81f05712590b656c5c864a`),
+including a 246,226,417-byte database dump and old Helm revision 5. Backups are
+protected private operator files, never Jenkins artifacts. Retirement verified
+live Helm ownership, stopped workloads, replacement digests, acceptance and
+backup integrity. The old release was uninstalled with hooks suppressed and
+history retained. Its database, backups, shared PostgreSQL/Redis and retained
+credential Secrets remain intact.
 
-The latest successful coordinated run is
-[`farmer-registry-services-dev/7`](https://jenkins.oanstaging.com/job/farmer-registry-services-dev/7/),
-from Farmer commit `b81457457337a20315fbaf7877d9bc01cd28faf0`.
-It deployed the paused replacement at revision 4 and the independent dashboard
-API image into Farmer Registry revision 15, preserving other resources. Connector
-API digest: `sha256:ebd38ab7a29b09c28fc994c6d1a7c4c583518be785fd2147b18503f208328e28`;
-UI digest: `sha256:741e5c2e43d698f15d6f9d5c8e38240e53c0588a1afe7e8fccf5fdac96e657f6`.
-Dashboard API source is `85fd0a3c251855ee48b9654fa5c8d2cf30d7bc81`, digest
-`sha256:81f8e87f8b749ddf706671902e2ef356a0b053d989863f6b69386abf02a7fa71`.
-The frontend was skipped for missing application files. A PostgreSQL rehearsal
-startup race was removed by waiting for its final TCP listener instead of the
-temporary initialization socket. Full private snapshot restore, app-role schema
-reruns, rollback recovery and original-data checks passed again locally.
+## Signing, checkpoints and live acceptance
 
-A subsequent synthetic submission exercised the deployed worker without a
-one-off worker invocation. ODK's collector name persisted in both intake
-`created_by` and Enumerator fields and was visible on the actual intake screen.
-Fresh Registry portal task statistics/listing and both authorized approval stages
-returned 200/SUCCESS with the required CSRF header. The record reached the
-Register with photo, land certificate and geography intact. A second connector
-poll fetched zero records with one ingestion run and one idempotency key. The
-temporary ODK account was removed, its form closed and its partner disabled.
-Change-request attribution is covered separately by tests of the actual built
-worker; this live ODK mapping creates intakes, so it is not evidence of a live
-ODK update/change-request route.
+The connector signs the G2P envelope with RS256, a pinned partner/key ID, a
+five-minute expiry, message ID and canonical message SHA256. Farmer's Partner API
+fetches the key only from the configured Partner Management service and validates
+issuer, algorithm, expiry and message binding. The actual deployed API rejects
+unsigned, tampered, wrong-key and expired requests with HTTP 401. A transaction
+lock and partner/model/message-ID lookup return the original correlation ID on
+identical signed retries; a changed body cannot reuse the message ID.
 
-The Linux container validation suite passed 314 tests and 57 subtests, including
-ODK collector attribution and the embedded API ownership/deployment guards. Three
-additional tests exercised the actual built intake/change-request workers and
-patch reruns without network access. Three Helm/OpenSSL credential-chart tests
-passed. Nine connector adapter tests passed against the built image.
-The ODK transform and deployment shell harness passed on Bash 4.3, 5.2 and 5.3.
-Both Jenkinsfiles passed the live Jenkins Declarative Pipeline validator. The
-actual upstream chart and locked dependencies rendered six preparation resources;
-guards confirmed separate storage, no active ingestion and no ingress. The helper
-image's Python/Git/Docker/AWS/Helm tools were verified, including Docker access as
-a non-root UID. Staging identity/configuration remains unverified and staging
-deployment stays disabled. Connector activation/retirement still requires the
-checkpoint, signing and rollback acceptance gates above.
+Polling stops at a failed record, preserving the last successful boundary for
+retry. The isolated rehearsal tests this failure boundary, schema reruns, injected
+DDL recovery and checkpoint/idempotency transfer into a separate recovery database.
+An injected recovery write failure rolls back the copied run and key together;
+a subsequent retry succeeds and its rerun copies nothing. Recovery requires both
+pipelines paused and no in-progress runs. Do not blindly restart the original
+unsigned connector after signature enforcement: stop replacement ingestion,
+reconcile its successful keys/checkpoint using `coss_connector.recovery`, and
+restore a signing-compatible image/key configuration before enabling old workers.
+Never run both schedulers concurrently.
 
-Postman also ran the two anonymous AWE calls with one passing 401 assertion per
-request. This installed CLI returns exit 1 for HTTP 401 even with passing tests;
-inspect the assertion summary when running these expected-denial checks.
+Jenkins coordinated build
+[`farmer-registry-services-dev/11`](https://jenkins.oanstaging.com/job/farmer-registry-services-dev/11/)
+used Farmer source `d13c36dc4302515516839bedea1b2f049d9a8c88` and connector source
+`bc565efd47c129ff0ce25809bd946afc2b5e70f5`. Connector API digest is
+`sha256:3a042f7a2d04e4e9ff8fdd2614f36a678cb6294f36ffc40d7d687bd33cb1c0c2`;
+UI digest is `sha256:05a7e2c2e7de3088a5cd7092899c760387840e4236ca67aaa6620a830aa8cb6e`.
+The replacement was accepted paused, then its route ownership and scheduler were
+activated through guarded Helm upgrades. Its active Helm revision is 10, with
+API/worker/UI and one beat, isolated queue `farmer-registry-connector-v2`, and
+consumer disabled. The live project-1 pipeline retains its ODK mapping and
+`farmer-partner` identity. Its first poll ingested one source record successfully;
+that business record was not approved during testing.
+
+Jenkins focused signing build
+[`farmer-registry-signing-dev/5`](https://jenkins.oanstaging.com/job/farmer-registry-signing-dev/5/)
+deployed Partner API source `4afa7401c68e081d1015832739e6d6403141b5f7`, digest
+`sha256:2766d684885b9f24378fe00f8e4b36ddfd1d771e17afb34f203559d56189a5a7`.
+Farmer Registry is at Helm revision 22; its previously verified attribution/AWE
+worker remains unchanged. The dashboard API source is
+`85fd0a3c251855ee48b9654fa5c8d2cf30d7bc81`, digest
+`sha256:07c3bc33988850af07dc473f62c50effa5b9257000ba8e201e75d47f128b19ca`,
+with existing Registry ownership preserved. The dashboard frontend remains skipped
+because its develop branch contains no application build files.
+
+A separate project-5 synthetic ODK submission traversed the deployed native
+Run Now API and Celery worker, signed Partner API, Registry intake and both
+unchanged live-policy approval stages. It reached the Register with both files,
+geography and the ODK collector name intact on the actual intake screen. A repeat
+poll fetched zero records with exactly one successful run/key. Re-signed delivery
+retries returned the original Registry correlation. A separate synthetic web
+intake passed save, readback, finalization, actual screen checks and both portal
+approval stages, then reached the Register. Fresh portal task statistics/listing
+and decisions passed using its access token and CSRF header. No existing business
+record was approved. The synthetic connector is disabled and paused with its
+credentials scrubbed; its temporary ODK account was deleted and form closed.
+The permanent partner remains active.
+
+The ordinary preparation job skips an already active connector; it cannot reset
+its replicas or credentials. `ci/services/dev/registry-connector-active.yaml`
+records the operator activation values and is not automatically applied by that
+job. Future active-image upgrades require their own accepted rollout. Public
+connector API health and UI both return HTTP 200 after routing handoff.
+
+Staging identity/configuration remains unverified and staging deployment stays
+disabled. Promote the accepted dev connector digests without rebuilding only after
+its own identity, storage and environment gates pass.
+
+The final Linux Jenkins validation-only run
+[`farmer-registry-services-dev/13`](https://jenkins.oanstaging.com/job/farmer-registry-services-dev/13/)
+passed 365 tests and 57 subtests plus ODK transform and deployment shell checks.
+It did not rebuild or deploy services. Ten connector adapter tests, three actual
+Partner API runtime tests, schema/failure/checkpoint recovery rehearsals and
+Helm credential retention checks also passed during preparation.
+
+A fresh Postman dashboard contract run after activation passed 17 requests and
+50 assertions with exit 0. The nonsecret deployment/acceptance record is
+[`rollouts/2026-10-15-farmer-dev.json`](rollouts/2026-10-15-farmer-dev.json).
+The two anonymous AWE requests each passed their expected HTTP 401 assertion;
+this installed CLI exits 1 on HTTP 401 despite passing assertions.

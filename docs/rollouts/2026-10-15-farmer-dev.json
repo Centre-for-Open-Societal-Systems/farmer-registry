@@ -1,0 +1,73 @@
+{
+  "environment": "dev",
+  "verifiedOn": "2026-10-15",
+  "status": "active",
+  "registry": {
+    "release": "farmer-registry",
+    "helmRevision": 22,
+    "partnerApiSource": "4afa7401c68e081d1015832739e6d6403141b5f7",
+    "partnerApiDigest": "sha256:2766d684885b9f24378fe00f8e4b36ddfd1d771e17afb34f203559d56189a5a7"
+  },
+  "connector": {
+    "release": "farmer-registry-connector",
+    "helmRevision": 10,
+    "upstreamBranch": "develop",
+    "upstreamCommit": "bc565efd47c129ff0ce25809bd946afc2b5e70f5",
+    "overlayBuildCommit": "d13c36dc4302515516839bedea1b2f049d9a8c88",
+    "apiDigest": "sha256:3a042f7a2d04e4e9ff8fdd2614f36a678cb6294f36ffc40d7d687bd33cb1c0c2",
+    "uiDigest": "sha256:05a7e2c2e7de3088a5cd7092899c760387840e4236ca67aaa6620a830aa8cb6e",
+    "partner": "farmer-partner",
+    "schedulerEnabled": true,
+    "consumerEnabled": false,
+    "oldReleaseUninstalled": true,
+    "oldDatabaseRetained": true,
+    "sharedQueuePurged": false
+  },
+  "dashboardApi": {
+    "owner": "farmer-registry",
+    "sourceCommit": "85fd0a3c251855ee48b9654fa5c8d2cf30d7bc81",
+    "digest": "sha256:07c3bc33988850af07dc473f62c50effa5b9257000ba8e201e75d47f128b19ca",
+    "postmanRequests": 17,
+    "postmanAssertions": 50,
+    "postmanFailures": 0
+  },
+  "dashboardFrontend": {
+    "outcome": "skipped",
+    "reason": "develop branch has no application build files",
+    "existingDeploymentPreserved": true
+  },
+  "backups": {
+    "finalCheckpointSnapshotHash": "261ca69a23e704d7c80b25a2420ad955eba6063323ceaf88f7e9d2f6e2c3270c",
+    "retirementSnapshotHash": "e535a6c23f1edb5c9d30967ec3150af237aff1331a81f05712590b656c5c864a",
+    "retained": true
+  },
+  "acceptance": {
+    "freshPortalLogin": true,
+    "aweStatisticsAndListing": true,
+    "wrongIssuerRejected": true,
+    "nonAssigneeRejected": true,
+    "syntheticWebApprovalToRegister": true,
+    "syntheticSignedOdkApprovalToRegister": true,
+    "odkCollectorAttribution": true,
+    "odkAttachments": true,
+    "signatureNegativeCases401": true,
+    "signedRetryReturnsOriginalCorrelation": true,
+    "failedPollBoundaryRetried": true,
+    "checkpointRecoveryRollbackAndRerun": true,
+    "automaticPollingZeroNewRecords": true,
+    "syntheticCredentialsRemoved": true,
+    "temporaryAccountDeleted": true,
+    "sharedOwnershipVerified": true
+  },
+  "validation": {
+    "jenkinsRun": "https://jenkins.oanstaging.com/job/farmer-registry-services-dev/13/",
+    "sourceCommit": "6d7edff8197a3d293a8e29bccb73856f71e976bc",
+    "tests": 365,
+    "subtests": 57,
+    "deployedDuringValidation": false
+  },
+  "staging": {
+    "enabled": false,
+    "identityConfigurationVerified": false
+  }
+}
