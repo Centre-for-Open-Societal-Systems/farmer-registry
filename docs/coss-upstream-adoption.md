@@ -20,8 +20,10 @@ and the small guarded staff UI overlay. There is no separate frontend source for
   uses isolated volumes; it is not an existing-server data migration.
 - Upstream GitHub checks are extended with COSS metadata, ODK transform, Compose,
   Helm and image-build checks. Six images, including the UI overlay, build
-  without publishing. The inherited OpenG2P publisher is restricted to the
-  upstream repository because its image destinations and secrets are upstream's.
+  without publishing. The inherited publisher is retained at
+  `ci/upstream/build-publish.yml.example` for adapting COSS release automation;
+  its destinations and secrets belong to upstream, and GitHub rejects the
+  inherited reusable workflow before starting jobs in this fork.
 - The old Jenkins deployment pipeline, vendored connector applications and
   private dashboard chart templates are removed from this registry layout.
   Existing deployed resources are not changed by this PR update. Their owners
