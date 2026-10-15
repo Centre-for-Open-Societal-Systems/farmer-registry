@@ -1,5 +1,8 @@
 import copy
+import base64
+import gzip
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -7,6 +10,19 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("release_handoff", ROOT / "ci/connector/release_handoff.py")
 handoff = importlib.util.module_from_spec(spec); spec.loader.exec_module(handoff)
+
+
+@pytest.mark.parametrize("files", [None, [], [{"name": "retained.yaml", "data": base64.b64encode(b"retained").decode()}]])
+def test_installed_chart_export_handles_absent_and_retained_files(tmp_path, monkeypatch, files):
+    saved = {"chart": {"metadata": {"name": "connector", "version": "1.0.0"},
+                       "values": {}, "templates": [], "files": files}}
+    encoded = base64.b64encode(base64.b64encode(gzip.compress(json.dumps(saved).encode()))).decode()
+    monkeypatch.setattr(handoff, "run", lambda args: json.dumps({"data": {"release": encoded}}))
+    destination = tmp_path / "chart"
+    handoff.export_chart(handoff.NEW, 1, destination)
+    assert (destination / "Chart.yaml").exists()
+    if files:
+        assert (destination / "retained.yaml").read_text() == "retained"
 
 
 @pytest.mark.parametrize("fault", [None, "image", "env", "delete", "secret", "running"])

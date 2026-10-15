@@ -63,7 +63,7 @@ def export_chart(release, version, directory):
         target = directory / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(base64.b64decode(item["data"]))
-    for item in chart.get("files", []):
+    for item in chart.get("files") or []:
         relative = Path(item["name"])
         if relative.is_absolute() or ".." in relative.parts or relative.name in ("Chart.yaml", "values.yaml"):
             raise ValueError("Invalid installed chart file path")
