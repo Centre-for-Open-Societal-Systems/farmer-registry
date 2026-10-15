@@ -122,7 +122,10 @@ def main():
         run(["docker", "run", "-d", "--name", name, "--network", name,
              *mounts,"-e", "POSTGRES_PASSWORD", "postgres:16-alpine"]); created_database = True
         for _ in range(60):
-            result = subprocess.run(["docker", "exec", name, "pg_isready", "-U", "postgres"], capture_output=True)
+            # The image's temporary init server accepts Unix sockets before
+            # shutting down and starting the final TCP listener. Other
+            # containers can use only TCP; do not race that initialization.
+            result = subprocess.run(["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "postgres"], capture_output=True)
             if result.returncode == 0:
                 break
             time.sleep(0.5)
