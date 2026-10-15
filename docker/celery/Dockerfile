@@ -21,3 +21,7 @@ RUN pip install --no-cache-dir /app/farmer-extension
 # Fail the build if the pinned platform's finalizer no longer matches.
 COPY docker/celery/assets/patch_awe_worker.py /tmp/patch_awe_worker.py
 RUN python /tmp/patch_awe_worker.py && rm /tmp/patch_awe_worker.py
+
+# Preserve the ODK collector on both intake and change-request audit fields.
+COPY docker/celery/assets/patch_odk_actor.py /tmp/patch_odk_actor.py
+RUN python /tmp/patch_odk_actor.py && rm /tmp/patch_odk_actor.py

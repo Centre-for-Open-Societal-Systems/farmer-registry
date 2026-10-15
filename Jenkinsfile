@@ -49,6 +49,8 @@ pipeline {
                     for component in staff-api partner-api celery db-seed sanity-tests staff-ui; do
                       docker build -f "docker/$component/Dockerfile" -t "coss-ci/$component:$IMAGE_TAG" .
                     done
+                    docker run --rm --network none --entrypoint python -v "$PWD:/repo:ro" \
+                      "coss-ci/celery:$IMAGE_TAG" /repo/test/odk_actor_worker_runtime.py
                     docker run --rm -v "$PWD:/repo:ro" -w /repo/farmer-extension \
                       --entrypoint python "coss-ci/staff-api:$IMAGE_TAG" -m unittest \
                       tests.test_domain_validation_utils tests.test_farmer_geo_sync \

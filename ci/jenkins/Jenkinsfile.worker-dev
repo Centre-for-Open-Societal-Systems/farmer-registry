@@ -27,6 +27,8 @@ pipeline {
                     docker build -t "coss-ci/validation:$IMAGE_TAG" ci/jenkins
                     docker run --rm -v "$PWD:/repo:ro" "coss-ci/validation:$IMAGE_TAG" bash ci/jenkins/validate.sh
                     docker build -t "coss-ci/celery:$IMAGE_TAG" -f docker/celery/Dockerfile .
+                    docker run --rm --network none --entrypoint python -v "$PWD:/repo:ro" \
+                        "coss-ci/celery:$IMAGE_TAG" /repo/test/odk_actor_worker_runtime.py
                 '''
             }
         }
