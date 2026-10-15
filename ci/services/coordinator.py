@@ -199,7 +199,7 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
                  "-v", str(overlay / "test_media.py") + ":/tests/test_media.py:ro", image, "/tests/test_media.py"])
         if (overlay / "rehearse.py").is_file():
             rehearsal_result = json.loads(run([sys.executable, str(overlay / "rehearse.py"), image]).strip().splitlines()[-1])
-            if not all(rehearsal_result.get(name) is True for name in ("schemaRerun", "failedDdlRolledBack", "failureRecovery", "duplicateSentOnce", "failedBoundaryRetried", "pollTimestampPersisted", "isolatedDatabases")):
+            if not all(rehearsal_result.get(name) is True for name in ("schemaRerun", "failedDdlRolledBack", "failureRecovery", "duplicateSentOnce", "failedBoundaryRetried", "rollbackReconciled", "pollTimestampPersisted", "isolatedDatabases")):
                 raise ServiceError("connector-schema-rehearsal-failed")
     pushed = run(["docker", "push", image])
     matches = re.findall(r"digest: (sha256:[0-9a-f]{64})\b", pushed)

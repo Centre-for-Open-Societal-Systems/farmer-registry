@@ -110,6 +110,47 @@ def change_replicas(release, replicas, directory):
             "privateRecoveryDirectory": str(directory), "setupJobsExecuted": False}
 
 
+def scheduler_guard(before, after):
+    old = {(d["kind"], d["metadata"]["name"]): copy.deepcopy(d) for d in before}
+    new = {(d["kind"], d["metadata"]["name"]): copy.deepcopy(d) for d in after}
+    key = "Deployment", NEW + "-beat"
+    if set(new) - set(old) != {key} or set(old) - set(new):
+        raise ValueError("Scheduler activation may only add the replacement beat")
+    worker = old[("Deployment", NEW + "-worker")]["spec"]["template"]["spec"]
+    beat = new.pop(key)["spec"]
+    if beat.get("replicas") != 1:
+        raise ValueError("One replacement scheduler required")
+    current = beat["template"]["spec"]
+    expected = copy.deepcopy(worker)
+    expected["containers"][0]["name"] = "connector-beat"
+    expected["containers"][0]["args"] = ["beat"]
+    if current != expected or old != new:
+        raise ValueError("Scheduler activation would change unrelated configuration")
+
+
+def activate_scheduler(directory, checkpoint_evidence):
+    if checkpoint_evidence.get("checkpointReconciled") is not True or checkpoint_evidence.get("pipelinesPaused") is not True:
+        raise ValueError("Final checkpoint evidence required")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=False)
+    status = json.loads(run(["helm", "status", NEW, "-n", "farmer", "-o", "json"]))
+    before = documents(run(["helm", "get", "manifest", NEW, "-n", "farmer"]))
+    values = yaml.safe_load(run(["helm", "get", "values", NEW, "-n", "farmer", "-o", "yaml"]))
+    chart = directory / "chart"
+    export_chart(NEW, status["version"], chart)
+    values["beat"]["enabled"] = True
+    values["beat"]["replicaCount"] = 1
+    values["cossCutover"] = {"phase": "active", "checkpointBackupHash": checkpoint_evidence["snapshotHash"]}
+    path = directory / "values.yaml"; path.write_text(yaml.safe_dump(values))
+    options = [NEW, str(chart), "-n", "farmer", "-f", str(path), "--no-hooks"]
+    after = documents(run(["helm", "template", *options, "--is-upgrade", "--dry-run=server"]))
+    scheduler_guard(before, after)
+    if json.loads(run(["helm", "status", NEW, "-n", "farmer", "-o", "json"]))["version"] != status["version"]:
+        raise ValueError("Replacement changed during activation")
+    run(["helm", "upgrade", *options, "--atomic", "--wait", "--timeout", "3m"])
+    scheduler_guard(before, documents(run(["helm", "get", "manifest", NEW, "-n", "farmer"])))
+    return {"replacementSchedulerEnabled": True, "helmRevision": status["version"]+1}
+
+
 if __name__ == "__main__":
     os.umask(0o077)
     parser = argparse.ArgumentParser(description=__doc__)

@@ -121,7 +121,33 @@ async def main():
   second=await _poll_async('synthetic-boundary')
   assert second['fetched']==2 and second['failed']==0
   assert calls==['synthetic:1','synthetic:2','synthetic:2','synthetic:3']
- print(json.dumps({'schemaRerun':True,'failedDdlRolledBack':True,'failureRecovery':True,'duplicateSentOnce':True,'failedBoundaryRetried':True,'pollTimestampPersisted':True,'applicationRole':True,'isolatedDatabases':True,'restoredSnapshot':bool(snapshots),'existingDataPreserved':bool(snapshots)}))
+ # Reconcile a successful event/checkpoint into an isolated recovery database,
+ # prove a key-insert failure rolls back the earlier run write, then rerun.
+ import asyncpg
+ from sqlalchemy.ext.asyncio import create_async_engine
+ from coss_connector.recovery import reconcile_stopped
+ recovery_engine=create_async_engine(engine.url.set(database='connector_recovery'))
+ async with recovery_engine.begin() as c:
+  await c.run_sync(Base.metadata.create_all);await db_migrations.apply(c)
+ recovery_factory=async_sessionmaker(recovery_engine,expire_on_commit=False)
+ async with recovery_factory() as session:
+  session.add(ConnectorDefinition(connector_id='synthetic-rehearsal',name='Synthetic Rehearsal',platform='odk_central',transport_type='odk_central',paused=True,enabled=True,auth_type='none',g2p_sender_id='farmer-partner',g2p_register_mnemonic='Farmer',data_model_mnemonic='FARMER_ODK_MODEL'))
+  await session.commit()
+ parameters=dict(host=os.environ['CONNECTOR_DB_HOSTNAME'],port=int(os.environ['CONNECTOR_DB_PORT']),user=os.environ['CONNECTOR_DB_USERNAME'],password=os.environ['CONNECTOR_DB_PASSWORD'])
+ source=await asyncpg.connect(**parameters,database=os.environ['CONNECTOR_DB_DBNAME'])
+ target=await asyncpg.connect(**parameters,database='connector_recovery')
+ await target.execute("CREATE FUNCTION synthetic_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected'; END $$; CREATE TRIGGER synthetic_failure BEFORE INSERT ON idempotency_keys FOR EACH ROW EXECUTE FUNCTION synthetic_failure()")
+ try: await reconcile_stopped(source,target,'synthetic-rehearsal',apply=True)
+ except Exception: pass
+ else: raise AssertionError('Injected recovery failure did not propagate')
+ assert await target.fetchval('SELECT count(*) FROM ingestion_runs')==0
+ await target.execute('DROP TRIGGER synthetic_failure ON idempotency_keys; DROP FUNCTION synthetic_failure()')
+ first=await reconcile_stopped(source,target,'synthetic-rehearsal',apply=True)
+ second=await reconcile_stopped(source,target,'synthetic-rehearsal',apply=True)
+ assert first['successfulKeysCopied']==1 and second['successfulKeysCopied']==0
+ assert await target.fetchval('SELECT count(*) FROM idempotency_keys')==1
+ await source.close();await target.close();await recovery_engine.dispose()
+ print(json.dumps({'schemaRerun':True,'failedDdlRolledBack':True,'failureRecovery':True,'rollbackReconciled':True,'duplicateSentOnce':True,'failedBoundaryRetried':True,'pollTimestampPersisted':True,'applicationRole':True,'isolatedDatabases':True,'restoredSnapshot':bool(snapshots),'existingDataPreserved':bool(snapshots)}))
  await engine.dispose()
 asyncio.run(main())
 '''
@@ -165,7 +191,8 @@ def main():
         credential = env['CONNECTOR_DB_PASSWORD'].replace("'", "''")
         run(['docker','exec','-i',name,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres'],
             input="CREATE ROLE connector_rehearsal_user LOGIN PASSWORD '" + credential + "';\n"
-                  "CREATE DATABASE connector_rehearsal OWNER connector_rehearsal_user;\n")
+                  "CREATE DATABASE connector_rehearsal OWNER connector_rehearsal_user;\n"
+                  "CREATE DATABASE connector_recovery OWNER connector_rehearsal_user;\n")
         if args.backup:
             run(['docker','exec',name,'pg_restore','--exit-on-error','--no-owner','--no-privileges',
                  '--role','connector_rehearsal_user','-U','postgres','-d','connector_rehearsal','/backup/database.dump'])
