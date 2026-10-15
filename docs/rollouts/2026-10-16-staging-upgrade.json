@@ -13,9 +13,14 @@
     "reviewedPreservation": [
       "Optional public staff UI template and existing Service name"
     ],
-    "pullRequestPublished": false,
+    "pullRequestPublished": true,
     "mergedIntoStaging": false,
-    "developRefreshMerge": "32c9c5e"
+    "developRefreshMerge": "32c9c5e",
+    "pullRequest": "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry/pull/102",
+    "pullRequestDraft": true,
+    "odkLocationFixCommit": "6c52951",
+    "stagingPreservationFixCommit": "8997f66",
+    "sharedGeographyReviewCommit": "85303af"
   },
   "target": {
     "platform": "1.2.2-rc.544",
