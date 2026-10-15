@@ -92,7 +92,36 @@ async def main():
  async with factory() as session:
   polled=await session.get(ConnectorDefinition,'synthetic-poll-clock')
   assert polled.last_poll_at is not None and polled.last_poll_status=='SUCCESS'
- print(json.dumps({'schemaRerun':True,'failedDdlRolledBack':True,'failureRecovery':True,'duplicateSentOnce':True,'pollTimestampPersisted':True,'applicationRole':True,'isolatedDatabases':True,'restoredSnapshot':bool(snapshots),'existingDataPreserved':bool(snapshots)}))
+ # A failed outbound record must stop the page before a later successful row
+ # can advance its watermark past the failed boundary.
+ from types import SimpleNamespace
+ from openg2p_connector_service.transports.base import SourceRecord
+ from openg2p_connector_service.transports.checkpoints import Checkpoint,CheckpointMode
+ async with factory() as session:
+  session.add(ConnectorDefinition(connector_id='synthetic-boundary',name='Synthetic Boundary',platform='odk_central',transport_type='odk_central',paused=False,enabled=True,auth_type='none'))
+  await session.commit()
+ class BoundaryTransport:
+  async def fetch(self,connector):
+   boundary=(connector.get_poll_state().get('_checkpoint') or {}).get('value','')
+   for index in [1,2,3]:
+    value='2026-10-15T00:00:0'+str(index)+'Z'
+    if value>boundary:
+     yield SourceRecord('synthetic:'+str(index),{'__id':str(index)},checkpoint=Checkpoint(mode=CheckpointMode.TIMESTAMP,value=value,boundary_ids=[str(index)]))
+ calls=[]
+ async def process(*args,**kwargs):
+  identity=kwargs['source_event_id'];calls.append(identity)
+  failed=identity=='synthetic:2' and calls.count(identity)==1
+  return SimpleNamespace(status=SimpleNamespace(value='FAILED' if failed else 'SUCCESS'))
+ with patch('openg2p_connector_service.worker.get_transport',return_value=BoundaryTransport()),patch.object(IngestionService,'process_record',side_effect=process):
+  first=await _poll_async('synthetic-boundary')
+  assert first['fetched']==2 and first['failed']==1
+  async with factory() as session:
+   boundary=await session.get(ConnectorDefinition,'synthetic-boundary')
+   assert boundary.get_poll_state()['_checkpoint']['value']=='2026-10-15T00:00:01Z'
+  second=await _poll_async('synthetic-boundary')
+  assert second['fetched']==2 and second['failed']==0
+  assert calls==['synthetic:1','synthetic:2','synthetic:2','synthetic:3']
+ print(json.dumps({'schemaRerun':True,'failedDdlRolledBack':True,'failureRecovery':True,'duplicateSentOnce':True,'failedBoundaryRetried':True,'pollTimestampPersisted':True,'applicationRole':True,'isolatedDatabases':True,'restoredSnapshot':bool(snapshots),'existingDataPreserved':bool(snapshots)}))
  await engine.dispose()
 asyncio.run(main())
 '''

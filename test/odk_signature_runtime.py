@@ -21,6 +21,25 @@ from openg2p_registry_farmer_extension import odk_signature
 
 
 class SignatureRuntime(unittest.IsolatedAsyncioTestCase):
+    async def test_retry_returns_existing_correlation_without_duplicate_intake(self):
+        envelope = {"body": {"message": {"payload": {"name": "Synthetic"}}}}
+        existing = SimpleNamespace(ingest_id="existing", ingest_correlation_id="original-correlation")
+        session = AsyncMock()
+        session.__aenter__.return_value = session
+        session.execute.side_effect = [None, SimpleNamespace(scalar_one_or_none=lambda: existing)]
+        stored = SimpleNamespace(raw_data_json=envelope)
+        session.get.return_value = stored
+        service = G2PIngestService()
+        model = SimpleNamespace(data_model_id="FARMER_ODK_MODEL", response_template_document_id=None)
+        with patch("openg2p_registry_core.services.g2p_ingest_service.get_async_session_maker", return_value=lambda: session), \
+             patch.object(service, "_get_data_model", AsyncMock(return_value=model)), \
+             patch.object(service, "_match_model_signature_pattern", AsyncMock(return_value=(SimpleNamespace(partner_id="farmer-partner"), "verified", {}, SimpleNamespace(is_list=False)))), \
+             patch.object(service, "_match_message_id_pattern", return_value="synthetic"):
+            result = await service.ingest_data("FARMER_ODK_MODEL", envelope)
+        self.assertEqual(result, ("original-correlation", None))
+        session.commit.assert_not_awaited()
+        self.assertIn("pg_advisory_xact_lock", str(session.execute.call_args_list[0].args[0]))
+
     async def test_real_service_requires_registered_signature_for_odk_only(self):
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         public = key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode()
