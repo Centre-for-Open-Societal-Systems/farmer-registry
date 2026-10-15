@@ -598,10 +598,13 @@ def test_identity_evidence_cannot_be_reused_after_values_change_or_expiry(identi
         identity.evidence(file)
 
 
-def test_retire_command_cannot_run_without_acceptance(accepted, tmp_path, monkeypatch):
+@pytest.mark.parametrize("expired_job", [False, True])
+def test_retire_command_cannot_run_without_acceptance(accepted, tmp_path, monkeypatch, expired_job):
     monkeypatch.setattr(cutover, "verify_backup", lambda p: "backup")
     (tmp_path / "backup.json").write_text('{"helmRevision": 2}')
     old, workloads, status, new_manifest, review, backup_hash = accepted
+    if expired_job:
+        old.append({"kind": "Job", "metadata": {"name": "farmer-connector-setup"}})
     calls = []
     pods = []
     def run(args):
@@ -615,6 +618,9 @@ def test_retire_command_cannot_run_without_acceptance(accepted, tmp_path, monkey
         if args[:3] == ["kubectl", "get", "pods"]:
             return json.dumps({"items": pods})
         if args[:2] == ["kubectl", "get"]:
+            if args[2] == "Job":
+                assert "--ignore-not-found" in args
+                return ""
             return json.dumps(workloads[0])
         if args[:2] == ["helm", "uninstall"]:
             return ""

@@ -131,8 +131,14 @@ def retire(directory, acceptance, run=command):
     # charts may omit or apply inconsistently.
     for d in old_manifest:
         if d["kind"] in ("Deployment", "StatefulSet", "DaemonSet", "Job", "CronJob"):
-            workloads.append(json.loads(run(["kubectl", "get", d["kind"], d["metadata"]["name"],
-                                             "-n", NAMESPACE, "-o", "json"])))
+            args = ["kubectl", "get", d["kind"], d["metadata"]["name"], "-n", NAMESPACE, "-o", "json"]
+            # Completed setup Jobs may already have expired under their TTL.
+            # API/authentication errors still fail; only a missing Job is safe.
+            if d["kind"] == "Job":
+                args.append("--ignore-not-found")
+            raw = run(args)
+            if raw:
+                workloads.append(json.loads(raw))
     selectors = [d.get("spec", {}).get("selector", {}).get("matchLabels", {}) for d in workloads]
     live_pods = json.loads(run(["kubectl", "get", "pods", "-n", NAMESPACE, "-o", "json"]))["items"]
     for p in live_pods:
