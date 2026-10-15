@@ -1,0 +1,4 @@
+PyYAML==6.0.2
+pytest>=8,<10
+Jinja2>=3,<4
+openpyxl>=3,<4

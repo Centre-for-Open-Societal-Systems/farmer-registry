@@ -1,6 +1,6 @@
 # Farmer Registry — values overlay for the openg2p-registry chart.
 #
-# This chart owns only the analytics jobs (templates/); everything else comes from
+# This chart owns analytics jobs and the optional COSS dashboard API; core services come from
 # the openg2p-registry subchart (pinned in Chart.yaml, aliased `registry`) with the
 # overrides below. Install:
 #
@@ -372,3 +372,29 @@ mapsContent:
   # Defaults to <release>-maps-content. Whatever this resolves to is what goes
   # into the Insights chart as insightMaps.build.content.configMap.
   nameOverride: ""
+
+# COSS optional dashboard API: retain the existing release-owned service.
+# Its image is independently built; registry CI preserves the deployed tag.
+dashboardApi:
+  enabled: false
+  image:
+    repository: ''
+    tag: ''
+  replicas: 1
+  workers: 2
+  dbPool:
+    minSize: 1
+    maxSize: 5
+  geoLevelTotals: {}
+  allowedOrigins: []
+  env: {}
+  virtualService:
+    enabled: false
+    host: ''
+    gateway: ''
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi

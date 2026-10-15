@@ -198,3 +198,7 @@ helm/**/charts/*.tgz
 local/*
 !local/upstream/
 local/upstream/generated/
+
+# Jenkins local validation artifacts (never include credentials or venv in builds).
+.ci-venv/
+.ci-odk-transform.log

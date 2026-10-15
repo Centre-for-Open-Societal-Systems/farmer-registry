@@ -34,6 +34,8 @@ check (`test/test_rp_pin_lockstep.py`) fails the build if they ever do.
 
 ## Deploy
 
+For the existing COSS new-dev server, use the [Jenkins deployment guide](docs/jenkins-dev-deployment.md). Merged `develop` builds publish six commit-tagged images and upgrade the existing release. The generic installation below requires published image overrides and is not the new-dev upgrade procedure.
+
 ```bash
 helm repo add openg2p https://openg2p.github.io/openg2p-helm
 helm dependency build ./helm/openg2p-farmer-registry

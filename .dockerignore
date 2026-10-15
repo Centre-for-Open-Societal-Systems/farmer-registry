@@ -3,3 +3,5 @@ local/upstream/generated
 **/__pycache__
 **/.pytest_cache
 **/.env
+.ci-venv
+.ci-odk-transform.log

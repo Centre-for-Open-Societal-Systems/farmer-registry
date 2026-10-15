@@ -1,0 +1,124 @@
+"""Safety properties for upgrading the existing new-dev release."""
+import copy
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location("deployment", ROOT / "ci/jenkins/deployment.py")
+deployment = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(deployment)
+ECR = "379220350808.dkr.ecr.ap-south-1.amazonaws.com"
+TAG = "abcdef012345"
+
+
+def workload(kind, suffix, image, env=None):
+    return {"kind": kind, "metadata": {"name": "farmer-registry-" + suffix},
+            "spec": {"selector": {"matchLabels": {"app": suffix}}, "template": {"spec": {
+                "containers": [{"name": "app", "image": image, "env": env or []}]}}}}
+
+
+@pytest.fixture
+def release():
+    before = [workload("Deployment", "staff-portal-api", "old/staff-api:previous", [
+        {"name": "REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME", "value": "commons-postgresql.commons.svc.cluster.local"},
+        {"name": "REGISTRY_STAFF_PORTAL_API_DB_PASSWORD", "valueFrom": {"secretKeyRef": {"name": "farmer-registry", "key": "farmer-registry-db-user"}}},
+    ]), workload("Deployment", "celery-worker", "old/celery:previous", [
+        {"name": "REGISTRY_CELERY_WORKERS_AWE_BASE_URL", "value": "http://commons-services-awe"},
+        {"name": "REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET", "valueFrom": {"secretKeyRef": {"name": "farmer-registry-staff-portal", "key": "client_secret"}}},
+    ]), workload("Deployment", "dashboard-api", "independent/dashboard:existing"),
+        {"kind": "VirtualService", "metadata": {"name": "farmer-registry-staff-portal-ui"},
+         "spec": {"hosts": ["registry.farmer-dev.oanstaging.com"], "gateways": ["internal"]}}]
+    after = copy.deepcopy(before)
+    existing = {(d["kind"], d["metadata"]["name"]): d for d in after}
+    for _, (kind, suffix, image) in deployment.COMPONENTS.items():
+        key = (kind, "farmer-registry-" + suffix)
+        if key not in existing:
+            existing[key] = workload(kind, suffix, "")
+            after.append(existing[key])
+        deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:{TAG}"
+    return before, after
+
+
+def test_safe_existing_release_upgrade(release):
+    deployment.validate(*release, ECR, TAG)
+
+
+def test_prepare_retains_values_and_worker_awe_secrets(release):
+    values = {"global": {"registryHostname": "registry.farmer-dev.oanstaging.com"},
+              "dashboardApi": {"image": {"tag": "existing"}},
+              "registry": {"staffUi": {"envVars": {"COOKIE_DOMAIN": ".oanstaging.com"}}}}
+    result = deployment.prepare(values, release[0], ECR, TAG)
+    assert "celeryWorker" not in values["registry"], "Must not mutate source values"
+    worker = result["registry"]["celeryWorker"]
+    assert worker["envVars"]["REGISTRY_CELERY_WORKERS_AWE_BASE_URL"] == "http://commons-services-awe"
+    assert worker["envVarsFrom"]["REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET"]["secretKeyRef"]["key"] == "client_secret"
+    assert result["dashboardApi"] == values["dashboardApi"]
+    assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".oanstaging.com"
+    assert result["registry"]["dbSeed"]["loadSampleData"] is False
+    assert result["registry"]["sanity"]["runE2e"] is False
+
+
+def test_wrong_environment_is_rejected(release):
+    with pytest.raises(ValueError, match="new-dev"):
+        deployment.prepare({"global": {"registryHostname": "registry.production.example"}}, release[0], ECR, TAG)
+
+
+def test_dashboard_removal_is_rejected(release):
+    before, after = release
+    after[:] = [d for d in after if d["metadata"]["name"] != "farmer-registry-dashboard-api"]
+    with pytest.raises(ValueError, match="remove"):
+        deployment.validate(before, after, ECR, TAG)
+
+
+@pytest.mark.parametrize("variable", ["REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME", "REGISTRY_STAFF_PORTAL_API_DB_PASSWORD"])
+def test_db_or_secret_change_is_rejected(release, variable):
+    before, after = release
+    env = deployment.pod(after[0])["containers"][0]["env"]
+    next(e for e in env if e["name"] == variable)["value"] = "unexpected"
+    with pytest.raises(ValueError, match="environment/Secret"):
+        deployment.validate(before, after, ECR, TAG)
+
+
+def test_worker_awe_omission_is_rejected(release):
+    before, after = release
+    deployment.pod(after[1])["containers"][0]["env"] = []
+    with pytest.raises(ValueError, match="AWE"):
+        deployment.validate(before, after, ECR, TAG)
+
+
+def test_browser_route_change_is_rejected(release):
+    before, after = release
+    after[3]["spec"]["hosts"] = ["placeholder.openg2p.org"]
+    with pytest.raises(ValueError, match="ingress"):
+        deployment.validate(before, after, ECR, TAG)
+
+
+def test_connector_ownership_is_rejected(release):
+    before, after = release
+    after.append({"kind": "Service", "metadata": {"name": "farmer-connector-api"}, "spec": {}})
+    with pytest.raises(ValueError, match="shared/connector"):
+        deployment.validate(before, after, ECR, TAG)
+
+
+def test_wrong_image_commit_is_rejected(release):
+    before, after = release
+    deployment.pod(after[0])["containers"][0]["image"] = "old/staff-api:previous"
+    with pytest.raises(ValueError, match="commit image"):
+        deployment.validate(before, after, ECR, TAG)
+
+
+def test_demo_seed_is_rejected(release):
+    before, after = release
+    seed = next(d for d in after if d["metadata"]["name"] == "farmer-registry-db-seed")
+    deployment.pod(seed)["containers"][0]["env"].append({"name": "LOAD_SAMPLE_DATA", "value": "true"})
+    with pytest.raises(ValueError, match="loader"):
+        deployment.validate(before, after, ECR, TAG)
+
+
+def test_dashboard_image_is_not_silently_upgraded(release):
+    before, after = release
+    deployment.pod(after[2])["containers"][0]["image"] = "dashboard:new"
+    with pytest.raises(ValueError, match="Dashboard image"):
+        deployment.validate(before, after, ECR, TAG)
