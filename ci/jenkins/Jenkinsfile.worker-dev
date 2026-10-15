@@ -1,0 +1,90 @@
+// Focused rollout for the verified background-auth fix. No schema/setup jobs.
+pipeline {
+    agent any
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 45, unit: 'MINUTES')
+    }
+    parameters {
+        booleanParam(name: 'APPLY_DEV_WORKER_FIX', defaultValue: false,
+            description: 'Deploy the tested Farmer worker image to new-dev; no setup jobs or connector cutover.')
+    }
+    environment { AWS_REGION = 'ap-south-1' }
+    stages {
+        stage('Checkout and validate') {
+            steps {
+                checkout scm
+                dir('service-outcomes') { deleteDir() }
+                script {
+                    env.SOURCE_COMMIT = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+                    if (!(env.SOURCE_COMMIT ==~ /[0-9a-f]{40}/)) { error('Invalid source commit') }
+                    env.IMAGE_TAG = env.SOURCE_COMMIT.take(12)
+                }
+                sh '''
+                    set -eu
+                    docker build -t "coss-ci/validation:$IMAGE_TAG" ci/jenkins
+                    docker run --rm -v "$PWD:/repo:ro" "coss-ci/validation:$IMAGE_TAG" bash ci/jenkins/validate.sh
+                    docker build -t "coss-ci/celery:$IMAGE_TAG" -f docker/celery/Dockerfile .
+                '''
+            }
+        }
+        stage('Publish tested worker') {
+            when { expression { params.APPLY_DEV_WORKER_FIX } }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
+                    script {
+                        env.ECR_REGISTRY = sh(returnStdout: true, script: '''
+                            set +x
+                            account=$(aws sts get-caller-identity --query Account --output text)
+                            case "$account" in *[!0-9]*|'') exit 1 ;; esac
+                            test "${#account}" = 12
+                            printf '%s.dkr.ecr.ap-south-1.amazonaws.com' "$account"
+                        ''').trim()
+                    }
+                    sh '''
+                        set -eu
+                        set +x
+                        export DOCKER_CONFIG
+                        DOCKER_CONFIG=$(mktemp -d)
+                        trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+                        aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+                        image="$ECR_REGISTRY/openg2p/farmer-registry/celery:$IMAGE_TAG"
+                        docker tag "coss-ci/celery:$IMAGE_TAG" "$image"
+                        docker push "$image"
+                        digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name openg2p/farmer-registry/celery \
+                            --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+                        printf '%s@%s' "$image" "$digest" > service-outcomes/worker-image.txt
+                    '''
+                }
+                stash name: 'worker-dev', includes: 'helm/**,ci/**,service-outcomes/worker-image.txt', excludes: 'helm/**/charts/**'
+            }
+        }
+        stage('Deploy only the Farmer worker') {
+            when { beforeAgent true; expression { params.APPLY_DEV_WORKER_FIX } }
+            agent { label 'vpn-agent2' }
+            steps {
+                dir('worker-dev-deployment') {
+                    deleteDir()
+                    unstash 'worker-dev'
+                    withCredentials([file(credentialsId: 'farmer-dev-kubeconfig', variable: 'KUBECONFIG')]) {
+                        sh '''
+                            set -eu
+                            set +x
+                            docker build -t "coss-ci/services:$IMAGE_TAG" ci/services
+                            docker run --rm --network host --user "$(id -u):$(id -g)" \
+                                -e KUBECONFIG -e HOME=/tmp/worker-deploy-home \
+                                -v "$PWD:$PWD" -w "$PWD" -v "$KUBECONFIG:$KUBECONFIG:ro" \
+                                "coss-ci/services:$IMAGE_TAG" python ci/jenkins/deploy-worker-only.py \
+                                --image "$(cat service-outcomes/worker-image.txt)" --commit "$SOURCE_COMMIT" \
+                                --apply --output service-outcomes/worker-deploy.json
+                        '''
+                    }
+                    archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/worker-image.txt'
+                }
+            }
+        }
+    }
+    post { always { archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/worker-image.txt', allowEmptyArchive: true } }
+}

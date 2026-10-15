@@ -32,9 +32,13 @@ aligned. A fresh Registry service token reached AWE task statistics and listing
 with HTTP 200; missing-token calls returned 401. The public and internal JWKS
 contain identical realm keys. A temporary Intake Validator completed a fresh
 browser login through Registry and IAM; its access token reached AWE statistics
-and task listing with HTTP 200. Authorized approval of a synthetic intake
-remains an acceptance gate. No business record was approved
-and the existing connector was not stopped, replaced or uninstalled.
+and task listing with HTTP 200. One labelled synthetic ODK intake completed both
+approval stages under the unchanged live Farmer policy (201) and reached the
+Register; photo, land certificate and geography were retained. The non-assignee
+temporary validator received 403 and a master-realm token received 401. Temporary
+Keycloak and ODK accounts were removed, the synthetic form closed and its test
+partner disabled. No existing business record was approved. The old connector
+remains running and has not been replaced or uninstalled.
 
 The connector source is `OpenG2P/registry-connector`, branch `develop`. Jenkins
 resolves that branch once, fetches the exact commit into a temporary checkout,
@@ -49,7 +53,7 @@ around its polling/checkpoint implementation. It transfers referenced files into
 Registry's existing File contract and aborts before yielding/checkpoint advancement
 on missing, failed or oversized attachments. The API, worker and beat share an
 isolated Celery queue, so replacement workers cannot consume old queued tasks.
-No old service code is copied into the replacement image. API/UI builds, eight
+No old service code is copied into the replacement image. API/UI builds, nine
 adapter tests and isolated PostgreSQL schema/deduplication rehearsal passed.
 
 Live polling exposed an upstream clock/schema mismatch: the worker assigns an
@@ -63,6 +67,25 @@ build-time checked change to that exact call and obtains a cached client
 credentials token from its configured AWE token URL. Missing credentials or token
 errors stop finalization. Public token routing stays in the owning identity values;
 issuer, signature, TLS and approval authorization checks remain enabled.
+
+`ci/jenkins/Jenkinsfile.worker-dev` supports a focused, opt-in deployment of this
+worker fix before connector cutover. It publishes only the tested Farmer worker
+image and updates the existing Registry release with that digest and its verified
+staff token URL. Preflight compares every persistent rendered resource, including
+Secrets and the dashboard API, against the installed manifest. Setup hooks are
+suppressed and normal setup Jobs filtered from this image-only upgrade, preserving
+their Secrets and ConfigMaps. No database migration is needed for this change.
+The ordinary full Registry pipeline retains its own setup/acceptance requirements.
+
+Live acceptance used the built replacement connector against an isolated Docker
+database and a separate ODK project, with no scheduler. The Registry worker fix
+was exercised in its built image for that one ingestion ID via SSH service routing;
+this is runtime verification, not evidence that either image is already deployed.
+The live pipeline's configured `farmer-partner` is absent from Partner Management,
+so its migration also requires real partner onboarding before activation. A separate
+synthetic partner was onboarded through PM's API for the test and then disabled.
+The named live approver could approve through AWE, but Registry's approval proxy
+returned `G2P-AUT-403`; portal permission readiness remains a cutover gate.
 
 The Farmer dashboard repository is `oan_farmerregistry_dashboard`. Its
 develop/staging heads currently have no Dockerfile or application code and are
@@ -254,19 +277,20 @@ activation; the prepared manifest does not create it or claim ingestion readines
 Local regression tests cover branch/network classification, exact commit and
 digest selection, independent failures, Helm mutation ordering/race prevention,
 identity allowlists, issuer/JWKS/audience prerequisites, isolated storage and
-retirement preservation. Live ingestion, authorization, hook rehearsals and
-Jenkins execution remain required rollout evidence.
+retirement preservation. Live ingestion and native AWE authorization passed for
+the synthetic record. Portal approval permissions, enabled-hook rehearsals and
+Jenkins deployment execution remain required rollout evidence.
 
-The Linux container validation suite passed 273 tests and 57 subtests; an
-additional finalizer integration test also passed in the focused eight-test worker
-authentication suite. Nine connector adapter tests passed against the built image.
+The Linux container validation suite passed 274 tests and 57 subtests. Seventeen
+focused worker authentication/deployment guard tests passed after adding the
+worker-only rollout guard. Nine connector adapter tests passed against the built image.
 The ODK transform and deployment shell harness passed on Bash 4.3, 5.2 and 5.3.
 Both Jenkinsfiles passed the live Jenkins Declarative Pipeline validator. The
 actual upstream chart and locked dependencies rendered six preparation resources;
 guards confirmed separate storage, no active ingestion and no ingress. The helper
 image's Python/Git/Docker/AWS/Helm tools were verified, including Docker access as
-a non-root UID. These checks do not establish live ODK-to-approval acceptance,
-optional setup-hook rehearsal, image publication or staging readiness.
+a non-root UID. Optional setup-hook rehearsal, image publication, deployed-runtime
+acceptance and staging readiness must still be recorded separately.
 
 Postman also ran the two anonymous AWE calls with one passing 401 assertion per
 request. This installed CLI returns exit 1 for HTTP 401 even with passing tests;
