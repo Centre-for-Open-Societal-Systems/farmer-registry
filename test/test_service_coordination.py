@@ -425,6 +425,8 @@ def release_tools(tmp_path, monkeypatch, component):
             return ""
         if args[:3] == ["helm", "dependency", "build"]:
             return ""
+        if args[:3] == ["helm", "repo", "add"]:
+            return ""
         pytest.fail("Unexpected command " + repr(args))
     return source, item, state, run
 

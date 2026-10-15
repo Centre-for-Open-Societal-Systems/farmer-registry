@@ -406,6 +406,7 @@ def deploy(component, environment, record, source, registry, run=command):
         path = Path(state) / "values.yaml"
         path.write_text(yaml.safe_dump(values), encoding="utf-8")
         path.chmod(0o600)
+        run(["helm", "repo", "add", "openg2p", "https://openg2p.github.io/openg2p-helm"])
         run(["helm", "dependency", "build", str(chart)])
         after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
                           "--dry-run=server", *(["--is-upgrade"] if status else [])]))

@@ -8,4 +8,5 @@ python odk/test_transform.py > /tmp/odk-transform.log
 bash -n ci/jenkins/deploy-dev.sh
 bash ci/jenkins/test-deploy-shell.sh
 bash -n ci/services/run.sh ci/services/run-container.sh
+bash -n ci/connector/fetch-backup-container.sh
 bash ci/services/test-container-shell.sh

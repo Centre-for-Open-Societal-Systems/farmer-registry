@@ -159,10 +159,19 @@ pipeline {
                 dir('optional-dev-deployment') {
                     deleteDir()
                     unstash 'optional-deployment'
+                    script {
+                      env.CONNECTOR_BACKUP_DIRECTORY = "${pwd(tmp: true)}/connector-backup-${env.BUILD_NUMBER}"
+                      catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                        withCredentials([sshUserPrivateKey(credentialsId: 'farmer-new-dev-backup-ssh', keyFileVariable: 'BACKUP_SSH_KEY')]) {
+                          sh 'bash ci/connector/fetch-backup-container.sh'
+                        }
+                      }
+                    }
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                         withCredentials([file(credentialsId: 'farmer-dev-kubeconfig', variable: 'KUBECONFIG')]) {
                             sh '''
                                 set -eu
+                                if ! test -d "$CONNECTOR_BACKUP_DIRECTORY"; then unset CONNECTOR_BACKUP_DIRECTORY; fi
                                 bash ci/services/run-container.sh deploy \
                                   --environment dev --registry "$ECR_REGISTRY" \
                                   --input service-outcomes/build.json --output service-outcomes/deploy.json
