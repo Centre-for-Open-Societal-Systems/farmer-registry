@@ -16,7 +16,15 @@ pipeline {
         stage('Checkout and validate') {
             steps {
                 checkout scm
-                script { env.IMAGE_TAG = env.GIT_COMMIT.take(12) }
+                script {
+                    // checkout scm does not always export GIT_COMMIT globally.
+                    // Resolve the actual workspace revision before tagging images.
+                    def commit = sh(returnStdout: true, script: 'git rev-parse --verify HEAD').trim()
+                    if (!(commit ==~ /[0-9a-f]{40}/)) {
+                        error('Could not resolve the checked-out Git commit')
+                    }
+                    env.IMAGE_TAG = commit.take(12)
+                }
                 sh '''
                     set -eu
                     python3 -m venv .ci-venv
