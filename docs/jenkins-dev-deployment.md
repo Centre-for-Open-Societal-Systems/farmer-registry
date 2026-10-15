@@ -1,5 +1,12 @@
 # Jenkins deployment to new dev
 
+Optional service coordination and the opt-in Commons identity migration are
+described in [the coordinated rollout guide](coordinated-services-rollout.md).
+The Registry upgrade behavior below still applies; the root pipeline now also
+coordinates independent optional releases after that upgrade. Those stages use
+a separate tooling container; host Python is not required. Staging remains a separate,
+disabled-by-default job rather than a Registry deploy stage.
+
 The root `Jenkinsfile` restores delivery for the upstream Farmer layout. A merged
 `develop` build validates the extension, builds six images, publishes them to ECR
 using the first 12 commit characters, then upgrades the existing `farmer-registry`

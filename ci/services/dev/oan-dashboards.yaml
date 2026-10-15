@@ -1,0 +1,4 @@
+# Existing release, revision 1, namespace/driver verified on 2026-10-15.
+# Retain its IAM, API URLs, Secret references, routing and storage from Helm.
+_coordination:
+  namespace: commons

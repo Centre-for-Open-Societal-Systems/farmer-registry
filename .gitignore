@@ -202,3 +202,5 @@ local/upstream/generated/
 # Jenkins local validation artifacts (never include credentials or venv in builds).
 .ci-venv/
 .ci-odk-transform.log
+.ci-services-venv/
+service-outcomes/

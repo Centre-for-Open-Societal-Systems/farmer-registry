@@ -12,10 +12,17 @@ pipeline {
         HELM_RELEASE = 'farmer-registry'
         HELM_NAMESPACE = 'farmer'
     }
+    parameters {
+        booleanParam(name: 'COORDINATE_SERVICES', defaultValue: true,
+            description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
+        booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
+            description: 'Apply reviewed Commons staff identity values; requires fresh farmer-dev-identity-evidence credential.')
+    }
     stages {
         stage('Checkout and validate') {
             steps {
                 checkout scm
+                dir('service-outcomes') { deleteDir() }
                 script {
                     // checkout scm does not always export GIT_COMMIT globally.
                     // Resolve the actual workspace revision before tagging images.
@@ -24,6 +31,7 @@ pipeline {
                         error('Could not resolve the checked-out Git commit')
                     }
                     env.IMAGE_TAG = commit.take(12)
+                    env.SOURCE_COMMIT = commit
                 }
                 sh '''
                     set -eu
@@ -69,14 +77,25 @@ pipeline {
                         trap 'rm -rf "$DOCKER_CONFIG"' EXIT
                         aws ecr get-login-password --region "$AWS_REGION" |
                           docker login --username AWS --password-stdin "$ECR_REGISTRY"
+                        mkdir -p service-outcomes
+                        : > service-outcomes/registry-images.tsv
                         for component in staff-api partner-api celery db-seed sanity-tests staff-ui; do
                           image="$ECR_REGISTRY/$ECR_PATH/$component:$IMAGE_TAG"
                           docker tag "coss-ci/$component:$IMAGE_TAG" "$image"
                           docker push "$image"
+                          digest=$(aws ecr describe-images --region "$AWS_REGION" \
+                            --repository-name "$ECR_PATH/$component" --image-ids "imageTag=$IMAGE_TAG" \
+                            --query 'imageDetails[0].imageDigest' --output text)
+                          printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
                         done
                     '''
                 }
-                stash name: 'dev-deployment', includes: 'helm/**,ci/**', excludes: 'helm/**/charts/**,helm/**/Chart.lock'
+            }
+        }
+        stage('Prepare dev deployment') {
+            when { allOf { branch 'develop'; not { changeRequest() } } }
+            steps {
+                stash name: 'dev-deployment', includes: 'helm/**,ci/**,service-outcomes/**', excludes: 'helm/**/charts/**,helm/**/Chart.lock'
             }
         }
         stage('Deploy new dev') {
@@ -90,14 +109,74 @@ pipeline {
                     deleteDir()
                     unstash 'dev-deployment'
                     withCredentials([file(credentialsId: 'farmer-dev-kubeconfig', variable: 'KUBECONFIG')]) {
-                        sh '''
+                        script {
+                          def deployRegistry = {
+                            sh '''
                             set -eu
+                            export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
                             docker build -t "coss-ci/validation:$IMAGE_TAG" ci/jenkins
                             bash ci/jenkins/deploy-dev.sh
+                            '''
+                          }
+                          withEnv(["APPLY_COMMONS_IDENTITY=${params.APPLY_COMMONS_IDENTITY}"]) {
+                            if (params.APPLY_COMMONS_IDENTITY) {
+                              withCredentials([file(credentialsId: 'farmer-dev-identity-evidence', variable: 'IDENTITY_EVIDENCE_FILE')]) {
+                                deployRegistry()
+                              }
+                            } else {
+                              deployRegistry()
+                            }
+                          }
+                        }
+                    }
+                    archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('Build optional services') {
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { params.COORDINATE_SERVICES } } }
+            steps {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
+                        sh '''
+                            set -eu
+                            set +x
+                            bash ci/services/run-container.sh build \
+                              --environment dev --registry "$ECR_REGISTRY" --output service-outcomes/build.json
                         '''
                     }
                 }
+                stash name: 'optional-deployment', includes: 'ci/**,service-outcomes/build.json'
             }
+        }
+        stage('Deploy optional services') {
+            when {
+                beforeAgent true
+                allOf { branch 'develop'; not { changeRequest() }; expression { params.COORDINATE_SERVICES } }
+            }
+            agent { label 'vpn-agent2' }
+            steps {
+                dir('optional-dev-deployment') {
+                    deleteDir()
+                    unstash 'optional-deployment'
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: 'farmer-dev-kubeconfig', variable: 'KUBECONFIG')]) {
+                            sh '''
+                                set -eu
+                                bash ci/services/run-container.sh deploy \
+                                  --environment dev --registry "$ECR_REGISTRY" \
+                                  --input service-outcomes/build.json --output service-outcomes/deploy.json
+                            '''
+                        }
+                    }
+                    archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
+                }
+            }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
         }
     }
 }

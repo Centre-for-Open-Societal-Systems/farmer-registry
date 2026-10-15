@@ -1,0 +1,52 @@
+# Configuration belongs to Farmer Registry; each source/release keeps its owner.
+# API repositories intentionally have no separate release: their Registry owns it.
+components:
+  - name: registry-connector
+    repository: https://github.com/OpenG2P/registry-connector.git
+    sourceBranch: develop
+    dockerfile: api/Dockerfile
+    context: api
+    chart: api/deploy/charts/openg2p-connector
+    release: farmer-registry-connector
+    namespace: farmer
+    kind: connector
+    allowInstall: true
+    imageValues: api.image
+    images:
+      api:
+        dockerfile: api/Dockerfile
+        context: api
+        overlay: ci/connector
+        imageValues: [api.image, worker.image, beat.image, consumer.image]
+      ui:
+        dockerfile: ui/Dockerfile
+        context: ui
+        imageValues: [ui.image]
+  - name: farmer-registry-dashboard
+    repository: https://github.com/Centre-for-Open-Societal-Systems/oan_farmerregistry_dashboard.git
+    dockerfile: Dockerfile
+    chart: helm/farmer-registry-dashboard
+    release: farmer-registry-dashboard
+    namespace: farmer
+    imageValues: image
+  - name: livestock-registry-dashboard
+    repository: https://github.com/Centre-for-Open-Societal-Systems/oan_livestock_dashboard.git
+    dockerfile: Dockerfile
+    chart: helm/livestock-registry-dashboard
+    release: livestock-registry-dashboard
+    namespace: livestock
+    imageValues: image
+  - name: cropsown-registry-dashboard
+    repository: https://github.com/Centre-for-Open-Societal-Systems/oan_cropsown_dashboard.git
+    dockerfile: Dockerfile
+    chart: helm/cropsown-registry-dashboard
+    release: cropsown-registry-dashboard
+    namespace: crop
+    imageValues: image
+  - name: oan-dashboards
+    repository: https://github.com/Centre-for-Open-Societal-Systems/oan_dashboards.git
+    dockerfile: Dockerfile
+    chart: helm/oan-dashboards
+    release: oan-dashboards
+    namespace: commons
+    imageValues: image

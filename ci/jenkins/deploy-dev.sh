@@ -15,14 +15,23 @@ trap 'rm -rf "$STATE"' EXIT
 # Python dependencies live in Docker on both agents; host Helm/kubectl keep the
 # existing VPN access. The helper receives no kubeconfig or Docker socket.
 guard() {
+  # Bash 4.3 + nounset cannot expand an empty array. Keep this nonempty.
+  local evidence_args=(-e APPLY_COMMONS_IDENTITY)
+  if [[ "${APPLY_COMMONS_IDENTITY:-false}" == true ]]; then
+    : "${IDENTITY_EVIDENCE_FILE:?Bind fresh identity readiness evidence}"
+    evidence_args+=(-v "$IDENTITY_EVIDENCE_FILE:/identity-evidence.json:ro" -e IDENTITY_EVIDENCE_FILE=/identity-evidence.json)
+  fi
   docker run --rm --network none --user "$(id -u):$(id -g)" \
-    -e ECR_REGISTRY -e IMAGE_TAG \
+    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT "${evidence_args[@]}" \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
     "coss-ci/validation:$IMAGE_TAG" python ci/jenkins/deployment.py "$@"
 }
 
 # Reading an existing release is mandatory; never install placeholder defaults
 # after a credential, namespace or context mistake. Private manifests stay local.
+if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
+  guard provenance
+fi
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json"
 guard status "$STATE/status.json"
 MODE=$(guard upgrade-mode "$STATE/status.json")
@@ -74,4 +83,9 @@ helm get hooks "$HELM_RELEASE" -n "$HELM_NAMESPACE" >> "$STATE/deployed.yaml"
 guard validate "$STATE/before.yaml" "$STATE/deployed.yaml"
 kubectl exec -i -n farmer deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
   python3 - < ci/gen2/check_geo_schema.py
-echo "Deployed Registry commit $IMAGE_TAG to farmer; Commons and farmer-connector releases were not upgraded."
+if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
+  guard outcome "$STATE/final-status.json" "$STATE/outcome.json"
+  mkdir -p "$(dirname "$REGISTRY_OUTCOME_FILE")"
+  cp "$STATE/outcome.json" "$REGISTRY_OUTCOME_FILE"
+fi
+echo "Deployed Registry commit $IMAGE_TAG to farmer; shared and optional releases are coordinated separately."

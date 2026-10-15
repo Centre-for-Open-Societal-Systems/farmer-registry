@@ -1,0 +1,46 @@
+# Preparation only: no API requests, worker, beat, consumer, UI or ingress.
+# The isolated DB/Secret must be provisioned and rehearsed before activation.
+_coordination:
+  namespace: farmer
+  database: farmer_connector_v2
+  databaseEnv: CONNECTOR_DB_DBNAME
+  oldDatabaseEnv: CONNECTOR_DB_DBNAME
+  backupHash: c4cdb2bb37049b00470994d6443ec9b562c3548d267b27df3bb1e0a6eddd48c1
+fullnameOverride: farmer-registry-connector
+global:
+  hostname: connector-farmer-registry-development.oanstaging.com
+  postgresqlHost: commons-postgresql.commons.svc.cluster.local
+  postgresqlPort: 5432
+  connectorDB: farmer_connector_v2
+  connectorDBUser: farmer_connector_v2_user
+  connectorDBSecret: farmer-connector-v2-db
+  connectorDBUserPasswordKey: password
+  redisHost: commons-redis-master.commons.svc.cluster.local
+  partnerApiService: farmer-registry-partner-api
+imagePullSecrets:
+  - name: ecr-pull-secret
+commonEnv:
+  CONNECTOR_STORE_RUN_PAYLOADS: "false"
+  CONNECTOR_STRICT_INCREMENTAL: "true"
+  CONNECTOR_FULL_SCAN_ON_INCREMENTAL_UNSUPPORTED: "false"
+  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry-development.oanstaging.com
+api:
+  replicaCount: 0
+  autoscaling:
+    enabled: false
+worker:
+  replicaCount: 0
+beat:
+  enabled: false
+consumer:
+  enabled: false
+ui:
+  replicaCount: 0
+postgresCheckerInit:
+  enabled: false
+postgres-init:
+  enabled: false
+istio:
+  enabled: false
+  virtualservice:
+    enabled: false

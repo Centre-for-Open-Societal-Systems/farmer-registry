@@ -68,7 +68,25 @@ def image_root(registry, tag):
     return registry + "/openg2p/farmer-registry"
 
 
-def prepare(values, before, registry, tag):
+def identity_overlay():
+    return load(Path(__file__).resolve().parents[1] / "identity/registry-new-dev.values.yaml")
+
+
+def identity_env(suffix):
+    component = {"staff-portal-ui": "staffUi", "staff-portal-api": "staffApi",
+                 "partner-api": "partnerApi", "celery-worker": "celeryWorker"}.get(suffix)
+    return identity_overlay()["registry"].get(component, {}).get("envVars", {})
+
+
+def merge(target, overlay):
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(target.get(key), dict):
+            merge(target[key], value)
+        else:
+            target[key] = copy.deepcopy(value)
+
+
+def prepare(values, before, registry, tag, migrate_identity=False):
     root = image_root(registry, tag)
     old = index(before)
     if ("Deployment", RELEASE + "-staff-portal-api") not in old:
@@ -101,10 +119,12 @@ def prepare(values, before, registry, tag):
     # Do not turn on new publishing/import jobs in shared Superset by default.
     values["analytics"].setdefault("dashboards", {}).setdefault("enabled", False)
     values.setdefault("mapsContent", {}).setdefault("enabled", False)
+    if migrate_identity:
+        merge(values, identity_overlay())
     return values
 
 
-def validate(before, after, registry, tag):
+def validate(before, after, registry, tag, migrate_identity=False):
     root = image_root(registry, tag)
     old, new = index(before), index(after)
     for key, previous in old.items():
@@ -122,7 +142,10 @@ def validate(before, after, registry, tag):
             for container, variables in old_env.items():
                 for name, value in variables.items():
                     if new_env.get(container, {}).get(name) != value:
-                        raise ValueError(f"Existing environment/Secret reference changed: {key[1]}/{container}/{name}")
+                        suffix = key[1].removeprefix(RELEASE + "-")
+                        approved = identity_env(suffix) if migrate_identity else {}
+                        if name not in approved or new_env.get(container, {}).get(name) != {"name": name, "value": approved[name]}:
+                            raise ValueError(f"Existing environment/Secret reference changed: {key[1]}/{container}/{name}")
             if pod(previous).get("imagePullSecrets", []) != pod(current).get("imagePullSecrets", []):
                 raise ValueError(f"Image-pull credentials changed: {key}")
         if key[0] == "VirtualService" and previous["spec"] != current["spec"]:
@@ -143,6 +166,15 @@ def validate(before, after, registry, tag):
         expected = root + "/" + component + ":" + tag
         if pod(new[key])["containers"][0]["image"] != expected:
             raise ValueError(f"Wrong commit image: {key}")
+    if migrate_identity:
+        for suffix in ("staff-portal-ui", "staff-portal-api", "partner-api", "celery-worker"):
+            current = new[("Deployment", RELEASE + "-" + suffix)]
+            environments = list(envs(current).values())
+            if len(environments) != 1:
+                raise ValueError("Identity migration requires one application container per workload")
+            for name, value in identity_env(suffix).items():
+                if environments[0].get(name) != {"name": name, "value": value}:
+                    raise ValueError(f"Identity migration was not rendered: {suffix}/{name}")
     for key, d in new.items():
         if key[1].startswith(("commons-", "farmer-connector")):
             raise ValueError(f"Registry must not own shared/connector resource: {key}")
@@ -175,6 +207,23 @@ def unchanged_release(before, current):
         raise ValueError("Helm revision/state changed during preflight; rerun against the latest release")
 
 
+def registry_provenance(registry, tag, commit):
+    root = image_root(registry, tag)
+    if not re.fullmatch(r"[0-9a-f]{40}", commit) or not commit.startswith(tag):
+        raise ValueError("Invalid Registry source provenance")
+    images = {}
+    for line in Path("service-outcomes/registry-images.tsv").read_text(encoding="utf-8").splitlines():
+        component, image, digest = line.split("\t")
+        if component not in {c[2] for c in COMPONENTS.values()} or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            raise ValueError("Invalid Registry image provenance")
+        if image != root + "/" + component + ":" + tag or component in images:
+            raise ValueError("Invalid Registry image provenance")
+        images[component] = {"image": image, "digest": digest}
+    if set(images) != {c[2] for c in COMPONENTS.values()}:
+        raise ValueError("Missing Registry image provenance")
+    return images
+
+
 def upgrade_diagnostic(log):
     """Classify Helm errors without echoing arbitrary manifests or secret values."""
     patterns = [
@@ -194,6 +243,15 @@ def upgrade_diagnostic(log):
 
 def main():
     action, *args = sys.argv[1:]
+    migrate_identity = os.environ.get("APPLY_COMMONS_IDENTITY", "false") == "true"
+    if migrate_identity:
+        # No environment drift allowed through a broad guard bypass. Evidence is
+        # bound to the checked-in values and expires after one hour.
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("identity", Path(__file__).resolve().parents[1] / "identity/check.py")
+        identity = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(identity)
+        identity.evidence(os.environ["IDENTITY_EVIDENCE_FILE"])
     if action in ("status", "complete", "upgrade-mode"):
         status = load(args[0])
         state = release_status(status, require_deployed=action == "complete")
@@ -206,11 +264,20 @@ def main():
     elif action == "diagnose":
         for message in upgrade_diagnostic(Path(args[0]).read_text(encoding="utf-8", errors="replace")):
             print("Helm diagnostic: " + message)
+    elif action in ("provenance", "outcome"):
+        commit = os.environ.get("SOURCE_COMMIT", "")
+        images = registry_provenance(os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], commit)
+        if action == "outcome":
+            status = load(args[0])
+            release_status(status, require_deployed=True)
+            Path(args[1]).write_text(json.dumps({"component": RELEASE, "namespace": "farmer",
+                                           "sourceCommit": commit, "images": images,
+                                           "helmRevision": status["version"], "outcome": "deployed"}) + "\n", encoding="utf-8")
     elif action == "prepare":
-        result = prepare(load(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"])
+        result = prepare(load(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], migrate_identity)
         Path(args[2]).write_text(yaml.safe_dump(result, sort_keys=False), encoding="utf-8")
     elif action == "validate":
-        validate(documents(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"])
+        validate(documents(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], migrate_identity)
     else:
         raise ValueError("Unknown deployment action")
     print(f"PASS: dev deployment {action}")
