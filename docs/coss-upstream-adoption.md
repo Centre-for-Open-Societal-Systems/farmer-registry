@@ -88,3 +88,8 @@ or production data migrations were performed for this adoption.
 
 PR #91 remains the single Farmer PR for this change. It is not merged by the
 update, and no additional PR is needed for the adopted repository implementation.
+
+The [PM rollout package](pm-issuer-and-approval-rollout.md) supplies a separately
+owned Commons overlay for the verified issuer, PM/IAM route collision and logout
+issues, with a manifest guard and local PM 1.0.2 lifecycle checks. It does not
+deploy Commons or activate the server connector partner from Farmer CI.

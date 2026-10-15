@@ -15,11 +15,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install --quiet pytest jinja2
+      - run: pip install --quiet pytest jinja2 PyYAML==6.0.2
       - name: openg2p-registry pin lockstep
         run: python -m pytest test/test_rp_pin_lockstep.py -q
       - name: Effective COSS metadata
         run: python -m pytest farmer-extension/tests/test_metadata_effective_layer.py -q
+      - name: Commons PM deployment guard
+        run: python -m pytest test/test_pm_manifest.py -q
       - name: ODK transform
         run: python odk/test_transform.py
       - name: Independent Commons and Registry projects

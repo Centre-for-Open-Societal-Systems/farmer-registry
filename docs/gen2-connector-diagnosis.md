@@ -74,6 +74,11 @@ replays or migrations were performed.
 
 ## Operator repair sequence
 
+The implementation and verified DNS map are in the
+[PM issuer and approval rollout](pm-issuer-and-approval-rollout.md). It includes
+the newly confirmed PM/IAM ingress collision and PM browser logout correction,
+the pinned Helm overlay, manifest guard, and local PM approval evidence.
+
 These are pending server operations, not actions performed during diagnosis.
 Keep the existing Commons Base 2.3.3 / Services 2.3.4-rc.245 releases.
 
