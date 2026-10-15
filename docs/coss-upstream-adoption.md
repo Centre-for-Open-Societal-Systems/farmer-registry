@@ -60,10 +60,20 @@ adoption. Do not copy the previous PR's 13/13 claim into this version's evidence
 Performance-testing files remain identical to the PR base; this change adds no
 performance tests or performance CI jobs.
 
-The 2026-10-15 read-only SSH recheck confirms that dev ODK downloads succeed but
+The earlier 2026-10-15 read-only SSH recheck confirms that dev ODK downloads succeed but
 registry still rejects the unregistered partner. PM issuer configuration and
 schema prerequisites remain unresolved; the Farmer AWE policy is configured.
 See the dated [connector evidence](gen2-connector-diagnosis.md#read-only-recheck-2026-10-15-0335-0336-utc).
+
+Subsequent operator work completed the coordinate/document-history repairs;
+the continuation reverified all 36 coordinate columns, document `event_type`,
+workload recovery and the separate `farmer-connector` Helm owner. After explicit
+shared-catalog approval, dev geography was migrated to COSS/ODK: 346 references
+were mapped and 509 legacy land references preserved. Form publication and live
+ODK approval remain pending. See the
+[current geography rollout and handoff](odk-geography-rollout.md) for aggregate
+evidence, checks, backups and remaining rollout steps. The earlier
+read-only diagnosis is historical, not the current schema state.
 
 ## Deployment work before rollout
 
@@ -83,8 +93,10 @@ The read-only [connector diagnosis](gen2-connector-diagnosis.md),
 [seed diagnosis](gen2-db-seed-diagnosis.md) and `ci/gen2/` preflight/schema tools
 are retained from #91 as operator references. PM issuer/partner onboarding,
 coordinate and document-history schema prerequisites, and existing seed-data
-repair remain server operations. No SSH writes, deployments, connector replays
-or production data migrations were performed for this adoption.
+repair remain separately managed server operations. The initial architecture
+adoption itself performed no server writes; later dev schema and approved shared
+geography migrations are recorded in the continuation linked above. No connector
+replay or ODK publication is established by the architecture adoption.
 
 PR #91 remains the single Farmer PR for this change. It is not merged by the
 update, and no additional PR is needed for the adopted repository implementation.

@@ -241,8 +241,8 @@ choices_kebele,10204888008,Soloda,1,102,10204
 choices_kebele,10204888015,Tahtay Logomti,1,102,10204
 choices_kebele,10204888002,Wedi Keshi,1,102,10204
 choices_kebele,10204888012,Weyenti,1,102,10204
-choices_kebele,10204101001,Yeha,1,102,10204
-choices_kebele,10204888005,Yeha,1,102,10204
+choices_kebele,10204101001,Yeha (ET010204101001),1,102,10204
+choices_kebele,10204888005,Yeha (ET010204888005),1,102,10204
 choices_kebele,10205888003,Aditsehafi,1,102,10205
 choices_kebele,10205888008,Awleo,1,102,10205
 choices_kebele,10205888011,Debre Kal,1,102,10205
@@ -379,8 +379,8 @@ choices_kebele,10301888012,Mereta,1,103,10301
 choices_kebele,10301888010,Mezaber,1,103,10301
 choices_kebele,10301888011,Rigebaye Medebaye,1,103,10301
 choices_kebele,10301888009,Shewit Lemelem,1,103,10301
-choices_kebele,10301301001,Sobeya,1,103,10301
-choices_kebele,10301888004,Sobeya,1,103,10301
+choices_kebele,10301301001,Sobeya (ET010301301001),1,103,10301
+choices_kebele,10301888004,Sobeya (ET010301888004),1,103,10301
 choices_kebele,10301101001,Zalanbesa,1,103,10301
 choices_kebele,10302888006,Agerelokoma,1,103,10302
 choices_kebele,10302888003,Alitena,1,103,10302
@@ -452,12 +452,12 @@ choices_kebele,10306888005,Laelay Adekesandid,1,103,10306
 choices_kebele,10306888015,Mahiber Weyni,1,103,10306
 choices_kebele,10306888017,Mesanu,1,103,10306
 choices_kebele,10306888012,Mykuha,1,103,10306
-choices_kebele,10306301001,Negash,1,103,10306
-choices_kebele,10306888004,Negash,1,103,10306
+choices_kebele,10306301001,Negash (ET010306301001),1,103,10306
+choices_kebele,10306888004,Negash (ET010306888004),1,103,10306
 choices_kebele,10306888006,Tahitay Adekesandid,1,103,10306
 choices_kebele,10306888003,Tsaeda Naele,1,103,10306
-choices_kebele,10306201001,Tsigereda,1,103,10306
-choices_kebele,10306888011,Tsigereda,1,103,10306
+choices_kebele,10306201001,Tsigereda (ET010306201001),1,103,10306
+choices_kebele,10306888011,Tsigereda (ET010306888011),1,103,10306
 choices_kebele,10307888012,Adi Mesanu,1,103,10307
 choices_kebele,10307888010,Barka Adisbha,1,103,10307
 choices_kebele,10307301001,Dera,1,103,10307
@@ -589,8 +589,8 @@ choices_kebele,10403888016,Korme,1,104,10406
 choices_kebele,10403301001,Kukufto,1,104,10406
 choices_kebele,10403888014,Maru,1,104,10406
 choices_kebele,10403101001,Mehoni Ketema,1,104,10406
-choices_kebele,10403401001,Menchare,1,104,10406
-choices_kebele,10403888004,Menchare,1,104,10406
+choices_kebele,10403401001,Menchare (ET010403401001),1,104,10406
+choices_kebele,10403888004,Menchare (ET010403888004),1,104,10406
 choices_kebele,10403888001,Tsga,1,104,10406
 choices_kebele,10403888017,Ulaga,1,104,10406
 choices_kebele,10403888006,Wargba,1,104,10406
@@ -867,8 +867,8 @@ choices_kebele,20104888001,Allassabolo,2,201,20104
 choices_kebele,20104888005,Deka,2,201,20104
 choices_kebele,20104888004,Geneti,2,201,20104
 choices_kebele,20104888007,Harrissa,2,201,20104
-choices_kebele,20104101001,Humodoyta,2,201,20104
-choices_kebele,20104888002,Humodoyta,2,201,20104
+choices_kebele,20104101001,Humodoyta (ET020104101001),2,201,20104
+choices_kebele,20104888002,Humodoyta (ET020104888002),2,201,20104
 choices_kebele,20104888006,Hurrugubi,2,201,20104
 choices_kebele,20104888003,Mego,2,201,20104
 choices_kebele,20105888014,Adaytu,2,201,20105
@@ -1019,8 +1019,8 @@ choices_kebele,20206888009,Mao,2,202,20206
 choices_kebele,20206888010,Sebiba,2,202,20206
 choices_kebele,20206888008,Sinbelele,2,202,20206
 choices_kebele,20207888008,Adihela,2,202,20207
-choices_kebele,20207101001,Aligenda,2,202,20207
-choices_kebele,20207888009,Aligenda,2,202,20207
+choices_kebele,20207101001,Aligenda (ET020207101001),2,202,20207
+choices_kebele,20207888009,Aligenda (ET020207888009),2,202,20207
 choices_kebele,20207888002,Argale,2,202,20207
 choices_kebele,20207888004,Ayturaha,2,202,20207
 choices_kebele,20207888003,Dabure,2,202,20207
@@ -1661,8 +1661,8 @@ choices_kebele,30208401001,Koma,3,302,30207
 choices_kebele,30208888041,Kometseabej,3,302,30207
 choices_kebele,30208888029,Lebet Eslam Hager,3,302,30207
 choices_kebele,30207888020,Leuele Semira,3,302,30207
-choices_kebele,30208101001,Lewaye,3,302,30207
-choices_kebele,30208888009,Lewaye,3,302,30207
+choices_kebele,30208101001,Lewaye (ET030208101001),3,302,30207
+choices_kebele,30208888009,Lewaye (ET030208888009),3,302,30207
 choices_kebele,30208888001,Licha,3,302,30207
 choices_kebele,30208301001,Licha Sinehiwote,3,302,30207
 choices_kebele,30208888035,Lmon,3,302,30207
@@ -1780,8 +1780,8 @@ choices_kebele,30211888008,Woybla Goref,3,302,30212
 choices_kebele,30211888012,Wukro,3,302,30212
 choices_kebele,30215888002,Adisgie,3,302,30213
 choices_kebele,30215888010,Adiya,3,302,30213
-choices_kebele,30215101001,Agisa,3,302,30213
-choices_kebele,30215888005,Agisa,3,302,30213
+choices_kebele,30215101001,Agisa (ET030215101001),3,302,30213
+choices_kebele,30215888005,Agisa (ET030215888005),3,302,30213
 choices_kebele,30215888006,Aja,3,302,30213
 choices_kebele,30215888003,Debirtekilehayimanot,3,302,30213
 choices_kebele,30215888007,Eyadawuliha,3,302,30213
@@ -1881,8 +1881,8 @@ choices_kebele,30302888034,Mito,3,303,30302
 choices_kebele,30302888010,Rama,3,303,30302
 choices_kebele,30302101001,Robit,3,303,30302
 choices_kebele,30302888015,Shewech,3,303,30302
-choices_kebele,30302301001,Tekulesh,3,303,30302
-choices_kebele,30302888017,Tekulesh,3,303,30302
+choices_kebele,30302301001,Tekulesh (ET030302301001),3,303,30302
+choices_kebele,30302888017,Tekulesh (ET030302888017),3,303,30302
 choices_kebele,30302888027,Weremgna,3,303,30302
 choices_kebele,30302888041,Werkie,3,303,30302
 choices_kebele,30302888042,Yaya,3,303,30302
@@ -1982,8 +1982,8 @@ choices_kebele,30307301001,Beklomanekiya,3,303,30307
 choices_kebele,30307888002,Bethehara,3,303,30307
 choices_kebele,30307888006,Debot,3,303,30307
 choices_kebele,30307888030,Dengola,3,303,30307
-choices_kebele,30307401001,Derogbr,3,303,30307
-choices_kebele,30307888015,Derogbr,3,303,30307
+choices_kebele,30307401001,Derogbr (ET030307401001),3,303,30307
+choices_kebele,30307888015,Derogbr (ET030307888015),3,303,30307
 choices_kebele,30307888020,Dihawedih,3,303,30307
 choices_kebele,30307888027,Ezet,3,303,30307
 choices_kebele,30307888023,Gebre Amba,3,303,30307
@@ -2039,8 +2039,8 @@ choices_kebele,30308888016,Kule,3,303,30308
 choices_kebele,30308888032,Mehalamba,3,303,30308
 choices_kebele,30308888017,Menentela,3,303,30308
 choices_kebele,30308888018,Merto,3,303,30308
-choices_kebele,30308301001,Sirinka 03,3,303,30308
-choices_kebele,30308888002,Sirinka 03,3,303,30308
+choices_kebele,30308301001,Sirinka 03 (ET030308301001),3,303,30308
+choices_kebele,30308888002,Sirinka 03 (ET030308888002),3,303,30308
 choices_kebele,30308888015,Teteyiti,3,303,30308
 choices_kebele,30308888009,Tilfe,3,303,30308
 choices_kebele,30308888030,Waytekilo,3,303,30308
@@ -2153,8 +2153,8 @@ choices_kebele,30425888001,Kilkilo,3,304,30401
 choices_kebele,30425888007,Loko,3,304,30401
 choices_kebele,30425101001,Medina,3,304,30401
 choices_kebele,30402888016,Aba Mella,3,304,30402
-choices_kebele,30402501001,Ababoru,3,304,30402
-choices_kebele,30402888024,Ababoru,3,304,30402
+choices_kebele,30402501001,Ababoru (ET030402501001),3,304,30402
+choices_kebele,30402888024,Ababoru (ET030402888024),3,304,30402
 choices_kebele,30402201001,Ajebare 01,3,304,30402
 choices_kebele,30402888020,Amba Mariam(05),3,304,30402
 choices_kebele,30402301001,Ambamariam 01,3,304,30402
@@ -2165,8 +2165,8 @@ choices_kebele,30402888007,Chacha,3,304,30402
 choices_kebele,30402888014,Chelemi,3,304,30402
 choices_kebele,30402888021,Chihna,3,304,30402
 choices_kebele,30402888010,Debek,3,304,30402
-choices_kebele,30402401001,Fito,3,304,30402
-choices_kebele,30402888019,Fito,3,304,30402
+choices_kebele,30402401001,Fito (ET030402401001),3,304,30402
+choices_kebele,30402888019,Fito (ET030402888019),3,304,30402
 choices_kebele,30402888012,Gafa,3,304,30402
 choices_kebele,30402888032,Gaya,3,304,30402
 choices_kebele,30402888031,Haroge,3,304,30402
@@ -2242,8 +2242,8 @@ choices_kebele,30405888009,Amemo,3,304,30405
 choices_kebele,30405888016,Bededo,3,304,30405
 choices_kebele,30405888018,Gedera,3,304,30405
 choices_kebele,30405888007,Gobeya,3,304,30405
-choices_kebele,30405401001,Hara,3,304,30405
-choices_kebele,30405888011,Hara,3,304,30405
+choices_kebele,30405401001,Hara (ET030405401001),3,304,30405
+choices_kebele,30405888011,Hara (ET030405888011),3,304,30405
 choices_kebele,30405888012,Hardbo,3,304,30405
 choices_kebele,30405888014,Hitecha,3,304,30405
 choices_kebele,30405888005,Jari,3,304,30405
@@ -2501,8 +2501,8 @@ choices_kebele,30412401001,Abeya bar,3,304,30412
 choices_kebele,30412201001,Bili,3,304,30412
 choices_kebele,30412301001,Mudalil,3,304,30412
 choices_kebele,30412501001,Tewa,3,304,30412
-choices_kebele,30413401001,Abetweha,3,304,30413
-choices_kebele,30413888026,Abetweha,3,304,30413
+choices_kebele,30413401001,Abetweha (ET030413401001),3,304,30413
+choices_kebele,30413888026,Abetweha (ET030413888026),3,304,30413
 choices_kebele,30413888029,Adis Amba(019),3,304,30413
 choices_kebele,30413888014,Aleltu(04),3,304,30413
 choices_kebele,30413888030,Anarat(013),3,304,30413
@@ -2552,13 +2552,13 @@ choices_kebele,30414888018,Bilew,3,304,30414
 choices_kebele,30414888014,Boren,3,304,30414
 choices_kebele,30414888012,Ejerty,3,304,30414
 choices_kebele,30414888016,Elshama,3,304,30414
-choices_kebele,30414201001,Faji,3,304,30414
-choices_kebele,30414888003,Faji,3,304,30414
+choices_kebele,30414201001,Faji (ET030414201001),3,304,30414
+choices_kebele,30414888003,Faji (ET030414888003),3,304,30414
 choices_kebele,30414888013,Gerbo,3,304,30414
 choices_kebele,30414888005,Katari,3,304,30414
 choices_kebele,30414888022,Kebena,3,304,30414
-choices_kebele,30414401001,Keyafer,3,304,30414
-choices_kebele,30414888019,Keyafer,3,304,30414
+choices_kebele,30414401001,Keyafer (ET030414401001),3,304,30414
+choices_kebele,30414888019,Keyafer (ET030414888019),3,304,30414
 choices_kebele,30414888007,Kubi,3,304,30414
 choices_kebele,30414888020,Leshetie,3,304,30414
 choices_kebele,30414888015,Micha,3,304,30414
@@ -3101,8 +3101,8 @@ choices_kebele,30519888027,Goshu Hager,3,305,30519
 choices_kebele,30519101001,Gudoberet Ketema 01,3,305,30519
 choices_kebele,30519888009,Gudoberetzuria,3,305,30519
 choices_kebele,30519888005,Kasima,3,305,30519
-choices_kebele,30519201001,Keyit,3,305,30519
-choices_kebele,30519888026,Keyit,3,305,30519
+choices_kebele,30519201001,Keyit (ET030519201001),3,305,30519
+choices_kebele,30519888026,Keyit (ET030519888026),3,305,30519
 choices_kebele,30519888022,Kormargefya(a),3,305,30519
 choices_kebele,30519888001,Mati,3,305,30519
 choices_kebele,30519888011,Mehalamba,3,305,30519
@@ -3157,8 +3157,8 @@ choices_kebele,30523888005,Esat Anba Melelafto,3,305,30523
 choices_kebele,30523888011,Gashu Anba,3,305,30523
 choices_kebele,30523888008,Gozegozana Motelemy,3,305,30523
 choices_kebele,30523888006,Rome,3,305,30523
-choices_kebele,30523201001,Saya Debir,3,305,30523
-choices_kebele,30523888010,Saya Debir,3,305,30523
+choices_kebele,30523201001,Saya Debir (ET030523201001),3,305,30523
+choices_kebele,30523888010,Saya Debir (ET030523888010),3,305,30523
 choices_kebele,30523888009,Senketana Wekr,3,305,30523
 choices_kebele,30523888012,Welle Deneba,3,305,30523
 choices_kebele,30524101003,Kebele _02,3,305,30524
@@ -3250,8 +3250,8 @@ choices_kebele,30603888011,Angot,3,306,30603
 choices_kebele,30603888032,Barijano Akababi,3,306,30603
 choices_kebele,30603888034,Buza Yimerat,3,306,30603
 choices_kebele,30603888023,Chemo Yigagira,3,306,30603
-choices_kebele,30603301001,Debere Berhan,3,306,30603
-choices_kebele,30603888024,Debere Berhan,3,306,30603
+choices_kebele,30603301001,Debere Berhan (ET030603301001),3,306,30603
+choices_kebele,30603888024,Debere Berhan (ET030603888024),3,306,30603
 choices_kebele,30603888022,Debere Yaqob,3,306,30603
 choices_kebele,30603888030,Debire Birhan,3,306,30603
 choices_kebele,30603888031,Debre Gent,3,306,30603
@@ -3314,8 +3314,8 @@ choices_kebele,30604888011,Finote Birhan,3,306,30604
 choices_kebele,30604888006,Gebre Giyorgis,3,306,30604
 choices_kebele,30604101001,Hagere Egziabher,3,306,30604
 choices_kebele,30604888020,Hagere Genet,3,306,30604
-choices_kebele,30604301001,Hagere Selam,3,306,30604
-choices_kebele,30604888029,Hagere Selam,3,306,30604
+choices_kebele,30604301001,Hagere Selam (ET030604301001),3,306,30604
+choices_kebele,30604888029,Hagere Selam (ET030604888029),3,306,30604
 choices_kebele,30604888032,Liul,3,306,30604
 choices_kebele,30604888003,Mekane Genet,3,306,30604
 choices_kebele,30604888025,Melabesha,3,306,30604
@@ -3344,8 +3344,8 @@ choices_kebele,30605888006,Eneshegn,3,306,30605
 choices_kebele,30605888024,Engena Fentaregie,3,306,30605
 choices_kebele,30605101001,Felege Birhan,3,306,30605
 choices_kebele,30605888005,Felege Zachena,3,306,30605
-choices_kebele,30605401001,Gedeb,3,306,30605
-choices_kebele,30605888023,Gedeb,3,306,30605
+choices_kebele,30605401001,Gedeb (ET030605401001),3,306,30605
+choices_kebele,30605888023,Gedeb (ET030605888023),3,306,30605
 choices_kebele,30605888020,Golokma,3,306,30605
 choices_kebele,30605888001,Koso Zira,3,306,30605
 choices_kebele,30605888008,Mariam Tagibagn Anguata,3,306,30605
@@ -3353,8 +3353,8 @@ choices_kebele,30605888014,Metaya Enadera,3,306,30605
 choices_kebele,30605888009,Newaye Mariam Enebelew,3,306,30605
 choices_kebele,30605888022,Soma Gelawudiwes,3,306,30605
 choices_kebele,30605888015,Tamo Dewaro,3,306,30605
-choices_kebele,30605301001,Tenguma,3,306,30605
-choices_kebele,30605888027,Tenguma,3,306,30605
+choices_kebele,30605301001,Tenguma (ET030605301001),3,306,30605
+choices_kebele,30605888027,Tenguma (ET030605888027),3,306,30605
 choices_kebele,30605888011,Titar Badma Yzuar,3,306,30605
 choices_kebele,30605888002,Wefit,3,306,30605
 choices_kebele,30605888012,Yedit,3,306,30605
@@ -3419,12 +3419,12 @@ choices_kebele,30608888006,Debre Elias Zuria,3,306,30608
 choices_kebele,30608888009,Degolima,3,306,30608
 choices_kebele,30608888015,Dejiba,3,306,30608
 choices_kebele,30608888003,Gibtsawit,3,306,30608
-choices_kebele,30608201001,Gofichima,3,306,30608
-choices_kebele,30608888008,Gofichima,3,306,30608
-choices_kebele,30608301001,Guay,3,306,30608
-choices_kebele,30608888011,Guay,3,306,30608
-choices_kebele,30608401001,Jabie Genet,3,306,30608
-choices_kebele,30608888014,Jabie Genet,3,306,30608
+choices_kebele,30608201001,Gofichima (ET030608201001),3,306,30608
+choices_kebele,30608888008,Gofichima (ET030608888008),3,306,30608
+choices_kebele,30608301001,Guay (ET030608301001),3,306,30608
+choices_kebele,30608888011,Guay (ET030608888011),3,306,30608
+choices_kebele,30608401001,Jabie Genet (ET030608401001),3,306,30608
+choices_kebele,30608888014,Jabie Genet (ET030608888014),3,306,30608
 choices_kebele,30608101002,Kebele 01,3,306,30608
 choices_kebele,30608101001,Kebele 02,3,306,30608
 choices_kebele,30608888012,Tija Goter,3,306,30608
@@ -3468,8 +3468,8 @@ choices_kebele,30610201001,Aba Libanose,3,306,30610
 choices_kebele,30610888012,Adisna Gulit,3,306,30610
 choices_kebele,30610888013,Aseb Abo,3,306,30610
 choices_kebele,30610888020,Balaref,3,306,30610
-choices_kebele,30610401001,Chertekel,3,306,30610
-choices_kebele,30610888021,Chertekel,3,306,30610
+choices_kebele,30610401001,Chertekel (ET030610401001),3,306,30610
+choices_kebele,30610888021,Chertekel (ET030610888021),3,306,30610
 choices_kebele,30610888010,Chimbored,3,306,30610
 choices_kebele,30610888025,Chimet,3,306,30610
 choices_kebele,30610888023,Deledel,3,306,30610
@@ -3489,8 +3489,8 @@ choices_kebele,30610888001,Weynima Geremo,3,306,30610
 choices_kebele,30610888022,Woger,3,306,30610
 choices_kebele,30610888011,Wonka,3,306,30610
 choices_kebele,30610888015,Yebo Arjena,3,306,30610
-choices_kebele,30610101001,Yebokela,3,306,30610
-choices_kebele,30610888006,Yebokela,3,306,30610
+choices_kebele,30610101001,Yebokela (ET030610101001),3,306,30610
+choices_kebele,30610888006,Yebokela (ET030610888006),3,306,30610
 choices_kebele,30610888004,Yegagena,3,306,30610
 choices_kebele,30610888009,Yenebrna Ena Yegobena,3,306,30610
 choices_kebele,30610888002,Yetijan,3,306,30610
@@ -3507,16 +3507,16 @@ choices_kebele,30611888015,Enetmen,3,306,30611
 choices_kebele,30611888014,Gobetma,3,306,30611
 choices_kebele,30611888018,Gundelmit,3,306,30611
 choices_kebele,30611888021,Komi_zemi,3,306,30611
-choices_kebele,30611301001,Kork,3,306,30611
-choices_kebele,30611888012,Kork,3,306,30611
+choices_kebele,30611301001,Kork (ET030611301001),3,306,30611
+choices_kebele,30611888012,Kork (ET030611888012),3,306,30611
 choices_kebele,30611888005,Lemechem,3,306,30611
 choices_kebele,30611888002,Michig,3,306,30611
 choices_kebele,30611888009,Yedug,3,306,30611
 choices_kebele,30611888004,Yegelawu,3,306,30611
 choices_kebele,30611101002,Yejubie_01,3,306,30611
 choices_kebele,30611101001,Yejubie_02,3,306,30611
-choices_kebele,30611201001,Yelamgej,3,306,30611
-choices_kebele,30611888017,Yelamgej,3,306,30611
+choices_kebele,30611201001,Yelamgej (ET030611201001),3,306,30611
+choices_kebele,30611888017,Yelamgej (ET030611888017),3,306,30611
 choices_kebele,30611888003,Yelemelem,3,306,30611
 choices_kebele,30611888011,Yensicha,3,306,30611
 choices_kebele,30611888020,Zemboli_yechara,3,306,30611
@@ -3573,8 +3573,8 @@ choices_kebele,30613888010,Tik,3,306,30613
 choices_kebele,30613888001,Tirchi Jeba,3,306,30613
 choices_kebele,30613888007,Weblat Getem,3,306,30613
 choices_kebele,30613888006,Yenagnat Lagene,3,306,30613
-choices_kebele,30613301001,Yetnora,3,306,30613
-choices_kebele,30613888011,Yetnora,3,306,30613
+choices_kebele,30613301001,Yetnora (ET030613301001),3,306,30613
+choices_kebele,30613888011,Yetnora (ET030613888011),3,306,30613
 choices_kebele,30613888014,Zemetn Amber Enabur,3,306,30613
 choices_kebele,30614888018,Abara,3,306,30614
 choices_kebele,30614888020,Abasilma,3,306,30614
@@ -3865,8 +3865,8 @@ choices_kebele,30710888011,Alefa,3,307,30710
 choices_kebele,30710888005,Arebisi Menfesawit,3,307,30710
 choices_kebele,30710888019,Bokotabo,3,307,30710
 choices_kebele,30710888010,Denbun,3,307,30710
-choices_kebele,30710201001,Fetam Sontom,3,307,30710
-choices_kebele,30710888018,Fetam Sontom,3,307,30710
+choices_kebele,30710201001,Fetam Sontom (ET030710201001),3,307,30710
+choices_kebele,30710888018,Fetam Sontom (ET030710888018),3,307,30710
 choices_kebele,30710888015,Fezel,3,307,30710
 choices_kebele,30710888017,Gedam Lejamor,3,307,30710
 choices_kebele,30710888012,Gulem Denjin,3,307,30710
@@ -3957,8 +3957,8 @@ choices_kebele,30807888005,Sereal,3,308,30802
 choices_kebele,30807888017,Shimdir,3,308,30802
 choices_kebele,30807201001,Siryel,3,308,30802
 choices_kebele,30807888020,Tiya,3,308,30802
-choices_kebele,30807101001,Tsemera,3,308,30802
-choices_kebele,30807888003,Tsemera,3,308,30802
+choices_kebele,30807101001,Tsemera (ET030807101001),3,308,30802
+choices_kebele,30807888003,Tsemera (ET030807888003),3,308,30802
 choices_kebele,30807888019,Wolehe,3,308,30802
 choices_kebele,30807888002,Zuna,3,308,30802
 choices_kebele,30803101001,01 Amdewerk,3,308,30803
@@ -3966,8 +3966,8 @@ choices_kebele,30803888029,Abam,3,308,30803
 choices_kebele,30803888016,Ayinmaryam,3,308,30803
 choices_kebele,30803888023,Azilla,3,308,30803
 choices_kebele,30803888013,Biribira,3,308,30803
-choices_kebele,30803201001,Chila,3,308,30803
-choices_kebele,30803888010,Chila,3,308,30803
+choices_kebele,30803201001,Chila (ET030803201001),3,308,30803
+choices_kebele,30803888010,Chila (ET030803888010),3,308,30803
 choices_kebele,30803888026,Chirguz,3,308,30803
 choices_kebele,30803888003,Diba,3,308,30803
 choices_kebele,30803888019,Dida,3,308,30803
@@ -3978,8 +3978,8 @@ choices_kebele,30803888024,Gomenge,3,308,30803
 choices_kebele,30803888022,Guld,3,308,30803
 choices_kebele,30803888020,Guramba,3,308,30803
 choices_kebele,30803888015,Ketema Zuriya,3,308,30803
-choices_kebele,30803301001,Kozba,3,308,30803
-choices_kebele,30803888009,Kozba,3,308,30803
+choices_kebele,30803301001,Kozba (ET030803301001),3,308,30803
+choices_kebele,30803888009,Kozba (ET030803888009),3,308,30803
 choices_kebele,30803888004,Menshewa,3,308,30803
 choices_kebele,30803888025,Seramire,3,308,30803
 choices_kebele,30803888011,Shimamidan,3,308,30803
@@ -4057,8 +4057,8 @@ choices_kebele,30808888001,Etikinu,3,308,30808
 choices_kebele,30808888002,Mikun,3,308,30808
 choices_kebele,30808888005,Selamge,3,308,30808
 choices_kebele,30808888003,Shemil Albeta,3,308,30808
-choices_kebele,30808101001,Tsata,3,308,30808
-choices_kebele,30808888008,Tsata,3,308,30808
+choices_kebele,30808101001,Tsata (ET030808101001),3,308,30808
+choices_kebele,30808888008,Tsata (ET030808888008),3,308,30808
 choices_kebele,30808888009,Zanziba,3,308,30808
 choices_kebele,30901888003,Abedra,3,309,30901
 choices_kebele,30901888010,Afesa,3,309,30901
@@ -4151,13 +4151,13 @@ choices_kebele,30904888016,Mota,3,309,30904
 choices_kebele,30904888007,Semen Degera,3,309,30904
 choices_kebele,30904888006,Sigadie,3,309,30904
 choices_kebele,30904888011,Tengeha,3,309,30904
-choices_kebele,30904201001,Tiregi,3,309,30904
-choices_kebele,30904888003,Tiregi,3,309,30904
+choices_kebele,30904201001,Tiregi (ET030904201001),3,309,30904
+choices_kebele,30904888003,Tiregi (ET030904888003),3,309,30904
 choices_kebele,30904888002,Tirubirehan,3,309,30904
 choices_kebele,30904888008,Wayikela,3,309,30904
 choices_kebele,30904888017,Yechereka,3,309,30904
-choices_kebele,30904301001,Yimali,3,309,30904
-choices_kebele,30904888014,Yimali,3,309,30904
+choices_kebele,30904301001,Yimali (ET030904301001),3,309,30904
+choices_kebele,30904888014,Yimali (ET030904888014),3,309,30904
 choices_kebele,30905101002,1,3,309,30905
 choices_kebele,30905101001,2,3,309,30905
 choices_kebele,30905888001,Amen Abo,3,309,30905
@@ -4236,8 +4236,8 @@ choices_kebele,30907888002,Wonjela,3,309,30907
 choices_kebele,30907888008,Wumbriie Fikre Yohanes,3,309,30907
 choices_kebele,30907888001,Zagra,3,309,30907
 choices_kebele,30907888003,Zala,3,309,30907
-choices_kebele,30909301001,Ambela,3,309,30908
-choices_kebele,30909888003,Ambela,3,309,30908
+choices_kebele,30909301001,Ambela (ET030909301001),3,309,30908
+choices_kebele,30909888003,Ambela (ET030909888003),3,309,30908
 choices_kebele,30909888015,Ambera,3,309,30908
 choices_kebele,30909101001,Azena,3,309,30908
 choices_kebele,30909888001,Chaja Giyorgis,3,309,30908
@@ -4276,8 +4276,8 @@ choices_kebele,30908101001,Goha,3,309,30997
 choices_kebele,30908888007,Guder Jawi,3,309,30997
 choices_kebele,30908888009,Guhanaj,3,309,30997
 choices_kebele,30908888002,Gunga Ena Dihi,3,309,30997
-choices_kebele,30908301001,Jemora,3,309,30997
-choices_kebele,30908888011,Jemora,3,309,30997
+choices_kebele,30908301001,Jemora (ET030908301001),3,309,30997
+choices_kebele,30908888011,Jemora (ET030908888011),3,309,30997
 choices_kebele,30908888004,Kulie,3,309,30997
 choices_kebele,30908888010,Nana Chebela,3,309,30997
 choices_kebele,30908888016,Sas Dubakicha,3,309,30997
@@ -4318,8 +4318,8 @@ choices_kebele,31001888023,Ketema Gula,3,310,31001
 choices_kebele,31001888019,Rike Gelana,3,310,31001
 choices_kebele,31001888009,Selama,3,310,31001
 choices_kebele,31001888004,Serte,3,310,31001
-choices_kebele,31001301001,Shekla,3,310,31001
-choices_kebele,31001888008,Shekla,3,310,31001
+choices_kebele,31001301001,Shekla (ET031001301001),3,310,31001
+choices_kebele,31001888008,Shekla (ET031001888008),3,310,31001
 choices_kebele,31001888001,Sitr,3,310,31001
 choices_kebele,31001888014,Teref,3,310,31001
 choices_kebele,31001888022,Tsigie Gula,3,310,31001
@@ -4408,8 +4408,8 @@ choices_kebele,31005888003,Buraksa,3,310,31005
 choices_kebele,31005888007,Dinkye,3,310,31005
 choices_kebele,31005888002,Dire,3,310,31005
 choices_kebele,31005888006,Gubesa,3,310,31005
-choices_kebele,31005201001,Harewa,3,310,31005
-choices_kebele,31005888004,Harewa,3,310,31005
+choices_kebele,31005201001,Harewa (ET031005201001),3,310,31005
+choices_kebele,31005888004,Harewa (ET031005888004),3,310,31005
 choices_kebele,31005888010,Kerebo Gende Dewe,3,310,31005
 choices_kebele,31005888008,Medine Kunyo,3,310,31005
 choices_kebele,31005888001,Tulu Bofa,3,310,31005
@@ -4456,19 +4456,19 @@ choices_kebele,31501888009,Bura,3,311,31107
 choices_kebele,31501888011,Dawuchena,3,311,31107
 choices_kebele,31501888006,Deganadir,3,311,31107
 choices_kebele,31501888007,Degazana,3,311,31107
-choices_kebele,31501101001,Ergoye,3,311,31107
-choices_kebele,31501888003,Ergoye,3,311,31107
+choices_kebele,31501101001,Ergoye (ET031501101001),3,311,31107
+choices_kebele,31501888003,Ergoye (ET031501888003),3,311,31107
 choices_kebele,31501888016,Gebriel,3,311,31107
-choices_kebele,31501201001,Gulkuakirakir,3,311,31107
-choices_kebele,31501888012,Gulkuakirakir,3,311,31107
+choices_kebele,31501201001,Gulkuakirakir (ET031501201001),3,311,31107
+choices_kebele,31501888012,Gulkuakirakir (ET031501888012),3,311,31107
 choices_kebele,31501888002,Kishagonderdeyo,3,311,31107
 choices_kebele,31501888008,Kolazana,3,311,31107
 choices_kebele,31501888010,Mayagam,3,311,31107
 choices_kebele,31501888005,Sarna,3,311,31107
 choices_kebele,31501888015,Sheni,3,311,31107
 choices_kebele,31501888017,Sifraleka,3,311,31107
-choices_kebele,31501301001,Soroka,3,311,31107
-choices_kebele,31501888004,Soroka,3,311,31107
+choices_kebele,31501301001,Soroka (ET031501301001),3,311,31107
+choices_kebele,31501888004,Soroka (ET031501888004),3,311,31107
 choices_kebele,31501888013,Wukro,3,311,31107
 choices_kebele,31501888014,Zigba,3,311,31107
 choices_kebele,31502101002,01 Tikil Dingay,3,311,31108
@@ -4627,8 +4627,8 @@ choices_kebele,31505888018,Wangie Tegana,3,311,31115
 choices_kebele,31505888015,Wondelef,3,311,31115
 choices_kebele,31505888012,Zeker,3,311,31115
 choices_kebele,31508888003,Abay,3,311,31120
-choices_kebele,31508301001,Asherie,3,311,31120
-choices_kebele,31508888005,Asherie,3,311,31120
+choices_kebele,31508301001,Asherie (ET031508301001),3,311,31120
+choices_kebele,31508888005,Asherie (ET031508888005),3,311,31120
 choices_kebele,31508888017,Banble,3,311,31120
 choices_kebele,31508888014,Berberseg,3,311,31120
 choices_kebele,31508888018,Bifegn Kebele,3,311,31120
@@ -4653,13 +4653,13 @@ choices_kebele,31508888029,Kurbi,3,311,31120
 choices_kebele,31508888036,Ledaho,3,311,31120
 choices_kebele,31508888033,Mahin,3,311,31120
 choices_kebele,31508888020,Mala,3,311,31120
-choices_kebele,31508401001,Masero Denb,3,311,31120
-choices_kebele,31508888024,Masero Denb,3,311,31120
+choices_kebele,31508401001,Masero Denb (ET031508401001),3,311,31120
+choices_kebele,31508888024,Masero Denb (ET031508888024),3,311,31120
 choices_kebele,31508888016,Mayinegad,3,311,31120
 choices_kebele,31508888022,Mayizazie,3,311,31120
 choices_kebele,31508888030,Merina,3,311,31120
-choices_kebele,31508201001,Musebanb,3,311,31120
-choices_kebele,31508888031,Musebanb,3,311,31120
+choices_kebele,31508201001,Musebanb (ET031508201001),3,311,31120
+choices_kebele,31508888031,Musebanb (ET031508888031),3,311,31120
 choices_kebele,31508101002,Sanja,3,311,31120
 choices_kebele,31508888023,Sanki,3,311,31120
 choices_kebele,31508888025,Sefi Bahir,3,311,31120
@@ -4755,8 +4755,8 @@ choices_kebele,31604888003,Mesheha,3,312,31213
 choices_kebele,31604401001,Mesheha Ketema,3,312,31213
 choices_kebele,31604888017,Shashgie,3,312,31213
 choices_kebele,31604888002,Shimelegara Tagur,3,312,31213
-choices_kebele,31604101001,Shinfa,3,312,31213
-choices_kebele,31604888022,Shinfa,3,312,31213
+choices_kebele,31604101001,Shinfa (ET031604101001),3,312,31213
+choices_kebele,31604888022,Shinfa (ET031604888022),3,312,31213
 choices_kebele,31604301001,Tumet,3,312,31213
 choices_kebele,31604888023,Tumet Mendoka,3,312,31213
 choices_kebele,31604888008,Zebach Bahir,3,312,31213
@@ -4770,8 +4770,8 @@ choices_kebele,31603888014,Bermil,3,312,31214
 choices_kebele,31603888010,Bignagna,3,312,31214
 choices_kebele,31603888007,Daza,3,312,31214
 choices_kebele,31603888013,Diza Gumiz,3,312,31214
-choices_kebele,31603201001,Dubaba,3,312,31214
-choices_kebele,31603888009,Dubaba,3,312,31214
+choices_kebele,31603201001,Dubaba (ET031603201001),3,312,31214
+choices_kebele,31603888009,Dubaba (ET031603888009),3,312,31214
 choices_kebele,31603101001,Gelegu Ketema,3,312,31214
 choices_kebele,31603888017,Geter Gelego,3,312,31214
 choices_kebele,31603888024,Kinebi,3,312,31214
@@ -4805,8 +4805,8 @@ choices_kebele,31701888005,Bizra_tuda,3,313,31301
 choices_kebele,31301888001,Boru Meda,3,313,31301
 choices_kebele,31301888002,Boru Silassie(014),3,313,31301
 choices_kebele,31701888001,Chanmar_dusman,3,313,31301
-choices_kebele,31701401001,Chinba,3,313,31301
-choices_kebele,31701888013,Chinba,3,313,31301
+choices_kebele,31701401001,Chinba (ET031701401001),3,313,31301
+choices_kebele,31701888013,Chinba (ET031701888013),3,313,31301
 choices_kebele,31701888006,Dembola,3,313,31301
 choices_kebele,31701888009,Estumit,3,313,31301
 choices_kebele,31701888008,Forhe_eyesus,3,313,31301
@@ -5966,8 +5966,8 @@ choices_kebele,40209888008,Bakanisa Becheru,4,402,40209
 choices_kebele,40209888001,Bako Jima,4,402,40209
 choices_kebele,40209888006,Baro Tita,4,402,40209
 choices_kebele,40209888018,Bikilal,4,402,40209
-choices_kebele,40209301001,Bujura Amuma,4,402,40209
-choices_kebele,40209888007,Bujura Amuma,4,402,40209
+choices_kebele,40209301001,Bujura Amuma (ET040209301001),4,402,40209
+choices_kebele,40209888007,Bujura Amuma (ET040209888007),4,402,40209
 choices_kebele,40209888009,Burka Talo,4,402,40209
 choices_kebele,40209888013,Chafe Jalale,4,402,40209
 choices_kebele,40209888016,Chari Jarso,4,402,40209
@@ -6041,8 +6041,8 @@ choices_kebele,40211888026,Warakura,4,402,40211
 choices_kebele,40212888017,Abono,4,402,40212
 choices_kebele,40212888004,Allekawisa,4,402,40212
 choices_kebele,40212888013,Badho,4,402,40212
-choices_kebele,40212201001,Bandira,4,402,40212
-choices_kebele,40212888018,Bandira,4,402,40212
+choices_kebele,40212201001,Bandira (ET040212201001),4,402,40212
+choices_kebele,40212888018,Bandira (ET040212888018),4,402,40212
 choices_kebele,40212888015,Batayakin,4,402,40212
 choices_kebele,40212888021,Bolo,4,402,40212
 choices_kebele,40212888003,Digafododo,4,402,40212
@@ -6069,16 +6069,16 @@ choices_kebele,40213888018,Fayinera,4,402,40213
 choices_kebele,40213888012,Fayisa,4,402,40213
 choices_kebele,40213888007,Gadisaoda,4,402,40213
 choices_kebele,40213888015,Gari,4,402,40213
-choices_kebele,40213201001,Horoalaltu,4,402,40213
-choices_kebele,40213888005,Horoalaltu,4,402,40213
+choices_kebele,40213201001,Horoalaltu (ET040213201001),4,402,40213
+choices_kebele,40213888005,Horoalaltu (ET040213888005),4,402,40213
 choices_kebele,40213888010,Jarsotolera,4,402,40213
 choices_kebele,40213888016,Jiregna,4,402,40213
 choices_kebele,40213888013,Kajela,4,402,40213
 choices_kebele,40213888001,Kenaf,4,402,40213
 choices_kebele,40213888017,Kitesa,4,402,40213
 choices_kebele,40213888008,Loko,4,402,40213
-choices_kebele,40213301001,Lugo,4,402,40213
-choices_kebele,40213888006,Lugo,4,402,40213
+choices_kebele,40213301001,Lugo (ET040213301001),4,402,40213
+choices_kebele,40213888006,Lugo (ET040213888006),4,402,40213
 choices_kebele,40213888009,Madajalala,4,402,40213
 choices_kebele,40213888004,Meti,4,402,40213
 choices_kebele,40213888020,Nagasa,4,402,40213
@@ -6406,8 +6406,8 @@ choices_kebele,40310101001,Hurumu 01,4,403,40316
 choices_kebele,40310888012,Ogge,4,403,40316
 choices_kebele,40310888009,Ordin Anto,4,403,40316
 choices_kebele,40310888014,Qeresi,4,403,40316
-choices_kebele,40310201001,Sonta,4,403,40316
-choices_kebele,40310888011,Sonta,4,403,40316
+choices_kebele,40310201001,Sonta (ET040310201001),4,403,40316
+choices_kebele,40310888011,Sonta (ET040310888011),4,403,40316
 choices_kebele,40310888005,Tomma Yobi,4,403,40316
 choices_kebele,40310888003,Wagegne,4,403,40316
 choices_kebele,40310888006,Yobi Dolla,4,403,40316
@@ -7432,9 +7432,9 @@ choices_kebele,40513888005,Suba Kirbe,4,405,40514
 choices_kebele,40513888018,Uko Haro,4,405,40514
 choices_kebele,40513888019,Warke Walensu,4,405,40514
 choices_kebele,40513888020,Werabo,4,405,40514
-choices_kebele,40516101001,1,4,405,40516
-choices_kebele,40516201001,1,4,405,40516
-choices_kebele,40516301001,1,4,405,40516
+choices_kebele,40516101001,1 (ET040516101001),4,405,40516
+choices_kebele,40516201001,1 (ET040516201001),4,405,40516
+choices_kebele,40516301001,1 (ET040516301001),4,405,40516
 choices_kebele,40516888022,Badesa Cando,4,405,40516
 choices_kebele,40516888036,Badesa Danbi,4,405,40516
 choices_kebele,40516888037,Badesa Gajo,4,405,40516
@@ -8526,8 +8526,8 @@ choices_kebele,40809888003,Qoroo Gugu,4,408,40809
 choices_kebele,40809888011,Shabo Shuli,4,408,40809
 choices_kebele,40809888010,Weragu Jawi,4,408,40809
 choices_kebele,40809888009,Yaii Gugu,4,408,40809
-choices_kebele,40810101001,Adele_01,4,408,40810
-choices_kebele,40810888001,Adele_01,4,408,40810
+choices_kebele,40810101001,Adele_01 (ET040810101001),4,408,40810
+choices_kebele,40810888001,Adele_01 (ET040810888001),4,408,40810
 choices_kebele,40810888014,Bamochefa,4,408,40810
 choices_kebele,40810888010,Dinkiti,4,408,40810
 choices_kebele,40810888018,Ebicho,4,408,40810
@@ -8862,8 +8862,8 @@ choices_kebele,40824888002,Limu Lema,4,408,40824
 choices_kebele,40824888009,Mecitu Gotu,4,408,40824
 choices_kebele,40824888008,Mecitu Lema,4,408,40824
 choices_kebele,40824888005,Seletana Changicha,4,408,40824
-choices_kebele,40824101001,Seltana,4,408,40824
-choices_kebele,40824201001,Seltana,4,408,40824
+choices_kebele,40824101001,Seltana (ET040824101001),4,408,40824
+choices_kebele,40824201001,Seltana (ET040824201001),4,408,40824
 choices_kebele,40824888004,Teji Welkite,4,408,40824
 choices_kebele,40824888007,Wabe Kebena,4,408,40824
 choices_kebele,40824888006,Wageda Kecha,4,408,40824
@@ -8882,8 +8882,8 @@ choices_kebele,40825888004,Tulu Keraru,4,408,40893
 choices_kebele,40825888011,Unke,4,408,40893
 choices_kebele,40826101002,Bekoji 01,4,408,40894
 choices_kebele,40826101001,Bekoji 02,4,408,40894
-choices_kebele,40901101001,1,4,409,40901
-choices_kebele,40901201001,1,4,409,40901
+choices_kebele,40901101001,1 (ET040901101001),4,409,40901
+choices_kebele,40901201001,1 (ET040901201001),4,409,40901
 choices_kebele,40901888016,Agemsa Ena Chele,4,409,40901
 choices_kebele,40901888019,Bililo,4,409,40901
 choices_kebele,40901888020,Burayisa Tuqa,4,409,40901
@@ -9146,8 +9146,8 @@ choices_kebele,40909888007,Sororo,4,409,40909
 choices_kebele,40909888024,Tamsay Tupo,4,409,40909
 choices_kebele,40910888004,Ao,4,409,40910
 choices_kebele,40910888018,Arba,4,409,40910
-choices_kebele,40910201001,Boke Gudo,4,409,40910
-choices_kebele,40910888005,Boke Gudo,4,409,40910
+choices_kebele,40910201001,Boke Gudo (ET040910201001),4,409,40910
+choices_kebele,40910888005,Boke Gudo (ET040910888005),4,409,40910
 choices_kebele,40910101001,Boke Tiko,4,409,40910
 choices_kebele,40910888016,Chabi,4,409,40910
 choices_kebele,40910888001,Dera Jambo,4,409,40910
@@ -9184,8 +9184,8 @@ choices_kebele,40911888029,Hakebas,4,409,40911
 choices_kebele,40911888033,Haroreti,4,409,40911
 choices_kebele,40911888005,Ido Beriso,4,409,40911
 choices_kebele,40911888007,Jawis,4,409,40911
-choices_kebele,40911101001,Kara,4,409,40911
-choices_kebele,40911888013,Kara,4,409,40911
+choices_kebele,40911101001,Kara (ET040911101001),4,409,40911
+choices_kebele,40911888013,Kara (ET040911888013),4,409,40911
 choices_kebele,40911888003,Kereyu,4,409,40911
 choices_kebele,40911888008,Kolu,4,409,40911
 choices_kebele,40911888016,Koye,4,409,40911
@@ -10154,8 +10154,8 @@ choices_kebele,41110888002,Hawo,4,411,41110
 choices_kebele,41110888009,Hero,4,411,41110
 choices_kebele,41110888003,Kumbi,4,411,41110
 choices_kebele,41110888012,Makana Gobele,4,411,41110
-choices_kebele,41110201001,Malka Arba,4,411,41110
-choices_kebele,41110888013,Malka Arba,4,411,41110
+choices_kebele,41110201001,Malka Arba (ET041110201001),4,411,41110
+choices_kebele,41110888013,Malka Arba (ET041110888013),4,411,41110
 choices_kebele,41110888005,Shawe,4,411,41110
 choices_kebele,41110888008,Sodu Lalafto,4,411,41110
 choices_kebele,41110888004,Sodu Welmel,4,411,41110
@@ -10219,8 +10219,8 @@ choices_kebele,41212888003,Kulcha,4,412,41212
 choices_kebele,41212201001,Kulcha 01,4,412,41212
 choices_kebele,41212888018,Marmaro,4,412,41212
 choices_kebele,41212888014,Mekkanisa,4,412,41212
-choices_kebele,41212101001,Milami,4,412,41212
-choices_kebele,41212888011,Milami,4,412,41212
+choices_kebele,41212101001,Milami (ET041212101001),4,412,41212
+choices_kebele,41212888011,Milami (ET041212888011),4,412,41212
 choices_kebele,41212888001,Wayu Wando,4,412,41212
 choices_kebele,41210888011,Abunu,4,412,41216
 choices_kebele,41210888006,Arbore,4,412,41216
@@ -10546,8 +10546,8 @@ choices_kebele,41310888003,Kegnira Labu,4,413,41310
 choices_kebele,41310888002,Legay,4,413,41310
 choices_kebele,41310888016,Molahun Sarity,4,413,41310
 choices_kebele,41310888007,Mudana Ibayu,4,413,41310
-choices_kebele,41310201001,Qeshit Kogne Jate,4,413,41310
-choices_kebele,41310888023,Qeshit Kogne Jate,4,413,41310
+choices_kebele,41310201001,Qeshit Kogne Jate (ET041310201001),4,413,41310
+choices_kebele,41310888023,Qeshit Kogne Jate (ET041310888023),4,413,41310
 choices_kebele,41310888006,Tole Balekasi,4,413,41310
 choices_kebele,41310888010,Tole Dalote,4,413,41310
 choices_kebele,41310888008,Urago Kellecha,4,413,41310
@@ -10864,8 +10864,8 @@ choices_kebele,41506888001,Cheri Sepelisa,4,415,41501
 choices_kebele,41506888021,Dibisa Ogo,4,415,41501
 choices_kebele,41506888006,Dogo Bulchani,4,415,41501
 choices_kebele,41506888010,Dogo Sodu,4,415,41501
-choices_kebele,41506301001,Galesa Negeso,4,415,41501
-choices_kebele,41506888026,Galesa Negeso,4,415,41501
+choices_kebele,41506301001,Galesa Negeso (ET041506301001),4,415,41501
+choices_kebele,41506888026,Galesa Negeso (ET041506888026),4,415,41501
 choices_kebele,41506888003,Gedu Yeba Sire,4,415,41501
 choices_kebele,41506101001,Gerba 01,4,415,41501
 choices_kebele,41506101002,Gerba _02,4,415,41501
@@ -10875,8 +10875,8 @@ choices_kebele,41506888005,Here Kuto,4,415,41501
 choices_kebele,41506888004,Here Lipitu,4,415,41501
 choices_kebele,41506888029,Kelaltu Sewo,4,415,41501
 choices_kebele,41506888028,Kelecha Ache,4,415,41501
-choices_kebele,41506201001,Kilenso Mokonisa,4,415,41501
-choices_kebele,41506888023,Kilenso Mokonisa,4,415,41501
+choices_kebele,41506201001,Kilenso Mokonisa (ET041506201001),4,415,41501
+choices_kebele,41506888023,Kilenso Mokonisa (ET041506888023),4,415,41501
 choices_kebele,41506888015,Kilenso Rasa,4,415,41501
 choices_kebele,41506888033,Kuya,4,415,41501
 choices_kebele,41506888016,Mate Lema,4,415,41501
@@ -11064,8 +11064,8 @@ choices_kebele,42006888025,Bido Galiko,4,416,41603
 choices_kebele,42006888024,Bido Jiren,4,416,41603
 choices_kebele,42006888031,Boreta,4,416,41603
 choices_kebele,41603888003,Boro Tiro Doroba,4,416,41603
-choices_kebele,42006201001,Chara,4,416,41603
-choices_kebele,42006888009,Chara,4,416,41603
+choices_kebele,42006201001,Chara (ET042006201001),4,416,41603
+choices_kebele,42006888009,Chara (ET042006888009),4,416,41603
 choices_kebele,42006888004,Chitu Bosena,4,416,41603
 choices_kebele,42006888020,Chona,4,416,41603
 choices_kebele,42006888008,Choptu,4,416,41603
@@ -11154,8 +11154,8 @@ choices_kebele,42008888026,Sobo,4,416,41604
 choices_kebele,41604888013,Walgawo,4,416,41604
 choices_kebele,41604888008,Warabi Tankole,4,416,41604
 choices_kebele,41604888014,Yeka Sedan,4,416,41604
-choices_kebele,42008201001,Yembero,4,416,41604
-choices_kebele,42008888004,Yembero,4,416,41604
+choices_kebele,42008201001,Yembero (ET042008201001),4,416,41604
+choices_kebele,42008888004,Yembero (ET042008888004),4,416,41604
 choices_kebele,42007888007,Beleka,4,416,41605
 choices_kebele,42007888020,Birkicha,4,416,41605
 choices_kebele,42007888024,Bobecho,4,416,41605
@@ -11463,8 +11463,8 @@ choices_kebele,41703888034,Aga,4,417,41703
 choices_kebele,41703888001,Alge,4,417,41703
 choices_kebele,41703888012,Ali Woyo,4,417,41703
 choices_kebele,41703888027,Ashoka,4,417,41703
-choices_kebele,41703101001,Beseku Elala,4,417,41703
-choices_kebele,41703888026,Beseku Elala,4,417,41703
+choices_kebele,41703101001,Beseku Elala (ET041703101001),4,417,41703
+choices_kebele,41703888026,Beseku Elala (ET041703888026),4,417,41703
 choices_kebele,41703888028,Bonbaso Reji,4,417,41703
 choices_kebele,41703888005,Daka Dalu Harengema,4,417,41703
 choices_kebele,41703888004,Daka Hora Kaleho,4,417,41703
@@ -11474,8 +11474,8 @@ choices_kebele,41703888013,Edo Jigesa 13,4,417,41703
 choices_kebele,41703888016,Edo Jigesa 16,4,417,41703
 choices_kebele,41703888006,Gale Ena Kelo,4,417,41703
 choices_kebele,41703888024,Gembeltoi,4,417,41703
-choices_kebele,41703501001,Gode,4,417,41703
-choices_kebele,41703888033,Gode,4,417,41703
+choices_kebele,41703501001,Gode (ET041703501001),4,417,41703
+choices_kebele,41703888033,Gode (ET041703888033),4,417,41703
 choices_kebele,41703888029,Gonde Gurate,4,417,41703
 choices_kebele,41703888011,Gorbi Arba,4,417,41703
 choices_kebele,41703888014,Gorbi Darera,4,417,41703
@@ -11486,8 +11486,8 @@ choices_kebele,41703888008,Keraru,4,417,41703
 choices_kebele,41703888019,Kersa Gera,4,417,41703
 choices_kebele,41703888020,Kersa Ilala,4,417,41703
 choices_kebele,41703888018,Kersa Meja,4,417,41703
-choices_kebele,41703401001,Lepis,4,417,41703
-choices_kebele,41703888025,Lepis,4,417,41703
+choices_kebele,41703401001,Lepis (ET041703401001),4,417,41703
+choices_kebele,41703888025,Lepis (ET041703888025),4,417,41703
 choices_kebele,41703888017,Meko Oda,4,417,41703
 choices_kebele,41703888032,Meraro Hawulo,4,417,41703
 choices_kebele,41703888031,Motera,4,417,41703
@@ -11522,8 +11522,8 @@ choices_kebele,41704888008,Koma Bitacha,4,417,41704
 choices_kebele,41704888004,Koma Mamo,4,417,41704
 choices_kebele,41704888007,Moke Borko,4,417,41704
 choices_kebele,41704888027,Negow Bolo,4,417,41704
-choices_kebele,41704301001,Robe Ashoka,4,417,41704
-choices_kebele,41704888017,Robe Ashoka,4,417,41704
+choices_kebele,41704301001,Robe Ashoka (ET041704301001),4,417,41704
+choices_kebele,41704888017,Robe Ashoka (ET041704888017),4,417,41704
 choices_kebele,41704888018,Samena Mudi,4,417,41704
 choices_kebele,41704888022,Tullo,4,417,41704
 choices_kebele,41704888023,Tulu Boke,4,417,41704
@@ -11900,8 +11900,8 @@ choices_kebele,41806101002,Biftu,4,418,41806
 choices_kebele,41806101004,Dollo,4,418,41806
 choices_kebele,41806101003,Lafto,4,418,41806
 choices_kebele,41806101001,Yabalo,4,418,41806
-choices_kebele,41807201001,Ashi,4,418,41807
-choices_kebele,41807888014,Ashi,4,418,41807
+choices_kebele,41807201001,Ashi (ET041807201001),4,418,41807
+choices_kebele,41807888014,Ashi (ET041807888014),4,418,41807
 choices_kebele,41807888011,Dalashor,4,418,41807
 choices_kebele,41807888009,Dalle Kolli,4,418,41807
 choices_kebele,41807888001,Dawo Tobbi,4,418,41807
@@ -12178,8 +12178,8 @@ choices_kebele,41908888004,Sombo Wato,4,419,41908
 choices_kebele,41908888010,Sombokumi,4,419,41908
 choices_kebele,41908888013,Suxekatale,4,419,41908
 choices_kebele,41908888009,Tulunono,4,419,41908
-choices_kebele,41909201001,Agemsa,4,419,41909
-choices_kebele,41909888008,Agemsa,4,419,41909
+choices_kebele,41909201001,Agemsa (ET041909201001),4,419,41909
+choices_kebele,41909888008,Agemsa (ET041909888008),4,419,41909
 choices_kebele,41909888014,Cidhati,4,419,41909
 choices_kebele,41909888017,Ejeregoromti,4,419,41909
 choices_kebele,41909888009,Gobusirba,4,419,41909
@@ -12269,8 +12269,8 @@ choices_kebele,43030101008,Furi 08,4,420,42011
 choices_kebele,43030101009,Furi 09,4,420,42011
 choices_kebele,43030101001,Sabata 01,4,420,42011
 choices_kebele,43030101002,Sabata 02,4,420,42011
-choices_kebele,43030101003,Sabata 03,4,420,42011
-choices_kebele,43030101103,Sabata 03,4,420,42011
+choices_kebele,43030101003,Sabata 03 (ET043030101003),4,420,42011
+choices_kebele,43030101103,Sabata 03 (ET043030101103),4,420,42011
 choices_kebele,43030101004,Sabata 04,4,420,42011
 choices_kebele,43030101005,Sabata 05,4,420,42011
 choices_kebele,43030101006,Sabata 06,4,420,42011
@@ -12314,8 +12314,8 @@ choices_kebele,44001888016,Selam,4,421,42101
 choices_kebele,44001888014,Temamo,4,421,42101
 choices_kebele,44001888004,Urgessa,4,421,42101
 choices_kebele,44001888001,Wabe Seada,4,421,42101
-choices_kebele,42102102002,01 Kebele,4,421,42102
-choices_kebele,42102102102,01 Kebele,4,421,42102
+choices_kebele,42102102002,01 Kebele (ET042102102002),4,421,42102
+choices_kebele,42102102102,01 Kebele (ET042102102102),4,421,42102
 choices_kebele,42102102003,04 Kebele,4,421,42102
 choices_kebele,44002888016,Adele,4,421,42102
 choices_kebele,44002888025,Anegoye,4,421,42102
@@ -12974,8 +12974,8 @@ choices_kebele,50209888011,Gilbob,5,502,50283
 choices_kebele,50209888014,Godene,5,502,50283
 choices_kebele,50209888006,Jidile,5,502,50283
 choices_kebele,50209888013,Kontoma,5,502,50283
-choices_kebele,50209101001,Tulu Guled,5,502,50283
-choices_kebele,50209888005,Tulu Guled,5,502,50283
+choices_kebele,50209101001,Tulu Guled (ET050209101001),5,502,50283
+choices_kebele,50209888005,Tulu Guled (ET050209888005),5,502,50283
 choices_kebele,50209888012,Ulaula,5,502,50283
 choices_kebele,50211888013,Anane,5,502,50290
 choices_kebele,50211888008,Beradeye,5,502,50290
@@ -13422,16 +13422,16 @@ choices_kebele,50504888005,Harano,5,505,50504
 choices_kebele,50504888002,Harunta,5,505,50504
 choices_kebele,50504888001,Jidale,5,505,50504
 choices_kebele,50504888008,Negedwein,5,505,50504
-choices_kebele,50506101001,1,5,505,50586
-choices_kebele,50506201001,1,5,505,50586
-choices_kebele,50506301001,1,5,505,50586
-choices_kebele,50506101002,2,5,505,50586
-choices_kebele,50506201002,2,5,505,50586
-choices_kebele,50506301002,2,5,505,50586
-choices_kebele,50506201003,3,5,505,50586
-choices_kebele,50506301003,3,5,505,50586
-choices_kebele,50506201004,4,5,505,50586
-choices_kebele,50506301004,4,5,505,50586
+choices_kebele,50506101001,1 (ET050506101001),5,505,50586
+choices_kebele,50506201001,1 (ET050506201001),5,505,50586
+choices_kebele,50506301001,1 (ET050506301001),5,505,50586
+choices_kebele,50506101002,2 (ET050506101002),5,505,50586
+choices_kebele,50506201002,2 (ET050506201002),5,505,50586
+choices_kebele,50506301002,2 (ET050506301002),5,505,50586
+choices_kebele,50506201003,3 (ET050506201003),5,505,50586
+choices_kebele,50506301003,3 (ET050506301003),5,505,50586
+choices_kebele,50506201004,4 (ET050506201004),5,505,50586
+choices_kebele,50506301004,4 (ET050506301004),5,505,50586
 choices_kebele,50506888006,Bambase,5,505,50586
 choices_kebele,50506888013,Chea,5,505,50586
 choices_kebele,50506888002,Dekeyebor,5,505,50586
@@ -13555,10 +13555,10 @@ choices_kebele,50604888012,Kerinka,5,506,50604
 choices_kebele,50604888005,Kunka,5,506,50604
 choices_kebele,50604888003,Welisdik,5,506,50604
 choices_kebele,50604888009,Yehasjemal,5,506,50604
-choices_kebele,50605101001,1,5,506,50605
-choices_kebele,50605201001,1,5,506,50605
-choices_kebele,50605301001,1,5,506,50605
-choices_kebele,50605401001,1,5,506,50605
+choices_kebele,50605101001,1 (ET050605101001),5,506,50605
+choices_kebele,50605201001,1 (ET050605201001),5,506,50605
+choices_kebele,50605301001,1 (ET050605301001),5,506,50605
+choices_kebele,50605401001,1 (ET050605401001),5,506,50605
 choices_kebele,50605101002,2,5,506,50605
 choices_kebele,50605888003,Alogarisi,5,506,50605
 choices_kebele,50605888008,Bargun,5,506,50605
@@ -13680,17 +13680,17 @@ choices_kebele,50702888008,Ombal,5,507,50702
 choices_kebele,50702888026,Raho,5,507,50702
 choices_kebele,50702888017,Shendaye,5,507,50702
 choices_kebele,50702888019,Wanegsen,5,507,50702
-choices_kebele,50703101002,1,5,507,50703
-choices_kebele,50703201003,1,5,507,50703
-choices_kebele,50703301004,1,5,507,50703
-choices_kebele,50703101001,2,5,507,50703
-choices_kebele,50703201002,2,5,507,50703
-choices_kebele,50703301003,2,5,507,50703
-choices_kebele,50703101003,3,5,507,50703
-choices_kebele,50703201001,3,5,507,50703
-choices_kebele,50703301002,3,5,507,50703
-choices_kebele,50703101004,4,5,507,50703
-choices_kebele,50703301001,4,5,507,50703
+choices_kebele,50703101002,1 (ET050703101002),5,507,50703
+choices_kebele,50703201003,1 (ET050703201003),5,507,50703
+choices_kebele,50703301004,1 (ET050703301004),5,507,50703
+choices_kebele,50703101001,2 (ET050703101001),5,507,50703
+choices_kebele,50703201002,2 (ET050703201002),5,507,50703
+choices_kebele,50703301003,2 (ET050703301003),5,507,50703
+choices_kebele,50703101003,3 (ET050703101003),5,507,50703
+choices_kebele,50703201001,3 (ET050703201001),5,507,50703
+choices_kebele,50703301002,3 (ET050703301002),5,507,50703
+choices_kebele,50703101004,4 (ET050703101004),5,507,50703
+choices_kebele,50703301001,4 (ET050703301001),5,507,50703
 choices_kebele,50703888010,Beal Tag,5,507,50703
 choices_kebele,50703888011,Beris Atte,5,507,50703
 choices_kebele,50703888004,Dageybor,5,507,50703
@@ -14815,8 +14815,8 @@ choices_kebele,100107888013,Yesharebina Ena Yeteter,7,701,70109
 choices_kebele,100107888014,Zizancho,7,701,70109
 choices_kebele,100109888023,Abret,7,701,70110
 choices_kebele,100109888015,Adoshe,7,701,70110
-choices_kebele,100109101001,Afetere,7,701,70110
-choices_kebele,100109888024,Afetere,7,701,70110
+choices_kebele,100109101001,Afetere (ET100109101001),7,701,70110
+choices_kebele,100109888024,Afetere (ET100109888024),7,701,70110
 choices_kebele,100109888009,Aser,7,701,70110
 choices_kebele,100109888021,Astepo,7,701,70110
 choices_kebele,100109888022,Awkakir,7,701,70110
@@ -14918,8 +14918,8 @@ choices_kebele,100104888020,Yasinawura,7,701,70112
 choices_kebele,100104888012,Yebejeech,7,701,70112
 choices_kebele,100104888021,Yekota,7,701,70112
 choices_kebele,100104888008,Yeshehere,7,701,70112
-choices_kebele,100104201001,Zenabener,7,701,70112
-choices_kebele,100104888003,Zenabener,7,701,70112
+choices_kebele,100104201001,Zenabener (ET100104201001),7,701,70112
+choices_kebele,100104888003,Zenabener (ET100104888003),7,701,70112
 choices_kebele,100114888009,Agata,7,701,70113
 choices_kebele,100114888016,Atazo,7,701,70113
 choices_kebele,100114888012,Ediget,7,701,70113
@@ -15216,8 +15216,8 @@ choices_kebele,100715888017,Yabukuna,7,702,70209
 choices_kebele,100702888016,Amborogoynana,7,702,70210
 choices_kebele,100702888015,Astekerker,7,702,70210
 choices_kebele,100702888011,Awesa,7,702,70210
-choices_kebele,100702101001,Checho,7,702,70210
-choices_kebele,100702888005,Checho,7,702,70210
+choices_kebele,100702101001,Checho (ET100702101001),7,702,70210
+choices_kebele,100702888005,Checho (ET100702888005),7,702,70210
 choices_kebele,100702888013,Dangamesalcho,7,702,70210
 choices_kebele,100702888009,Ereramo,7,702,70210
 choices_kebele,100702888014,Gesedakodada,7,702,70210
@@ -15231,8 +15231,8 @@ choices_kebele,100702888017,Olawamogonamo,7,702,70210
 choices_kebele,100702888004,Omochra,7,702,70210
 choices_kebele,100702301001,Sede,7,702,70210
 choices_kebele,100702888007,Sidema,7,702,70210
-choices_kebele,100702201001,Soda,7,702,70210
-choices_kebele,100702888006,Soda,7,702,70210
+choices_kebele,100702201001,Soda (ET100702201001),7,702,70210
+choices_kebele,100702888006,Soda (ET100702888006),7,702,70210
 choices_kebele,100702888002,Tetema,7,702,70210
 choices_kebele,100702888010,Wercho,7,702,70210
 choices_kebele,100707101008,Arada,7,702,70211
@@ -15266,8 +15266,8 @@ choices_kebele,100701888008,Borara,7,702,70215
 choices_kebele,100701888010,Dima,7,702,70215
 choices_kebele,100701888012,Duna Gemedo,7,702,70215
 choices_kebele,100701888001,Forkose,7,702,70215
-choices_kebele,100701101001,Fugeja,7,702,70215
-choices_kebele,100701888009,Fugeja,7,702,70215
+choices_kebele,100701101001,Fugeja (ET100701101001),7,702,70215
+choices_kebele,100701888009,Fugeja (ET100701888009),7,702,70215
 choices_kebele,100701201001,Geja,7,702,70215
 choices_kebele,100701888006,Gidasha,7,702,70215
 choices_kebele,100701888003,Ololicho,7,702,70215
@@ -15408,8 +15408,8 @@ choices_kebele,101012101004,Teza Agara,7,703,70308
 choices_kebele,101012101007,Tezageriba,7,703,70308
 choices_kebele,101012101010,Zato Shdera,7,703,70308
 choices_kebele,101012101002,Zeraroo,7,703,70308
-choices_kebele,101007101001,Adiloo,7,703,70309
-choices_kebele,101007888007,Adiloo,7,703,70309
+choices_kebele,101007101001,Adiloo (ET101007101001),7,703,70309
+choices_kebele,101007888007,Adiloo (ET101007888007),7,703,70309
 choices_kebele,101007888006,Geshgola,7,703,70309
 choices_kebele,101007888003,Hamidoo,7,703,70309
 choices_kebele,101007888004,Holagabazatoo,7,703,70309
@@ -15614,8 +15614,8 @@ choices_kebele,70505101001,Senegal,7,705,70505
 choices_kebele,70505888043,Senmamer,7,705,70505
 choices_kebele,70505888033,Shephi,7,705,70505
 choices_kebele,70506101001,JINKA 01,7,705,70506
-choices_kebele,70506101002,JINKA 02,7,705,70506
-choices_kebele,70506101005,JINKA 02,7,705,70506
+choices_kebele,70506101002,JINKA 02 (ET070506101002),7,705,70506
+choices_kebele,70506101005,JINKA 02 (ET070506101005),7,705,70506
 choices_kebele,70601888009,Arum,8,812,70601
 choices_kebele,70601888020,Bongozo,8,812,70601
 choices_kebele,70601888003,Chedmis,8,812,70601
@@ -15640,19 +15640,19 @@ choices_kebele,70601888014,Tsitsima,8,812,70601
 choices_kebele,70602888017,Ajo,8,812,70602
 choices_kebele,70602888015,Aleze,8,812,70602
 choices_kebele,70602888001,Arkiroko,8,812,70602
-choices_kebele,70602201001,Asheker,8,812,70602
-choices_kebele,70602888012,Asheker,8,812,70602
-choices_kebele,70602301001,Bala,8,812,70602
-choices_kebele,70602888016,Bala,8,812,70602
-choices_kebele,70602501001,Beneta,8,812,70602
-choices_kebele,70602888023,Beneta,8,812,70602
+choices_kebele,70602201001,Asheker (ET070602201001),8,812,70602
+choices_kebele,70602888012,Asheker (ET070602888012),8,812,70602
+choices_kebele,70602301001,Bala (ET070602301001),8,812,70602
+choices_kebele,70602888016,Bala (ET070602888016),8,812,70602
+choices_kebele,70602501001,Beneta (ET070602501001),8,812,70602
+choices_kebele,70602888023,Beneta (ET070602888023),8,812,70602
 choices_kebele,70602601001,Boshkoro,8,812,70602
 choices_kebele,70602888003,Buylansa,8,812,70602
 choices_kebele,70602888020,Damiker,8,812,70602
 choices_kebele,70602888006,Doyso,8,812,70602
 choices_kebele,70602888018,Erbo,8,812,70602
-choices_kebele,70602101001,Gento,8,812,70602
-choices_kebele,70602888009,Gento,8,812,70602
+choices_kebele,70602101001,Gento (ET070602101001),8,812,70602
+choices_kebele,70602888009,Gento (ET070602888009),8,812,70602
 choices_kebele,70602888021,Gera Gado,8,812,70602
 choices_kebele,70602888007,Golo,8,812,70602
 choices_kebele,70602888019,Gongode,8,812,70602
@@ -15660,14 +15660,14 @@ choices_kebele,70602888011,Gudo,8,812,70602
 choices_kebele,70602888005,Kamba Bobo,8,812,70602
 choices_kebele,70602888013,Katibaka,8,812,70602
 choices_kebele,70602888004,Kela,8,812,70602
-choices_kebele,70602401001,Koybe,8,812,70602
-choices_kebele,70602888014,Koybe,8,812,70602
+choices_kebele,70602401001,Koybe (ET070602401001),8,812,70602
+choices_kebele,70602888014,Koybe (ET070602888014),8,812,70602
 choices_kebele,70602888010,Lemokalenido,8,812,70602
 choices_kebele,70602888008,Makana,8,812,70602
 choices_kebele,70602888022,Sholtaka,8,812,70602
 choices_kebele,70602888002,Tiki Boko,8,812,70602
-choices_kebele,70603401001,Alduba,8,812,70603
-choices_kebele,70603888021,Alduba,8,812,70603
+choices_kebele,70603401001,Alduba (ET070603401001),8,812,70603
+choices_kebele,70603888021,Alduba (ET070603888021),8,812,70603
 choices_kebele,70603888025,Ansonda,8,812,70603
 choices_kebele,70603888005,Argo,8,812,70603
 choices_kebele,70603888015,Aymele,8,812,70603
@@ -15686,8 +15686,8 @@ choices_kebele,70603888001,Goldiya,8,812,70603
 choices_kebele,70603888027,Gone,8,812,70603
 choices_kebele,70603888020,Gurdo,8,812,70603
 choices_kebele,70603888008,Gurma Mero,8,812,70603
-choices_kebele,70603201001,Kako,8,812,70603
-choices_kebele,70603888002,Kako,8,812,70603
+choices_kebele,70603201001,Kako (ET070603201001),8,812,70603
+choices_kebele,70603888002,Kako (ET070603888002),8,812,70603
 choices_kebele,70603101001,Key Afer,8,812,70603
 choices_kebele,70603888012,Luka,8,812,70603
 choices_kebele,70603888023,Morgala,8,812,70603
@@ -15836,8 +15836,8 @@ choices_kebele,70702888008,Shilale,7,707,70702
 choices_kebele,70702888016,Tardele,7,707,70702
 choices_kebele,70702888020,Tare,7,707,70702
 choices_kebele,70702888029,Toyisala,7,707,70702
-choices_kebele,70702301004,Walayte,7,707,70702
-choices_kebele,70702888003,Walayte,7,707,70702
+choices_kebele,70702301004,Walayte (ET070702301004),7,707,70702
+choices_kebele,70702888003,Walayte (ET070702888003),7,707,70702
 choices_kebele,70702888004,Walsa,7,707,70702
 choices_kebele,70702888012,Yaybe,7,707,70702
 choices_kebele,70702301003,Yelaygnaw Arguba,7,707,70702
@@ -16076,21 +16076,21 @@ choices_kebele,100514888004,Getem,7,720,72006
 choices_kebele,100514888003,Getem Gurbeye,7,720,72006
 choices_kebele,100514888008,Getem Ziko,7,720,72006
 choices_kebele,100514888018,Gutancho,7,720,72006
-choices_kebele,100514101002,Jata,7,720,72006
-choices_kebele,100514888022,Jata,7,720,72006
+choices_kebele,100514101002,Jata (ET100514101002),7,720,72006
+choices_kebele,100514888022,Jata (ET100514888022),7,720,72006
 choices_kebele,100514888005,Jejebicho Lemlem,7,720,72006
 choices_kebele,100514888006,Jejebicho Seyato,7,720,72006
 choices_kebele,100514888019,Kore,7,720,72006
-choices_kebele,100514101003,Kulufo Shadger,7,720,72006
-choices_kebele,100514888025,Kulufo Shadger,7,720,72006
+choices_kebele,100514101003,Kulufo Shadger (ET100514101003),7,720,72006
+choices_kebele,100514888025,Kulufo Shadger (ET100514888025),7,720,72006
 choices_kebele,100514888017,Lay Kemo,7,720,72006
 choices_kebele,100514888011,Menzo,7,720,72006
 choices_kebele,100514888014,Menzo Feten,7,720,72006
 choices_kebele,100514888007,Menzo Seyato,7,720,72006
-choices_kebele,100514101005,Regdina,7,720,72006
-choices_kebele,100514888026,Regdina,7,720,72006
-choices_kebele,100514101001,Regdina Kore,7,720,72006
-choices_kebele,100514888023,Regdina Kore,7,720,72006
+choices_kebele,100514101005,Regdina (ET100514101005),7,720,72006
+choices_kebele,100514888026,Regdina (ET100514888026),7,720,72006
+choices_kebele,100514101001,Regdina Kore (ET100514101001),7,720,72006
+choices_kebele,100514888023,Regdina Kore (ET100514888023),7,720,72006
 choices_kebele,100514101004,Regdina Kore Mazoria,7,720,72006
 choices_kebele,100514888016,Tach Kemo,7,720,72006
 choices_kebele,100514888013,Weteta,7,720,72006
@@ -16323,8 +16323,8 @@ choices_kebele,70104888011,Shochora Ogodama,8,801,80104
 choices_kebele,70104888005,Shochora Ose,8,801,80104
 choices_kebele,70105888014,Ansome Gembela,8,801,80105
 choices_kebele,70105888008,Bosa Kacha,8,801,80105
-choices_kebele,70105701001,Buge Wanche,8,801,80105
-choices_kebele,70105888012,Buge Wanche,8,801,80105
+choices_kebele,70105701001,Buge Wanche (ET070105701001),8,801,80105
+choices_kebele,70105888012,Buge Wanche (ET070105888012),8,801,80105
 choices_kebele,70105101001,Dalbo Mazegaja,8,801,80105
 choices_kebele,70105888006,Dalbo Wogene,8,801,80105
 choices_kebele,70105888005,Damot Waja,8,801,80105
@@ -16343,8 +16343,8 @@ choices_kebele,70105888001,Shola Kodo,8,801,80105
 choices_kebele,80105105002,Teso,8,801,80105
 choices_kebele,70105888016,Tome Gerera,8,801,80105
 choices_kebele,70105501001,Tome Mazegaja,8,801,80105
-choices_kebele,70105601001,Wachiga Busha,8,801,80105
-choices_kebele,70105888015,Wachiga Busha,8,801,80105
+choices_kebele,70105601001,Wachiga Busha (ET070105601001),8,801,80105
+choices_kebele,70105888015,Wachiga Busha (ET070105888015),8,801,80105
 choices_kebele,70105888003,Waja Shoya,8,801,80105
 choices_kebele,80105105001,Wukiro,8,801,80105
 choices_kebele,70105888007,Zala Shasha,8,801,80105
@@ -16415,8 +16415,8 @@ choices_kebele,80108108011,Haranfama,8,801,80108
 choices_kebele,80108108010,Hawela Wondo,8,801,80108
 choices_kebele,70108888008,Hereje,8,801,80108
 choices_kebele,70108888006,Kuto Ambe,8,801,80108
-choices_kebele,70108401001,Libase,8,801,80108
-choices_kebele,70108888017,Libase,8,801,80108
+choices_kebele,70108401001,Libase (ET070108401001),8,801,80108
+choices_kebele,70108888017,Libase (ET070108888017),8,801,80108
 choices_kebele,70108888013,Matala Walana,8,801,80108
 choices_kebele,70108888018,Mole Manisa,8,801,80108
 choices_kebele,70108201001,Mole Town,8,801,80108
@@ -16431,8 +16431,8 @@ choices_kebele,70108888016,Zaba,8,801,80108
 choices_kebele,70109301001,Anchucho,8,801,80109
 choices_kebele,70109888007,Anchucho Chaw Kare,8,801,80109
 choices_kebele,70109888015,Bolola Chaw Kare,8,801,80109
-choices_kebele,70109201001,Demba Zamine,8,801,80109
-choices_kebele,70109888009,Demba Zamine,8,801,80109
+choices_kebele,70109201001,Demba Zamine (ET070109201001),8,801,80109
+choices_kebele,70109888009,Demba Zamine (ET070109888009),8,801,80109
 choices_kebele,70109888004,Doge Anchucho,8,801,80109
 choices_kebele,70109888016,Doge Mashido,8,801,80109
 choices_kebele,70109888017,Doge Shakisho,8,801,80109
@@ -16588,8 +16588,8 @@ choices_kebele,70116888006,Zamo,8,801,80120
 choices_kebele,70119888013,Abala Ajaja,8,801,80121
 choices_kebele,70119888012,Abala Faracho,8,801,80121
 choices_kebele,70119888008,Abala Gefeta,8,801,80121
-choices_kebele,70119201001,Abala Kolshobo,8,801,80121
-choices_kebele,70119888009,Abala Kolshobo,8,801,80121
+choices_kebele,70119201001,Abala Kolshobo (ET070119201001),8,801,80121
+choices_kebele,70119888009,Abala Kolshobo (ET070119888009),8,801,80121
 choices_kebele,70119888003,Abala Longena,8,801,80121
 choices_kebele,70119888007,Abala Maraka,8,801,80121
 choices_kebele,70119888001,Abala Shoya,8,801,80121
@@ -16915,8 +16915,8 @@ choices_kebele,80209888010,Baja Fabrica,8,802,80209
 choices_kebele,80209888008,Baja Gemecho,8,802,80209
 choices_kebele,80209888009,Chukogeter,8,802,80209
 choices_kebele,70206888009,Dalbansa,8,802,80209
-choices_kebele,70206101001,Dita,8,802,80209
-choices_kebele,70206201001,Dita,8,802,80209
+choices_kebele,70206101001,Dita (ET070206101001),8,802,80209
+choices_kebele,70206201001,Dita (ET070206201001),8,802,80209
 choices_kebele,70206888021,Dokama,8,802,80209
 choices_kebele,70206888011,Done,8,802,80209
 choices_kebele,80209888011,Edo,8,802,80209
@@ -17324,8 +17324,8 @@ choices_kebele,80305888016,Meniho,8,803,80305
 choices_kebele,80305888010,Orowo,8,803,80305
 choices_kebele,80306888007,Akile,8,803,80306
 choices_kebele,80306888014,Asradawayo,8,803,80306
-choices_kebele,70301401001,Balta,8,803,80306
-choices_kebele,70301888022,Balta,8,803,80306
+choices_kebele,70301401001,Balta (ET070301401001),8,803,80306
+choices_kebele,70301888022,Balta (ET070301888022),8,803,80306
 choices_kebele,70301888001,Banka Gara Haste,8,803,80306
 choices_kebele,70301888008,Bokre Yoya,8,803,80306
 choices_kebele,70301888015,Borada Kakisha,8,803,80306
@@ -17341,8 +17341,8 @@ choices_kebele,70301888028,Fra Shuma,8,803,80306
 choices_kebele,70301888027,Gayina,8,803,80306
 choices_kebele,70301888006,Gaysa,8,803,80306
 choices_kebele,70301501001,Gazer Mazegaja,8,803,80306
-choices_kebele,70301301001,Gergeda,8,803,80306
-choices_kebele,70301888010,Gergeda,8,803,80306
+choices_kebele,70301301001,Gergeda (ET070301301001),8,803,80306
+choices_kebele,70301888010,Gergeda (ET070301888010),8,803,80306
 choices_kebele,80306888011,Hanchululicho,8,803,80306
 choices_kebele,80306888003,Jaldo,8,803,80306
 choices_kebele,70301888003,Koza Aliza,8,803,80306
@@ -17459,8 +17459,8 @@ choices_kebele,70309888005,Somba,8,803,80310
 choices_kebele,70309888002,Ubayela,8,803,80310
 choices_kebele,70309888009,Workagoha,8,803,80310
 choices_kebele,70309888012,Yelashabo,8,803,80310
-choices_kebele,70309101001,Zaba,8,803,80310
-choices_kebele,70309888019,Zaba,8,803,80310
+choices_kebele,70309101001,Zaba (ET070309101001),8,803,80310
+choices_kebele,70309888019,Zaba (ET070309888019),8,803,80310
 choices_kebele,70309888013,Zeka Zelto,8,803,80310
 choices_kebele,70308888014,Ambe Gayle,8,803,80311
 choices_kebele,70308888019,Babo,8,803,80311
@@ -17653,8 +17653,8 @@ choices_kebele,80408888004,Wita Bono,8,804,80408
 choices_kebele,80408888008,Worare,8,804,80408
 choices_kebele,80409888009,Abera_atila,8,804,80409
 choices_kebele,80409888010,Abera_doda,8,804,80409
-choices_kebele,80409201001,Abera_doko,8,804,80409
-choices_kebele,80409888015,Abera_doko,8,804,80409
+choices_kebele,80409201001,Abera_doko (ET080409201001),8,804,80409
+choices_kebele,80409888015,Abera_doko (ET080409888015),8,804,80409
 choices_kebele,80409888008,Abera_gelade,8,804,80409
 choices_kebele,80409888014,Babe_komolcha,8,804,80409
 choices_kebele,80409888007,Bamisa,8,804,80409
@@ -17831,8 +17831,8 @@ choices_kebele,70903888005,Kemele,8,809,80901
 choices_kebele,70903888002,Mecheke,8,809,80901
 choices_kebele,70903888008,Sawugame,8,809,80901
 choices_kebele,70902888014,Abaroba,8,809,80902
-choices_kebele,70902101001,Arfayde,8,809,80902
-choices_kebele,70902888005,Arfayde,8,809,80902
+choices_kebele,70902101001,Arfayde (ET070902101001),8,809,80902
+choices_kebele,70902888005,Arfayde (ET070902888005),8,809,80902
 choices_kebele,70902888002,Beayde,8,809,80902
 choices_kebele,70902888011,Buso,8,809,80902
 choices_kebele,70902888008,Dara,8,809,80902
@@ -18493,8 +18493,8 @@ choices_kebele,90406888010,Chama,11,1102,110206
 choices_kebele,90406888014,Chura,11,1102,110206
 choices_kebele,90406888017,Decha,11,1102,110206
 choices_kebele,90406888012,Gadagubena,11,1102,110206
-choices_kebele,90406201001,Gebala,11,1102,110206
-choices_kebele,90406888016,Gebala,11,1102,110206
+choices_kebele,90406201001,Gebala (ET090406201001),11,1102,110206
+choices_kebele,90406888016,Gebala (ET090406888016),11,1102,110206
 choices_kebele,90406888022,Gera,11,1102,110206
 choices_kebele,90406888003,Grgupa,11,1102,110206
 choices_kebele,90406888006,Guta,11,1102,110206
@@ -18534,8 +18534,8 @@ choices_kebele,90408888036,Ada,11,1102,110208
 choices_kebele,90408888025,Agarobushi,11,1102,110208
 choices_kebele,90408888031,Awashola,11,1102,110208
 choices_kebele,90408888018,Awashqofira,11,1102,110208
-choices_kebele,90408101001,Awurada,11,1102,110208
-choices_kebele,90408888030,Awurada,11,1102,110208
+choices_kebele,90408101001,Awurada (ET090408101001),11,1102,110208
+choices_kebele,90408888030,Awurada (ET090408888030),11,1102,110208
 choices_kebele,90408888019,Baha,11,1102,110208
 choices_kebele,90408888026,Batara,11,1102,110208
 choices_kebele,90408888027,Boba Gecha,11,1102,110208
@@ -18625,8 +18625,8 @@ choices_kebele,90413888010,Angela,11,1102,110212
 choices_kebele,90413888003,Baskadiri,11,1102,110212
 choices_kebele,90413888016,Bunanta,11,1102,110212
 choices_kebele,90413888021,Dadin,11,1102,110212
-choices_kebele,90413101001,Dish,11,1102,110212
-choices_kebele,90413888009,Dish,11,1102,110212
+choices_kebele,90413101001,Dish (ET090413101001),11,1102,110212
+choices_kebele,90413888009,Dish (ET090413888009),11,1102,110212
 choices_kebele,90413888014,Gara Maji Arbito Ader,11,1102,110212
 choices_kebele,90413888013,Genet,11,1102,110212
 choices_kebele,90413888008,Gesa,11,1102,110212
@@ -18919,10 +18919,10 @@ choices_kebele,90611888007,Muga,11,1104,110406
 choices_kebele,90611888008,Oda Gofa,11,1104,110406
 choices_kebele,90611888003,Shoga Bala,11,1104,110406
 choices_kebele,90611888004,Takiama,11,1104,110406
-choices_kebele,90609301001,Aba Bonga,11,1104,110407
-choices_kebele,90609888002,Aba Bonga,11,1104,110407
-choices_kebele,90609201001,Aba Dahi,11,1104,110407
-choices_kebele,90609888005,Aba Dahi,11,1104,110407
+choices_kebele,90609301001,Aba Bonga (ET090609301001),11,1104,110407
+choices_kebele,90609888002,Aba Bonga (ET090609888002),11,1104,110407
+choices_kebele,90609201001,Aba Dahi (ET090609201001),11,1104,110407
+choices_kebele,90609888005,Aba Dahi (ET090609888005),11,1104,110407
 choices_kebele,90609888004,Aba Garga,11,1104,110407
 choices_kebele,90609888003,Aba Reari,11,1104,110407
 choices_kebele,90609888014,Bol'i Ari,11,1104,110407
@@ -19120,10 +19120,10 @@ choices_kebele,120202888007,Ulang,12,1202,120202
 choices_kebele,120101888003,Upagna,12,1202,120202
 choices_kebele,120202888019,Wankey,12,1202,120202
 choices_kebele,120202888023,Waw,12,1202,120202
-choices_kebele,120103101003,1,12,1202,120203
-choices_kebele,120203101002,1,12,1202,120203
-choices_kebele,120103101004,2,12,1202,120203
-choices_kebele,120203101001,2,12,1202,120203
+choices_kebele,120103101003,1 (ET120103101003),12,1202,120203
+choices_kebele,120203101002,1 (ET120203101002),12,1202,120203
+choices_kebele,120103101004,2 (ET120103101004),12,1202,120203
+choices_kebele,120203101001,2 (ET120203101001),12,1202,120203
 choices_kebele,120103101002,3,12,1202,120203
 choices_kebele,120103101001,4,12,1202,120203
 choices_kebele,120103888001,Abodo,12,1202,120203
@@ -19355,8 +19355,8 @@ choices_kebele,140209102009,Kebele9& AAU HealthScienceCollegeSefereSelamCompus,1
 choices_kebele,140210102010,10,14,1402,140210
 choices_kebele,140301103001,1,14,1403,140301
 choices_kebele,140302103002,2,14,1403,140302
-choices_kebele,140303103003,3,14,1403,140303
-choices_kebele,140303103103,3,14,1403,140303
+choices_kebele,140303103003,3 (ET140303103003),14,1403,140303
+choices_kebele,140303103103,3 (ET140303103103),14,1403,140303
 choices_kebele,140304103004,4,14,1403,140304
 choices_kebele,140305103005,5,14,1403,140305
 choices_kebele,140306103006,6,14,1403,140306
@@ -19409,11 +19409,11 @@ choices_kebele,140706107006,6,14,1407,140706
 choices_kebele,140707107007,7,14,1407,140707
 choices_kebele,140708107008,8,14,1407,140708
 choices_kebele,140709107009,9,14,1407,140709
-choices_kebele,140710107010,10,14,1407,140710
-choices_kebele,140710107110,10,14,1407,140710
+choices_kebele,140710107010,10 (ET140710107010),14,1407,140710
+choices_kebele,140710107110,10 (ET140710107110),14,1407,140710
 choices_kebele,140711107011,Kebele11& Kotebe Metropolitan&Civil Service Univ,14,1407,140711
-choices_kebele,140712107012,12,14,1407,140712
-choices_kebele,140712107112,12,14,1407,140712
+choices_kebele,140712107012,12 (ET140712107012),14,1407,140712
+choices_kebele,140712107112,12 (ET140712107112),14,1407,140712
 choices_kebele,140801108001,1,14,1408,140801
 choices_kebele,140802108002,2,14,1408,140802
 choices_kebele,140803108003,3,14,1408,140803
@@ -19423,14 +19423,14 @@ choices_kebele,140806108006,6,14,1408,140806
 choices_kebele,140807108007,7,14,1408,140807
 choices_kebele,140809108009,9,14,1408,140809
 choices_kebele,140811108011,11,14,1408,140811
-choices_kebele,140812108012,12,14,1408,140812
-choices_kebele,140812108112,12,14,1408,140812
+choices_kebele,140812108012,12 (ET140812108012),14,1408,140812
+choices_kebele,140812108112,12 (ET140812108112),14,1408,140812
 choices_kebele,140813108013,13,14,1408,140813
 choices_kebele,140814108014,14,14,1408,140814
-choices_kebele,140901109001,1,14,1409,140901
-choices_kebele,140901109101,1,14,1409,140901
-choices_kebele,140902109002,2,14,1409,140902
-choices_kebele,140902109102,2,14,1409,140902
+choices_kebele,140901109001,1 (ET140901109001),14,1409,140901
+choices_kebele,140901109101,1 (ET140901109101),14,1409,140901
+choices_kebele,140902109002,2 (ET140902109002),14,1409,140902
+choices_kebele,140902109102,2 (ET140902109102),14,1409,140902
 choices_kebele,140903109003,3,14,1409,140903
 choices_kebele,140904109004,4,14,1409,140904
 choices_kebele,140905109005,5,14,1409,140905
@@ -19439,11 +19439,11 @@ choices_kebele,140907109007,7,14,1409,140907
 choices_kebele,140908109008,8,14,1409,140908
 choices_kebele,140909109009,9,14,1409,140909
 choices_kebele,140910109010,10,14,1409,140910
-choices_kebele,140911109011,11,14,1409,140911
-choices_kebele,140911109111,11,14,1409,140911
+choices_kebele,140911109011,11 (ET140911109011),14,1409,140911
+choices_kebele,140911109111,11 (ET140911109111),14,1409,140911
 choices_kebele,140912109012,12,14,1409,140912
-choices_kebele,140913109001,13,14,1409,140913
-choices_kebele,140913109113,13,14,1409,140913
+choices_kebele,140913109001,13 (ET140913109001),14,1409,140913
+choices_kebele,140913109113,13 (ET140913109113),14,1409,140913
 choices_kebele,140915108201,1,14,1409,140915
 choices_kebele,141001110001,1,14,1410,141001
 choices_kebele,141002110002,2,14,1410,141002
@@ -19464,15 +19464,15 @@ choices_kebele,141103111003,3,14,1411,141103
 choices_kebele,141104111004,4,14,1411,141104
 choices_kebele,141105111005,5,14,1411,141105
 choices_kebele,141106111006,6,14,1411,141106
-choices_kebele,141107111007,7,14,1411,141107
-choices_kebele,141107111107,7,14,1411,141107
+choices_kebele,141107111007,7 (ET141107111007),14,1411,141107
+choices_kebele,141107111107,7 (ET141107111107),14,1411,141107
 choices_kebele,141108111008,8,14,1411,141108
 choices_kebele,141109111009,9,14,1411,141109
 choices_kebele,141110111010,10,14,1411,141110
 choices_kebele,141111101011,6,14,1411,141111
 choices_kebele,150101101001,01 Kebele,15,1501,150101
-choices_kebele,150102101002,Kebele 02 and Diredawa Universty,15,1501,150102
-choices_kebele,150102101102,Kebele 02 and Diredawa Universty,15,1501,150102
+choices_kebele,150102101002,Kebele 02 and Diredawa Universty (ET150102101002),15,1501,150102
+choices_kebele,150102101102,Kebele 02 and Diredawa Universty (ET150102101102),15,1501,150102
 choices_kebele,150103101003,03 Kebele,15,1501,150103
 choices_kebele,50401888008,Afeweyne,15,1501,150103
 choices_kebele,50401888011,Balahade,15,1501,150103

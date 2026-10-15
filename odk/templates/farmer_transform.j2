@@ -118,7 +118,10 @@
 {%- if kebele_code.isdigit() -%}
   {%- set geo_lowest = 'kebele-ET' ~ ('%012d' | format(kebele_code | int)) -%}
 {%- elif woreda_code.isdigit() -%}
-  {%- set geo_lowest = 'woreda-ET' ~ ('%06d' | format(woreda_code | int)) -%}
+  {# The supplied catalog has one seven-digit woreda P-code; keep its leading
+     zero when decoding the existing numeric XLSForm choice value. #}
+  {%- set woreda_pcode = '0420112' if woreda_code | int == 420112 else ('%06d' | format(woreda_code | int)) -%}
+  {%- set geo_lowest = 'woreda-ET' ~ woreda_pcode -%}
 {%- else -%}
   {%- set geo_lowest = None -%}
 {%- endif -%}

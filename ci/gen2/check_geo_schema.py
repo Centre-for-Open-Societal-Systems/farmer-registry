@@ -14,7 +14,7 @@ QUERY = """
 SELECT table_name, column_name, data_type
 FROM information_schema.columns
 WHERE table_schema = 'public'
-  AND table_name LIKE 'g2p_register_%'
+  AND table_name ~ '^g2p_(register_|register_history_|intake_form_)(farmers|households|household_members|lands)$'
   AND column_name IN ('latitude', 'longitude', 'altitude')
 ORDER BY table_name, column_name
 """
