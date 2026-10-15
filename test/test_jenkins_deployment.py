@@ -127,6 +127,12 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
     assert result["analytics"]["reportingViews"]["generate"] is False
 
 
+@pytest.mark.parametrize("hostname", sorted(deployment.NEW_DEV_HOSTNAMES))
+def test_new_dev_hostnames_are_accepted(release, hostname):
+    values = {"global": {"registryHostname": hostname}}
+    assert deployment.prepare(values, release[0], ECR, TAG)["global"]["registryHostname"] == hostname
+
+
 def test_wrong_environment_is_rejected(release):
     with pytest.raises(ValueError, match="new-dev"):
         deployment.prepare({"global": {"registryHostname": "registry.production.example"}}, release[0], ECR, TAG)

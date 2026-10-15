@@ -10,10 +10,10 @@ from pathlib import Path
 
 import yaml
 
-ISSUER = "https://keycloak.commons-dev.oanstaging.com/realms/staff"
+ISSUER = "https://keycloak-development.oanstaging.com/realms/staff"
 JWKS = "http://commons-keycloak:80/realms/staff/protocol/openid-connect/certs"
 PM_HOST = "partner-management-staff-portal-api.commons-dev.oanstaging.com"
-IAM_HOST = "staff-iam.commons-dev.oanstaging.com"
+IAM_HOST = "staff-iam-development.oanstaging.com"
 
 
 def validate(documents):
@@ -77,7 +77,7 @@ def validate(documents):
     for field, expected in {
         "STAFF_PORTAL_API_URL": "http://commons-services-pm-staff-portal-api",
         "IAM_URL": "http://commons-services-iam-staff-portal-api",
-        "REDIRECT_URL": "https://partner-management.commons-dev.oanstaging.com",
+        "REDIRECT_URL": "https://partner-management-development.oanstaging.com",
     }.items():
         if ui.get(field) != expected:
             raise ValueError(f"Unexpected PM UI {field}")

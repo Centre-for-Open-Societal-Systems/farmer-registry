@@ -7,8 +7,8 @@ partner-management:
       PARTNER_MANAGER_AUTH_ENABLED: "true"
       PARTNER_MANAGER_AUTH_ADMIN_ROLE: partner_manager
       PARTNER_MANAGER_AUTH_ADMIN_CLIENT_ID: commons-services-staff-portal
-      PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS: '["https://keycloak.commons-dev.oanstaging.com/realms/staff"]'
-      COMMON_AUTH_DEFAULT_ISSUERS: '["https://keycloak.commons-dev.oanstaging.com/realms/staff"]'
+      PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS: '["https://keycloak-development.oanstaging.com/realms/staff"]'
+      COMMON_AUTH_DEFAULT_ISSUERS: '["https://keycloak-development.oanstaging.com/realms/staff"]'
       PARTNER_MANAGER_AUTH_DEFAULT_JWKS_URLS: '["http://commons-keycloak:80/realms/staff/protocol/openid-connect/certs"]'
       COMMON_AUTH_DEFAULT_JWKS_URLS: '["http://commons-keycloak:80/realms/staff/protocol/openid-connect/certs"]'
     istio:
@@ -17,4 +17,4 @@ partner-management:
   staffPortalUi:
     envVars:
       # Logout is browser-facing; the cluster-only DNS name is not usable there.
-      KEYCLOAK_LOGOUT_URL: https://keycloak.commons-dev.oanstaging.com/realms/staff/protocol/openid-connect/logout
+      KEYCLOAK_LOGOUT_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/logout

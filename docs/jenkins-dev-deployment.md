@@ -42,7 +42,8 @@ credentials must allow those repositories. Never put credentials in Git.
 - Runtime images and the inherited Registry chart stay pinned to **1.2.2-rc.544**.
   There is no root Dockerfile; Jenkins builds the six component Dockerfiles.
 - The pipeline reads existing release values and checks the hostname is
-  `registry.farmer-dev.oanstaging.com`. It carries forward environment values,
+  `farmer-registry-development.oanstaging.com` (or the original
+  `registry.farmer-dev.oanstaging.com`). It carries forward environment values,
   Secret references, ingress routes, storage, and the worker's AWE settings.
 - The optional dashboard API template preserves its resources within the Registry
   release and retains its existing independently published image.

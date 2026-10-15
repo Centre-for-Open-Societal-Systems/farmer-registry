@@ -10,25 +10,30 @@ Read-only SSH inspection on 2026-10-15 verified Kubernetes Services,
 VirtualServices, running environment variables and HTTP GETs from a Farmer pod.
 All listed external Commons hostnames resolve to `13.201.58.55` from that pod.
 
+Later on 2026-10-15 the gen2-dev `*-development.oanstaging.com` names were moved
+to this box and became the public names of Keycloak, IAM, PM UI and the Farmer
+Registry. The old `*.commons-dev` / `*.farmer-dev` names of those services redirect
+(UIs) or proxy (APIs) to the new ones; the rows below are updated.
+
 | Purpose | URL | Evidence / use |
 | --- | --- | --- |
-| PM staff UI | `https://partner-management.commons-dev.oanstaging.com` | HTTP 200; use for onboarding and reviewing requests |
-| Keycloak staff issuer | `https://keycloak.commons-dev.oanstaging.com/realms/staff` | Exact `issuer` returned by OIDC discovery |
-| Token endpoint | `https://keycloak.commons-dev.oanstaging.com/realms/staff/protocol/openid-connect/token` | From discovery; existing secret references only |
+| PM staff UI | `https://partner-management-development.oanstaging.com` | HTTP 200; use for onboarding and reviewing requests |
+| Keycloak staff issuer | `https://keycloak-development.oanstaging.com/realms/staff` | Exact `issuer` returned by OIDC discovery |
+| Token endpoint | `https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token` | From discovery; existing secret references only |
 | Internal Keycloak JWKS | `http://commons-keycloak.commons.svc.cluster.local/realms/staff/protocol/openid-connect/certs` | Same service as `http://commons-keycloak:80/...` inside Commons |
 | Internal PM admin API | `http://commons-services-pm-staff-portal-api.commons.svc.cluster.local` | OpenAPI HTTP 200 identifies PM and its onboarding/approve routes |
 | Internal PM key API | `http://commons-services-pm-partner-api.commons.svc.cluster.local` | `/keys/farmer-partner` currently returns 404 |
 | PM key API ingress | `https://partner-management-partner-api.commons-dev.oanstaging.com` | Configured VirtualService destination is PM partner API |
 | Intended PM admin ingress | `https://partner-management-staff-portal-api.commons-dev.oanstaging.com` | DNS resolves; **not currently routed to PM**; overlay adds this route |
-| IAM | `https://staff-iam.commons-dev.oanstaging.com` | OpenAPI HTTP 200 identifies IAM, not PM |
+| IAM | `https://staff-iam-development.oanstaging.com` | OpenAPI HTTP 200 identifies IAM, not PM |
 | AWE | `https://awe.commons-dev.oanstaging.com` | `/v1/awe/health` returns 200; API prefix `/v1/awe/`, UI at `/` |
 | Internal AWE | `http://commons-services-awe.commons.svc.cluster.local` | Shared service in Commons |
-| Farmer UI | `https://registry.farmer-dev.oanstaging.com` | Configured Farmer UI route |
-| Registry partner API | `https://partner-registry.farmer-dev.oanstaging.com` | Configured Registry partner route |
-| Registry staff API | `https://staff-registry.farmer-dev.oanstaging.com` | Configured Registry staff route |
+| Farmer UI | `https://farmer-registry-development.oanstaging.com` | Configured Farmer UI route |
+| Registry partner API | `https://partner-farmer-development.oanstaging.com` | Configured Registry partner route |
+| Registry staff API | `https://staff-farmer-development.oanstaging.com` | Configured Registry staff route |
 
 DNS resolution alone does not establish routing. Currently PM staff API and IAM
-both declare `staff-iam.commons-dev.oanstaging.com/` on the same gateway. The
+both declare the IAM host (`staff-iam-development.oanstaging.com`) on the same gateway. The
 observed response is IAM. The override gives PM its own host without changing
 the shared IAM hostname global. PM UI already uses its correct internal API.
 PM logout is also changed from cluster-only Keycloak DNS to the public URL.
