@@ -414,8 +414,10 @@ def deploy(component, environment, record, source, registry, run=command):
         if component.get("kind") == "connector":
             from connector_cutover import verify_backup
             backup_dir = os.environ.get("CONNECTOR_BACKUP_DIRECTORY")
-            if not backup_dir or verify_backup(Path(backup_dir)) != settings.get("backupHash"):
+            if not backup_dir or not (Path(backup_dir) / "backup.json").is_file():
                 raise ServiceError("connector-backup-required")
+            if verify_backup(Path(backup_dir)) != settings.get("backupHash"):
+                raise ServiceError("connector-backup-integrity-failed")
             old = docs(run(["helm", "get", "manifest", "farmer-connector", *args]))
             isolated_connector(old, after, settings)
             paused_connector(after)

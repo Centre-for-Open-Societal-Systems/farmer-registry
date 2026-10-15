@@ -17,9 +17,11 @@ from connector_cutover import verify_backup  # noqa: E402
 FILES = {"backup.json", "values.yaml", "manifest.yaml", "hooks.yaml", "pipelines.json",
          "mappings.json", "checkpoints.json", "database.dump"}
 REMOTE = "/var/backups/farmer-connector-20261015-before-replacement/snapshot-validated"
+PHASE = "configuration"
 
 
 def main():
+    global PHASE
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--ssh-key", type=Path, required=True)
@@ -27,6 +29,7 @@ def main():
     args.directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     expected = yaml.safe_load((ROOT / "ci/services/dev/registry-connector.yaml").read_text())["_coordination"]["backupHash"]
     known_hosts = ROOT / "ci/connector/new-dev-known-hosts"
+    PHASE = "authenticated-ssh-transfer"
     process = subprocess.Popen(["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
                                 "-o", "UserKnownHostsFile=" + str(known_hosts), "-o", "ConnectTimeout=15",
                                 "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
@@ -46,6 +49,11 @@ def main():
                 with destination.open("xb") as output, archive.extractfile(entry) as source:
                     shutil.copyfileobj(source, output)
                 destination.chmod(0o600)
+        # Consume tar padding before waiting, so a full SSH stdout pipe cannot
+        # hold the sender open after tarfile has reached the archive terminator.
+        while process.stdout.read(1024 * 1024):
+            pass
+        PHASE = "snapshot-integrity"
         if process.wait(timeout=30) or found != FILES or verify_backup(args.directory) != expected:
             raise ValueError("Backup is unavailable or its integrity changed")
     finally:
@@ -58,6 +66,6 @@ if __name__ == "__main__":
     os.umask(0o077)
     try:
         main()
-    except Exception:
-        print("Backup transfer stopped; private output withheld", file=sys.stderr)
+    except Exception as exc:
+        print("Backup transfer stopped during " + PHASE + " (" + type(exc).__name__ + "); private output withheld", file=sys.stderr)
         raise SystemExit(1)
