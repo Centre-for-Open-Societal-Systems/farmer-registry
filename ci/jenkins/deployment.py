@@ -88,6 +88,9 @@ def prepare(values, before, registry, tag):
     # records. Do not run those mutations on dev as a side effect of merging.
     config["sanity"].update(enabled=True, runE2e=False, failOnError=True)
     values.setdefault("analytics", {}).setdefault("bulkSample", {})["enabled"] = False
+    # rc.544 lacks the adopted layout's automatic reporting generator.
+    # Maintained SQL reports and their refresh job remain enabled.
+    values["analytics"].setdefault("reportingViews", {})["generate"] = False
     # Do not turn on new publishing/import jobs in shared Superset by default.
     values["analytics"].setdefault("dashboards", {}).setdefault("enabled", False)
     values.setdefault("mapsContent", {}).setdefault("enabled", False)

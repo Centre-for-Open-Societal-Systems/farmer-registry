@@ -124,6 +124,7 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
     assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".oanstaging.com"
     assert result["registry"]["dbSeed"]["loadSampleData"] is False
     assert result["registry"]["sanity"]["runE2e"] is False
+    assert result["analytics"]["reportingViews"]["generate"] is False
 
 
 def test_wrong_environment_is_rejected(release):

@@ -134,7 +134,7 @@ spec:
   backoffLimit: 2
   template:
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       containers:
         - name: reporting-views
           image: {{ $seedRepo }}:{{ $seedTag }}
@@ -149,7 +149,7 @@ spec:
               # 1. The registry's OWN views — the semantic ones. Materialized,
               #    hand-maintained, and named under `custom:` in reporting.yaml
               #    so step 2 leaves them alone.
-              psql -v ON_ERROR_STOP=1 -f /seed/reporting_views.sql
+              psql --single-transaction -v ON_ERROR_STOP=1 -f /seed/reporting_views.sql
               {{- if .Values.analytics.reportingViews.generate }}
               # 2. The mechanical rest, from the platform: one view per entity
               #    node, discovered from this registry's own schema. It runs

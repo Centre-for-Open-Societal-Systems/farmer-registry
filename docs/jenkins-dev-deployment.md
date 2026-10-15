@@ -63,6 +63,12 @@ credentials must allow those repositories. Never put credentials in Git.
   existing rows, while explicit extension upserts apply reviewed COSS changes.
   Shared lookup SQL is not loaded into Registry or MDS by this job; shared catalogs
   must already be managed by the Commons migration workflow.
+- Reporting runs the maintained SQL in one transaction. The optional upstream
+  `main_crops` field is treated as undeclared when absent from the COSS schema.
+  Automatic schema-generated reports are disabled for rc.544 because that image
+  does not contain `generate_reporting_views.py`; maintained reports and their
+  refresh CronJob remain enabled. Reporting retries use separate failed pods so
+  their logs survive the retry limit.
 - Candidate validation rejects resource removal, changed existing environment or
   Secret references, changed routing/storage, and incorrect commit images.
   A rejected change requires an explicit reviewed migration, not bypassing the guard.
