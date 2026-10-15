@@ -24,17 +24,16 @@ and the small guarded staff UI overlay. There is no separate frontend source for
   `ci/upstream/build-publish.yml.example` for adapting COSS release automation;
   its destinations and secrets belong to upstream, and GitHub rejects the
   inherited reusable workflow before starting jobs in this fork.
-- The old Jenkins deployment pipeline, vendored connector applications and
-  private dashboard chart templates are removed from this registry layout.
-  Existing deployed resources are not changed by this PR update. Their owners
-  must manage connector/dashboard delivery separately; this chart is not a drop-in
-  upgrade of the old combined release.
+- The old combined Jenkins pipeline was removed during adoption. The replacement
+  [new-dev Jenkins pipeline](jenkins-dev-deployment.md) builds the six RC-based
+  images and upgrades the existing Registry release on merged `develop` builds.
+  The optional dashboard template preserves its existing Helm ownership and image.
+  The connector remains an independently managed release.
 
-The existing PR history, including Suresh's merged #92, is retained. Its server
-contract remains relevant: development uses `farmer-dev-kubeconfig`, registry
-namespace `farmer` and shared namespace `commons`; staging remains separate.
-The inherited generic chart does not encode that deployment's hostnames or
-secrets. CI no longer automatically deploys this repository through Jenkins.
+The server contract from Suresh's merged #92 is retained: development uses
+`farmer-dev-kubeconfig`, registry namespace `farmer` and shared namespace
+`commons`. Staging remains separate and is not deployed by this pipeline.
+Existing release values supply the deployment's hostnames and secret references.
 
 ## Verified behavior
 
@@ -77,17 +76,17 @@ read-only diagnosis is historical, not the current schema state.
 
 ## Deployment work before rollout
 
-Configure COSS image/chart publishing, then supply those built image repositories
-and tags for every Farmer component, including `registry.staffUi.image`. Chart
-defaults use upstream image names and placeholder tags; they are not published
-COSS artifacts. The COSS CI builds images but does not publish or deploy them.
+Follow the [Jenkins setup and deployment guide](jenkins-dev-deployment.md).
+GitHub checks validate and build without publishing; Jenkins publishes commit
+images and upgrades new dev after merge to `develop`. Chart defaults still use
+placeholder tags and must not be installed directly onto the existing server.
+The migration guard compares the candidate against the live release before any
+upgrade and preserves the dashboard, routing and environment references.
 
-Review a migration from the existing combined Helm release before upgrading it:
-removing connector/dashboard templates from a release can remove its old resources.
-Preserve live browser/auth configuration and namespace-local secret references.
-Analytics is inherited from upstream and has only been rendered, not validated
-against COSS production data. The four-level geographic override is currently
-implemented in the local Commons Services seed; it is not an automatic server job.
+Analytics has only been rendered, not validated against COSS production data.
+The pipeline disables demo/geography seeding and does not perform shared catalog
+migrations. PM configuration, partner onboarding and ODK form publication remain
+separate rollout steps.
 
 The read-only [connector diagnosis](gen2-connector-diagnosis.md),
 [seed diagnosis](gen2-db-seed-diagnosis.md) and `ci/gen2/` preflight/schema tools

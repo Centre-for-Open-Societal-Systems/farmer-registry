@@ -4,11 +4,12 @@ description: |
   OpenG2P Farmer Registry — a thin, branded package over the shared
   openg2p-registry chart published by the registry platform.
 
-  This chart owns NO service templates. It declares openg2p-registry as a pinned
+  Registry service templates come from openg2p-registry as a pinned
   dependency and supplies the farmer values overlay (variant identity, hostname,
   the farmer-built images, seed toggles and the farmer sanity suite). Every
   deployment, service, ingress, keycloak/iam wiring and the db-seed machinery
-  come from the openg2p-registry subchart.
+  come from the openg2p-registry subchart. The optional COSS dashboard-api
+  Deployment and Service remain here to preserve existing release ownership.
 
   It does own the ANALYTICS layer, in templates/ — because the reporting views
   and dashboards are written against the farmer schema and the platform has no
