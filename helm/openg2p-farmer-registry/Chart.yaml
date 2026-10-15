@@ -10,6 +10,9 @@ description: |
   deployment, service, ingress, keycloak/iam wiring and the db-seed machinery
   come from the openg2p-registry subchart. The optional COSS dashboard-api
   Deployment and Service remain here to preserve existing release ownership.
+  COSS add-on application repositories, build layouts, image values and Helm
+  owners are configured under cossAddons.components in values.yaml. Jenkins
+  coordinates their releases and preserves services when source code is absent.
 
   It does own the ANALYTICS layer, in templates/ — because the reporting views
   and dashboards are written against the farmer schema and the platform has no
@@ -44,6 +47,10 @@ home: https://openg2p.org
 icon: https://openg2p.github.io/openg2p-helm/openg2p-logo.png
 sources:
   - https://github.com/OpenG2P/farmer-registry
+  - https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
+  - https://github.com/Centre-for-Open-Societal-Systems/oan_farmerregistry_dashboard
+  - https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api
+  - https://github.com/OpenG2P/registry-connector
 maintainers:
   - name: OpenG2P
     email: info@openg2p.org

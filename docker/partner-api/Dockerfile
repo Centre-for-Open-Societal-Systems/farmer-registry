@@ -14,3 +14,5 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
+COPY docker/partner-api/patch_odk_signature.py /tmp/patch_odk_signature.py
+RUN python /tmp/patch_odk_signature.py && rm /tmp/patch_odk_signature.py

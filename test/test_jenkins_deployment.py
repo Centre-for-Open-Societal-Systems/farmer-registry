@@ -111,6 +111,50 @@ def test_safe_existing_release_upgrade(release):
     deployment.validate(*release, ECR, TAG)
 
 
+def test_identity_migration_requires_explicit_allowlist_and_keeps_other_settings(release):
+    before, after = release
+    for doc in after:
+        suffix = doc["metadata"]["name"].removeprefix("farmer-registry-")
+        env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
+        for name, value in deployment.identity_env(suffix).items():
+            env[:] = [e for e in env if e["name"] != name]
+            env.append({"name": name, "value": value})
+    deployment.validate(before, after, ECR, TAG, migrate_identity=True)
+    # Secret references remain subject to the original preservation rules.
+    deployment.pod(after[0])["containers"][0]["env"][1]["valueFrom"]["secretKeyRef"]["name"] = "wrong"
+    with pytest.raises(ValueError, match="Secret reference"):
+        deployment.validate(before, after, ECR, TAG, migrate_identity=True)
+
+
+def test_identity_migration_missing_worker_configuration_is_rejected(release):
+    with pytest.raises(ValueError, match="Identity migration was not rendered"):
+        deployment.validate(*release, ECR, TAG, migrate_identity=True)
+
+
+def test_identity_values_are_applied_only_when_requested(release):
+    values = {"global": {"registryHostname": "registry.farmer-dev.oanstaging.com"}}
+    default = deployment.prepare(values, release[0], ECR, TAG)
+    assert "keycloakBaseUrl" not in default["global"]
+    result = deployment.prepare(values, release[0], ECR, TAG, migrate_identity=True)
+    assert result["global"]["keycloakRealm"] == "staff"
+    assert result["global"]["keycloakBaseUrl"] == "https://keycloak-development.oanstaging.com"
+    assert result["registry"]["staffUi"]["envVars"]["IAM_URL"] == "https://staff-iam-development.oanstaging.com"
+
+
+def test_registry_provenance_rejects_wrong_or_missing_image_digest(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "service-outcomes/registry-images.tsv"
+    path.parent.mkdir()
+    commit = TAG + "a" * 28
+    names = {c[2] for c in deployment.COMPONENTS.values()}
+    lines = [f"{name}\t{ECR}/openg2p/farmer-registry/{name}:{TAG}\tsha256:{'b' * 64}" for name in sorted(names)]
+    path.write_text("\n".join(lines))
+    assert set(deployment.registry_provenance(ECR, TAG, commit)) == names
+    path.write_text("\n".join(lines[:-1]))
+    with pytest.raises(ValueError, match="Missing"):
+        deployment.registry_provenance(ECR, TAG, commit)
+
+
 def test_prepare_retains_values_and_worker_awe_secrets(release):
     values = {"global": {"registryHostname": "registry.farmer-dev.oanstaging.com"},
               "dashboardApi": {"image": {"tag": "existing"}},

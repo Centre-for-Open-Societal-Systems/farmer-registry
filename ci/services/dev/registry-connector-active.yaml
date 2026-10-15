@@ -1,0 +1,24 @@
+# Operator handoff overlay after final backup, signing and synthetic acceptance.
+# The ordinary preparation job must never apply this file automatically.
+api:
+  replicaCount: 1
+worker:
+  replicaCount: 1
+ui:
+  replicaCount: 1
+beat:
+  enabled: true
+  replicaCount: 1
+consumer:
+  enabled: false
+istio:
+  enabled: true
+  gateway:
+    create: false
+    name: internal
+  virtualservice:
+    enabled: true
+    gateway: internal
+cossCutover:
+  phase: active
+  checkpointBackupHash: 261ca69a23e704d7c80b25a2420ad955eba6063323ceaf88f7e9d2f6e2c3270c

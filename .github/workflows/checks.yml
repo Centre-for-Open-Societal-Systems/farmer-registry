@@ -24,14 +24,21 @@ jobs:
         run: python -m pytest test/test_pm_manifest.py -q
       - name: Jenkins deployment migration guard
         run: |
-          python -m pytest test/test_jenkins_deployment.py -q
+          python -m pytest test/test_jenkins_deployment.py test/test_service_coordination.py -q
           bash -n ci/jenkins/deploy-dev.sh
       - name: Jenkins Python container
         run: |
           docker build -t coss-ci/validation:check ci/jenkins
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" coss-ci/validation:check bash ci/jenkins/validate.sh
       - name: Deployment shell compatibility (Bash 4.3)
-        run: docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash ci/jenkins/test-deploy-shell.sh
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash ci/jenkins/test-deploy-shell.sh
+          docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash ci/services/test-container-shell.sh
+      - name: Optional services tooling container
+        run: |
+          docker build -t coss-ci/services:check ci/services
+          docker run --rm coss-ci/services:check bash -ec 'python -c "import yaml"; git --version; helm version --short; aws --version; docker --version; docker buildx version'
+          docker run --rm --user 1000:1000 coss-ci/services:check bash -ec 'getent passwd "$(id -u)" >/dev/null; ssh -V'
       - name: ODK transform
         run: python odk/test_transform.py
       - name: ODK geography matches the shared COSS seed
@@ -47,3 +54,4 @@ jobs:
           helm dependency build helm/openg2p-farmer-registry
           helm lint helm/openg2p-farmer-registry --strict
           helm template farmer-registry helm/openg2p-farmer-registry -n farmer > /tmp/farmer.yaml
+          python -m pytest test/test_connector_credentials.py -q

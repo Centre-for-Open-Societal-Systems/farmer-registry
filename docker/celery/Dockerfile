@@ -16,3 +16,12 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
+
+# rc.544 finalizes background intake without forwarding an AWE bearer token.
+# Fail the build if the pinned platform's finalizer no longer matches.
+COPY docker/celery/assets/patch_awe_worker.py /tmp/patch_awe_worker.py
+RUN python /tmp/patch_awe_worker.py && rm /tmp/patch_awe_worker.py
+
+# Preserve the ODK collector on both intake and change-request audit fields.
+COPY docker/celery/assets/patch_odk_actor.py /tmp/patch_odk_actor.py
+RUN python /tmp/patch_odk_actor.py && rm /tmp/patch_odk_actor.py

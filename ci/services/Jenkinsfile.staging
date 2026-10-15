@@ -1,0 +1,70 @@
+// Separate, opt-in promotion job. Configure script path explicitly; this file
+// never enables staging deployment in the Registry develop pipeline.
+pipeline {
+    agent { label 'vpn-agent2' }
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 60, unit: 'MINUTES')
+    }
+    parameters {
+        booleanParam(name: 'ENABLE_STAGING', defaultValue: false,
+            description: 'Requires reviewed staging values and accepted dev connector digest; no Registry deployment.')
+    }
+    environment {
+        AWS_REGION = 'ap-south-1'
+    }
+    stages {
+        stage('Build dashboards and promote connector') {
+            when { expression { params.ENABLE_STAGING } }
+            steps {
+                dir('service-outcomes') { deleteDir() }
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                    withCredentials([
+                        [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds'],
+                        file(credentialsId: 'farmer-services-tested-dev-manifest', variable: 'DEV_MANIFEST'),
+                        file(credentialsId: 'farmer-services-dev-acceptance', variable: 'DEV_ACCEPTANCE')
+                    ]) {
+                        script {
+                            env.ECR_REGISTRY = sh(returnStdout: true, script: '''
+                                set +x
+                                account=$(aws sts get-caller-identity --query Account --output text)
+                                case "$account" in *[!0-9]*|'') exit 1 ;; esac
+                                test "${#account}" = 12
+                                printf '%s.dkr.ecr.%s.amazonaws.com' "$account" "$AWS_REGION"
+                            ''').trim()
+                        }
+                        sh '''
+                            set -eu
+                            set +x
+                            bash ci/services/run-container.sh build --environment staging \
+                              --registry "$ECR_REGISTRY" --input "$DEV_MANIFEST" --acceptance "$DEV_ACCEPTANCE" \
+                              --output service-outcomes/staging-build.json
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Deploy staging services') {
+            when { expression { params.ENABLE_STAGING } }
+            steps {
+                catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                    withCredentials([
+                        file(credentialsId: 'farmer-staging-kubeconfig', variable: 'KUBECONFIG'),
+                        file(credentialsId: 'farmer-services-dev-acceptance', variable: 'DEV_ACCEPTANCE')
+                    ]) {
+                        sh '''
+                            set -eu
+                            bash ci/services/run-container.sh deploy --environment staging \
+                              --registry "$ECR_REGISTRY" --input service-outcomes/staging-build.json \
+                              --acceptance "$DEV_ACCEPTANCE" --output service-outcomes/staging-deploy.json
+                        '''
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always { archiveArtifacts artifacts: 'service-outcomes/*.json', allowEmptyArchive: true }
+    }
+}

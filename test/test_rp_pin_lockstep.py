@@ -53,3 +53,10 @@ def test_rp_pin_is_in_lockstep():
             + "\n".join(lines)
             + "\n\nFix with: ./scripts/bump-rp-version.sh <version>"
         )
+
+
+def test_chart_dependency_lock_matches_the_pinned_platform():
+    lock = CHART.with_name("Chart.lock")
+    assert lock.is_file(), "Pinned Farmer chart must commit its dependency lock"
+    assert re.search(r"version:\s*" + re.escape(_chart_pin()) + r"\s", lock.read_text())
+    assert "https://openg2p.github.io/openg2p-helm" in lock.read_text()
