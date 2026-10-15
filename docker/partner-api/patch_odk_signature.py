@@ -62,6 +62,21 @@ def patch(path):
     path.write_text(result)
 
 
+def patch_controller(path):
+    source = path.read_text()
+    old = "        except Exception as error_exception:\n"
+    new = "        except HTTPException:\n            raise\n        except Exception as error_exception:\n"
+    if new in source:
+        return
+    if source.count(old) != 1 or source.count("from fastapi import Response\n") != 1:
+        raise RuntimeError("Platform ingestion controller changed; review authentication errors")
+    result = source.replace("from fastapi import Response\n", "from fastapi import Response, HTTPException\n").replace(old, new)
+    compile(result, str(path), "exec")
+    path.write_text(result)
+
+
 if __name__ == "__main__":
     spec = importlib.util.find_spec("openg2p_registry_core")
     patch(Path(spec.origin).parent / "services/g2p_ingest_service.py")
+    spec = importlib.util.find_spec("openg2p_registry_partner_api")
+    patch_controller(Path(spec.origin).parent / "ingestion/controllers/g2p_ingest_controller.py")

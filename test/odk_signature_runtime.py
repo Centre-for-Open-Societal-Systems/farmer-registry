@@ -21,6 +21,15 @@ from openg2p_registry_farmer_extension import odk_signature
 
 
 class SignatureRuntime(unittest.IsolatedAsyncioTestCase):
+    async def test_controller_preserves_signature_authentication_status(self):
+        from openg2p_registry_partner_api.ingestion.controllers.g2p_ingest_controller import G2PIngestController
+        controller = object.__new__(G2PIngestController)
+        controller.request_response_helper = SimpleNamespace(construct_http_request=AsyncMock(return_value={}))
+        controller.g2p_ingest_controller_service = SimpleNamespace(ingest_data=AsyncMock(side_effect=HTTPException(401, "Invalid Farmer ODK message signature")))
+        with self.assertRaises(HTTPException) as caught:
+            await controller.ingest_data(object(), "FARMER_ODK_MODEL")
+        self.assertEqual(caught.exception.status_code, 401)
+
     async def test_retry_returns_existing_correlation_without_duplicate_intake(self):
         envelope = {"body": {"message": {"payload": {"name": "Synthetic"}}}}
         existing = SimpleNamespace(ingest_id="existing", ingest_correlation_id="original-correlation")
