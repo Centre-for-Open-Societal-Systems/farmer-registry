@@ -55,6 +55,7 @@ pipeline {
                         docker push "$image"
                         digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name openg2p/farmer-registry/celery \
                             --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+                        mkdir -p service-outcomes
                         printf '%s@%s' "$image" "$digest" > service-outcomes/worker-image.txt
                     '''
                 }
