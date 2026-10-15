@@ -97,7 +97,7 @@ pipeline {
         stage('Prepare dev deployment') {
             when { allOf { branch 'develop'; not { changeRequest() } } }
             steps {
-                stash name: 'dev-deployment', includes: 'helm/**,ci/**,service-outcomes/**', excludes: 'helm/**/charts/**,helm/**/Chart.lock'
+                stash name: 'dev-deployment', includes: 'helm/**,ci/**,service-outcomes/**', excludes: 'helm/**/charts/**'
             }
         }
         stage('Deploy new dev') {

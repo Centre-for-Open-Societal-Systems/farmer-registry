@@ -50,7 +50,7 @@ guard prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
 kubectl exec -i -n farmer deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
   python3 - < ci/gen2/check_geo_schema.py
 helm repo add openg2p https://openg2p.github.io/openg2p-helm --force-update
-helm dependency update "$CHART"
+helm dependency build "$CHART"
 helm lint "$CHART" --strict -f "$STATE/values.yaml" > "$STATE/lint.log"
 helm template "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
   -f "$STATE/values.yaml" > "$STATE/after.yaml"
