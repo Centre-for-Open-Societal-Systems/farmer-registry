@@ -21,6 +21,7 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "scripts/operations/connector"))
 MANIFEST = ROOT / "helm/openg2p-farmer-registry/values.yaml"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -71,7 +72,9 @@ def image_specs(component):
                                                "imageValues": [component["imageValues"]]}}
 
 
-def configuration(path=MANIFEST):
+def configuration(path=MANIFEST, environment="dev"):
+    if environment not in ("dev", "staging"):
+        raise ValueError("Unknown environment")
     items = yaml.safe_load(path.read_text(encoding="utf-8"))["cossAddons"]["components"]
     seen = set()
     for item in items:
@@ -97,6 +100,10 @@ def configuration(path=MANIFEST):
             raise ValueError("Optional service must not adopt an existing shared/Registry/old connector release")
         if item.get("imageRepository") and not re.fullmatch(r"openg2p/[a-z0-9/-]+", item["imageRepository"]):
             raise ValueError("Invalid image repository")
+    if environment == "staging":
+        items = copy.deepcopy(items)
+        for item in items:
+            item["namespace"] = "far"
     return items
 
 
@@ -628,7 +635,7 @@ def main():
                 if acceptance.get("images", {}).get(name) != expected_digests:
                     parser.error("Acceptance does not cover every promoted digest")
     with tempfile.TemporaryDirectory(prefix="registry-services-") as work:
-        records = coordinate(configuration(), args.action, args.environment, args.registry,
+        records = coordinate(configuration(environment=args.environment), args.action, args.environment, args.registry,
                              previous.get("components", {}), Path(work))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps({"environment": args.environment,

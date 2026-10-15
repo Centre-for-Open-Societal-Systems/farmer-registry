@@ -59,8 +59,9 @@ separately before accepting any identity migration. Cleanup does not repair eith
 ## Shared maintenance
 
 Retain the separate `farmer-registry-commons-services` job and its credentials.
-Verify its configured script against the owning repository before use. Farmer
-cleanup does not grant permission to upgrade shared Commons services.
+Its configured `ci/commons-services/Jenkinsfile` is absent from current upstream
+`develop`; do not run it until its owner restores the source. Farmer cleanup does
+not grant permission to upgrade shared Commons services.
 
 See [service coordination](coordinated-services-rollout.md),
 [connector recovery](connector.md), and the [cleanup inventory](cleanup-inventory.md).

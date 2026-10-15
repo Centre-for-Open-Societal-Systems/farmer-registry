@@ -100,7 +100,7 @@ pipeline {
         stage('Prepare dev deployment') {
             when { allOf { branch 'develop'; not { changeRequest() } } }
             steps {
-                stash name: 'dev-deployment', includes: 'helm/**,ci/**,service-outcomes/**', excludes: 'helm/**/charts/**'
+                stash name: 'dev-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,tests/runtime/**,service-outcomes/**', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
         }
         stage('Deploy new dev') {
@@ -151,7 +151,7 @@ pipeline {
                         '''
                     }
                 }
-                stash name: 'optional-deployment', includes: 'ci/**,helm/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
+                stash name: 'optional-deployment', includes: 'ci/**,helm/**,scripts/**,integrations/**,tests/runtime/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
         }
         stage('Deploy optional services') {

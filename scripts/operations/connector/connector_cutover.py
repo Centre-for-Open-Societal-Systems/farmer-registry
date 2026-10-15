@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 import sys
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "ci/services"))
 from coordinator import command, docs, pod, ServiceError
 
 OLD = "farmer-connector"

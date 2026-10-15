@@ -198,7 +198,7 @@ or decoded JWT is not evidence of these authorization checks.
    these private files; the destination must be new:
 
    ```bash
-   python ci/services/connector_cutover.py backup --directory /private/connector-backup \
+   python scripts/operations/connector/connector_cutover.py backup --directory /private/connector-backup \
      --pipelines /private/pipelines.json --mappings /private/mappings.json \
      --checkpoints /private/checkpoints.json --database /private/database.dump
    ```

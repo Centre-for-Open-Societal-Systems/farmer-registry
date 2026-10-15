@@ -21,7 +21,7 @@ def module(name, path):
 
 
 coordinator = module("coordinator", "ci/services/coordinator.py")
-cutover = module("connector_cutover", "ci/services/connector_cutover.py")
+cutover = module("connector_cutover", "scripts/operations/connector/connector_cutover.py")
 identity = module("identity_check", "scripts/operations/identity/check.py")
 ECR = "123456789012.dkr.ecr.ap-south-1.amazonaws.com"
 SHA = "a" * 40
@@ -133,9 +133,19 @@ def test_service_catalogue_is_owned_by_helm_and_hash_covers_repositories(tmp_pat
 
 
 def test_jenkins_transfers_hidden_chart_files_bound_into_the_build_hash():
-    for path, name in [("ci/pipelines/dev.groovy", "optional-deployment")]:
+    for path, name in [("ci/pipelines/dev.groovy", "dev-deployment"), ("ci/pipelines/dev.groovy", "optional-deployment")]:
         line = next(line for line in (ROOT / path).read_text().splitlines() if "stash name: '" + name + "'" in line)
         assert "helm/**" in line and "useDefaultExcludes: false" in line
+        assert "scripts/**" in line and "integrations/**" in line and "tests/runtime/**" in line
+
+
+def test_staging_components_target_far_without_adopting_the_legacy_connector():
+    dev = coordinator.configuration()
+    staging = coordinator.configuration(environment="staging")
+    assert all(c["namespace"] == "farmer" for c in dev)
+    assert all(c["namespace"] == "far" for c in staging)
+    assert [c["release"] for c in dev] == [c["release"] for c in staging]
+    assert all(c["release"] != "farmer-connector" for c in staging)
 
 
 @pytest.mark.parametrize("mutation", ["none", "worker", "secret", "route", "job", "remove", "database"])
