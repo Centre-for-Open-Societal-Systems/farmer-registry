@@ -40,6 +40,5 @@ async def verify_odk_signature(partner_id, signature, message, envelope, key_api
             raise ValueError("message binding failed")
     except Exception:
         # Never include key material, signatures or private message data.
-        from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryException
-        raise G2PRegistryException(code=G2PRegistryErrorCodes.INVALID_REQUEST.value[1],
-                                  message="Invalid Farmer ODK message signature") from None
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Invalid Farmer ODK message signature") from None

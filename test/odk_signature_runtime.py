@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives import serialization
 sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_farmer_extension")
 from openg2p_registry_core.services.g2p_ingest_service import G2PIngestService
 from openg2p_registry_core.helpers import PatternMatcher
-from openg2p_registry_core.errors import G2PRegistryException
+from fastapi import HTTPException
 from openg2p_registry_farmer_extension import odk_signature
 
 
@@ -61,7 +61,7 @@ class SignatureRuntime(unittest.IsolatedAsyncioTestCase):
              patch.object(odk_signature.httpx, "AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(response), **kw)):
             await service._match_model_signature_pattern("FARMER_ODK_MODEL", envelope, session)
             message["payload"]["name"] = "Tampered"
-            with self.assertRaises(G2PRegistryException):
+            with self.assertRaises(HTTPException):
                 await service._match_model_signature_pattern("FARMER_ODK_MODEL", envelope, session)
             # Unrelated models retain their existing integration contracts.
             await service._match_model_signature_pattern("OTHER_MODEL", envelope, session)

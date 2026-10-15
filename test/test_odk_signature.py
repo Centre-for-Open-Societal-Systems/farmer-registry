@@ -21,13 +21,12 @@ spec.loader.exec_module(verifier)
 
 
 class Rejected(Exception):
-    def __init__(self, **kwargs): super().__init__(kwargs["message"])
+    def __init__(self, **kwargs): super().__init__(kwargs["detail"])
 
 
 @pytest.mark.parametrize("fault", [None, "tamper", "message-id", "issuer", "expired", "wrong-key", "missing", "algorithm", "kid", "inactive", "pm-unavailable", "long-lifetime", "key-partner"])
 def test_signature_binding_and_fail_closed(monkeypatch, fault):
-    monkeypatch.setitem(sys.modules, "openg2p_registry_core.errors", SimpleNamespace(
-        G2PRegistryException=Rejected, G2PRegistryErrorCodes=SimpleNamespace(INVALID_REQUEST=SimpleNamespace(value=("invalid", "invalid")))))
+    monkeypatch.setitem(sys.modules, "fastapi", SimpleNamespace(HTTPException=Rejected))
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public = key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode()
     message = {"payload": {"name": "Synthetic", "photo": {"data": "fixture"}}}

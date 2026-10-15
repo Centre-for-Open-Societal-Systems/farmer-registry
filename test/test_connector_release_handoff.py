@@ -23,3 +23,20 @@ def test_pausing_may_only_stop_existing_processes(fault):
     if fault:
         with pytest.raises(ValueError): handoff.replica_guard(before, after, handoff.OLD, {"worker": 0})
     else: handoff.replica_guard(before, after, handoff.OLD, {"worker": 0})
+
+
+@pytest.mark.parametrize("fault", [None, "image", "secret", "queue", "replicas"])
+def test_scheduler_must_use_the_same_worker_image_secret_and_queue(fault):
+    worker = {"kind": "Deployment", "metadata": {"name": handoff.NEW+"-worker"}, "spec": {"replicas": 1,
+              "template": {"spec": {"containers": [{"name": "connector-worker", "args": ["worker"], "image": "signed@digest",
+                          "env": [{"name": "CONNECTOR_SIGNING_PRIVATE_KEY_PEM", "valueFrom": {"secretKeyRef": {"name": "retained", "key": "private-key.pem"}}}]}]}}}}
+    beat = copy.deepcopy(worker); beat["metadata"]["name"] = handoff.NEW+"-beat"
+    container = beat["spec"]["template"]["spec"]["containers"][0]
+    container.update(name="connector-beat", args=["beat"])
+    if fault == "image": container["image"] = "unsigned"
+    if fault == "secret": container["env"] = []
+    if fault == "queue": container["args"] = ["worker"]
+    if fault == "replicas": beat["spec"]["replicas"] = 2
+    if fault:
+        with pytest.raises(ValueError): handoff.scheduler_guard([worker], [worker,beat])
+    else: handoff.scheduler_guard([worker], [worker,beat])
