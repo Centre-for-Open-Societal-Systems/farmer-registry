@@ -1,35 +1,28 @@
 -- Farmer Registry reporting layer
 -- =============================================================================
--- Flattens the register into wide, indexed materialized views that the
--- registry's dashboard API reads from. Charts then stay simple SELECTs instead of
--- repeating multi-table joins and JSONB digging in every chart definition.
---
--- These views are the whole reporting surface: each one exists because a chart
--- reads it. A new chart over another entity gets a view written here, next to the
--- others, rather than one generated for every table in the schema.
+-- Flattens the register into wide, indexed materialized views that dashboards
+-- (Superset) read from. Charts then stay simple SELECTs instead of repeating
+-- multi-table joins and JSONB digging in every chart definition.
 --
 -- Grain differs from NSR, deliberately
 -- ------------------------------------
 -- NSR pairs household/individual. Farmer's shape is a three-level tree:
 --
---     farmer ──< land ──< crop / livestock / farm_inputs
+--     farmer ──< land ──< livestock / farm_inputs
 --            └──< membership_details, score
 --
--- Crops, livestock and inputs hang off the LAND PARCEL, not the farmer (verified
--- against the seed set: 392/392 crops, 317/317 livestock and 434/434 input rows
--- link to a land id, 0 to a farmer id). So there are two views, at the two grains
--- that answer real questions:
+-- Livestock and inputs hang off the LAND PARCEL, not the farmer (verified
+-- against the seed set: 317/317 livestock and 434/434 input rows link to a land
+-- id, 0 to a farmer id). So there are two views, at the two grains that answer
+-- real questions:
 --
 --   fr_rpt_farmer — one row per farmer, everything rolled up. "How many farmers
 --                   irrigate?", "cluster membership by region", "livestock heads
 --                   per farmer".
---   fr_rpt_land   — one row per parcel. "Area by tenure", "crop mix", "land use".
+--   fr_rpt_land   — one row per parcel. "Area by tenure", "land use".
 --                   Area questions MUST use this view: rolling area to the farmer
 --                   and then charting it double-counts nothing, but slicing by a
 --                   parcel attribute (tenure, use) only makes sense per parcel.
---
--- plus fr_rpt_crop, one row per planting, for "which crops, where" (the
--- commodities map layer).
 --
 -- Country-agnostic by construction
 -- --------------------------------
@@ -42,7 +35,8 @@
 --
 -- Areas are normalised to hectares
 -- --------------------------------
--- land_size is a free-text column and unit is an enum, so the raw pair cannot be
+-- land_size is numeric (it was free text before 1.2; read through ::text so the
+-- view builds on either) and unit is an enum, so the raw pair cannot be
 -- summed. land_size_ha is the only column charts should aggregate; the raw pair is
 -- carried alongside for drill-down. A non-numeric land_size yields NULL rather
 -- than failing the refresh — bad data must not take the dashboards down.
@@ -54,15 +48,18 @@
 --
 --   REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_land;
 --   REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_farmer;
---   REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_crop;
 --
--- (The refresh job resolves that order from pg_depend. CONCURRENTLY needs the
--- unique indexes created at the bottom, and those in turn need a first
--- non-concurrent refresh — which CREATE ... AS does for us.)
+-- Crops are not records in this registry: what is sown each season belongs to
+-- the Crop Sown Registry. A farmer carries only main_crops, the crops declared at
+-- registration (Master Data CROP_COMMODITY codes). fr_rpt_farmer exposes them,
+-- and fr_rpt_farmer_main_crop (a plain view, one row per farmer per declared
+-- crop) answers "farmers by main crop" — it needs no refresh of its own.
+--
+-- (CONCURRENTLY needs the unique indexes created at the bottom, and those in turn
+-- need a first non-concurrent refresh — which CREATE ... AS does for us.)
 -- =============================================================================
 
--- fr_rpt_geo_levels is built from Master Data by reporting_geo_levels.sh, which
--- the reporting job runs after this file.
+-- fr_rpt_geo_levels is GENERATED, from Master Data.
 --
 -- It used to be derived here, by unpacking a registered farmer's own hierarchy.
 -- That made the labels a property of the DATA: a registry installed empty — the
@@ -71,40 +68,24 @@
 -- first record exists.
 
 -- ---------------------------------------------------------------------------
--- Retired views
--- ---------------------------------------------------------------------------
--- Older installs carry one view per register table, created by the registry
--- platform's view generator for Superset. Nothing reads them any more, and with
--- nothing refreshing their definitions they would drift from the schema. Named
--- one by one: a pattern here would also drop a view added above later.
-DO $$
-DECLARE
-    v text;
-    kind "char";
-BEGIN
-    FOREACH v IN ARRAY ARRAY[
-        'fr_rpt_change_request', 'fr_rpt_consent_receipt', 'fr_rpt_consent_request',
-        'fr_rpt_farm_input', 'fr_rpt_farmer_phone', 'fr_rpt_household',
-        'fr_rpt_household_member', 'fr_rpt_livestock', 'fr_rpt_membership',
-        'fr_rpt_record_history', 'fr_rpt_reg_id', 'fr_rpt_score',
-        'fr_rpt_score_history'
-    ] LOOP
-        SELECT c.relkind INTO kind
-        FROM pg_class c
-        WHERE c.relname = v AND c.relnamespace = 'public'::regnamespace;
-        IF kind = 'v' THEN
-            EXECUTE format('DROP VIEW %I CASCADE', v);
-        ELSIF kind = 'm' THEN
-            EXECUTE format('DROP MATERIALIZED VIEW %I CASCADE', v);
-        END IF;
-        kind := NULL;
-    END LOOP;
-END $$;
-
--- ---------------------------------------------------------------------------
 -- Land parcels
 -- ---------------------------------------------------------------------------
 -- Built first: fr_rpt_farmer rolls its per-farmer aggregates off the same CTEs.
+-- The retired per-planting view. It read g2p_register_crops, which the Farmer
+-- Registry no longer writes (the table and its rows are left in place on an
+-- upgraded database). Dropped whichever kind it is; reporting.yaml names it
+-- under `custom:` so the generator does not recreate it from the legacy table.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_matviews WHERE schemaname = current_schema()
+               AND matviewname = 'fr_rpt_crop') THEN
+        EXECUTE 'DROP MATERIALIZED VIEW fr_rpt_crop CASCADE';
+    ELSIF EXISTS (SELECT 1 FROM pg_views WHERE schemaname = current_schema()
+                  AND viewname = 'fr_rpt_crop') THEN
+        EXECUTE 'DROP VIEW fr_rpt_crop CASCADE';
+    END IF;
+END $$;
+
 DROP MATERIALIZED VIEW IF EXISTS fr_rpt_land CASCADE;
 CREATE MATERIALIZED VIEW fr_rpt_land AS
 WITH land_geo AS (
@@ -125,21 +106,6 @@ WITH land_geo AS (
                  WITH ORDINALITY AS t(elem, ordinality)
     WHERE l.geo_code_hierarchy_json IS NOT NULL
     GROUP BY l.internal_record_id
-),
-crop AS (
-    -- One row per parcel. commodities is the drill-down label; the booleans are
-    -- what charts filter on, so a parcel growing both food and market crops is
-    -- counted in both rather than forced into one bucket.
-    SELECT link_internal_record_id AS land_id,
-           count(*)                                              AS crop_count,
-           count(DISTINCT commodity)                             AS crop_variety_count,
-           string_agg(DISTINCT commodity, ', ' ORDER BY commodity) AS commodities,
-           bool_or(end_use = 'FOOD_HUMAN_CONSUMPTION')           AS has_food_crop,
-           bool_or(end_use = 'FEED_ANIMALS')                     AS has_feed_crop,
-           bool_or(end_use = 'BIOFUELS_NONFOOD')                 AS has_biofuel_crop
-    FROM g2p_register_crops
-    WHERE record_status = 'ACTIVE'
-    GROUP BY link_internal_record_id
 ),
 stock AS (
     SELECT link_internal_record_id AS land_id,
@@ -200,7 +166,7 @@ SELECT
      AND l.certificate_storage_id <> '')       AS has_title_certificate,
 
     -- Raw pair kept for drill-down; land_size_ha is the only summable column.
-    l.land_size                                AS land_size_raw,
+    l.land_size::text                          AS land_size_raw,
     l.unit                                     AS land_size_unit,
     (CASE
         WHEN l.land_size IS NULL THEN NULL
@@ -215,13 +181,6 @@ SELECT
             ELSE NULL
         END
      END)::numeric(18,6)                       AS land_size_ha,
-
-    COALESCE(c.crop_count, 0)                  AS crop_count,
-    COALESCE(c.crop_variety_count, 0)          AS crop_variety_count,
-    c.commodities,
-    COALESCE(c.has_food_crop, false)           AS has_food_crop,
-    COALESCE(c.has_feed_crop, false)           AS has_feed_crop,
-    COALESCE(c.has_biofuel_crop, false)        AS has_biofuel_crop,
 
     COALESCE(s.livestock_record_count, 0)      AS livestock_record_count,
     COALESCE(s.livestock_head_total, 0)        AS livestock_head_total,
@@ -240,7 +199,6 @@ SELECT
      OR COALESCE(i.access_to_machinery, false)) AS uses_any_modern_input
 FROM g2p_register_lands l
 LEFT JOIN land_geo g  ON g.land_id  = l.internal_record_id
-LEFT JOIN crop     c  ON c.land_id  = l.internal_record_id
 LEFT JOIN stock    s  ON s.land_id  = l.internal_record_id
 LEFT JOIN inputs   i  ON i.land_id  = l.internal_record_id
 -- Parcel geo is often blank while the farmer's is set; fall back so map and
@@ -265,7 +223,7 @@ LEFT JOIN LATERAL (
 ) fg ON TRUE;
 
 COMMENT ON MATERIALIZED VIEW fr_rpt_land IS
-    'One row per land parcel with its crops, livestock and input use rolled in. '
+    'One row per land parcel with its livestock and input use rolled in. '
     'Area questions belong here: land_size_ha is normalised to hectares and is '
     'the only summable area column.';
 
@@ -303,10 +261,7 @@ holding AS (
            count(*) FILTER (WHERE land_size_ha IS NULL) AS parcels_missing_area,
            bool_or(is_owner_operated)                 AS owns_any_parcel,
            bool_or(has_title_certificate)             AS has_any_title,
-           sum(crop_count)                            AS crop_count,
            sum(livestock_head_total)                  AS livestock_head_total,
-           bool_or(has_food_crop)                     AS has_food_crop,
-           bool_or(has_feed_crop)                     AS has_feed_crop,
            bool_or(fertilizer_use)                    AS fertilizer_use,
            bool_or(improved_seed_use)                 AS improved_seed_use,
            bool_or(access_to_machinery)               AS access_to_machinery,
@@ -390,11 +345,16 @@ SELECT
     h.main_farming_type,
     h.main_livestock_system,
 
-    COALESCE(h.crop_count, 0)                  AS crop_count,
+    -- Declared at registration (Master Data CROP_COMMODITY codes). The JSONB
+    -- list is kept for drill-down; main_crop_codes is its readable label, and
+    -- fr_rpt_farmer_main_crop has one row per declared crop for grouping.
+    mc.main_crops,
+    mc.main_crop_codes,
+    COALESCE(mc.main_crop_count, 0)            AS main_crop_count,
+    (COALESCE(mc.main_crop_count, 0) > 0)      AS has_main_crops,
+
     COALESCE(h.livestock_head_total, 0)        AS livestock_head_total,
     (COALESCE(h.livestock_head_total, 0) > 0)  AS keeps_livestock,
-    COALESCE(h.has_food_crop, false)           AS has_food_crop,
-    COALESCE(h.has_feed_crop, false)           AS has_feed_crop,
 
     COALESCE(h.fertilizer_use, false)          AS fertilizer_use,
     COALESCE(h.improved_seed_use, false)       AS improved_seed_use,
@@ -428,6 +388,17 @@ LEFT JOIN geo     g  ON g.farmer_id  = f.internal_record_id
 LEFT JOIN holding h  ON h.farmer_id  = f.internal_record_id
 LEFT JOIN member  m  ON m.farmer_id  = f.internal_record_id
 LEFT JOIN score   sc ON sc.farmer_id = f.internal_record_id
+-- main_crops is a JSONB list; anything else (NULL, a stray scalar) reads as none
+-- rather than failing the refresh.
+CROSS JOIN LATERAL (
+    SELECT CASE WHEN jsonb_typeof(f.main_crops) = 'array' THEN f.main_crops END AS main_crops,
+           (SELECT string_agg(c, ', ' ORDER BY c)
+              FROM jsonb_array_elements_text(
+                     CASE WHEN jsonb_typeof(f.main_crops) = 'array'
+                          THEN f.main_crops ELSE '[]'::jsonb END) AS c) AS main_crop_codes,
+           (CASE WHEN jsonb_typeof(f.main_crops) = 'array'
+                 THEN jsonb_array_length(f.main_crops) END)          AS main_crop_count
+) mc
 CROSS JOIN LATERAL (
     SELECT COALESCE(
         CASE WHEN f.birth_date IS NOT NULL
@@ -436,61 +407,8 @@ CROSS JOIN LATERAL (
 ) a;
 
 COMMENT ON MATERIALIZED VIEW fr_rpt_farmer IS
-    'One row per farmer with land, crop, livestock, input, membership and score '
+    'One row per farmer with land, main crops, livestock, input, membership and score '
     'rolled up. Use fr_rpt_land for anything sliced by a parcel attribute.';
-
-
--- ---------------------------------------------------------------------------
--- Crops
--- ---------------------------------------------------------------------------
--- One row per crop planting, with geography. fr_rpt_land collapses commodities
--- into a comma-joined string for drill-down, which cannot be grouped by — "which
--- crops, where" needs the crop grain. Keep aggregates that COUNT PARCELS on
--- fr_rpt_land and aggregates that COUNT PLANTINGS here.
---
--- A crop links to EITHER its land parcel or straight to its farmer, depending on
--- which form captured it; intake records crops against the farmer. Geography is
--- the parcel's when there is one and the farmer's otherwise, so every planting
--- lands on the map. Built after fr_rpt_farmer because it reads it.
-DROP MATERIALIZED VIEW IF EXISTS fr_rpt_crop CASCADE;
-CREATE MATERIALIZED VIEW fr_rpt_crop AS
-SELECT
-    c.internal_record_id                               AS crop_id,
-    l.land_id,
-    f.farmer_id,
-    c.commodity,
-    c.season,
-    c.planted_date,
-    c.end_use,
-    (c.end_use = 'FOOD_HUMAN_CONSUMPTION')             AS is_food_crop,
-    (c.end_use = 'FEED_ANIMALS')                       AS is_feed_crop,
-    COALESCE(l.geo_1, f.geo_1)                         AS geo_1,
-    COALESCE(l.geo_2, f.geo_2)                         AS geo_2,
-    COALESCE(l.geo_3, f.geo_3)                         AS geo_3,
-    COALESCE(l.geo_4, f.geo_4)                         AS geo_4,
-    COALESCE(l.geo_5, f.geo_5)                         AS geo_5,
-    COALESCE(l.geo_1_id, f.geo_1_id)                   AS geo_1_id,
-    COALESCE(l.geo_2_id, f.geo_2_id)                   AS geo_2_id,
-    COALESCE(l.geo_3_id, f.geo_3_id)                   AS geo_3_id,
-    COALESCE(l.geo_4_id, f.geo_4_id)                   AS geo_4_id,
-    COALESCE(l.geo_5_id, f.geo_5_id)                   AS geo_5_id,
-    -- Parcel attributes are NULL for a crop recorded against the farmer.
-    l.land_ownership_type,
-    l.current_land_use,
-    l.farming_type,
-    -- Parcel area repeats on every crop row: correct for "area where X is grown",
-    -- WRONG to SUM across a parcel's crops. Charts that total area use fr_rpt_land.
-    l.land_size_ha                                     AS parcel_land_size_ha
-FROM g2p_register_crops c
-LEFT JOIN fr_rpt_land l ON l.land_id = c.link_internal_record_id
-LEFT JOIN fr_rpt_farmer f
-       ON f.farmer_id = COALESCE(l.farmer_id, c.link_internal_record_id)
-WHERE c.record_status = 'ACTIVE';
-
-COMMENT ON MATERIALIZED VIEW fr_rpt_crop IS
-    'One row per crop planting with geography (the parcel''s, else the farmer''s). '
-    'Use for crop-mix and end-use questions; parcel_land_size_ha repeats per crop, '
-    'so never SUM it.';
 
 
 -- ---------------------------------------------------------------------------
@@ -500,9 +418,6 @@ COMMENT ON MATERIALIZED VIEW fr_rpt_crop IS
 -- blocking readers — a dashboard mid-query keeps the old snapshot).
 CREATE UNIQUE INDEX fr_rpt_farmer_pk ON fr_rpt_farmer (farmer_id);
 CREATE UNIQUE INDEX fr_rpt_land_pk   ON fr_rpt_land   (land_id);
-CREATE UNIQUE INDEX fr_rpt_crop_pk   ON fr_rpt_crop   (crop_id);
-CREATE INDEX fr_rpt_crop_commodity   ON fr_rpt_crop   (commodity);
-CREATE INDEX fr_rpt_crop_geo         ON fr_rpt_crop   (geo_1, geo_2, geo_3);
 
 -- Geo indexes back the region drill-down, which filters progressively by level.
 CREATE INDEX fr_rpt_farmer_geo    ON fr_rpt_farmer (geo_1, geo_2, geo_3);
@@ -516,3 +431,33 @@ CREATE INDEX fr_rpt_farmer_cluster ON fr_rpt_farmer (is_farmer_cluster_member);
 CREATE INDEX fr_rpt_land_tenure   ON fr_rpt_land   (land_ownership_type);
 CREATE INDEX fr_rpt_land_use      ON fr_rpt_land   (current_land_use);
 CREATE INDEX fr_rpt_land_ftype    ON fr_rpt_land   (farming_type);
+
+
+-- ---------------------------------------------------------------------------
+-- Farmers by main crop
+-- ---------------------------------------------------------------------------
+-- One row per farmer per declared main crop, with the farmer's geography and
+-- the dimensions charts slice by. A plain view over fr_rpt_farmer: always as
+-- current as that snapshot, nothing to refresh. COUNT(*) here counts
+-- farmer-crop declarations; COUNT(DISTINCT farmer_id) counts farmers. Recreated
+-- on every run because the DROP ... CASCADE of fr_rpt_farmer above removes it.
+CREATE VIEW fr_rpt_farmer_main_crop AS
+SELECT
+    f.farmer_id,
+    f.functional_record_id,
+    c.main_crop,
+    f.main_crop_count,
+    f.geo_1, f.geo_2, f.geo_3, f.geo_4, f.geo_5,
+    f.geo_1_id, f.geo_2_id, f.geo_3_id, f.geo_4_id, f.geo_5_id,
+    f.gender,
+    f.is_female,
+    f.age_band,
+    f.main_farming_type,
+    f.record_status
+FROM fr_rpt_farmer f
+CROSS JOIN LATERAL jsonb_array_elements_text(f.main_crops) AS c(main_crop)
+WHERE f.main_crops IS NOT NULL;
+
+COMMENT ON VIEW fr_rpt_farmer_main_crop IS
+    'One row per farmer per declared main crop (Master Data CROP_COMMODITY code). '
+    'COUNT(DISTINCT farmer_id) for farmers; never sum farmer measures here.';

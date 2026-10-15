@@ -254,7 +254,7 @@ class TestEffectiveLayer(unittest.TestCase):
             / "docker"
             / "staff-ui"
             / "assets"
-            / "intake-photo-widget.css"
+            / "coss-intake.js"
         ).read_text(encoding="utf-8")
         selector = f".header-section-widget-{PHOTO_WIDGET_ID}"
         self.assertIn(f"{selector} .hdr-info", css)

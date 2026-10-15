@@ -20,8 +20,3 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
-
-# Match the unified CI build. rc.544 requires the intake policy helper to stay
-# synchronous; the shared patcher retains only fixes still needed by this pin.
-COPY docker/patches/patch_platform.py /tmp/patch_platform.py
-RUN python3 /tmp/patch_platform.py && rm /tmp/patch_platform.py

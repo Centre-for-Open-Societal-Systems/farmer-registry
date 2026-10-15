@@ -16,57 +16,21 @@
 
 # ── Globals (propagate to the openg2p-registry subchart) ──────────────────────
 global:
+  # THE single source of truth for every public hostname. Declared here as well
+  # as in the openg2p-registry subchart because Helm globals flow parent -> child
+  # only: without this, the parent's own templates resolve it to "" and hosts
+  # render as 'fr.' with no domain at all.
+  baseDomain: '{{ .Release.Namespace }}.openg2p.org'
+
   registryVariant: 'farmer-registry'
   # Ingress host for this registry. Overrides the subchart's generic default.
-  registryHostname: '{{ .Release.Name }}.{{ .Release.Namespace }}.openg2p.org'
+  # Derived from baseDomain (defaulted by the openg2p-registry subchart) so that
+  # overriding the domain once moves every host, here and in the platform chart.
+  registryHostname: '{{ .Release.Name }}.{{ tpl .Values.global.baseDomain $ }}'
 
-  # Where AWE posts its approval decision back to the registry. The subchart
-  # default routes this through the public ingress
-  # (https://staff-<registryHostname>/awe/webhooks/decision), which means a
-  # call between two Services in the same namespace leaves the cluster, comes
-  # back in through the ingress, and depends on that ingress certificate being
-  # trusted by AWE. On the far namespace the ingress is signed by a private CA
-  # that AWE does not carry, and its webhook client has no verify/CA setting,
-  # so every delivery since the integration went live failed with
-  # CERTIFICATE_VERIFY_FAILED: AWE recorded the request as approved, the
-  # registry never heard, and the submission sat in PENDING with the ingest
-  # worker correctly never picking it up.
-  #
-  # Call the staff-portal-api Service directly instead, as docker-compose.yml
-  # does. The payload is HMAC-signed (X-Approval-Signature, secret from
-  # awe-callback-hmac-secret), so dropping TLS on the in-cluster hop does not
-  # weaken authentication. The Service is named by the subchart's
-  # staffApi.nameOverride ("staff-portal-api") on port 80.
-  #
-  # db-seed writes the same value into AWE's callback_secret.caller_service
-  # and repoints this registry's still-open requests and their undelivered
-  # webhooks to it (awe_meta_data/40_callback_secret.sql.tpl), so the seed
-  # must run with the deploy (it does: dbSeed is enabled) for AWE to pick the
-  # new address up.
-  aweDefaultCallbackUrl: 'http://{{ .Release.Name }}-staff-portal-api/awe/webhooks/decision'
-
-  # Browser-facing MinIO host. Record images (the farmer photo captured at
-  # intake, land certificates) are served to the BROWSER as pre-signed URLs
-  # built against this value, and the subchart also derives the staff-ui
-  # img-src CSP from it (CSP_SRC_IMG). It must therefore be a hostname a
-  # browser can actually resolve and reach.
-  #
-  # Point it at an in-cluster Service name and the photo silently fails twice
-  # over: the browser cannot resolve the name, and the CSP it generates blocks
-  # the request anyway, so the widget just shows its placeholder with no error
-  # that names the cause.
-  #
-  # Note this host is also what the API SIGNS against, and a pre-signed S3
-  # signature covers the Host header -- so the signer and the browser must use
-  # the SAME name. Fixing only the CSP is not enough, and neither is rewriting
-  # the host at an ingress: the replayed signature is rejected with
-  # SignatureDoesNotMatch. Both halves of that are demonstrated against a real
-  # MinIO in test/staff-ui/test_minio_presigned_host.py. Set minioSecure to
-  # match the scheme (https -> true).
-  #
-  # Inherited from the subchart default unless overridden per environment.
-  # minioHost: 'minio-api.{{ .Release.Namespace }}.openg2p.org'
-  # minioSecure: true
+  # This RC uses Commons Base 2.3.3's MinIO, before upstream moved to Garage.
+  minioHost: 'commons-minio:9000'
+  minioSecure: false
 
   # Database wiring, mirroring openg2p-registry's own defaults. Declared here
   # rather than inherited because a parent chart's templates cannot read a
@@ -80,103 +44,85 @@ global:
   registryDBUser: '{{ printf "%s_user" .Release.Name | replace "-" "_" }}'
   registryDBSecret: '{{ .Release.Name }}'
   registryDBUserPasswordKey: '{{ .Release.Name }}-db-user'
-  masterDataDB: 'master_data'
-  masterDataDBPort: 5432
-  masterDataDBUser: 'master_data_user'
-  masterDataDBSecret: 'master-data'
-  masterDataDBUserPasswordKey: 'master-data-db-user'
 
-# Document the opt-in Gen2 shared-service contract. The platform already supplies
-# the ExternalName aliases in farmer; this chart must not recreate/adopt them.
-# Configurable endpoints use namespace-qualified URLs to commons.
-sharedCommons:
-  enabled: false
-  namespace: commons
-  baseRelease: commons
-  servicesRelease: commons-services
-  # Published versions actually running on new Gen2 dev. The registry pipeline
-  # consumes this contract, never upgrades either shared release.
-  baseChartVersion: 2.3.3
-  servicesChartVersion: 2.3.4-rc.245
+  # Master Data API wiring, mirroring openg2p-registry's own defaults for the
+  # same reason as the database wiring above: the bulk-sample and
+  # reporting-views Jobs in templates/ read the geography from Master Data's
+  # API (never its database), authenticated with a client-credentials token as
+  # this registry's own Keycloak client. IDENTICAL to the subchart's values —
+  # drifting them would authenticate the Jobs differently from the services.
+  keycloakBaseUrl: 'https://keycloak.{{ tpl .Values.global.baseDomain $ }}'
+  keycloakRealm: 'staff'
+  keycloakIssuerUrl: '{{ tpl .Values.global.keycloakBaseUrl $ }}/realms/{{ tpl .Values.global.keycloakRealm $ }}'
+  masterDataApiUrl: 'http://commons-services-master-data-api'
+  masterDataTokenUrl: '{{ tpl .Values.global.keycloakIssuerUrl $ }}/protocol/openid-connect/token'
+  authClientId: '{{ .Release.Name }}-staff-portal'
+  authClientSecret: '{{ .Release.Name }}-staff-portal'
+  authClientSecretKey: 'client_secret'
 
 # ── openg2p-registry subchart overrides ───────────────────────────────────────
 registry:
+  # The COSS intake overlay is built here from the pinned platform staff UI.
+  # Supply the COSS-published repository/tag for a deployment; the default
+  # follows upstream's image naming, like the other Farmer image placeholders.
+  staffUi:
+    image:
+      repository: openg2p/openg2p-farmer-registry-staff-ui
+      tag: 0.0.0-rc.0
   # Farmer-built images (each FROM the matching openg2p-registry base image).
   # CI rewrites these tags to the freshly built farmer version (lockstep); the
   # base image they extend is pinned by the openg2p-registry dependency version.
   staffApi:
     image:
-      repository: registry.gitlab.com/openg2p/registry/farmer-registry/staff-api
-      tag: 0.0.0-develop
-  staffUi:
-    image:
-      repository: registry.gitlab.com/openg2p/registry/farmer-registry/staff-ui
-      tag: 0.0.0-develop
+      repository: openg2p/openg2p-farmer-registry-staff-api
+      tag: 0.0.0-rc.0
   partnerApi:
     image:
-      repository: registry.gitlab.com/openg2p/registry/farmer-registry/partner-api
-      tag: 0.0.0-develop
+      repository: openg2p/openg2p-farmer-registry-partner-api
+      tag: 0.0.0-rc.0
   celeryWorker:
     image:
-      repository: registry.gitlab.com/openg2p/registry/farmer-registry/celery
-      tag: 0.0.0-develop
-    # Ingested (partner / ODK) submissions start their AWE approval workflow
-    # here, like a staff Submit does in the staff-portal-api: same AWE, same
-    # callback, so decisions come back to the staff-portal-api as usual. The
-    # subchart gives the worker no AWE settings, and the worker has no user, so
-    # it logs in with a client-credentials token of the release's client (the
-    # one the partner-api's keymanager auth already uses). That client needs
-    # "Service accounts" enabled; without a token, ingests fail with
-    # AWE_BEARER_TOKEN_REQUIRED instead of reaching approvers.
-    # In the worker the platform reads its settings (AWE included) through the
-    # worker's own config class, so they take the REGISTRY_CELERY_WORKERS_
-    # prefix; REGISTRY_CORE_AWE_* is silently ignored there and AWE stays off.
-    envVars:
-      REGISTRY_CELERY_WORKERS_AWE_ENABLED: '{{ .Values.global.aweEnabled }}'
-      # In-cluster, like db-seed's AWE wait: the ingress URL (global.aweBaseUrl)
-      # is signed by a private CA on far that the worker does not carry.
-      REGISTRY_CELERY_WORKERS_AWE_BASE_URL: 'http://{{ tpl .Values.global.aweReleaseName $ }}-awe'
-      REGISTRY_CELERY_WORKERS_AWE_HTTP_TIMEOUT_SECONDS: '{{ .Values.global.aweHttpTimeoutSeconds }}'
-      REGISTRY_CELERY_WORKERS_AWE_DEFAULT_CALLBACK_URL: '{{ tpl .Values.global.aweDefaultCallbackUrl $ }}'
-      REGISTRY_CELERY_WORKERS_AWE_CALLBACK_SECRET_ID: '{{ tpl .Values.global.aweCallbackSecretId $ }}'
-      REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: "{{ tpl .Values.global.keycloakIssuerUrl $ }}/protocol/openid-connect/token"
-      # keycloakIssuerUrl may be Keycloak's in-cluster address; the token must
-      # still carry the public issuer AWE trusts, which this host provides.
-      REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
-      REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID: '{{ tpl .Values.global.authClientId $ }}'
-    envVarsFrom:
-      REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET:
-        secretKeyRef:
-          name: '{{ tpl .Values.global.authClientSecret $ }}'
-          key: '{{ tpl .Values.global.authClientSecretKey $ }}'
+      repository: openg2p/openg2p-farmer-registry-celery
+      tag: 0.0.0-rc.0
   celeryBeat:
     image:
-      repository: registry.gitlab.com/openg2p/registry/farmer-registry/celery
-      tag: 0.0.0-develop
+      repository: openg2p/openg2p-farmer-registry-celery
+      tag: 0.0.0-rc.0
   dbSeed:
     image:
-      repository: registry.gitlab.com/openg2p/registry/farmer-registry/db-seed
-      tag: 0.0.0-develop
-    # The subchart defaults these OFF (minimal reference registry). Farmer ships
-    # demo records/geo/images, so turn the db-seed loaders on. NB these are
-    # `dbSeed.*`, not `global.*` — the db-seed Job reads .Values.dbSeed.load*
-    # and there is no global fallback, so setting them under global is inert.
-    # Geo is seeded by the master-data chart now (geoSeed.countryPack there),
-    # not as a side effect of the registry seed. Leaving this on would load a
-    # second, unrelated hierarchy over the one MDS already holds.
-    loadGeoData: false
-    loadSampleData: true
-    loadImages: true
+      repository: openg2p/openg2p-farmer-registry-db-seed
+      tag: 0.0.0-rc.0
+    # Demo data is OFF by default — an install creates no sample farmers or
+    # photos unless asked. Both are opt-in from the Rancher form ("Load Sample
+    # Data", "Load Sample Images" under DB Seed). NB these are `dbSeed.*`, not
+    # `global.*` — the db-seed Job reads .Values.dbSeed.load* and there is no
+    # global fallback, so setting them under global is inert.
+    # Geography is not seeded here: the master-data chart loads it
+    # (geoSeed.countryPack there) and the registry reads it from Master Data's
+    # API — the register geo widgets get their levels at runtime.
+    loadSampleData: false    # a few dozen demo farmers from the country pack
+    loadImages: false        # their profile photos; needs loadSampleData
     loadTemplates: true
-    # Match the geo dropdowns to the hierarchy Master Data holds. Code lists are
-    # not seeded into the registry: from openg2p-registry 1.2 they are read live
-    # from Master Data, so the old loadAttributes/attributeDomains switches are gone.
-    syncGeoWidgets: true
+    # Code lists are NOT copied into this registry: dropdowns and the attribute
+    # validator read them live from Master Data. The Farmer Registry needs the
+    # pack's agriculture domain (e.g. SOURCE_OF_INCOME) loaded into MDS, which is
+    # set on the master-data chart — geoSeed.domains: [agriculture] — not here.
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
 
   # Name of this registry's tile in IAM. The roles/permissions catalog itself is
   # registry-agnostic and comes from the subchart.
   iamRegister:
     applicationDescription: "Farmer Registry"
+    # Rancher may skip Helm hooks: run IAM registration as a regular resource
+    # (same as commons does for master-data / AWE / PM). Needs a platform chart
+    # with iamRegister.runAsHook; a parent `null` cannot clear the subchart's
+    # hook annotations (Helm warns "cannot overwrite table with non table").
+    runAsHook: false
 
   # Functional-ID pools, one per register. The subchart defaults to the REFERENCE
   # registry's registers (individual + household), so the farmer register must be
@@ -188,13 +134,11 @@ registry:
       appConfig:
         idTypes:
           farmer:
-            idLength: 10
+            idLength: 12
           household:
             idLength: 10
 
-  # beneApi is consumed as-is from the openg2p-registry base image.
-  # staffUi is a thin branding overlay that replaces only the dashboard
-  # background asset.
+  # beneApi is consumed as-is from the platform subchart.
 
   # ── Farmer e2e sanity suite (image built here; Set 2 field tests) ───────────
   # The subchart ships the reference (Individual) sanity values; override them
@@ -203,26 +147,37 @@ registry:
   sanity:
     enabled: true
     image:
-      repository: registry.gitlab.com/openg2p/registry/farmer-registry/sanity-tests
-      tag: 0.0.0-develop
+      repository: openg2p/openg2p-farmer-registry-sanity-tests
+      tag: 0.0.0-rc.0
     regType: Farmer
     regRecordType: 'spdci-extensions-dci:Farmer'
     # farmer functional_record_id of the injected sanity record (see
     # test/sanity/sanity/fixtures.py).
     searchText: SANITY-FARMER-0001
-    # Consented scope + scopes asserted absent — top-level keys of the farmer
-    # outgoing DCI template (openg2p_farmer_to_dci.json.j2).
-    dataScopes: "farmer_personal_details"
-    deniedScopes: "family_details,farm_details,machineries_details"
+    # Data scopes the sanity consent asks for, and scopes whose seeded values
+    # must not come back: names from the Farmer Registry's scope catalogue
+    # (farmer-extension .../meta_data/data-scopes/, GET /partner/data_scopes),
+    # prefixed with the consent data controller (farmer-registry.<name>).
+    # personal_details covers the seeded name and birth date; farmer_identifiers
+    # covers the seeded national ID.
+    dataScopes: "personal_details"
+    deniedScopes: "farmer_identifiers,contact"
     # The Farmer register + the UI coordinates the change-request test edits
     # (must match the farmer-extension seed metadata).
-    farmerRegisterId: a1a4d25a-1cd4-4356-abac-985a0b3c6bcd
+    registerId: a1a4d25a-1cd4-4356-abac-985a0b3c6bcd
     crTabId: "farmer_farmer_tab"
     crSectionId: "farmer_farmer_personal_identification_section_01"
 
 
-# ── Analytics: sample data, reporting views ──────────────────────
-# Runs after the registry db-seed (hook weight 10) at hook weights 40 -> 45.
+  # Agent Portal / credential issuance is not shipped by rc.544.
+  agentPortalApi:
+    enabled: false
+  agentPortalUi:
+    enabled: false
+
+
+# ── Analytics: sample data, reporting views, dashboards ──────────────────────
+# Runs after the registry db-seed (hook weight 10) as 15 -> 20 -> 30.
 #
 # There is deliberately no country setting here. Geography comes from whatever
 # the environment's Master Data Service holds — see geoSeed.countryPack in the
@@ -239,10 +194,13 @@ analytics:
   # copied into /seed by the db-seed image. They used to be read from the shared
   # openg2p-data clone at /openg2p-data, which is what let them drift out of step
   # with the enums they write.
-  waitImage: jbergknoff/postgresql-client:latest
 
   bulkSample:
-    enabled: true
+    # Bulk demo data — 100,000 invented farmers for load tests and to give the
+    # dashboards volume. OFF by default and never for production. Independent of
+    # reportingViews: the views and dashboards install either way, over whatever
+    # data the register holds. Opt-in from the Rancher form (Analytics group).
+    enabled: false
     # ~250k individuals over ~62.5k households, sized against the DEFAULT geo
     # pack (Kamuntu, 668 villages) so the deepest level averages ~90 households
     # and its percentages are reportable rather than suppressed as unreliable.
@@ -265,6 +223,12 @@ analytics:
   reportingViews:
     enabled: true
 
+    # Generate the mechanical views from the schema, after the hand-written
+    # ones. Off means this registry reports on exactly the entities somebody
+    # remembered to write SQL for — which is how livestock ended up with no
+    # view while the register held 132,824 of them.
+    generate: true
+
     # How often the snapshots behind the dashboards are rebuilt.
     #
     # These are MATERIALIZED views: Postgres does not update them when the
@@ -279,8 +243,8 @@ analytics:
 
     # DEVELOPMENT ONLY — override the reporting scripts from a ConfigMap.
     #
-    # The reporting SQL and the geo-levels script live in the db-seed image, so
-    # testing a change to either normally means building and publishing an
+    # The reporting SQL and the platform's generator live in the db-seed image,
+    # so testing a change to either normally means building and publishing an
     # image. Point this at a ConfigMap holding the files and the job runs those
     # instead, which turns a fifteen-minute pipeline into a kubectl apply.
     #
@@ -289,22 +253,105 @@ analytics:
     devOverlay:
       configMap: ""
       files:
+        - generate_reporting_views.py
         - reporting_views.sql
-        - reporting_geo_levels.sh
+        - reporting.yaml
 
     # Which materialized views the refresh covers. Matched by prefix rather than
     # listed, so a view added to reporting_views.sql is picked up without anyone
     # remembering to add it here.
     matchPrefix: fr_rpt_
 
-    # Record every refresh outcome in the reporting_refresh_log table (created
-    # by the job) in addition to the JSON line each outcome prints on stdout.
-    # The table feeds refresh-health dashboards and alerts; see
-    # docs/reporting-refresh-log.md. Rows older than retentionDays are deleted
-    # at the end of each run.
-    refreshLog:
-      enabled: true
-      retentionDays: 90
+  dashboards:
+    enabled: true
+    image:
+      repository: apachesuperset.docker.scarf.sh/apache/superset
+      tag: 4.0.1
+    # Service account that owns imported assets. On a Keycloak-only Superset no
+    # local user exists until someone logs in, so the Job creates this one if
+    # absent. It cannot log in through the UI — AUTH_OAUTH removes the local
+    # login form — but see the password below: it can still use the REST API.
+    supersetAdmin: svc-importer
+    # Password for that account, read from a Secret. Leave the secret name empty
+    # and the Job generates a random password and discards it, which is fine if
+    # the account only ever needs to own assets.
+    #
+    # Set it when anything has to call the Superset API as a machine, which is
+    # what G2P Insight's Dashboards tab does. Under AUTH_TYPE = AUTH_OAUTH this
+    # is the ONLY way in: POST /login/ is a browser redirect to Keycloak and
+    # returns 405 to a form post, and /api/v1/security/login authenticates
+    # against Superset's OWN user table — provider=db never consults Keycloak, so
+    # no Keycloak credential, however privileged, can authenticate a service.
+    #
+    # When set, the Job converges the account onto this password on every run,
+    # so rotating the Secret and upgrading is enough to rotate the credential.
+    supersetAdminPasswordSecret:
+      # Generated on first install and adopted thereafter, so nobody has to
+      # invent one. Whichever of FR and G2P Insights installs first creates it;
+      # the other adopts it, which is why both charts default to the same name
+      # and key. Set generate=false and create the Secret yourself if your
+      # pipeline renders manifests and applies them (helm template / --dry-run
+      # cannot read the cluster, so it would mint a new password every render).
+      generate: true
+      name: openg2p-insights-superset-svc
+      key: password
+    # database_name of the connection inside Superset, as recorded in the bundle
+    supersetDatabaseName: FR
+
+    # Superset's OWN configuration. This job runs Superset's CLI and ORM
+    # (`superset fab`, `create_app()`, `import-dashboards`), so it must be
+    # pointed at the SAME metadata database Superset itself uses.
+    #
+    # Without these it was pointed at nothing: Superset defaults
+    # SQLALCHEMY_DATABASE_URI to a SQLite file, so the job created its service
+    # account and imported all 8 dashboards into a throwaway database inside its
+    # own pod, exited 0, and left the real Superset empty. A successful install
+    # with no dashboards in it. The job now aborts rather than repeat that.
+    #
+    # Defaults match the commons-services Superset chart; override for a Superset
+    # deployed under another name.
+    superset:
+      # In-cluster base URL, used for the REST calls that enable embedding.
+      url: http://commons-services-superset:8088
+      # Superset is a different Helm release, so nothing orders it against this
+      # Job. Wait rather than fail: a Superset merely restarting would otherwise
+      # take the whole dashboard import down with it.
+      # Superset is a SEPARATE Helm release and analytics is optional, so an
+      # absent Superset SKIPS the dashboard import rather than failing the
+      # install: a registry must come up whether or not a reporting stack was
+      # deployed beside it. Set true where the dashboards are load-bearing and a
+      # silent skip would be worse than a failed deploy.
+      required: false
+      waitAttempts: 60
+      waitSeconds: 5
+      # Secret carrying Superset's DB_HOST/DB_NAME/DB_USER/DB_PASS.
+      envFromSecret: commons-services-superset-env
+      # ...except DB_PASS, which in that Secret is EMPTY. The Superset chart keeps
+      # the password in a Secret of its own and injects it as an explicit `env:`
+      # entry, which takes precedence over the same key coming from `envFrom`.
+      # Copying only the envFrom half therefore produced a URI with no password and
+      # the CLI died on `fe_sendauth: no password supplied` — after waiting for
+      # Superset, after installing authlib, so the log looked like it was working
+      # right up to the point it wasn't. Rendered as an explicit env var here for
+      # the same reason: it has to win over the blank one.
+      dbPasswordSecret:
+        name: superset-db-user
+        key: superset-db-user-password
+      # Secret carrying superset_config.py (AUTH_TYPE, SECRET_KEY, the DB URI).
+      configSecret: commons-services-superset-config
+      configKey: superset_config.py
+      # Sourced before the Superset CLI runs, exactly as the Superset deployment
+      # does before starting. It installs what the mounted config needs — authlib
+      # for AUTH_OAUTH — which the stock apache/superset image does not ship.
+      # Without it this Job died in create_app with ModuleNotFoundError, before
+      # importing a single dashboard. Set empty to skip.
+      bootstrapKey: superset_bootstrap.sh
+      # Enable embedding on the imported dashboards. Without this they exist and
+      # are published but carry no embedded UUID, so G2P Insights' Dashboards tab
+      # lists them and can render none of them.
+      enableEmbedding: true
+    # ConfigMap holding fr-dashboards.zip; defaults to <release>-nsr-dashboard-bundle
+    bundleConfigMap: ""
 
   resources:
     requests:
@@ -325,75 +372,3 @@ mapsContent:
   # Defaults to <release>-maps-content. Whatever this resolves to is what goes
   # into the Insights chart as insightMaps.build.content.configMap.
   nameOverride: ""
-
-# ── Public staff portal UI ───────────────────────────────────────────────────
-# A second staff UI for an environment's public hostname, rendered by
-# templates/staff-ui-public.yaml. The UI takes its origin, cookie domain, IAM URL
-# and login provider from env, so the subchart's own staff UI cannot also answer
-# on a public hostname.
-#
-# It runs registry.staffUi.image, which CI sets on every deploy, so a deploy
-# refreshes both UIs. Off by default: an environment that publishes the portal
-# enables it and supplies the complete env in its release values.
-publicStaffUi:
-  enabled: false
-  replicas: 1
-  # Every variable the staff UI reads, as NAME: value. Values may use templates.
-  env: {}
-  volumes: []
-  volumeMounts: []
-  resources:
-    requests:
-      cpu: 50m
-      memory: 192Mi
-    limits:
-      memory: 768Mi
-
-# ── Dashboard API ────────────────────────────────────────────────────────────
-# farmer-registry-dashboard-api: the read-only service the OAN dashboards BFF
-# calls for this registry's chart data, rendered by templates/dashboard-api.yaml.
-# Source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api
-# (built by the Jenkinsfile; see docs/deployment.md §3.5).
-#
-# It reads fr_rpt_farmer and fr_rpt_land, so it needs analytics.reportingViews.
-# The BFF (in the cluster) reaches the ClusterIP Service at
-# http://<release>-dashboard-api.<namespace>.
-#
-# Off by default, so an install that does not ship the image is unchanged. The
-# Jenkins deploy turns it on and sets the image.
-dashboardApi:
-  enabled: false
-  image:
-    repository: ""
-    tag: ""
-  replicas: 1
-  # gunicorn workers. Each holds its own database pool (below), so a replica
-  # uses up to workers x dbPool.maxSize connections on commons-postgresql.
-  workers: 2
-  # Connections per worker: minSize kept open, maxSize under load. The
-  # dashboards cache responses for 15 minutes, so a few are plenty.
-  dbPool:
-    minSize: 1
-    maxSize: 5
-  # National number of administrative units per level, for registryCoverage
-  # rates, e.g. {regions: 13, zones: 90, woredas: 1138, kebeles: 18000}. A level
-  # left out is reported as null.
-  geoLevelTotals: {}
-  # CORS origins. Browsers are not expected to call the service directly.
-  allowedOrigins: []
-  # Extra environment variables, as NAME: value. Values may use templates.
-  env: {}
-  # Optional hostname route for developers and tools, on a PRIVATE Istio gateway
-  # only (the service has no authentication), e.g.
-  #   host: dashboard-api.far.openg2p.test
-  #   gateway: internal
-  virtualService:
-    enabled: false
-    host: ""
-    gateway: ""
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      memory: 512Mi

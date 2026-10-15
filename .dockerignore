@@ -1,17 +1,5 @@
-# Host build artifacts must never enter the build context: the Windows
-# node_modules/.bin shims reference node.exe and break the Linux build stage.
-**/node_modules
-**/.next
-**/dist
-**/.venv
-**/__pycache__
 .git
-
-# Local cutover backups contain DB contents and container configuration.
-# They are never inputs to any Farmer image.
-local/gen2/backups
-local/gen2/generated
-local/gen2/.env
-
-# The dashboard-api clone the Jenkinsfile makes. It has its own build context.
-.build
+local/upstream/generated
+**/__pycache__
+**/.pytest_cache
+**/.env

@@ -1,0 +1,234 @@
+{
+  "upstream_repository": "https://github.com/OpenG2P/farmer-registry.git",
+  "upstream_layout_commit": "5babaca7d513cf94a7cc6f366b19964f2c021913",
+  "coss_source_commit": "10d03aaa5861b8e358f3d89ecf7f3378b6e31ec7",
+  "registry_platform": "1.2.2-rc.544",
+  "commons_base_contract": "2.3.3",
+  "commons_services_contract": "2.3.4-rc.245",
+  "note": "Local trial with uncommitted COSS overlay; source layout commit is not an RC release tag. Image identities describe this run, not a deployment lock.",
+  "images": [
+    {
+      "reference": "apache/kafka:3.9.0",
+      "id": "sha256:fbc7d7c428e3755cf36518d4976596002477e4c052d1f80b5b9eafd06d0fff2f",
+      "repo_digests": [
+        "apache/kafka@sha256:fbc7d7c428e3755cf36518d4976596002477e4c052d1f80b5b9eafd06d0fff2f"
+      ]
+    },
+    {
+      "reference": "farmer-upstream-trial/celery:rc544-coss",
+      "id": "sha256:8607ab84eeb4affb2c79a6e106371e51a8bf38653108ccfb1b8a7b03affd7549",
+      "repo_digests": [
+        "farmer-upstream-trial/celery@sha256:8607ab84eeb4affb2c79a6e106371e51a8bf38653108ccfb1b8a7b03affd7549"
+      ]
+    },
+    {
+      "reference": "farmer-upstream-trial/db-seed:rc544-coss",
+      "id": "sha256:4a9b0c8e631f3c7c701912bcc47e5ca1b8cc9957df26c0cd14904669206ba7c9",
+      "repo_digests": [
+        "farmer-upstream-trial/db-seed@sha256:4a9b0c8e631f3c7c701912bcc47e5ca1b8cc9957df26c0cd14904669206ba7c9"
+      ]
+    },
+    {
+      "reference": "farmer-upstream-trial/partner-api:rc544-coss",
+      "id": "sha256:49eafe8f5ca152d4ebb7eae975ee8ba188be72ced35a3dffb720ff53fc2a2523",
+      "repo_digests": [
+        "farmer-upstream-trial/partner-api@sha256:49eafe8f5ca152d4ebb7eae975ee8ba188be72ced35a3dffb720ff53fc2a2523"
+      ]
+    },
+    {
+      "reference": "farmer-upstream-trial/sanity-tests:rc544-coss",
+      "id": "sha256:c2edfbfde00857524db56eb6080d664024f1b609a241f83051a5ab96c474bb5a",
+      "repo_digests": [
+        "farmer-upstream-trial/sanity-tests@sha256:c2edfbfde00857524db56eb6080d664024f1b609a241f83051a5ab96c474bb5a"
+      ]
+    },
+    {
+      "reference": "farmer-upstream-trial/staff-api:rc544-coss",
+      "id": "sha256:120a18953ed9bba221b9b275aff6d6f72c9e9c67a26786ae404ea8542bcbb336",
+      "repo_digests": [
+        "farmer-upstream-trial/staff-api@sha256:120a18953ed9bba221b9b275aff6d6f72c9e9c67a26786ae404ea8542bcbb336"
+      ]
+    },
+    {
+      "reference": "farmer-upstream-trial/staff-ui:rc544-coss",
+      "id": "sha256:3d0a1b66e2a07d86a7804f4befa69c01fe3961e6504be20a793e02be07fb1043",
+      "repo_digests": [
+        "farmer-upstream-trial/staff-ui@sha256:3d0a1b66e2a07d86a7804f4befa69c01fe3961e6504be20a793e02be07fb1043"
+      ]
+    },
+    {
+      "reference": "minio/mc:latest",
+      "id": "sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd",
+      "repo_digests": [
+        "minio/mc@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd",
+        "pgsty/mc@sha256:cfc83108c3abb371f8fb84d99c1fdc88f8c237e022409b0081fb7c0a3be634dd"
+      ]
+    },
+    {
+      "reference": "minio/minio:latest",
+      "id": "sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372",
+      "repo_digests": [
+        "minio/minio@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372",
+        "pgsty/minio@sha256:b6bfe7239bfc83fb90d31612d9704d86039dd714f7904b3f1ad68f211e602372"
+      ]
+    },
+    {
+      "reference": "openg2p/consent-manager-api:1.0.2",
+      "id": "sha256:37a562ac308be4130c0340782c4b821c219cc65094b8c9b1cb087fefcef737ef",
+      "repo_digests": [
+        "openg2p/consent-manager-api@sha256:37a562ac308be4130c0340782c4b821c219cc65094b8c9b1cb087fefcef737ef"
+      ]
+    },
+    {
+      "reference": "openg2p/consent-manager-ui:1.0.2",
+      "id": "sha256:5e2398be470080c1d5ff4e6d7a4630eb412825430c2e514b1bf596325ec030d1",
+      "repo_digests": [
+        "openg2p/consent-manager-ui@sha256:5e2398be470080c1d5ff4e6d7a4630eb412825430c2e514b1bf596325ec030d1"
+      ]
+    },
+    {
+      "reference": "openg2p/iam-staff-portal-api:1.4.4-rc.125",
+      "id": "sha256:07a3827750a010381128b21ddcdce2a90997220bb365ce5038b91616139e0a37",
+      "repo_digests": [
+        "openg2p/iam-staff-portal-api@sha256:07a3827750a010381128b21ddcdce2a90997220bb365ce5038b91616139e0a37"
+      ]
+    },
+    {
+      "reference": "openg2p/master-data-api:1.1.4-rc.104",
+      "id": "sha256:2aacc37b49607c3b32b8aaa617c0086765da9c9f4f4b7ef50c77c08c835b5f24",
+      "repo_digests": [
+        "openg2p/master-data-api@sha256:2aacc37b49607c3b32b8aaa617c0086765da9c9f4f4b7ef50c77c08c835b5f24"
+      ]
+    },
+    {
+      "reference": "openg2p/master-data-db-seed:1.1.4-rc.104",
+      "id": "sha256:a2c69f319e4356a8a9b45b5c422bd44c5f60de9c5700ff9a6f4e074ed1959184",
+      "repo_digests": [
+        "openg2p/master-data-db-seed@sha256:a2c69f319e4356a8a9b45b5c422bd44c5f60de9c5700ff9a6f4e074ed1959184"
+      ]
+    },
+    {
+      "reference": "openg2p/master-data-ui:1.1.4-rc.104",
+      "id": "sha256:f256219843527b0b653509438809c49f62b792387f70b8b8396b7ea3ad66f6e4",
+      "repo_digests": [
+        "openg2p/master-data-ui@sha256:f256219843527b0b653509438809c49f62b792387f70b8b8396b7ea3ad66f6e4"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-audit-manager:1.2.0",
+      "id": "sha256:123855aae3794d48b829d6e5e43fa42282f1062cd2826333eb1df64b16191a19",
+      "repo_digests": [
+        "openg2p/openg2p-audit-manager@sha256:123855aae3794d48b829d6e5e43fa42282f1062cd2826333eb1df64b16191a19"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-awe-ui:1.2.2",
+      "id": "sha256:4ba9b3dfebee9ac5d43f2a4f3873112ce8029269f07ddc976fe6c09573558db9",
+      "repo_digests": [
+        "openg2p/openg2p-awe-ui@sha256:4ba9b3dfebee9ac5d43f2a4f3873112ce8029269f07ddc976fe6c09573558db9"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-awe:1.2.2",
+      "id": "sha256:b88b96e301d1bb652e617348e42e88b424ad8d60ff2838b59c60c0d3808703b8",
+      "repo_digests": [
+        "openg2p/openg2p-awe@sha256:b88b96e301d1bb652e617348e42e88b424ad8d60ff2838b59c60c0d3808703b8"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-id-generator:1.0.0",
+      "id": "sha256:bf0c0784e7b0ca597bf59d565234ad4c364d442a4aa58dfb880545da57ca31b8",
+      "repo_digests": [
+        "openg2p/openg2p-id-generator@sha256:bf0c0784e7b0ca597bf59d565234ad4c364d442a4aa58dfb880545da57ca31b8"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-registry-celery:1.2.2-rc.544",
+      "id": "sha256:ffcf9003f8c5ea034056300a0f9c03d95a0b6535af3b58423dc25eb0d2be22e1",
+      "repo_digests": [
+        "openg2p/openg2p-registry-celery@sha256:ffcf9003f8c5ea034056300a0f9c03d95a0b6535af3b58423dc25eb0d2be22e1"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-registry-db-seed:1.2.2-rc.544",
+      "id": "sha256:5e5f66b4f40be9eb254ca0d4cf215ea13d8dc6f5a2eecc8cf339e880c54b9b6a",
+      "repo_digests": [
+        "openg2p/openg2p-registry-db-seed@sha256:5e5f66b4f40be9eb254ca0d4cf215ea13d8dc6f5a2eecc8cf339e880c54b9b6a"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-registry-partner-api:1.2.2-rc.544",
+      "id": "sha256:5c1ac25af3eba360269cc2653149f5adf1f596d6604821a094d8eea7535d0f20",
+      "repo_digests": [
+        "openg2p/openg2p-registry-partner-api@sha256:5c1ac25af3eba360269cc2653149f5adf1f596d6604821a094d8eea7535d0f20"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-registry-sanity-tests:1.2.2-rc.544",
+      "available_locally": false
+    },
+    {
+      "reference": "openg2p/openg2p-registry-staff-api:1.2.2-rc.544",
+      "id": "sha256:00a4aab95be98c53516e41a769689af85f39c7d415a2416d21c5291553e1fbab",
+      "repo_digests": [
+        "openg2p/openg2p-registry-staff-api@sha256:00a4aab95be98c53516e41a769689af85f39c7d415a2416d21c5291553e1fbab"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-registry-staff-ui:1.2.2-rc.544",
+      "id": "sha256:d31d27437df72017f57e7ab0ce1d78bbb2d9b267c190c1ce032dcf3d1ffc7dd4",
+      "repo_digests": [
+        "openg2p/openg2p-registry-staff-ui@sha256:d31d27437df72017f57e7ab0ce1d78bbb2d9b267c190c1ce032dcf3d1ffc7dd4"
+      ]
+    },
+    {
+      "reference": "openg2p/openg2p-staff-portal-ui:1.2.0",
+      "id": "sha256:bacc8dc6712712c90fffa81217fc3a801741b1615d8c9c34b6dc41cbfb0da191",
+      "repo_digests": [
+        "openg2p/openg2p-staff-portal-ui@sha256:bacc8dc6712712c90fffa81217fc3a801741b1615d8c9c34b6dc41cbfb0da191"
+      ]
+    },
+    {
+      "reference": "openg2p/partner-management-partner-api:1.0.2",
+      "id": "sha256:887ca1fae1dba41dcd7ec71d923d1aae710e25405c60e135141313307b809667",
+      "repo_digests": [
+        "openg2p/partner-management-partner-api@sha256:887ca1fae1dba41dcd7ec71d923d1aae710e25405c60e135141313307b809667"
+      ]
+    },
+    {
+      "reference": "openg2p/partner-management-staff-portal-api:1.0.2",
+      "id": "sha256:a5f9c128ffe51739bf1ec2fb664b1c9f5951d0d46891288a81436d012f62e304",
+      "repo_digests": [
+        "openg2p/partner-management-staff-portal-api@sha256:a5f9c128ffe51739bf1ec2fb664b1c9f5951d0d46891288a81436d012f62e304"
+      ]
+    },
+    {
+      "reference": "openg2p/partner-management-staff-portal-ui:1.0.2",
+      "id": "sha256:f97109868988287c85058ac77e49433f929384d4b8a62f35192bfa7da927634e",
+      "repo_digests": [
+        "openg2p/partner-management-staff-portal-ui@sha256:f97109868988287c85058ac77e49433f929384d4b8a62f35192bfa7da927634e"
+      ]
+    },
+    {
+      "reference": "postgres:16",
+      "id": "sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54",
+      "repo_digests": [
+        "postgres@sha256:1a6ab3f5345eb6dbe04a1349529caabdb0ab09293a09590fad07b2246bfa4b54"
+      ]
+    },
+    {
+      "reference": "quay.io/keycloak/keycloak:26.0",
+      "id": "sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858",
+      "repo_digests": [
+        "quay.io/keycloak/keycloak@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858"
+      ]
+    },
+    {
+      "reference": "redis:7-alpine",
+      "id": "sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499",
+      "repo_digests": [
+        "redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499"
+      ]
+    }
+  ]
+}

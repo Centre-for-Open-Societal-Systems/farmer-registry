@@ -14,8 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-# Keep nested application source directories named lib trackable.
-/lib/
+lib/
 lib64/
 parts/
 sdist/
@@ -109,10 +108,6 @@ celerybeat.pid
 .env
 .env.*
 !.env.example
-# The local compose stack's env file. Checked in deliberately: it holds no real
-# credentials, only the local-only values that must match local/postgres/init.sql,
-# and `docker compose --env-file local/.env` does not work without it.
-!local/.env
 .envrc
 .venv
 env/
@@ -186,8 +181,6 @@ Desktop.ini
 /docker/adapters.requirements.txt
 /docker/scripts/_service_env.sh
 /docker/scripts/.env
-# farmer-registry-dashboard-api, cloned by the Jenkinsfile
-/.build/
 
 # ---------------------------------------------------------------------------
 # Helm artifacts
@@ -201,5 +194,7 @@ helm/**/Chart.lock
 # Vendored uncompressed subcharts (charts/<name>/) remain tracked.
 helm/**/charts/*.tgz
 
-# ci/commons-services/migrate-far-geo.sh dumps the tables it rewrites here (record data).
-far-geo-backup-*.sql.gz
+# Local dev tooling (docker compose stack, seeds, env) — never shipped
+local/*
+!local/upstream/
+local/upstream/generated/

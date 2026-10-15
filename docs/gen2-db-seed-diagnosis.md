@@ -1,3 +1,5 @@
+> Historical server diagnosis and rollout prerequisites from PR #91. The repository now uses the upstream RC layout; old Jenkins/local-gen2 commands below are not the new deployment procedure. See [current adoption notes](coss-upstream-adoption.md).
+
 # New Gen2 db-seed: read-only findings (2026-10-14)
 
 Inspected the server behind `new-gen2-development`. No Jobs were rerun, no

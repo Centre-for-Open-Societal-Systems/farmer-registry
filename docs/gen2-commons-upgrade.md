@@ -1,3 +1,5 @@
+> Historical server diagnosis and rollout prerequisites from PR #91. The repository now uses the upstream RC layout; old Jenkins/local-gen2 commands below are not the new deployment procedure. See [current adoption notes](coss-upstream-adoption.md).
+
 # Gen2 dev: registry in `farmer`, shared services in `commons`
 
 This profile is based on COSS `develop` at `67d47a8` (including DevOps PR #92). It changes **development
