@@ -38,6 +38,7 @@ jobs:
         run: |
           docker build -t coss-ci/services:check ci/services
           docker run --rm coss-ci/services:check bash -ec 'python -c "import yaml"; git --version; helm version --short; aws --version; docker --version; docker buildx version'
+          docker run --rm --user 1000:1000 coss-ci/services:check bash -ec 'getent passwd "$(id -u)" >/dev/null; ssh -V'
       - name: ODK transform
         run: python odk/test_transform.py
       - name: ODK geography matches the shared COSS seed

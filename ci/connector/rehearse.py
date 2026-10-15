@@ -29,6 +29,8 @@ from openg2p_connector_service.worker import _poll_async
 
 async def main():
  engine=get_engine()
+ async with engine.connect() as conn:
+  assert await conn.scalar(text('SELECT rolsuper FROM pg_roles WHERE rolname=current_user')) is False
  # Hash original columns only, so additive migrations can be checked without
  # ignoring changes to existing rows. Hashes and private payloads stay local.
  snapshots=[]
@@ -90,7 +92,7 @@ async def main():
  async with factory() as session:
   polled=await session.get(ConnectorDefinition,'synthetic-poll-clock')
   assert polled.last_poll_at is not None and polled.last_poll_status=='SUCCESS'
- print(json.dumps({'schemaRerun':True,'failedDdlRolledBack':True,'failureRecovery':True,'duplicateSentOnce':True,'pollTimestampPersisted':True,'isolatedDatabases':True,'restoredSnapshot':bool(snapshots),'existingDataPreserved':bool(snapshots)}))
+ print(json.dumps({'schemaRerun':True,'failedDdlRolledBack':True,'failureRecovery':True,'duplicateSentOnce':True,'pollTimestampPersisted':True,'applicationRole':True,'isolatedDatabases':True,'restoredSnapshot':bool(snapshots),'existingDataPreserved':bool(snapshots)}))
  await engine.dispose()
 asyncio.run(main())
 '''
@@ -107,8 +109,8 @@ def main():
     name = "coss-connector-rehearsal-" + uuid.uuid4().hex[:12]
     env = dict(os.environ)
     env["POSTGRES_PASSWORD"] = secrets.token_urlsafe(32)
-    env.update(CONNECTOR_DB_PASSWORD=env["POSTGRES_PASSWORD"], CONNECTOR_DB_HOSTNAME=name,
-               CONNECTOR_DB_USERNAME="postgres", CONNECTOR_DB_DBNAME="postgres",
+    env.update(CONNECTOR_DB_PASSWORD=secrets.token_urlsafe(32), CONNECTOR_DB_HOSTNAME=name,
+               CONNECTOR_DB_USERNAME="connector_rehearsal_user", CONNECTOR_DB_DBNAME="connector_rehearsal",
                CONNECTOR_DB_PORT="5432", CONNECTOR_DB_DRIVER="postgresql+asyncpg")
     created_network = created_database = False
     def run(args, **kw):
@@ -126,8 +128,15 @@ def main():
             time.sleep(0.5)
         else:
             raise RuntimeError("Isolated PostgreSQL did not start")
+        # Exercise migrations with a database-owning application role rather
+        # than the PostgreSQL superuser used to create the disposable fixture.
+        credential = env['CONNECTOR_DB_PASSWORD'].replace("'", "''")
+        run(['docker','exec','-i',name,'psql','-v','ON_ERROR_STOP=1','-U','postgres','-d','postgres'],
+            input="CREATE ROLE connector_rehearsal_user LOGIN PASSWORD '" + credential + "';\n"
+                  "CREATE DATABASE connector_rehearsal OWNER connector_rehearsal_user;\n")
         if args.backup:
-            run(['docker','exec',name,'pg_restore','--exit-on-error','--no-owner','--no-privileges','-U','postgres','-d','postgres','/backup/database.dump'])
+            run(['docker','exec',name,'pg_restore','--exit-on-error','--no-owner','--no-privileges',
+                 '--role','connector_rehearsal_user','-U','postgres','-d','connector_rehearsal','/backup/database.dump'])
             env['REHEARSAL_RESTORED']='true'
         docker_args = ["docker", "run", "--rm", "-i", "--network", name, "--entrypoint", "python","-e","REHEARSAL_RESTORED"]
         for key in ("CONNECTOR_DB_PASSWORD", "CONNECTOR_DB_HOSTNAME", "CONNECTOR_DB_USERNAME",
