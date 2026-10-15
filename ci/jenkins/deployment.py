@@ -10,6 +10,13 @@ import sys
 import yaml
 
 RELEASE = "farmer-registry"
+# Registry UI hostnames of the new-dev release. farmer-registry-development replaces
+# registry.farmer-dev now that the gen2-dev *-development names point at this box;
+# the original name stays accepted until the release itself has been renamed.
+NEW_DEV_HOSTNAMES = {
+    "registry.farmer-dev.oanstaging.com",
+    "farmer-registry-development.oanstaging.com",
+}
 COMPONENTS = {
     "staffApi": ("Deployment", "staff-portal-api", "staff-api"),
     "staffUi": ("Deployment", "staff-portal-ui", "staff-ui"),
@@ -69,7 +76,7 @@ def prepare(values, before, registry, tag):
     values = copy.deepcopy(values)
     if not isinstance(values, dict) or not values.get("global", {}).get("registryHostname"):
         raise ValueError("Existing environment values required; refusing default-host installation")
-    if values["global"]["registryHostname"] != "registry.farmer-dev.oanstaging.com":
+    if values["global"]["registryHostname"] not in NEW_DEV_HOSTNAMES:
         raise ValueError("This pipeline targets only the verified new-dev Registry hostname")
     config = values.setdefault("registry", {})
     for component, (_, _, image) in COMPONENTS.items():
