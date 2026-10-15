@@ -6,3 +6,4 @@ python -m pytest -q -p no:cacheprovider test/test_rp_pin_lockstep.py \
   test/test_shared_geo_migration.py farmer-extension/tests/test_metadata_effective_layer.py
 python odk/test_transform.py > /tmp/odk-transform.log
 bash -n ci/jenkins/deploy-dev.sh
+bash ci/jenkins/test-deploy-shell.sh

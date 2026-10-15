@@ -30,6 +30,8 @@ jobs:
         run: |
           docker build -t coss-ci/validation:check ci/jenkins
           docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" coss-ci/validation:check bash ci/jenkins/validate.sh
+      - name: Deployment shell compatibility (Bash 4.3)
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash ci/jenkins/test-deploy-shell.sh
       - name: ODK transform
         run: python odk/test_transform.py
       - name: ODK geography matches the shared COSS seed
