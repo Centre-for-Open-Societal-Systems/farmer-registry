@@ -35,3 +35,19 @@ jobs:
             --entrypoint python coss/staff-api:ci -m unittest \
             tests.test_domain_validation_utils tests.test_farmer_geo_sync \
             tests.test_intake_record_image_urls tests.test_household_family_size -v
+      - name: Seed transaction and rollback integration
+        if: matrix.component == 'db-seed'
+        run: |
+          set -euo pipefail
+          docker network create seed-ci
+          trap 'docker rm -f seed-ci-db >/dev/null 2>&1; docker network rm seed-ci >/dev/null 2>&1' EXIT
+          docker run -d --name seed-ci-db --network seed-ci -e POSTGRES_PASSWORD=local-test -e POSTGRES_DB=coss_seed_test_ci postgres:16-alpine
+          ready=false
+          for attempt in $(seq 1 30); do
+            if docker exec seed-ci-db pg_isready -U postgres; then ready=true; break; fi
+            sleep 1
+          done
+          test "$ready" = true
+          docker run --rm --network seed-ci -v "$PWD:/repo:ro" \
+            -e PGHOST=seed-ci-db -e PGDATABASE=coss_seed_test_ci -e PGUSER=postgres -e PGPASSWORD=local-test \
+            --entrypoint python3 coss/db-seed:ci /repo/test/test_seed_transaction.py

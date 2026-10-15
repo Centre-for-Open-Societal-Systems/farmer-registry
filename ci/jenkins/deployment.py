@@ -165,6 +165,23 @@ def unchanged_release(before, current):
         raise ValueError("Helm revision/state changed during preflight; rerun against the latest release")
 
 
+def upgrade_diagnostic(log):
+    """Classify Helm errors without echoing arbitrary manifests or secret values."""
+    patterns = [
+        (r'BackoffLimitExceeded|backoff limit', 'A hook Job exhausted its retries.'),
+        (r'ImagePullBackOff|ErrImagePull|pull access denied', 'A workload could not pull its image.'),
+        (r'timed out|context deadline exceeded', 'Helm timed out waiting for resources or hooks.'),
+        (r'another operation .*in progress', 'Another Helm operation is in progress.'),
+        (r'forbidden|Unauthorized', 'Kubernetes authorization rejected the operation.'),
+        (r'cannot patch|field is immutable', 'Kubernetes rejected a resource update.'),
+        (r'failed (?:pre|post)-(?:install|upgrade)|hooks? failed', 'A Helm lifecycle hook failed.'),
+        (r'no matches for kind|resource mapping not found', 'A required Kubernetes API or CRD is unavailable.'),
+        (r'connection refused|no such host|TLS handshake timeout', 'The Kubernetes endpoint could not be reached.'),
+    ]
+    matches = [message for pattern, message in patterns if re.search(pattern, log, re.I)]
+    return matches or ['Helm failed with an unclassified error; raw output was withheld because it may contain secrets.']
+
+
 def main():
     action, *args = sys.argv[1:]
     if action in ("status", "complete", "upgrade-mode"):
@@ -176,6 +193,9 @@ def main():
         print(f"Helm revision {status['version']}: {state}")
     elif action == "unchanged":
         unchanged_release(load(args[0]), load(args[1]))
+    elif action == "diagnose":
+        for message in upgrade_diagnostic(Path(args[0]).read_text(encoding="utf-8", errors="replace")):
+            print("Helm diagnostic: " + message)
     elif action == "prepare":
         result = prepare(load(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"])
         Path(args[2]).write_text(yaml.safe_dump(result, sort_keys=False), encoding="utf-8")

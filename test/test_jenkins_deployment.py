@@ -19,6 +19,19 @@ def helm_status(state="deployed", revision=5):
             "info": {"status": state}}
 
 
+@pytest.mark.parametrize("log,expected", [
+    ('Error: post-upgrade hooks failed: job farmer-registry-db-seed failed: BackoffLimitExceeded', 'retries'),
+    ('Error: timed out waiting for the condition', 'timed out'),
+    ('Error: ImagePullBackOff password=private-value', 'pull its image'),
+    ('Error: cannot patch deployment; private-value', 'resource update'),
+    ('Error: unexpected private-value', 'unclassified'),
+])
+def test_helm_failure_diagnostics_do_not_echo_private_output(log, expected):
+    result = ' '.join(deployment.upgrade_diagnostic(log))
+    assert expected in result
+    assert 'private-value' not in result
+
+
 @pytest.mark.parametrize("state", ["deployed", "failed"])
 def test_release_accepts_stable_upgrade_states(state):
     assert deployment.release_status(helm_status(state)) == state

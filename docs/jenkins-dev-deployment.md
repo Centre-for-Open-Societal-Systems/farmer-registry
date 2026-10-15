@@ -55,6 +55,14 @@ credentials must allow those repositories. Never put credentials in Git.
 - The seed hook applies extension metadata with geography, sample records, images
   and intake fixtures disabled. The sanity hook is required to pass; mutating E2E
   fixtures are disabled. New analytics publishing/import jobs default to disabled.
+- The COSS seed entrypoint commits Registry metadata in one transaction and AWE
+  metadata in a separate transaction, then runs enabled upstream widget/template
+  loaders. SQL errors exit nonzero and roll back that database's metadata batch.
+  Earlier database commits and object uploads are not part of a distributed
+  transaction; rerun after correcting a failure. Baseline duplicate inserts retain
+  existing rows, while explicit extension upserts apply reviewed COSS changes.
+  Shared lookup SQL is not loaded into Registry or MDS by this job; shared catalogs
+  must already be managed by the Commons migration workflow.
 - Candidate validation rejects resource removal, changed existing environment or
   Secret references, changed routing/storage, and incorrect commit images.
   A rejected change requires an explicit reviewed migration, not bypassing the guard.
@@ -78,6 +86,13 @@ investigate before retrying. Keep the operator's database backup/recovery proces
 Private values and rendered manifests are temporary, are not archived, and are
 removed on exit. Inspect restricted pod logs when a hook fails. Never apply an
 offline rendered manifest: chart Secret lookups require the live cluster.
+
+On upgrade failure, Jenkins prints a classified Helm error summary plus release
+history and Job/Pod status. It does not echo arbitrary Helm output, which may
+contain Secrets. Unclassified errors are identified explicitly. Diagnostic
+command failures do not suppress the remaining checks. The successful path joins
+`helm get manifest` with `helm get hooks` before checking required workloads.
+See the [seed and deployment rehearsal report](jenkins-seed-validation-20261015.md).
 
 ## Validation and first rollout
 

@@ -6,6 +6,7 @@ trap 'rm -rf "$TEST_ROOT"' EXIT
 mkdir "$TEST_ROOT/bin"
 cat > "$TEST_ROOT/bin/docker" <<'MOCK'
 #!/bin/sh
+printf '%s\n' "$*" >> "$GUARD_CALLS"
 case "$*" in
   *upgrade-mode*) printf '%s\n' "$TEST_MODE" ;;
 esac
@@ -25,10 +26,12 @@ export KUBECONFIG="$TEST_ROOT/unused-kubeconfig"
 export HELM_RELEASE=farmer-registry HELM_NAMESPACE=farmer
 export ECR_REGISTRY=123456789012.dkr.ecr.ap-south-1.amazonaws.com IMAGE_TAG=abcdef012345
 export HELM_CALLS="$TEST_ROOT/helm-calls"
+export GUARD_CALLS="$TEST_ROOT/guard-calls"
 for TEST_MODE in normal recovery; do
   for TEST_UPGRADE_EXIT in 0 1; do
     export TEST_MODE TEST_UPGRADE_EXIT
     : > "$HELM_CALLS"
+    : > "$GUARD_CALLS"
     result=0
     bash ci/jenkins/deploy-dev.sh > "$TEST_ROOT/output" 2>&1 || result=$?
     if [ "$result" -ne "$TEST_UPGRADE_EXIT" ]; then
@@ -46,6 +49,7 @@ for TEST_MODE in normal recovery; do
       normal:*) echo 'Normal upgrade must use atomic rollback'; exit 1 ;;
     esac
     if [ "$TEST_UPGRADE_EXIT" -eq 1 ]; then
+      grep -q ' diagnose ' "$GUARD_CALLS"
       grep -q '^history ' "$HELM_CALLS"
       if grep -q '^get hooks ' "$HELM_CALLS"; then
         echo 'Failed upgrade must stop before post-upgrade validation'; exit 1

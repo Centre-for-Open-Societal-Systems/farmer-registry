@@ -57,9 +57,10 @@ if ! helm upgrade "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
   -f "$STATE/values.yaml" "${UPGRADE_FLAGS[@]}" \
   > "$STATE/upgrade.log" 2>&1; then
   echo "Registry Helm upgrade failed (mode: $MODE). Inspect Helm history and seed/sanity pod logs with the deployment credentials." >&2
+  guard diagnose "$STATE/upgrade.log" || echo 'Could not classify the private Helm error log.' >&2
   # Print status only; manifests and raw seed logs may contain credentials/data.
-  helm history "$HELM_RELEASE" -n "$HELM_NAMESPACE" --max 3
-  kubectl get jobs,pods -n "$HELM_NAMESPACE"
+  helm history "$HELM_RELEASE" -n "$HELM_NAMESPACE" --max 3 || true
+  kubectl get jobs,pods -n "$HELM_NAMESPACE" || true
   exit 1
 fi
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/final-status.json"
