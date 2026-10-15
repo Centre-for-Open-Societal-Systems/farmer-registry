@@ -208,3 +208,7 @@ service-outcomes/
 # Operator exports and local acceptance artifacts never belong in Git.
 /private-exports/
 tests/e2e/local/generated/
+
+# The repository image build helpers are source, not packaging artifacts.
+!ci/build/
+!ci/build/**
