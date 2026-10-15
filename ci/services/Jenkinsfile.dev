@@ -66,7 +66,7 @@ pipeline {
                         '''
                     }
                 }
-                stash name: 'services-dev', includes: 'ci/**,helm/**,service-outcomes/build.json', excludes: 'helm/**/charts/**'
+                stash name: 'services-dev', includes: 'ci/**,helm/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
         }
         stage('Prepare paused replacement') {

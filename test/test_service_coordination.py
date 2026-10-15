@@ -132,6 +132,12 @@ def test_service_catalogue_is_owned_by_helm_and_hash_covers_repositories(tmp_pat
     assert coordinator.configuration_hash() != original
 
 
+def test_jenkins_transfers_hidden_chart_files_bound_into_the_build_hash():
+    for path, name in [("Jenkinsfile", "optional-deployment"), ("ci/services/Jenkinsfile.dev", "services-dev")]:
+        line = next(line for line in (ROOT / path).read_text().splitlines() if "stash name: '" + name + "'" in line)
+        assert "helm/**" in line and "useDefaultExcludes: false" in line
+
+
 @pytest.mark.parametrize("mutation", ["none", "worker", "secret", "route", "job", "remove", "database"])
 def test_dashboard_api_guard_preserves_every_other_resource(mutation):
     api = deployment("farmer-registry-dashboard-api")

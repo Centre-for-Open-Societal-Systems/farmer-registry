@@ -148,7 +148,7 @@ pipeline {
                         '''
                     }
                 }
-                stash name: 'optional-deployment', includes: 'ci/**,helm/**,service-outcomes/build.json', excludes: 'helm/**/charts/**'
+                stash name: 'optional-deployment', includes: 'ci/**,helm/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
         }
         stage('Deploy optional services') {
