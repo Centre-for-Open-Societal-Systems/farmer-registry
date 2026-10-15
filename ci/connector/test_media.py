@@ -15,6 +15,27 @@ from openg2p_connector_service.transports.registry import get_transport
 
 
 class MediaTests(unittest.IsolatedAsyncioTestCase):
+    def test_signed_message_binds_partner_payload_and_id(self):
+        import hashlib
+        import os
+        import jwt
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+        from coss_connector.signing import signed_envelope
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        private = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+        settings = SimpleNamespace(signing_enabled=True, signing_private_key_pem=private, signing_algorithm="RS256", signing_issuer="farmer-partner")
+        envelope = {"header": {"sender_id": "farmer-partner", "message_id": "synthetic"}, "message": {"payload": {"name": "Synthetic"}}}
+        with patch("coss_connector.signing.get_settings", return_value=settings), patch.dict(os.environ, CONNECTOR_SIGNING_KEY_ID="test-key"):
+            result = signed_envelope(envelope)
+        claims = jwt.decode(result["header"]["signature"], key.public_key(), algorithms=["RS256"], issuer="farmer-partner")
+        self.assertEqual(claims["message_id"], "synthetic")
+        self.assertEqual(claims["body_sha256"], hashlib.sha256(json.dumps(result["message"], sort_keys=True, separators=(",", ":")).encode()).hexdigest())
+        self.assertEqual(jwt.get_unverified_header(result["header"]["signature"])["kid"], "test-key")
+        settings.signing_enabled = False
+        with patch("coss_connector.signing.get_settings", return_value=settings), patch.dict(os.environ, CONNECTOR_REQUIRE_SIGNING="true"):
+            with self.assertRaises(ValueError): signed_envelope(envelope)
+
     async def test_nested_attachments_preserve_source_identity(self):
         entry = {"__id": "uuid:synthetic", "photo": "photo.jpg", "land": [{"certificate": "land.pdf"}]}
         def handle(request):

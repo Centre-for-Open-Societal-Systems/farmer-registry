@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -157,6 +158,11 @@ def layout(component, source):
     chart_metadata = yaml.safe_load((chart / "Chart.yaml").read_text(encoding="utf-8"))
     if chart_metadata.get("dependencies") and not (chart / "Chart.lock").is_file():
         raise ServiceError("chart-dependencies-not-locked")
+    if component.get("kind") == "connector":
+        module_spec = importlib.util.spec_from_file_location("connector_chart_signing", ROOT / "ci/connector/chart_signing.py")
+        module = importlib.util.module_from_spec(module_spec)
+        module_spec.loader.exec_module(module)
+        module.apply(chart)
     return dockerfile, chart
 
 
@@ -309,6 +315,33 @@ def paused_connector(manifest):
             raise ServiceError("connector-process-active")
         if kind in ("Job", "DaemonSet"):
             raise ServiceError("connector-job-requires-rehearsal")
+
+
+def signing_preparation_before(before, after):
+    """Allow only the reviewed signing env addition while every process is stopped."""
+    paused_connector(before)
+    paused_connector(after)
+    result = copy.deepcopy(before)
+    expected = {
+        "CONNECTOR_REQUIRE_SIGNING": {"value": "true"},
+        "CONNECTOR_SIGNING_ENABLED": {"value": "true"},
+        "CONNECTOR_SIGNING_ALGORITHM": {"value": "RS256"},
+        "CONNECTOR_SIGNING_ISSUER": {"value": "farmer-partner"},
+        "CONNECTOR_SIGNING_KEY_ID": {"value": "farmer-connector-v2-52da0fc34e90"},
+        "CONNECTOR_SIGNING_PRIVATE_KEY_PEM": {"valueFrom": {"secretKeyRef": {"name": "farmer-connector-v2-signing", "key": "private-key.pem"}}},
+    }
+    newer = {(d["kind"], d["metadata"]["name"]): d for d in after}
+    for document in result:
+        if document["kind"] != "Deployment" or document["metadata"]["name"].endswith("-ui"):
+            continue
+        current = newer[(document["kind"], document["metadata"]["name"])]
+        for old, new in zip(pod(document)["containers"], pod(current)["containers"]):
+            env = {e["name"]: e for e in new.get("env", [])}
+            if any(env.get(name) != dict(name=name, **value) for name, value in expected.items()):
+                raise ServiceError("connector-signing-config-not-verified")
+            existing = {e["name"] for e in old.get("env", [])}
+            old.setdefault("env", []).extend(e for e in new["env"] if e["name"] in expected and e["name"] not in existing)
+    return result
 
 
 def guard_dashboard_api(before, after, image):
@@ -466,10 +499,11 @@ def deploy(component, environment, record, source, registry, run=command):
             render_options = ["--no-hooks", "--post-renderer", str(renderer)]
         after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
                           "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
+        guard_before = signing_preparation_before(before, after) if component.get("kind") == "connector" else before
         if embedded:
             guard_dashboard_api(before, after, images["main"])
         else:
-            guard(before, after, namespace, images.values(), release)
+            guard(guard_before, after, namespace, images.values(), release)
         if component.get("kind") == "connector":
             from connector_cutover import verify_backup
             backup_dir = os.environ.get("CONNECTOR_BACKUP_DIRECTORY")
@@ -501,7 +535,8 @@ def deploy(component, environment, record, source, registry, run=command):
     if embedded:
         guard_dashboard_api(before, final_manifest, images["main"])
     else:
-        guard(before, final_manifest, namespace, images.values(), release)
+        guard(signing_preparation_before(before, final_manifest) if component.get("kind") == "connector" else before,
+              final_manifest, namespace, images.values(), release)
     return final["version"]
 
 

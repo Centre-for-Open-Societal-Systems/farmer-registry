@@ -7,6 +7,11 @@ _coordination:
   oldDatabaseEnv: CONNECTOR_DB_DBNAME
   backupHash: c4cdb2bb37049b00470994d6443ec9b562c3548d267b27df3bb1e0a6eddd48c1
 fullnameOverride: farmer-registry-connector
+cossSigning:
+  enabled: true
+  partnerId: farmer-partner
+  keyId: farmer-connector-v2-52da0fc34e90
+  secret: farmer-connector-v2-signing
 global:
   hostname: connector-farmer-registry-development.oanstaging.com
   postgresqlHost: commons-postgresql.commons.svc.cluster.local
