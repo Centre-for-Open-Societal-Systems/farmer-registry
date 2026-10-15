@@ -1,0 +1,125 @@
+"""Guarded replica changes using the installed connector charts and Helm values.
+
+Run on the trusted dev host. Private original values/manifests are retained in a
+new operator directory. No chart dependencies, migrations or setup Jobs execute.
+"""
+import argparse
+import base64
+import copy
+import gzip
+import json
+import os
+from pathlib import Path
+import subprocess
+
+import yaml
+
+OLD = "farmer-connector"
+NEW = "farmer-registry-connector"
+
+
+def run(args):
+    result = subprocess.run(args, capture_output=True, text=True, timeout=300)
+    if result.returncode:
+        raise RuntimeError("Connector Helm operation failed; private output withheld")
+    return result.stdout
+
+
+def documents(raw):
+    return [item for item in yaml.safe_load_all(raw) if item]
+
+
+def replica_guard(before, after, release, replicas):
+    def index(items):
+        return {(d["kind"], d["metadata"]["name"]): copy.deepcopy(d) for d in items}
+    old, new = index(before), index(after)
+    if len(old) != len(before) or len(new) != len(after) or set(old) != set(new):
+        raise ValueError("Replica handoff must preserve every resource")
+    for key, previous in old.items():
+        current = new[key]
+        if key[0] == "Deployment":
+            suffix = key[1].removeprefix(release + "-")
+            if suffix not in replicas or current["spec"].get("replicas", 1) != replicas[suffix]:
+                raise ValueError("Unexpected connector process or replica count")
+            current["spec"]["replicas"] = previous["spec"].get("replicas", 1)
+    if old != new:
+        raise ValueError("Replica handoff would change unrelated configuration")
+
+
+def export_chart(release, version, directory):
+    secret = json.loads(run(["kubectl", "-n", "farmer", "get", "secret",
+                            f"sh.helm.release.v1.{release}.v{version}", "-o", "json"]))
+    saved = json.loads(gzip.decompress(base64.b64decode(base64.b64decode(secret["data"]["release"]))))
+    chart = saved["chart"]
+    directory.mkdir(mode=0o700)
+    metadata = chart["metadata"]
+    metadata.pop("dependencies", None)
+    (directory / "Chart.yaml").write_text(yaml.safe_dump(metadata))
+    (directory / "values.yaml").write_text(yaml.safe_dump(chart["values"]))
+    for item in chart["templates"]:
+        relative = Path(item["name"])
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError("Invalid installed template path")
+        target = directory / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(base64.b64decode(item["data"]))
+    return saved
+
+
+def change_replicas(release, replicas, directory):
+    if release not in (OLD, NEW):
+        raise ValueError("Unknown connector owner")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=False)
+    status = json.loads(run(["helm", "status", release, "-n", "farmer", "-o", "json"]))
+    if status["info"]["status"] != "deployed":
+        raise ValueError("Deployed connector release required")
+    before_raw = run(["helm", "get", "manifest", release, "-n", "farmer"])
+    before = documents(before_raw)
+    (directory / "before.yaml").write_text(before_raw)
+    values = yaml.safe_load(run(["helm", "get", "values", release, "-n", "farmer", "-o", "yaml"]))
+    (directory / "original-values.yaml").write_text(yaml.safe_dump(values))
+    chart = directory / "chart"
+    export_chart(release, status["version"], chart)
+    # Existing old init dependency resources are retained verbatim; no chart
+    # download or setup rerun is involved in stopping scheduling/processing.
+    values.setdefault("postgres-init", {})["enabled"] = False
+    for role, count in replicas.items():
+        values.setdefault(role, {})["replicaCount"] = count
+    path = directory / "values.yaml"
+    path.write_text(yaml.safe_dump(values))
+    base = ["helm", "template", release, str(chart), "-n", "farmer", "-f", str(path), "--is-upgrade", "--dry-run=server", "--no-hooks"]
+    candidate = documents(run(base))
+    present = {(d["kind"], d["metadata"]["name"]) for d in candidate}
+    retained = [d for d in before if (d["kind"], d["metadata"]["name"]) not in present]
+    allowed = {("ServiceAccount", "farmer-connector-postgres-init"), ("Job", "farmer-connector-postgres-init-farmer-connector")}
+    if any((d["kind"], d["metadata"]["name"]) not in allowed for d in retained):
+        raise ValueError("Unreviewed dependency resources")
+    if retained:
+        (chart / "retained.yaml").write_text(yaml.safe_dump_all(retained))
+        (chart / "templates/retained.yaml").write_text('{{ .Files.Get "retained.yaml" }}\n')
+    after = documents(run(base))
+    replica_guard(before, after, release, replicas)
+    current = json.loads(run(["helm", "status", release, "-n", "farmer", "-o", "json"]))
+    if current["version"] != status["version"]:
+        raise ValueError("Connector changed during handoff")
+    run(["helm", "upgrade", release, str(chart), "-n", "farmer", "-f", str(path),
+         "--no-hooks", "--atomic", "--wait", "--timeout", "3m"])
+    replica_guard(before, documents(run(["helm", "get", "manifest", release, "-n", "farmer"])), release, replicas)
+    final = json.loads(run(["helm", "status", release, "-n", "farmer", "-o", "json"]))
+    return {"release": release, "helmRevision": final["version"], "replicas": replicas,
+            "privateRecoveryDirectory": str(directory), "setupJobsExecuted": False}
+
+
+if __name__ == "__main__":
+    os.umask(0o077)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("pause-old", "start-replacement"))
+    parser.add_argument("--directory", type=Path, required=True)
+    args = parser.parse_args()
+    if args.action == "pause-old":
+        print(json.dumps(change_replicas(OLD, {"api": 0, "worker": 0, "beat": 0, "ui": 0}, args.directory)))
+    else:
+        old = json.loads(run(["kubectl", "-n", "farmer", "get", "deploy", "-o", "json"]))
+        if any(d["metadata"]["name"].startswith(OLD + "-") and (d["spec"].get("replicas", 1) or d.get("status", {}).get("replicas", 0)) for d in old["items"]):
+            raise ValueError("Old connector processes must stop first")
+        print(json.dumps(change_replicas(NEW, {"api": 1, "worker": 1, "ui": 1}, args.directory)))

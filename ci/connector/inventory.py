@@ -41,16 +41,24 @@ def main():
     import re
     if not re.fullmatch(r"[a-z][a-z0-9_]+", database):
         raise ValueError("Unexpected database name")
-    rows = json.loads(command(["kubectl", "exec", "-n", "farmer", "deploy/farmer-connector-api", "--", "python", "-c", EXPORT]))
+    pods = json.loads(command(["kubectl", "get", "pods", "-n", "commons", "-l", "app.kubernetes.io/name=postgresql", "-o", "json"]))["items"]
+    if len(pods) != 1:
+        raise ValueError("Expected one Commons PostgreSQL pod")
+    pg_pod = pods[0]["metadata"]["name"]
+    # The final handoff snapshot is taken AFTER old API/worker/beat pods stop.
+    # Read definitions through the existing PostgreSQL pod, not a live API pod.
+    query = "SELECT coalesce(json_agg(row_to_json(c) ORDER BY connector_id),'[]'::json) FROM connector_definitions c"
+    result = subprocess.run(["kubectl", "exec", "-n", "commons", pg_pod, "--", "sh", "-c",
+                             'PGPASSWORD="$POSTGRES_POSTGRES_PASSWORD" exec psql -X -U postgres -d "$1" -Atc "$2"',
+                             "inventory", database, query], capture_output=True, text=True, timeout=60)
+    if result.returncode:
+        raise ValueError("Pipeline inventory failed")
+    rows = json.loads(result.stdout)
     documents = {"pipelines.json": rows,
                  "mappings.json": [{key: row.get(key) for key in ("connector_id", "data_model_mnemonic", "mapper_expression", "mapper_version")} for row in rows],
                  "checkpoints.json": [{key: row.get(key) for key in ("connector_id", "poll_state_json", "source_config_json")} for row in rows]}
     for name, value in documents.items():
         (exports / name).write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
-    pods = json.loads(command(["kubectl", "get", "pods", "-n", "commons", "-l", "app.kubernetes.io/name=postgresql", "-o", "json"]))["items"]
-    if len(pods) != 1:
-        raise ValueError("Expected one Commons PostgreSQL pod")
-    pg_pod = pods[0]["metadata"]["name"]
     pg_secret = json.loads(command(["kubectl", "get", "secret", "commons-postgresql", "-n", "commons", "-o", "json"]))
     password = base64.b64decode(pg_secret["data"]["postgres-password"])
     if b"\n" in password:

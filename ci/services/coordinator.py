@@ -473,6 +473,8 @@ def deploy(component, environment, record, source, registry, run=command):
         if component.get("allowInstall") is not True:
             raise SkipService("no-existing-release")
         before, values = [], {}
+    if component.get("kind") == "connector" and values.get("cossCutover", {}).get("phase") == "active":
+        raise SkipService("active-connector-requires-accepted-image-rollout")
     merge(values, overrides)
     for role, spec in image_specs(component).items():
         selected = record["images"][role] if component.get("images") else record
