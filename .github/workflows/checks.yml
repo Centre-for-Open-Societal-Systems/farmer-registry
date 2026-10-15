@@ -33,6 +33,7 @@ jobs:
       - name: Deployment shell compatibility (Bash 4.3)
         run: |
           docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash tests/integration/test-deploy-shell.sh
+          docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash tests/integration/test-staging-deploy-shell.sh
           docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash tests/integration/test-container-shell.sh
       - name: Optional services tooling container
         run: |

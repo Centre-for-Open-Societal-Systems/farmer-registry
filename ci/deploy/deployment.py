@@ -9,6 +9,9 @@ import sys
 
 import yaml
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from environments import configuration, namespace
+
 RELEASE = "farmer-registry"
 # Registry UI hostnames of the new-dev release. farmer-registry-development replaces
 # registry.farmer-dev now that the gen2-dev *-development names point at this box;
@@ -36,14 +39,14 @@ def documents(path):
     return [d for d in yaml.safe_load_all(Path(path).read_text(encoding="utf-8")) if isinstance(d, dict)]
 
 
-def index(docs):
+def index(docs, environment="dev"):
     result = {}
     for d in docs:
         key = (d["kind"], d["metadata"]["name"])
         if key in result:
             raise ValueError(f"Duplicate resource: {key}")
-        if d["metadata"].get("namespace", "farmer") != "farmer":
-            raise ValueError(f"Resource outside farmer: {key}")
+        if d["metadata"].get("namespace", namespace(environment)) != namespace(environment):
+            raise ValueError(f"Resource outside selected environment: {key}")
         result[key] = d
     return result
 
@@ -56,8 +59,14 @@ def pod(d):
 
 
 def envs(d):
-    return {c["name"]: {e["name"]: e for e in c.get("env", [])}
-            for c in pod(d).get("containers", [])}
+    result = {}
+    for container in pod(d).get("containers", []):
+        entries = container.get("env", [])
+        variables = {e["name"]: e for e in entries}
+        if container["name"] in result or len(variables) != len(entries):
+            raise ValueError("Duplicate workload container/environment entry")
+        result[container["name"]] = variables
+    return result
 
 
 def image_root(registry, tag):
@@ -68,14 +77,14 @@ def image_root(registry, tag):
     return registry + "/openg2p/farmer-registry"
 
 
-def identity_overlay():
-    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-identity.yaml")
+def identity_overlay(environment="dev"):
+    return load(Path(__file__).resolve().parents[2] / "helm/environments" / environment / "registry-identity.yaml")
 
 
-def identity_env(suffix):
+def identity_env(suffix, environment="dev"):
     component = {"staff-portal-ui": "staffUi", "staff-portal-api": "staffApi",
                  "partner-api": "partnerApi", "celery-worker": "celeryWorker"}.get(suffix)
-    return identity_overlay()["registry"].get(component, {}).get("envVars", {})
+    return identity_overlay(environment)["registry"].get(component, {}).get("envVars", {})
 
 
 def merge(target, overlay):
@@ -86,19 +95,22 @@ def merge(target, overlay):
             target[key] = copy.deepcopy(value)
 
 
-def prepare(values, before, registry, tag, migrate_identity=False):
+def prepare(values, before, registry, tag, migrate_identity=False, environment="dev", images=None):
     root = image_root(registry, tag)
-    old = index(before)
+    old = index(before, environment)
     if ("Deployment", RELEASE + "-staff-portal-api") not in old:
         raise ValueError("Existing Registry deployment required")
     values = copy.deepcopy(values)
     if not isinstance(values, dict) or not values.get("global", {}).get("registryHostname"):
         raise ValueError("Existing environment values required; refusing default-host installation")
-    if values["global"]["registryHostname"] not in NEW_DEV_HOSTNAMES:
-        raise ValueError("This pipeline targets only the verified new-dev Registry hostname")
+    allowed = NEW_DEV_HOSTNAMES if environment == "dev" else {configuration(environment)["registryHostname"]}
+    if values["global"]["registryHostname"] not in allowed:
+        raise ValueError("This pipeline targets only the verified new-dev Registry hostname" if environment == "dev"
+                         else "Registry hostname does not match staging")
     config = values.setdefault("registry", {})
     for component, (_, _, image) in COMPONENTS.items():
-        config.setdefault(component, {}).setdefault("image", {}).update(repository=root + "/" + image, tag=tag)
+        pinned_tag = images[image]["tag"] + "@" + images[image]["digest"] if images else tag
+        config.setdefault(component, {}).setdefault("image", {}).update(repository=root + "/" + image, tag=pinned_tag)
     # rc.544's chart omits AWE worker variables previously added by COSS. Carry
     # their exact literals/Secret refs forward, without capturing Secret data.
     worker = old.get(("Deployment", RELEASE + "-celery-worker"), {})
@@ -120,13 +132,17 @@ def prepare(values, before, registry, tag, migrate_identity=False):
     values["analytics"].setdefault("dashboards", {}).setdefault("enabled", False)
     values.setdefault("mapsContent", {}).setdefault("enabled", False)
     if migrate_identity:
-        merge(values, identity_overlay())
+        merge(values, identity_overlay(environment))
+    if environment == "staging":
+        if not images:
+            raise ValueError("Staging requires a tested image set pinned by digest")
+        merge(values, identity_overlay("staging"))
     return values
 
 
-def validate(before, after, registry, tag, migrate_identity=False):
+def validate(before, after, registry, tag, migrate_identity=False, environment="dev", images=None):
     root = image_root(registry, tag)
-    old, new = index(before), index(after)
+    old, new = index(before, environment), index(after, environment)
     for key, previous in old.items():
         # Hook/revision Jobs are short-lived. Persistent release resources must
         # all remain, including dashboard, PVCs, Services and ingress routes.
@@ -143,7 +159,7 @@ def validate(before, after, registry, tag, migrate_identity=False):
                 for name, value in variables.items():
                     if new_env.get(container, {}).get(name) != value:
                         suffix = key[1].removeprefix(RELEASE + "-")
-                        approved = identity_env(suffix) if migrate_identity else {}
+                        approved = identity_env(suffix, environment) if migrate_identity or environment == "staging" else {}
                         if name not in approved or new_env.get(container, {}).get(name) != {"name": name, "value": approved[name]}:
                             raise ValueError(f"Existing environment/Secret reference changed: {key[1]}/{container}/{name}")
             if pod(previous).get("imagePullSecrets", []) != pod(current).get("imagePullSecrets", []):
@@ -156,6 +172,8 @@ def validate(before, after, registry, tag, migrate_identity=False):
                     raise ValueError(f"Existing service routing changed: {key}/{field}")
         if key[0] == "PersistentVolumeClaim" and previous["spec"] != current["spec"]:
             raise ValueError(f"Persistent volume claim changed: {key}")
+        if key[0] == "Secret" and any(previous.get(field) != current.get(field) for field in ("data", "stringData", "type")):
+            raise ValueError(f"Existing Secret contents changed: {key}")
         if key == ("Deployment", RELEASE + "-dashboard-api"):
             if [c["image"] for c in pod(previous)["containers"]] != [c["image"] for c in pod(current)["containers"]]:
                 raise ValueError("Dashboard image must be retained by this Registry deployment")
@@ -163,9 +181,14 @@ def validate(before, after, registry, tag, migrate_identity=False):
         key = (kind, RELEASE + "-" + suffix)
         if key not in new or not pod(new[key]).get("containers"):
             raise ValueError(f"Missing required image workload: {key}")
-        expected = root + "/" + component + ":" + tag
+        expected = root + "/" + component + ":" + (images[component]["tag"] + "@" + images[component]["digest"] if images else tag)
         if pod(new[key])["containers"][0]["image"] != expected:
             raise ValueError(f"Wrong commit image: {key}")
+    public = new.get(("Deployment", RELEASE + "-staff-portal-ui-public"))
+    if public:
+        expected = root + "/staff-ui:" + (images["staff-ui"]["tag"] + "@" + images["staff-ui"]["digest"] if images else tag)
+        if [c.get("image") for c in pod(public).get("containers", [])] != [expected]:
+            raise ValueError("Public staff UI must use the accepted Registry staff UI image")
     if migrate_identity:
         for suffix in ("staff-portal-ui", "staff-portal-api", "partner-api", "celery-worker"):
             current = new[("Deployment", RELEASE + "-" + suffix)]
@@ -175,10 +198,23 @@ def validate(before, after, registry, tag, migrate_identity=False):
             for name, value in identity_env(suffix).items():
                 if environments[0].get(name) != {"name": name, "value": value}:
                     raise ValueError(f"Identity migration was not rendered: {suffix}/{name}")
+    if environment == "staging":
+        if not images:
+            raise ValueError("Staging requires immutable image digests")
+        partner = next(iter(envs(new[("Deployment", RELEASE + "-partner-api")]).values()))
+        if partner.get("REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED") != {"name": "REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED", "value": "true"}:
+            raise ValueError("Partner signature verification must stay enabled")
+        for suffix in ("staff-portal-api", "partner-api", "celery-worker"):
+            current = next(iter(envs(new[("Deployment", RELEASE + "-" + suffix)]).values()))
+            for name, value in identity_env(suffix, "staging").items():
+                if current.get(name) != {"name": name, "value": value}:
+                    raise ValueError(f"Staging staff identity was not rendered: {suffix}/{name}")
     for key, d in new.items():
         if key[1].startswith(("commons-", "farmer-connector")):
             raise ValueError(f"Registry must not own shared/connector resource: {key}")
-        if key[0] in ("ClusterRole", "ClusterRoleBinding", "Namespace"):
+        if key[0] in ("ClusterRole", "ClusterRoleBinding", "Namespace", "PersistentVolume",
+                      "CustomResourceDefinition", "StorageClass", "APIService",
+                      "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration"):
             raise ValueError(f"Registry must remain namespace-scoped: {key}")
         for container in pod(d).get("containers", []):
             for e in container.get("env", []):
@@ -186,9 +222,9 @@ def validate(before, after, registry, tag, migrate_identity=False):
                     raise ValueError(f"Demo/geography loader enabled: {key}/{e['name']}")
 
 
-def release_status(status, require_deployed=False):
-    if status.get("name") != RELEASE or status.get("namespace") != "farmer":
-        raise ValueError("Expected farmer-registry in namespace farmer")
+def release_status(status, require_deployed=False, environment="dev"):
+    if status.get("name") != RELEASE or status.get("namespace") != namespace(environment):
+        raise ValueError("Expected farmer-registry in the selected environment namespace")
     revision = status.get("version")
     if type(revision) is not int or revision < 1:
         raise ValueError("Expected a positive Helm release revision")
@@ -202,8 +238,8 @@ def release_status(status, require_deployed=False):
     return state
 
 
-def unchanged_release(before, current):
-    if (release_status(before), before["version"]) != (release_status(current), current["version"]):
+def unchanged_release(before, current, environment="dev"):
+    if (release_status(before, environment=environment), before["version"]) != (release_status(current, environment=environment), current["version"]):
         raise ValueError("Helm revision/state changed during preflight; rerun against the latest release")
 
 
@@ -243,7 +279,18 @@ def upgrade_diagnostic(log):
 
 def main():
     action, *args = sys.argv[1:]
+    environment = os.environ.get("DELIVERY_ENVIRONMENT", "dev")
+    namespace(environment)
+    images = None
+    if environment == "staging":
+        from staging import evidence
+        record = evidence(os.environ["STAGING_EVIDENCE_FILE"], os.environ["SOURCE_COMMIT"])
+        images = record["registry"]["images"]
+        os.environ["ECR_REGISTRY"] = record["registry"]["registry"]
+        os.environ["IMAGE_TAG"] = record["registry"]["sourceCommit"][:12]
     migrate_identity = os.environ.get("APPLY_COMMONS_IDENTITY", "false") == "true"
+    if environment == "staging" and migrate_identity:
+        raise ValueError("Dev Commons identity migration cannot be used for staging")
     if migrate_identity:
         # No environment drift allowed through a broad guard bypass. Evidence is
         # bound to the checked-in values and expires after one hour.
@@ -254,33 +301,38 @@ def main():
         identity.evidence(os.environ["IDENTITY_EVIDENCE_FILE"])
     if action in ("status", "complete", "upgrade-mode"):
         status = load(args[0])
-        state = release_status(status, require_deployed=action == "complete")
+        state = release_status(status, require_deployed=action == "complete", environment=environment)
         if action == "upgrade-mode":
             print("recovery" if state == "failed" else "normal")
             return
         print(f"Helm revision {status['version']}: {state}")
     elif action == "unchanged":
-        unchanged_release(load(args[0]), load(args[1]))
+        unchanged_release(load(args[0]), load(args[1]), environment)
     elif action == "diagnose":
         for message in upgrade_diagnostic(Path(args[0]).read_text(encoding="utf-8", errors="replace")):
             print("Helm diagnostic: " + message)
     elif action in ("provenance", "outcome"):
         commit = os.environ.get("SOURCE_COMMIT", "")
-        images = registry_provenance(os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], commit)
+        if environment == "dev":
+            images = registry_provenance(os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], commit)
         if action == "outcome":
             status = load(args[0])
-            release_status(status, require_deployed=True)
-            Path(args[1]).write_text(json.dumps({"component": RELEASE, "namespace": "farmer",
+            release_status(status, require_deployed=True, environment=environment)
+            Path(args[1]).write_text(json.dumps({"component": RELEASE, "namespace": namespace(environment),
                                            "sourceCommit": commit, "images": images,
                                            "helmRevision": status["version"], "outcome": "deployed"}) + "\n", encoding="utf-8")
     elif action == "prepare":
-        result = prepare(load(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], migrate_identity)
+        result = prepare(load(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], migrate_identity, environment, images)
         Path(args[2]).write_text(yaml.safe_dump(result, sort_keys=False), encoding="utf-8")
     elif action == "validate":
-        validate(documents(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], migrate_identity)
+        validate(documents(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], migrate_identity, environment, images)
+        if environment == "staging":
+            from staging import manifest_hash
+            if manifest_hash(documents(args[1])) != record["candidateManifestHash"]:
+                raise ValueError("Candidate resources differ from the rehearsed manifests")
     else:
         raise ValueError("Unknown deployment action")
-    print(f"PASS: dev deployment {action}")
+    print(f"PASS: {environment} deployment {action}")
 
 
 if __name__ == "__main__":

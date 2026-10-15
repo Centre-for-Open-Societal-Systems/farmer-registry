@@ -264,7 +264,7 @@ def test_staging_never_rebuilds_connector_or_promotes_untested_images(tmp_path, 
 def test_staging_promotes_connector_digest_but_builds_dashboard_staging_branch(tmp_path, component):
     connector = dict(component, name="connector", release="connector", kind="connector")
     previous = record(connector)
-    previous.update(outcome="deployed", helmRevision=6)
+    previous.update(outcome="deployed", helmRevision=6, stagingChartHash="e" * 64, stagingBackupHash="f" * 64)
     calls = []
     def build(item, environment, *args):
         calls.append((item["name"], coordinator.branch(environment, item)))
@@ -274,6 +274,9 @@ def test_staging_promotes_connector_digest_but_builds_dashboard_staging_branch(t
     assert calls == [("example", "staging")]
     assert result["connector"]["digest"] == previous["digest"]
     assert result["connector"]["devHelmRevision"] == 6
+    assert result["connector"]["devChartHash"] == previous["chartHash"]
+    assert result["connector"]["chartHash"] == "e" * 64
+    assert result["connector"]["stagingBackupHash"] == "f" * 64
 
 
 @pytest.mark.parametrize("field,value", [("commit", "develop"), ("digest", "latest"),
@@ -610,7 +613,7 @@ def test_identity_evidence_cannot_be_reused_after_values_change_or_expiry(identi
 
 @pytest.mark.parametrize("expired_job", [False, True])
 def test_retire_command_cannot_run_without_acceptance(accepted, tmp_path, monkeypatch, expired_job):
-    monkeypatch.setattr(cutover, "verify_backup", lambda p: "backup")
+    monkeypatch.setattr(cutover, "verify_backup", lambda p, environment="dev": "backup")
     (tmp_path / "backup.json").write_text('{"helmRevision": 2}')
     old, workloads, status, new_manifest, review, backup_hash = accepted
     if expired_job:

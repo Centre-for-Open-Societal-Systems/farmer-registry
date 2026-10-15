@@ -9,6 +9,7 @@ docker build -t "coss-ci/services:$tag" ci/services
 args=(--rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp/services-home
       -e ECR_REGISTRY -e AWS_REGION -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY
       -e AWS_SESSION_TOKEN -e CONNECTOR_BACKUP_DIRECTORY
+      -e KUBECONFIG_CREDENTIAL
       -v "$PWD:$PWD" -w "$PWD")
 if [[ "$action" == build ]]; then
   args+=(-v /var/run/docker.sock:/var/run/docker.sock
@@ -22,7 +23,11 @@ for variable in KUBECONFIG DEV_MANIFEST DEV_ACCEPTANCE; do
   fi
 done
 if [[ -n "${CONNECTOR_BACKUP_DIRECTORY:-}" ]]; then
-  test -d "$CONNECTOR_BACKUP_DIRECTORY"
-  args+=(-v "$CONNECTOR_BACKUP_DIRECTORY:$CONNECTOR_BACKUP_DIRECTORY:ro")
+  if [[ -d "$CONNECTOR_BACKUP_DIRECTORY" ]]; then
+    args+=(-v "$CONNECTOR_BACKUP_DIRECTORY:$CONNECTOR_BACKUP_DIRECTORY:ro")
+  else
+    # The coordinator fails the connector independently; dashboards can proceed.
+    unset CONNECTOR_BACKUP_DIRECTORY
+  fi
 fi
 docker run "${args[@]}" "coss-ci/services:$tag" bash ci/services/run.sh "$@"

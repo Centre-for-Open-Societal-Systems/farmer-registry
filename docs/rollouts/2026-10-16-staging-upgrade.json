@@ -1,0 +1,92 @@
+{
+  "environment": "staging",
+  "namespace": "far",
+  "status": "implemented-locally-live-execution-blocked",
+  "branch": "feat/staging-rc544-signed-intake",
+  "source": {
+    "maintainedBase": "667b8fbbc2a55262c1e9c291e33b7bcb565be1dd",
+    "cachedDevelop": "d70c49ff1af31145bf0ae72fc132d3b5b98e0091",
+    "cachedStaging": "0ee17a2874fb3035126d2a4b91a9190fc4c7ac47",
+    "stagingHistoryMerge": "63fb04304a5ccb07c3a204df896f6b47de5b9c4a",
+    "remoteRefsRefreshed": false,
+    "cachedStagingExclusiveCommitSourceDiff": false,
+    "reviewedPreservation": ["Optional public staff UI template and existing Service name"],
+    "pullRequestPublished": false,
+    "mergedIntoStaging": false
+  },
+  "target": {
+    "platform": "1.2.2-rc.544",
+    "registryRelease": "farmer-registry",
+    "registryDatabase": "farmer_registry_far",
+    "legacyConnectorRelease": "farmer-connector",
+    "legacyConnectorDatabase": "farmer_connector_far",
+    "connectorRelease": "farmer-registry-connector",
+    "connectorDatabase": "farmer_connector_v2_far",
+    "connectorRole": "far_farmer_connector_v2_user",
+    "queue": "farmer-registry-connector-v2-far",
+    "signingSecret": "farmer-connector-v2-far-signing",
+    "partner": "farmer-partner",
+    "staffIssuer": "https://keycloak.oanstaging.com/realms/staff",
+    "odkProject": "1",
+    "odkForm": "farmer_profile"
+  },
+  "delivery": {
+    "deployByDefault": false,
+    "protectedRehearsalRequired": true,
+    "finalMaintenanceBackupRequired": true,
+    "perImageSourceAndDigestRequired": true,
+    "rebuildConnectorOnStaging": false,
+    "schedulerPreparedDisabled": true,
+    "automaticSchemaRollback": false
+  },
+  "liveExecution": {
+    "stagingAccessVerifiedThisSession": false,
+    "backupLocations": null,
+    "restoredDumpEvidence": null,
+    "rehearsalEvidence": null,
+    "registryImages": null,
+    "connectorImages": null,
+    "helmRevisionsAfterUpgrade": null,
+    "maintenanceEntered": false,
+    "odkFormPublished": false,
+    "syntheticApprovalsPerformed": false,
+    "realSubmissionIngested": false,
+    "schedulerActivated": false,
+    "legacyConnectorRetired": false
+  },
+  "recovery": {
+    "plannedBackupRoot": "/var/backups/farmer-staging-<run>/",
+    "plannedJournalRoot": "/var/lib/registry-coordination/farmer-staging-<run>/",
+    "locationsCreatedOrVerified": false,
+    "oldDatabaseMustBeRetained": true,
+    "reconcileBeforeResume": true,
+    "unsignedLegacyMustNotResume": true
+  },
+  "executionBlockers": [
+    "GitHub fetch and Jenkins HTTPS are unreachable in this session",
+    "No local Kubernetes context",
+    "Docker engine access denied",
+    "Helm unavailable",
+    "Git Bash cannot create its signal pipe in the restricted Windows session",
+    "Postman CLI cannot read its managed Private Cloud manifest"
+  ],
+  "verification": {
+    "localUnitTests": {
+      "passed": 471,
+      "skipped": 7,
+      "subtestsPassed": 109,
+      "exitCode": 0,
+      "report": "workspace:Temp/farmer-staging-unit-results.xml",
+      "testHarness": "Windows synthetic temporary fixtures used inherited ACLs; production backup permissions unchanged",
+      "skipReasons": {"helmUnavailable": 4, "posixPermissionsRequired": 2, "staffUiAssetsUnavailable": 1}
+    },
+    "documentationLinks": "passed, 39 files",
+    "environmentContracts": "dev and staging passed",
+    "pythonSyntaxAndErrorChecks": "passed",
+    "gitWhitespaceCheck": "passed",
+    "runtimeImagesAndDatabaseRehearsals": "not-run",
+    "helmAndShellIntegrationChecks": "not-run",
+    "liveWebAndSignedOdkAcceptance": "not-run"
+  },
+  "runbook": "docs/operations/staging-upgrade.md"
+}

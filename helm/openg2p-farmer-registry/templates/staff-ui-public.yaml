@@ -1,0 +1,106 @@
+{{- if .Values.publicStaffUi.enabled }}
+{{/*
+The staff portal UI a second time, for an environment's public hostname.
+
+The staff UI takes its own origin, cookie domain, IAM URL and login provider
+from env, so the subchart's Deployment cannot answer on the internal hostname
+and a public one at once. This renders the public instance beside it.
+
+It runs registry.staffUi.image, the image CI sets on every deploy, so each
+deploy refreshes both UIs together.
+
+Its component label differs from the internal UI's on purpose. The subchart's
+Service selects name/instance/component only, so pods sharing the internal
+component label would be load-balanced behind the internal hostname too, with
+the public env.
+*/}}
+{{- $image := .Values.registry.staffUi.image }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-staff-portal-ui-public
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: staff-portal-ui-public
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | trunc 63 | trimSuffix "-" }}
+spec:
+  replicas: {{ .Values.publicStaffUi.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: registry
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: staff-portal-ui-public
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registry
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: staff-portal-ui-public
+    spec:
+      containers:
+        - name: staff-portal-ui
+          image: "{{ $image.repository }}:{{ $image.tag }}"
+          imagePullPolicy: {{ $image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            {{- range $name, $value := .Values.publicStaffUi.env }}
+            - name: {{ $name }}
+              value: {{ tpl (toString $value) $ | quote }}
+            {{- end }}
+          {{- with .Values.publicStaffUi.volumeMounts }}
+          volumeMounts: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources: {{- toYaml .Values.publicStaffUi.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+      {{- with .Values.publicStaffUi.volumes }}
+      volumes: {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  # Kept at the -pub name: the environment's public VirtualService routes here.
+  name: {{ .Release.Name }}-staff-portal-ui-pub
+  labels:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: staff-portal-ui-public
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: registry
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: staff-portal-ui-public
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+{{- end }}

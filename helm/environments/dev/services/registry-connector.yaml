@@ -3,6 +3,7 @@
 _coordination:
   namespace: farmer
   database: farmer_connector_v2
+  queue: farmer-registry-connector-v2
   databaseEnv: CONNECTOR_DB_DBNAME
   oldDatabaseEnv: CONNECTOR_DB_DBNAME
   backupHash: c4cdb2bb37049b00470994d6443ec9b562c3548d267b27df3bb1e0a6eddd48c1

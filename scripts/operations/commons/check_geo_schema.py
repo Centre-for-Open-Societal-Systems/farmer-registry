@@ -47,8 +47,12 @@ async def check():
             document_columns = await connection.fetch(DOCUMENT_QUERY)
     finally:
         await connection.close()
-    if not rows:
-        print("FAIL: no registry coordinate columns found; verify the selected database/schema")
+    expected = {(f"g2p_{prefix}{table}", column)
+                for prefix in ("register_", "register_history_", "intake_form_")
+                for table in ("farmers", "households", "household_members", "lands")
+                for column in ("latitude", "longitude", "altitude")}
+    if {(r["table_name"], r["column_name"]) for r in rows} != expected:
+        print("FAIL: expected all 36 registry coordinate columns; verify database/schema")
         return 1
     incompatible = [row for row in rows if row["data_type"] not in ("real", "double precision")]
     if incompatible:

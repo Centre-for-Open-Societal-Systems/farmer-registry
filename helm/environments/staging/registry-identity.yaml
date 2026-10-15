@@ -1,0 +1,23 @@
+# Merge over the protected installed values. Storage, routes, callback URLs and
+# Secret references come from that release, not a copy of development values.
+global:
+  keycloakBaseUrl: https://keycloak.oanstaging.com
+  keycloakRealm: staff
+  keycloakIssuerUrl: https://keycloak.oanstaging.com/realms/staff
+registry:
+  staffApi:
+    envVars:
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+  partnerApi:
+    envVars:
+      REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED: 'true'
+      REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_KEYMANAGER_AUTH_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+  celeryWorker:
+    envVars:
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL: https://keycloak.oanstaging.com
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
