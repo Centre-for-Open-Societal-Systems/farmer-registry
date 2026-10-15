@@ -96,7 +96,7 @@ def test_odk_ingestion_attachments_and_approval(cfg, staff_client):
     assert rows[0]["ingestion_status"] == "PROCESSED", rows
     submission_id = rows[0]["intake_form_submission_id"]
     farmer = db.query(cfg.registry_dsn,
-        "SELECT internal_record_id,record_image_document_id,geo_lowest_level_value_id FROM g2p_intake_form_farmers WHERE submission_id=%s",
+        "SELECT internal_record_id,record_image_document_id,geo_lowest_level_value_id,enumerator_name FROM g2p_intake_form_farmers WHERE submission_id=%s",
         (submission_id,))[0]
     assert farmer["record_image_document_id"], "ODK photo was lost"
     assert farmer["geo_lowest_level_value_id"] == "kebele-ET040801101001"
@@ -108,7 +108,8 @@ def test_odk_ingestion_attachments_and_approval(cfg, staff_client):
     assert lands[0]["certificate_storage_id"] in str(docs)
     state = db.query(cfg.registry_dsn,
         "SELECT draft_status,created_by FROM g2p_intake_form_submissions WHERE submission_id=%s", (submission_id,))[0]
-    assert "(ODK)" in state["created_by"]
+    assert state["created_by"] and state["created_by"] != "system"
+    assert state["created_by"] == farmer["enumerator_name"]
     if state["draft_status"] == "DRAFT":
         payload(staff_client.post("/intake-form-data/finalize_intake_form_submission", {"submission_id": submission_id}))
     approve(cfg, staff_client, submission_id)

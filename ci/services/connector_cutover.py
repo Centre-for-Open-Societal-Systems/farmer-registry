@@ -95,7 +95,8 @@ def retirement_guard(manifest, workloads, new_status, new_manifest, acceptance, 
     # or any unprotected storage. An external PostgreSQL DB is never dropped here.
     for d in manifest:
         metadata = d["metadata"]
-        if metadata.get("namespace", NAMESPACE) != NAMESPACE or not metadata["name"].startswith(OLD + "-"):
+        exact_route = d["kind"] == "VirtualService" and metadata["name"] == OLD
+        if metadata.get("namespace", NAMESPACE) != NAMESPACE or not (metadata["name"].startswith(OLD + "-") or exact_route):
             raise ServiceError("old-release-contains-shared-resource")
         if d["kind"] in ("Namespace", "ClusterRole", "ClusterRoleBinding", "StatefulSet", "PersistentVolume"):
             raise ServiceError("old-release-contains-shared-or-database-resource")

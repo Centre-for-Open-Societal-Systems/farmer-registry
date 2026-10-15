@@ -40,3 +40,24 @@ def test_scheduler_must_use_the_same_worker_image_secret_and_queue(fault):
     if fault:
         with pytest.raises(ValueError): handoff.scheduler_guard([worker], [worker,beat])
     else: handoff.scheduler_guard([worker], [worker,beat])
+
+
+@pytest.mark.parametrize("new_owner", [False, True])
+@pytest.mark.parametrize("fault", [None, "host", "gateway", "destination", "secret"])
+def test_route_handoff_preserves_environment_and_other_resources(new_owner, fault):
+    route = {"kind": "VirtualService", "metadata": {"name": handoff.OLD}, "spec": {
+        "hosts": ["connector-farmer-registry-development.oanstaging.com"], "gateways": ["internal"],
+        "http": [{"route": [{"destination": {"host": handoff.OLD+"-api", "port": {"number": 80}}}]}]}}
+    secret = {"kind": "Secret", "metadata": {"name": "retained"}, "data": {"password": "fixture"}}
+    before = [secret] if new_owner else [secret, route]
+    after = copy.deepcopy(before)
+    new = copy.deepcopy(route); new["spec"]["http"][0]["route"][0]["destination"]["host"] = handoff.NEW+"-api"
+    if new_owner: new["metadata"]["name"] = handoff.NEW; after.append(new)
+    else: after[-1] = new
+    if fault == "host": new["spec"]["hosts"] = ["other-registry.example"]
+    if fault == "gateway": new["spec"]["gateways"] = ["public"]
+    if fault == "destination": new["spec"]["http"][0]["route"][0]["destination"]["host"] = "commons-services"
+    if fault == "secret": after[0]["data"] = {}
+    if fault:
+        with pytest.raises(ValueError): handoff.route_guard(before, after, new_owner)
+    else: handoff.route_guard(before, after, new_owner)

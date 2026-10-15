@@ -63,7 +63,68 @@ def export_chart(release, version, directory):
         target = directory / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(base64.b64decode(item["data"]))
+    for item in chart.get("files", []):
+        relative = Path(item["name"])
+        if relative.is_absolute() or ".." in relative.parts or relative.name in ("Chart.yaml", "values.yaml"):
+            raise ValueError("Invalid installed chart file path")
+        target = directory / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(base64.b64decode(item["data"]))
     return saved
+
+
+def route_guard(before, after, new_route=False):
+    old = {(d["kind"], d["metadata"]["name"]): copy.deepcopy(d) for d in before}
+    new = {(d["kind"], d["metadata"]["name"]): copy.deepcopy(d) for d in after}
+    key = "VirtualService", NEW if new_route else OLD
+    if new_route:
+        if set(new) - set(old) != {key} or set(old) - set(new):
+            raise ValueError("Ingress handoff may only add the replacement route")
+        route = new.pop(key)["spec"]
+    else:
+        if set(old) != set(new): raise ValueError("Routing handoff must preserve every resource")
+        route = new[key]["spec"]
+    if route["hosts"] != ["connector-farmer-registry-development.oanstaging.com"] or route["gateways"] != ["internal"]:
+        raise ValueError("Connector routing environment changed")
+    for item in route["http"]:
+        if len(item["route"]) != 1: raise ValueError("Unexpected connector route")
+        destination = item["route"][0]["destination"]
+        if destination["host"] not in (NEW+"-api", NEW+"-ui"):
+            raise ValueError("Connector must route only to its replacement services")
+        if not new_route:
+            destination["host"] = destination["host"].replace(NEW, OLD, 1)
+    if old != new: raise ValueError("Routing handoff would change unrelated resources")
+
+
+def handoff_route(directory, new_route=False):
+    release = NEW if new_route else OLD
+    directory.mkdir(mode=0o700, parents=True, exist_ok=False)
+    status = json.loads(run(["helm", "status", release, "-n", "farmer", "-o", "json"]))
+    before = documents(run(["helm", "get", "manifest", release, "-n", "farmer"]))
+    values = yaml.safe_load(run(["helm", "get", "values", release, "-n", "farmer", "-o", "yaml"]))
+    chart = directory / "chart"; export_chart(release, status["version"], chart)
+    if new_route:
+        old_values = yaml.safe_load(run(["helm", "get", "values", OLD, "-n", "farmer", "-o", "yaml"]))
+        values["istio"] = old_values["istio"]
+        values["global"]["hostname"] = old_values["global"]["hostname"]
+    else:
+        template = chart / "templates/virtualservice.yaml"
+        source = template.read_text()
+        for scope in ("$", "."):
+            anchor = '{{ include "openg2p-connector.fullname" '+scope+' }}'
+            for role in ("api", "ui"):
+                source = source.replace('host: '+anchor+'-'+role, 'host: {{ .Values.cossRoutingTarget | default "'+NEW+'" }}-'+role if scope=="." else 'host: {{ $.Values.cossRoutingTarget | default "'+NEW+'" }}-'+role)
+        template.write_text(source)
+        values["cossRoutingTarget"] = NEW
+    path = directory / "values.yaml"; path.write_text(yaml.safe_dump(values))
+    options = [release, str(chart), "-n", "farmer", "-f", str(path), "--no-hooks"]
+    after = documents(run(["helm", "template", *options, "--is-upgrade", "--dry-run=server"]))
+    route_guard(before, after, new_route)
+    if json.loads(run(["helm", "status", release, "-n", "farmer", "-o", "json"]))["version"] != status["version"]:
+        raise ValueError("Connector changed during route handoff")
+    run(["helm", "upgrade", *options, "--atomic", "--wait", "--timeout", "3m"])
+    route_guard(before, documents(run(["helm", "get", "manifest", release, "-n", "farmer"])), new_route)
+    return {"routeOwner": release, "helmRevision": status["version"]+1, "destination": NEW}
 
 
 def change_replicas(release, replicas, directory):
