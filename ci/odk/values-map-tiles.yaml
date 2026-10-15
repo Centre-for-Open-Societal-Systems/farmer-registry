@@ -4,11 +4,11 @@ odk-central:
   frontend:
     setupOdkScript: |-
       #!/usr/bin/env bash
-      
+
       set -e
       set -o pipefail
       shopt -s inherit_errexit
-      
+
       export DOLLAR='$'
       echo "writing client config..."
       if [[ $OIDC_ENABLED != 'true' ]] && [[ $OIDC_ENABLED != 'false' ]]; then
@@ -36,20 +36,20 @@ odk-central:
         ~^(GET|HEAD)::/favicon.ico$        "revalidate";
         ~^(GET|HEAD)::/robots.txt$         "revalidate";
         ~^(GET|HEAD)::/version.txt$        "revalidate";
-      
+
         # central-backend
         ~^(GET|HEAD)::/v1/                 "passthrough";
-      
+
         # central-frontend - unversioned
         ~^(GET|HEAD)::/$             "revalidate";
         ~^(GET|HEAD)::/index.html$   "revalidate";
         ~^(GET|HEAD)::/blank.html$   "revalidate";
         ~^(GET|HEAD)::/fonts/.*\?\w+ "immutable";
         ~^(GET|HEAD)::/fonts/        "revalidate";
-      
+
         # central-frontend - versioned
         ~^(GET|HEAD)::/assets/ "immutable";
-      
+
         # enketo
         ~^(GET|HEAD)::/-(/x)?/css/                 "revalidate";
         ~^(GET|HEAD)::/-(/x)?/fonts/.*?v=          "immutable";
@@ -60,7 +60,7 @@ odk-central:
         ~^(GET|HEAD)::/-(/x)?/locales/             "revalidate";
         ~^(GET|HEAD)::/-/x/[a-zA-Z0-9]+            "revalidate";
         ~^(GET|HEAD)::/-/x/offline-app-worker\.js$ "revalidate";
-      
+
         default "single-use";
       }
       map $cache_strategy $cache_header_cache_control {
@@ -81,23 +81,23 @@ odk-central:
         "passthrough"  "";
         default      "*";
       }
-      
+
       server {
         listen 80;
-      
+
         server_tokens off;
-      
+
         add_header Content-Security-Policy-Report-Only "default-src 'none'; connect-src https://translate.google.com https://translate.googleapis.com; img-src https://translate.google.com; report-uri /csp-report";
         include /usr/share/odk/nginx/common-headers.conf;
-      
+
         client_max_body_size 100m;
-      
+
         gzip on;
         gzip_vary on;
         gzip_min_length 1280;
         gzip_http_version 1.1;
         gzip_types text/plain text/css application/json application/x-javascript application/javascript text/xml text/csv;
-      
+
         # Enketo Configuration.
         # Enketo express is traditionally served at /- but with the introduction of ODK Web Forms
         # we want old Enketo URLs redirected to a Central frontend page which dynamically decides
@@ -124,7 +124,7 @@ odk-central:
           alias /usr/share/nginx/html/blank.html;
           default_type text/html;
         }
-      
+
         # For that iframe to work, we'll need another path prefix (enketo-passthrough) under which we can
         # reach Enketo — this one will not be intercepted.
         location ~ ^/(?:-|enketo-passthrough)(?:/|$) {
@@ -134,41 +134,41 @@ odk-central:
           proxy_set_header Host $host;
           proxy_hide_header Vary;
           proxy_hide_header Cache-Control;
-      
+
           # More lax CSP for enketo-express:
           # Google Maps API: https://developers.google.com/maps/documentation/javascript/content-security-policy
           add_header Content-Security-Policy-Report-Only "default-src 'none'; connect-src 'self' blob: https://maps.googleapis.com/ https://maps.google.com/ https://maps.gstatic.com/mapfiles/ https://fonts.gstatic.com/ https://fonts.googleapis.com/ https://translate.google.com https://translate.googleapis.com; font-src 'self' https://fonts.gstatic.com/; frame-src 'none'; img-src data: blob: jr: 'self' https://maps.google.com/maps/ https://maps.gstatic.com/mapfiles/ https://maps.googleapis.com/maps/ https://tile.openstreetmap.org/ https://translate.google.com; manifest-src 'none'; media-src blob: jr: 'self'; object-src 'none'; script-src 'unsafe-inline' 'self' https://maps.googleapis.com/maps/api/js/ https://maps.google.com/maps/ https://maps.google.com/maps-api-v3/api/js/; style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/css; style-src-attr 'unsafe-inline'; report-uri /csp-report";
           #
           # Rules set to 'none' here would fallback to default-src if excluded.
           # They are included here to ease interpretation of violation reports.
-      
+
           # OSM requires an origin Referer; keep form URLs and tokens private.
           include /usr/share/odk/nginx/enketo-headers.conf;
         }
         # End of Enketo Configuration.
-      
+
         location ~ ^/v\d {
           proxy_set_header X-Forwarded-Proto https;
           proxy_pass http://${BACKEND_URL};
           proxy_redirect off;
-      
+
           # buffer requests, but not responses, so streaming out works.
           proxy_request_buffering on;
           proxy_buffering off;
           proxy_read_timeout 2m;
         }
-      
+
         location / {
           root /usr/share/nginx/html;
           try_files $uri $uri/ /index.html;
-      
+
           # Rules set to 'none' here would fallback to default-src if excluded.
           # They are included here to ease interpretation of violation reports.
           add_header Content-Security-Policy-Report-Only "default-src 'none'; connect-src 'self' https://translate.google.com https://translate.googleapis.com; font-src 'self'; frame-src 'self' https://getodk.github.io/central/news.html; img-src * data:; manifest-src 'none'; media-src 'none'; object-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; report-uri /csp-report";
-      
+
           include /usr/share/odk/nginx/common-headers.conf;
         }
-      
+
         location /csp-report {
           proxy_pass https://${SENTRY_ORG_SUBDOMAIN}.ingest.sentry.io/api/${SENTRY_PROJECT}/security/?sentry_key=${SENTRY_KEY};
         }
