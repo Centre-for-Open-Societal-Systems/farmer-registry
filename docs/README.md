@@ -10,6 +10,7 @@
 ## Operations
 
 - [Dev and staging delivery](operations/README.md)
+- [Merge through develop and staging; farmer counts](operations/merge-develop-staging.md)
 - [Staging RC upgrade and signed ODK cutover](operations/staging-upgrade.md)
 - [Service coordination](operations/coordinated-services-rollout.md)
 - [Signing, checkpoints and recovery](operations/connector.md)

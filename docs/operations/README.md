@@ -19,6 +19,8 @@ pull requests validate without publishing or deploying.
 
 ## Dev
 
+Use the [develop-to-staging merge handoff](merge-develop-staging.md) for the migration PR, promotion sequence, seeded-farmer counts and remaining staging cutover gates.
+
 Merged develop builds validate, build six Registry images, publish commit-tagged
 images, and upgrade the existing release. Registry failures are fatal. Available
 Farmer add-ons release independently; their failures mark Jenkins unstable.

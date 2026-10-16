@@ -17,7 +17,7 @@
     "mergedIntoStaging": false,
     "developRefreshMerge": "32c9c5e",
     "pullRequest": "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry/pull/102",
-    "pullRequestDraft": true,
+    "pullRequestDraft": false,
     "odkLocationFixCommit": "6c52951",
     "stagingPreservationFixCommit": "8997f66",
     "sharedGeographyReviewCommit": "85303af",
@@ -421,5 +421,78 @@
       "existingSubmissionXmlAndAttachmentUnchanged": true
     },
     "publicStagingAndKubernetesOdkAreDifferentInstallations": true
+  },
+  "mergeReview": {
+    "status": "ready-for-develop-review-staging-deployment-remains-gated",
+    "checkedDevelop": "dd3287c839016ab41b1fd72f9bc4ee440696fd5e",
+    "checkedStaging": "0ee17a2874fb3035126d2a4b91a9190fc4c7ac47",
+    "checkedImplementationHead": "1fb8795d7900b7b04b4731b60e65ae0ef2a6a011",
+    "bothTargetBranchesAreAncestors": true,
+    "promotionPath": [
+      "feature branch",
+      "develop",
+      "staging"
+    ],
+    "mergeMethod": "Preserve migration and staging history with a merge commit",
+    "userRetainsMergeControl": true,
+    "stagingDeployDefault": false,
+    "odkDecision": "Retain the separate public staging Central VM; further ODK server changes deferred",
+    "livePreviews": {
+      "dev": {
+        "environment": "dev",
+        "namespace": "farmer",
+        "baselineRevision": 26,
+        "baselineState": "deployed",
+        "helmLint": true,
+        "candidateManifestPreservation": true,
+        "persistentBaselineResources": 32,
+        "candidateResources": 40,
+        "schemaReady": true,
+        "schemaSummary": "Coordinate schema OK: 36 Float-compatible columns; no schema/data was changed.",
+        "evidenceDirectory": "/var/lib/registry-coordination/farmer-merge-preview-ea94c8c4be98",
+        "noDeployOrMigrations": true
+      },
+      "staging": {
+        "environment": "staging",
+        "namespace": "far",
+        "baselineRevision": 36,
+        "baselineState": "deployed",
+        "helmLint": true,
+        "candidateManifestPreservation": true,
+        "persistentBaselineResources": 33,
+        "candidateResources": 38,
+        "schemaReady": false,
+        "schemaSummary": "FAIL: 36 coordinate columns are incompatible with rc.544:",
+        "evidenceDirectory": "/var/lib/registry-coordination/farmer-merge-preview-cdfa4a8cc1de",
+        "noDeployOrMigrations": true
+      }
+    },
+    "farmerCounts": {
+      "new-dev": {
+        "registeredTotal": 27,
+        "seeded": 21,
+        "other": 6,
+        "intakeTotal": 10
+      },
+      "staging": {
+        "registeredTotal": 1000501,
+        "seeded": 500,
+        "other": 1000001,
+        "intakeTotal": 32
+      }
+    },
+    "validation": {
+      "linuxUnitPassed": 493,
+      "helmCredentialCasesPassedSeparately": 4,
+      "distinctUnitCasesPassed": 497,
+      "unavailableStaffUiAssetSkipped": 1,
+      "subtestsPassed": 109,
+      "shellBash52": true,
+      "stagingShellBash43": true,
+      "jenkinsDevAndStagingDeclarativeValidation": true,
+      "documentationFilesChecked": 44,
+      "finalHeadGithubChecks": "Required on the final PR head before merge"
+    },
+    "newDevRegisterPageSize": 20
   }
 }
