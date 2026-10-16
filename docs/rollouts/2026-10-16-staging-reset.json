@@ -1,0 +1,78 @@
+{
+  "environment": "staging",
+  "namespace": "far",
+  "status": "implementation-and-isolated-rehearsal-complete-promotion-and-live-cutover-pending",
+  "promotionPath": ["feature branch", "develop", "staging"],
+  "resetScope": {
+    "database": "farmer_registry_far",
+    "retainOriginalAsArchive": true,
+    "dropOriginalDatabase": false,
+    "seedMode": "metadata-only",
+    "populationDecision": "Leave the register empty until Master Data is upgraded",
+    "resetOdk": false,
+    "resetSharedCommons": false,
+    "resetOtherRegistries": false
+  },
+  "liveState": {
+    "registryHelmRevision": 36,
+    "legacyConnectorHelmRevision": 3,
+    "stagingBuild": 11,
+    "stagingBuildCommit": "73a792361568bccb2b258b251aa90bdde7dae171",
+    "stagingBuildOutcome": "SUCCESS-validation-only-deployment-stages-skipped",
+    "maintenanceEntered": false,
+    "resetApplied": false,
+    "rcDeployed": false
+  },
+  "verification": {
+    "linuxValidation": {
+      "unitCasesPassed": 538,
+      "subtestsPassed": 109,
+      "skipped": 1,
+      "skipReason": "Unavailable staff UI asset fixture",
+      "deploymentShellIntegration": true,
+      "environmentGuards": true,
+      "documentationLinks": "46 files passed"
+    },
+    "postgres16DatabaseExchange": {
+      "propertiesAndGrantsPreserved": true,
+      "atomicExchange": true,
+      "repeatedExchangeRejected": true,
+      "injectedFailureKeepsConnectionsBlocked": true,
+      "originalRecovered": true,
+      "unrelatedDatabasePreserved": true,
+      "databasesDropped": false
+    },
+    "emptyDatabaseBootstrap": {
+      "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b",
+      "staffApiDigest": "sha256:b8116e52f51c85d228d26ab97113b75cf293a9dfba120a062c16d97727039ed5",
+      "dbSeedDigest": "sha256:0b48d9f90be2734a131bcea08219c79cb9251307f13b422ead94f56fb7a00cd9",
+      "internalOnlyDockerNetwork": true,
+      "migrationsAndRerun": true,
+      "metadataSeedAndRerun": true,
+      "reporting": true,
+      "transactionFailureRecovery": true,
+      "sealedDataAndSchemaPreserved": true,
+      "registerDefinitions": 13,
+      "farmers": 0,
+      "farmerIntakes": 0,
+      "compatibleCoordinateColumns": 36
+    },
+    "schemaProbeStagingServerDryRun": {
+      "passed": true,
+      "resourceCreated": false,
+      "serviceAccountTokenAutomount": false,
+      "liveSchemaExecution": false
+    },
+    "jenkinsDeclarativeValidation": {"dev": true, "staging": true}
+  },
+  "protectedRehearsalLocation": "operator:Temp/farmer-staging-20261016-private/reset-rehearsal/",
+  "remaining": [
+    "Merge the implementation into develop, verify its build/deployment, then promote develop into staging",
+    "Refresh exact-image runtime and all enabled external-hook rehearsals after promotion",
+    "Complete staging partner/signing-key readiness and isolate pre-reset Farmer workflow callbacks",
+    "Prepare candidate, enter Farmer-only maintenance and take verified fresh final backups",
+    "Exchange databases and bind complete protected staging deployment evidence",
+    "Deploy Registry, complete web and signed ODK acceptance, then single-scheduler connector cutover"
+  ],
+  "runbook": "docs/operations/staging-reset.md"
+}

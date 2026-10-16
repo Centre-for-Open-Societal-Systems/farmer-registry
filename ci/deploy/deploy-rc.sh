@@ -16,7 +16,14 @@ esac
 test "${HELM_RELEASE:-}" = farmer-registry
 CHART=helm/openg2p-farmer-registry
 STATE=$(mktemp -d)
-trap 'rm -rf "$STATE"' EXIT
+SCHEMA_JOB=''
+cleanup() {
+  if [[ -n "$SCHEMA_JOB" ]]; then
+    kubectl delete -n far "$SCHEMA_JOB" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  fi
+  rm -rf "$STATE"
+}
+trap cleanup EXIT
 
 # Python dependencies live in Docker on both agents; host Helm/kubectl keep the
 # existing VPN access. The helper receives no kubeconfig or Docker socket.
@@ -66,8 +73,25 @@ guard prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
 
 # This gate includes all 36 intake/register/history coordinate columns and the
 # document-history field. Migrations remain explicit backed-up operator actions.
-kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
-  python3 - < scripts/operations/commons/check_geo_schema.py
+check_schema() {
+  if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
+    kubectl get deployment farmer-registry-staff-portal-api -n far -o json > "$STATE/api.json"
+    guard schema-probe "$STATE/api.json" "$STATE/schema-probe.json"
+    SCHEMA_JOB=$(kubectl create -f "$STATE/schema-probe.json" -o name)
+    if ! kubectl wait -n far --for=condition=complete "$SCHEMA_JOB" --timeout=100s > "$STATE/schema-wait.log" 2>&1; then
+      echo 'Staging schema probe failed; maintenance must remain active.' >&2
+      return 1
+    fi
+    kubectl logs -n far "$SCHEMA_JOB" > "$STATE/schema.log"
+    cat "$STATE/schema.log"
+    kubectl delete -n far "$SCHEMA_JOB" --wait=true > /dev/null
+    SCHEMA_JOB=''
+  else
+    kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
+      python3 - < scripts/operations/commons/check_geo_schema.py
+  fi
+}
+check_schema
 helm repo add openg2p https://openg2p.github.io/openg2p-helm --force-update
 helm dependency build "$CHART"
 helm lint "$CHART" --strict -f "$STATE/values.yaml" > "$STATE/lint.log"
@@ -100,8 +124,7 @@ helm get manifest "$HELM_RELEASE" -n "$HELM_NAMESPACE" > "$STATE/deployed.yaml"
 printf '\n---\n' >> "$STATE/deployed.yaml"
 helm get hooks "$HELM_RELEASE" -n "$HELM_NAMESPACE" >> "$STATE/deployed.yaml"
 guard validate "$STATE/before.yaml" "$STATE/deployed.yaml"
-kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
-  python3 - < scripts/operations/commons/check_geo_schema.py
+check_schema
 if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
   guard outcome "$STATE/final-status.json" "$STATE/outcome.json"
   mkdir -p "$(dirname "$REGISTRY_OUTCOME_FILE")"

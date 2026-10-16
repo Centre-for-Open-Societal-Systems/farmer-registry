@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import uuid
 
 import yaml
 
@@ -37,6 +38,38 @@ def load(path):
 
 def documents(path):
     return [d for d in yaml.safe_load_all(Path(path).read_text(encoding="utf-8")) if isinstance(d, dict)]
+
+
+def schema_probe(api, image):
+    """Read the DB with existing Secret references while API replicas are stopped."""
+    if api.get('metadata', {}).get('name') != RELEASE + '-staff-portal-api' or api['metadata'].get('namespace') != 'far':
+        raise ValueError('Schema probe requires the staging staff API Deployment')
+    if not re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/openg2p/farmer-registry/staff-api:[a-f0-9]{12}@sha256:[a-f0-9]{64}', image):
+        raise ValueError('Schema probe requires the tested immutable staging API image')
+    source = pod(api)
+    containers = [c for c in source['containers'] if c['name'] == 'staff-portal-api']
+    if len(containers) != 1 or containers[0].get('envFrom'):
+        raise ValueError('Explicit staff API DB environment required')
+    env = [copy.deepcopy(e) for e in containers[0].get('env', []) if e['name'].startswith('REGISTRY_STAFF_PORTAL_API_DB_')]
+    names = [e['name'] for e in env]
+    if len(set(names)) != len(names) or any('REGISTRY_STAFF_PORTAL_API_DB_' + key not in names for key in ('HOSTNAME', 'DBNAME', 'USERNAME', 'PASSWORD')):
+        raise ValueError('Incomplete or duplicate schema probe DB configuration')
+    database = next(e for e in env if e['name'].endswith('_DB_DBNAME'))
+    if database.get('value') != configuration('staging')['registryDatabase']:
+        raise ValueError('Schema probe cannot target another database')
+    probe = {'restartPolicy': 'Never', 'automountServiceAccountToken': False,
+             'containers': [{'name': 'schema', 'image': image, 'env': env,
+                             'command': ['python3', '-c', (Path(__file__).resolve().parents[2] / 'scripts/operations/commons/check_geo_schema.py').read_text(encoding='utf-8')],
+                             'resources': {'requests': {'cpu': '50m', 'memory': '64Mi'}, 'limits': {'memory': '256Mi'}}}]}
+    for key in ('imagePullSecrets', 'serviceAccountName', 'securityContext', 'nodeSelector', 'tolerations'):
+        if key in source:
+            probe[key] = copy.deepcopy(source[key])
+    if 'securityContext' in containers[0]:
+        probe['containers'][0]['securityContext'] = copy.deepcopy(containers[0]['securityContext'])
+    return {'apiVersion': 'batch/v1', 'kind': 'Job',
+            'metadata': {'name': 'farmer-schema-' + uuid.uuid4().hex[:12], 'namespace': 'far'},
+            'spec': {'backoffLimit': 0, 'activeDeadlineSeconds': 90, 'ttlSecondsAfterFinished': 300,
+                     'template': {'metadata': {'annotations': {'sidecar.istio.io/inject': 'false'}}, 'spec': probe}}}
 
 
 def index(docs, environment="dev"):
@@ -312,7 +345,13 @@ def main():
         identity = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(identity)
         identity.evidence(os.environ["IDENTITY_EVIDENCE_FILE"])
-    if action in ("status", "complete", "upgrade-mode"):
+    if action == 'schema-probe':
+        if environment != 'staging':
+            raise ValueError('Stopped-workload probe is staging-only')
+        api_image = images['staff-api']
+        image = api_image['repository'] + ':' + api_image['tag'] + '@' + api_image['digest']
+        Path(args[1]).write_text(json.dumps(schema_probe(load(args[0]), image)), encoding='utf-8')
+    elif action in ("status", "complete", "upgrade-mode"):
         status = load(args[0])
         state = release_status(status, require_deployed=action == "complete", environment=environment)
         if action == "upgrade-mode":
