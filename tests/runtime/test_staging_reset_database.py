@@ -31,7 +31,7 @@ def sql(query, database='postgres'):
 try:
     command(['docker', 'run', '-d', '--name', name, '--network', 'none', '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', 'postgres:16'])
     for _ in range(60):
-        ready = subprocess.run(['docker', 'exec', name, 'pg_isready', '-U', 'postgres'], capture_output=True)
+        ready = subprocess.run(['docker', 'exec', name, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], capture_output=True)
         if ready.returncode == 0: break
         time.sleep(1)
     else: raise RuntimeError('Disposable PostgreSQL did not start')

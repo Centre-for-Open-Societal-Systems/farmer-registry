@@ -50,7 +50,8 @@ jobs:
           docker run -d --name seed-ci-db --network seed-ci -e POSTGRES_PASSWORD=local-test -e POSTGRES_DB=coss_seed_test_ci postgres:16-alpine
           ready=false
           for attempt in $(seq 1 30); do
-            if docker exec seed-ci-db pg_isready -U postgres; then ready=true; break; fi
+            # The temporary init server accepts Unix sockets before final TCP startup.
+            if docker exec -e PGPASSWORD=local-test seed-ci-db psql -h 127.0.0.1 -U postgres -d coss_seed_test_ci -X -v ON_ERROR_STOP=1 -Atqc 'SELECT 1'; then ready=true; break; fi
             sleep 1
           done
           test "$ready" = true
