@@ -21,6 +21,8 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "ci"))
+from environments import connector_settings, validate_cluster
 sys.path.insert(0, str(ROOT / "scripts/operations/connector"))
 MANIFEST = ROOT / "helm/openg2p-farmer-registry/values.yaml"
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -326,7 +328,7 @@ def paused_connector(manifest):
             raise ServiceError("connector-job-requires-rehearsal")
 
 
-def signing_preparation_before(before, after):
+def signing_preparation_before(before, after, environment="dev"):
     """Allow only the reviewed signing env addition while every process is stopped."""
     paused_connector(before)
     paused_connector(after)
@@ -339,6 +341,20 @@ def signing_preparation_before(before, after):
         "CONNECTOR_SIGNING_KEY_ID": {"value": "farmer-connector-v2-52da0fc34e90"},
         "CONNECTOR_SIGNING_PRIVATE_KEY_PEM": {"valueFrom": {"secretKeyRef": {"name": "farmer-connector-v2-signing", "key": "private-key.pem"}}},
     }
+    if environment == "staging":
+        expected["CONNECTOR_SIGNING_KEY_ID"] = {"value": "farmer-connector-v2-far"}
+        expected["CONNECTOR_SIGNING_PRIVATE_KEY_PEM"] = {"valueFrom": {"secretKeyRef": {"name": "farmer-connector-v2-far-signing", "key": "private-key.pem"}}}
+        expected["CONNECTOR_CELERY_QUEUE"] = {"value": "farmer-registry-connector-v2-far"}
+        for document in after:
+            if document["kind"] != "Deployment" or document["metadata"]["name"].endswith("-ui"):
+                continue
+            for container in pod(document).get("containers", []):
+                env = {e["name"]: e for e in container.get("env", [])}
+                required = dict(expected, CONNECTOR_DB_DBNAME={"value": "farmer_connector_v2_far"},
+                                CONNECTOR_DB_USERNAME={"value": "far_farmer_connector_v2_user"},
+                                CONNECTOR_DB_PASSWORD={"valueFrom": {"secretKeyRef": {"name": "farmer-connector-v2-far-db", "key": "password"}}})
+                if any(env.get(k) != dict(name=k, **v) for k, v in required.items()):
+                    raise ServiceError("staging-connector-isolation-or-signing-mismatch")
     newer = {(d["kind"], d["metadata"]["name"]): d for d in after}
     for document in result:
         if document["kind"] != "Deployment" or document["metadata"]["name"].endswith("-ui"):
@@ -353,7 +369,7 @@ def signing_preparation_before(before, after):
     return result
 
 
-def guard_dashboard_api(before, after, image):
+def guard_dashboard_api(before, after, image, namespace="farmer"):
     """An embedded API update may change only its image in the Registry release."""
     def index(items):
         result = {}
@@ -361,7 +377,7 @@ def guard_dashboard_api(before, after, image):
             if item["kind"] == "Job":
                 continue
             key = item["kind"], item["metadata"]["name"]
-            if key in result or item["metadata"].get("namespace", "farmer") != "farmer":
+            if key in result or item["metadata"].get("namespace", namespace) != namespace:
                 raise ServiceError("dashboard-api-resource-identity-changed")
             result[key] = copy.deepcopy(item)
         return result
@@ -463,6 +479,12 @@ def deploy(component, environment, record, source, registry, run=command):
         raise SkipService("missing-environment-values")
     overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
     settings = overrides.pop("_coordination", {})
+    if component.get("kind") == "connector":
+        connector_settings(environment, settings)
+        if environment == "staging":
+            if not re.fullmatch(r"[0-9a-f]{64}", record.get("stagingBackupHash", "")):
+                raise ServiceError("reviewed-staging-snapshot-required")
+            settings["backupHash"] = record["stagingBackupHash"]
     release, namespace = component["release"], component["namespace"]
     embedded = component.get("kind") == "registry-dashboard-api"
     if settings.get("namespace") != namespace:
@@ -510,9 +532,9 @@ def deploy(component, environment, record, source, registry, run=command):
             render_options = ["--no-hooks", "--post-renderer", str(renderer)]
         after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
                           "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
-        guard_before = signing_preparation_before(before, after) if component.get("kind") == "connector" else before
+        guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" else before
         if embedded:
-            guard_dashboard_api(before, after, images["main"])
+            guard_dashboard_api(before, after, images["main"], namespace)
         else:
             guard(guard_before, after, namespace, images.values(), release)
         if component.get("kind") == "connector":
@@ -520,7 +542,7 @@ def deploy(component, environment, record, source, registry, run=command):
             backup_dir = os.environ.get("CONNECTOR_BACKUP_DIRECTORY")
             if not backup_dir or not (Path(backup_dir) / "backup.json").is_file():
                 raise ServiceError("connector-backup-required")
-            if verify_backup(Path(backup_dir)) != settings.get("backupHash"):
+            if verify_backup(Path(backup_dir), environment) != settings.get("backupHash"):
                 raise ServiceError("connector-backup-integrity-failed")
             old = docs(run(["helm", "get", "manifest", "farmer-connector", *args]))
             isolated_connector(old, after, settings)
@@ -544,9 +566,9 @@ def deploy(component, environment, record, source, registry, run=command):
         raise ServiceError("release-not-deployed")
     final_manifest = docs(run(["helm", "get", "manifest", release, *args]))
     if embedded:
-        guard_dashboard_api(before, final_manifest, images["main"])
+        guard_dashboard_api(before, final_manifest, images["main"], namespace)
     else:
-        guard(signing_preparation_before(before, final_manifest) if component.get("kind") == "connector" else before,
+        guard(signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" else before,
               final_manifest, namespace, images.values(), release)
     return final["version"]
 
@@ -574,6 +596,10 @@ def coordinate(components, action, environment, registry, previous, work, build_
                         raise SkipService("connector-not-deployed-in-dev")
                     image_artifacts(component, record, registry)
                     record = {k: record[k] for k in ("commit", "repository", "tag", "digest", "chartHash", "images", "overlayHashes") if k in record}
+                    if previous[name].get("stagingChartHash"):
+                        record["devChartHash"] = record["chartHash"]
+                        record["chartHash"] = previous[name]["stagingChartHash"]
+                        record["stagingBackupHash"] = previous[name]["stagingBackupHash"]
                     record.update(promotedFromDev=True, devHelmRevision=previous[name]["helmRevision"])
                 else:
                     record = build_fn(component, environment, work / name, registry)
@@ -586,7 +612,7 @@ def coordinate(components, action, environment, registry, previous, work, build_
                     if record.get("promotedFromDev") is not True or type(record.get("devHelmRevision")) is not int:
                         raise ServiceError("connector-not-promoted-from-dev")
                     outcome.update(promotedFromDev=True, devHelmRevision=record["devHelmRevision"])
-                outcome.update({k: record[k] for k in ("commit", "repository", "tag", "digest", "chartHash", "images", "overlayHashes") if k in record})
+                outcome.update({k: record[k] for k in ("commit", "repository", "tag", "digest", "chartHash", "images", "overlayHashes", "devChartHash", "stagingBackupHash") if k in record})
                 outcome["helmRevision"] = deploy_fn(component, environment, record, work / name, registry)
                 outcome["outcome"] = "deployed"
         except SkipService as error:
@@ -611,6 +637,9 @@ def main():
     parser.add_argument("--acceptance", type=Path, help="Dev acceptance evidence required for staging")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.action == "deploy" and args.environment == "staging":
+        validate_cluster("staging", os.environ.get("KUBECONFIG_CREDENTIAL"),
+                         json.loads(command(["kubectl", "config", "view", "--minify", "-o", "json"])))
     if not re.fullmatch(r"\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com", args.registry):
         parser.error("Expected ap-south-1 ECR registry")
     previous = json.loads(args.input.read_text(encoding="utf-8")) if args.input else {}
@@ -634,6 +663,15 @@ def main():
                 expected_digests = {role: image["digest"] for role, image in record["images"].items()} if record.get("images") else record.get("digest")
                 if acceptance.get("images", {}).get(name) != expected_digests:
                     parser.error("Acceptance does not cover every promoted digest")
+                staging = acceptance.get("staging", {})
+                if (staging.get("namespace") != "far" or
+                        not re.fullmatch(r"[0-9a-f]{64}", staging.get("connectorChartHash", "")) or
+                        not re.fullmatch(r"[0-9a-f]{64}", staging.get("backupHash", ""))):
+                    parser.error("Reviewed staging connector chart and final backup required")
+                if args.action == "build":
+                    record.update(stagingChartHash=staging["connectorChartHash"], stagingBackupHash=staging["backupHash"])
+                elif record.get("chartHash") != staging["connectorChartHash"] or record.get("stagingBackupHash") != staging["backupHash"]:
+                    parser.error("Staging connector rehearsal changed after promotion")
     with tempfile.TemporaryDirectory(prefix="registry-services-") as work:
         records = coordinate(configuration(environment=args.environment), args.action, args.environment, args.registry,
                              previous.get("components", {}), Path(work))

@@ -6,6 +6,13 @@ Its permanent ODK pipeline remains active. The old dev release was uninstalled
 after acceptance; its database and backups remain. Staging still uses
 `farmer-connector` in `far`, with database `farmer_connector_far`.
 
+The [staging migration candidate](staging-upgrade.md) prepares
+`farmer-registry-connector` in `far`, database `farmer_connector_v2_far`, queue
+`farmer-registry-connector-v2-far`, and a dedicated staging signing Secret. This
+is a gated candidate; staging ingestion and retirement have not been executed.
+Operator CLIs now take an explicit `--environment dev|staging` to select their
+namespace and backup/acceptance contract.
+
 `farmer-partner` is the approved permanent dev identity. Its private signing key
 lives in retained Secret `farmer-connector-v2-signing`, never in Git. RS256
 messages bind partner/message identifiers, canonical payload hash, issued-at and

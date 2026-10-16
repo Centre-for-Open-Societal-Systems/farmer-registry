@@ -1,5 +1,6 @@
 # This release creates credentials only. It cannot start connector ingestion.
 # Helm generates each credential once and retains it with lookup on upgrades.
 # Never use offline helm template output to replace existing credentials.
+environment: dev
 databaseSecret: farmer-connector-v2-db
 signingSecret: farmer-connector-v2-signing

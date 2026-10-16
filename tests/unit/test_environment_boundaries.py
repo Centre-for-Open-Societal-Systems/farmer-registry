@@ -27,14 +27,16 @@ def test_existing_environment_requires_matching_namespace_and_hostname(environme
         delivery.validate_release(environment, status, {"global": {"registryHostname": delivery.configuration(other)["registryHostname"]}})
 
 
-def test_staging_requires_explicit_gate_and_never_uses_dev_deploy_or_connector_cutover():
+def test_staging_requires_rehearsal_and_shared_rc_path_without_automatic_cutover():
     pipeline = (ROOT / "ci/pipelines/staging.groovy").read_text()
     assert "name: 'DEPLOY_STAGING', defaultValue: false" in pipeline
     assert "env.BRANCH_NAME != 'staging' || env.CHANGE_ID" in pipeline
-    assert "Legacy staging Dockerfile missing" in pipeline
-    assert "ci/deploy/staging-legacy.sh" in pipeline
+    assert "staging-farmer-rehearsal" in pipeline
+    assert "ci/deploy/deploy-rc.sh" in pipeline
+    assert "staging-legacy" not in pipeline
     assert "ci/deploy/deploy-dev.sh" not in pipeline
     assert "connector_cutover" not in pipeline
-    shell = (ROOT / "ci/deploy/staging-legacy.sh").read_text()
+    shell = (ROOT / "ci/deploy/deploy-rc.sh").read_text()
     assert "helm upgrade --install" not in shell
-    assert "python ci/environments.py staging --status" in shell
+    assert "guard cutover" in shell
+    assert "dev:farmer" in shell and "staging:far" in shell

@@ -26,5 +26,15 @@ mutating operations.
 
 Cleanup exports and removes only verified synthetic rollout projects/forms and
 accounts through supported Central operations. Keep the real Farmer project,
-form, submissions, media, service account and permanent partner. Staging remains
-read-only during cleanup.
+form, submissions, media, service account and permanent partner. Staging cleanup must preserve the real project and submissions.
+
+The [16 October staging location update](../history/odk-staging-location-20261016.md)
+published form 1.0.5 with canonical cascading dropdowns, compact CSV media and
+manual map placement. This form update is independent of the blocked Registry
+upgrade; its shared-geography and partner prerequisites remain outstanding.
+
+
+The [dev location update](../history/odk-dev-location-20261016.md) published the
+same form version 1.0.5 to `https://odk.commons-dev.oanstaging.com`, preserving
+both existing submissions and their attachments. Registry delivery changes
+land in develop before develop is promoted to staging.

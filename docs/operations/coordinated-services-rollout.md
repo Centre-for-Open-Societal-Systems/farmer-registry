@@ -15,7 +15,8 @@ outside Farmer ownership.
   reset its replicas, credentials or ingestion state.
 - Connector cutover and upgrades require explicit rehearsal and acceptance.
   Staging promotion requires accepted dev digests and separately verified staging
-  identity/configuration. No staging replacement is enabled by this cleanup.
+  identity/configuration. Staging prepares the replacement paused; scheduler
+  activation and retirement remain separate acceptance-gated operator commands.
 
 Dev service values are under `helm/environments/dev/services/`. The active overlay
 is operator-only; it must not replace the paused preparation overlay. Runtime
@@ -25,4 +26,5 @@ Artifacts record source commits, image digests, Helm revisions and component
 outcomes. Raw values, backups, credentials and rendered Secrets remain private.
 
 See [delivery](README.md), [signing and recovery](connector.md), and
-[accepted rollout evidence](../history/signed-connector-dev-20261015.md).
+[staging cutover](staging-upgrade.md). The [accepted dev rollout
+evidence](../history/signed-connector-dev-20261015.md) does not establish staging acceptance.

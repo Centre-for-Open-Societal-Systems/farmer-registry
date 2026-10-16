@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Build the farmer form's location lists from the shared location hierarchy.
 
-The form picks region > zone > woreda from choice lists in the XLSForm's
-choices sheet (choices_region, choices_zone, choices_woreda) and the kebele
-from media/KebeleList.csv. They are generated from
+The form picks region from the XLSForm choices sheet and zone > woreda >
+kebele from external CSV lists. External lists avoid duplicating thousands of
+translated XML labels in the form model. All four levels are generated from
 local/upstream/assets/geo/ethiopia_geo_seed.sql.gz, the COSS Ethiopia hierarchy the
 registry's Master Data is seeded with (region-ET04, zone-ET0408,
 woreda-ET040801, kebele-ET040801101001), so every place Master Data knows is
@@ -25,7 +25,8 @@ the Master Data name, as before.
     python odk/build_location_media.py --check  # exit 1 if they are stale
 
 tests/unit/test_odk_location_media.py runs the check. Publish the rebuilt XLSForm and
-media together as a new version of the same form, after updating Master Data.
+media together as a new version of the same form. Audit Master Data compatibility
+separately before enabling Registry ingestion.
 """
 
 from __future__ import annotations
@@ -43,12 +44,13 @@ REPO = HERE.parent
 SOURCE = REPO / "local/upstream/assets/geo/ethiopia_geo_seed.sql.gz"
 FORM = HERE / "ATI_Farmers_Profile_ODK_Form_v2.xlsx"
 KEBELES = HERE / "media" / "KebeleList.csv"
+ZONES = HERE / "media" / "ZoneList.csv"
+WOREDAS = HERE / "media" / "WoredaList.csv"
 
 LOCATION_LISTS = ("choices_region", "choices_zone", "choices_woreda")
 LABELS = ("label::English (en)", "label::Amharic (am)", "label::Afaan Oromoo (om)")
 # The form's own escape hatches, kept as they are.
-OTHER_WOREDA = {"name": "other", "labels": ("Other", "Other", "Other"), "zone": "other_woreda"}
-OTHER_KEBELE = ["choices_kebele", "other", "Other", "", "", "other_kebele"]
+OTHER_KEBELE = ["other", "Other", "other_kebele"]
 
 
 def load_hierarchy(source: pathlib.Path = SOURCE) -> dict[str, dict[str, tuple[str, str | None]]]:
@@ -112,31 +114,59 @@ def number(code: str) -> int:
 
 
 def choice_rows(levels, region_translations: dict[int, tuple[str, str]]) -> list[dict]:
-    """The choices_region / choices_zone / choices_woreda rows, in sheet order."""
+    """Only regions stay inline; pyxform also emits unused choice lists."""
     rows = []
     for code, (name, _) in sorted(levels["region"].items(), key=lambda kv: kv[1][0].lower()):
         am, om = region_translations.get(number(code), (name, name))
         rows.append({"list_name": "choices_region", "name": number(code), "labels": (name, am, om)})
-    for code, (name, parent) in sorted(levels["zone"].items(), key=lambda kv: (kv[1][1], kv[1][0].lower(), kv[0])):
-        rows.append({"list_name": "choices_zone", "name": number(code), "labels": (name, name, name),
-                     "region": number(parent)})
-    for code, (name, parent) in sorted(levels["woreda"].items(), key=lambda kv: (kv[1][1], kv[1][0].lower(), kv[0])):
-        rows.append({"list_name": "choices_woreda", "name": number(code), "labels": (name, name, name),
-                     "region": number(levels["zone"][parent][1]), "zone": number(parent)})
-    rows.append({"list_name": "choices_woreda", **OTHER_WOREDA})
     return rows
 
 
 def kebele_csv(levels) -> str:
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
-    writer.writerow(["list_name", "name", "label", "region", "zone", "woreda"])
+    # Only carry columns used by the itemset. Redundant ancestors and list_name
+    # used to create ~60,000 unnecessary XML nodes in each Enketo form model.
+    writer.writerow(["name", "label", "woreda"])
     for code, (name, woreda) in sorted(levels["kebele"].items(), key=lambda kv: (kv[1][1], kv[1][0].lower(), kv[0])):
-        zone = levels["woreda"][woreda][1]
-        region = levels["zone"][zone][1]
-        writer.writerow(["choices_kebele", number(code), name, number(region), number(zone), number(woreda)])
+        writer.writerow([number(code), name, number(woreda)])
     writer.writerow(OTHER_KEBELE)
     return buffer.getvalue()
+
+
+def parent_csv(levels, level):
+    if level not in ("zone", "woreda"):
+        raise ValueError("Only external zone/woreda lists are supported")
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(["name", "label", "region" if level == "zone" else "zone"])
+    for code, (name, parent) in sorted(levels[level].items(), key=lambda kv: (kv[1][1], kv[1][0].lower(), kv[0])):
+        writer.writerow([number(code), name, number(parent)])
+    if level == "woreda":
+        writer.writerow(["other", "Other", "other_woreda"])
+    return buffer.getvalue()
+
+
+def configure_location_widgets(workbook):
+    """Keep submitted field paths/types, while using real cascading dropdowns."""
+    sheet = workbook["survey"]
+    columns = {cell.value: cell.column for cell in sheet[1] if cell.value}
+    changed = False
+    for row in range(2, sheet.max_row + 1):
+        name = sheet.cell(row, columns["name"]).value
+        level = str(name).removeprefix("hh_member_")
+        updates = {}
+        if level in ("zone", "woreda", "kebele"):
+            filename = {"zone": "ZoneList.csv", "woreda": "WoredaList.csv", "kebele": "KebeleList.csv"}[level]
+            updates = {"type": "select_one_from_file " + filename, "appearance": "minimal"}
+        if name == "location" and sheet.cell(row, columns["type"]).value == "geopoint":
+            updates = {"appearance": "placement-map"}
+        for field, value in updates.items():
+            cell = sheet.cell(row, columns[field])
+            if cell.value != value:
+                cell.value = value
+                changed = True
+    return changed
 
 
 def _choices_sheet(workbook):
@@ -194,12 +224,16 @@ def main(argv: list[str]) -> int:
     workbook = openpyxl.load_workbook(FORM)
     current, translations = current_choice_rows(workbook)
     wanted = choice_rows(levels, translations)
-    kebeles = kebele_csv(levels)
+    media = {KEBELES: kebele_csv(levels), ZONES: parent_csv(levels, "zone"), WOREDAS: parent_csv(levels, "woreda")}
+    widgets_changed = configure_location_widgets(workbook)
     stale = []
     if current != wanted:
         stale.append(f"{FORM.name} ({', '.join(LOCATION_LISTS)})")
-    if KEBELES.read_bytes().decode("utf-8") != kebeles:
-        stale.append(KEBELES.name)
+    for path, content in media.items():
+        if not path.exists() or path.read_bytes().decode("utf-8") != content:
+            stale.append(path.name)
+    if widgets_changed:
+        stale.append("location widgets")
     if "--check" in argv:
         if stale:
             print(f"stale, rerun odk/build_location_media.py: {stale}", file=sys.stderr)
@@ -208,8 +242,10 @@ def main(argv: list[str]) -> int:
         return 0
     if current != wanted:
         write_choice_rows(workbook, wanted)
+    if current != wanted or widgets_changed:
         workbook.save(FORM)
-    KEBELES.write_bytes(kebeles.encode("utf-8"))
+    for path, content in media.items():
+        path.write_bytes(content.encode("utf-8"))
     print("updated: " + (", ".join(stale) if stale else "nothing, already current"))
     return 0
 

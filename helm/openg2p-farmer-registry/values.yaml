@@ -371,6 +371,21 @@ mapsContent:
   # into the Insights chart as insightMaps.build.content.configMap.
   nameOverride: ""
 
+# Retain staging's optional second staff UI and its existing Service name.
+# Saved environment values own its origin, IAM, volumes and cookie settings.
+publicStaffUi:
+  enabled: false
+  replicas: 1
+  env: {}
+  volumes: []
+  volumeMounts: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 768Mi
+
 # COSS optional dashboard API: retain the existing release-owned service.
 # Its image is independently built; registry CI preserves the deployed tag.
 dashboardApi:

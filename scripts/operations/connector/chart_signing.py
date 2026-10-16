@@ -19,6 +19,10 @@ EXTRA = '''{{- if .Values.cossSigning.enabled }}
       name: {{ required "Signing Secret is required" .Values.cossSigning.secret | quote }}
       key: private-key.pem
 {{- end }}
+{{- if .Values.cossQueue }}
+- name: CONNECTOR_CELERY_QUEUE
+  value: {{ .Values.cossQueue | quote }}
+{{- end }}
 '''
 
 

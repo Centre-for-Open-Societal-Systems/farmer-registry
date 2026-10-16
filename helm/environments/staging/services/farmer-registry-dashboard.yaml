@@ -1,0 +1,3 @@
+# Existing release only: the coordinator preserves its effective values.
+_coordination:
+  namespace: far

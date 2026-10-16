@@ -12,6 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Require develop as the staging promotion source
+        if: github.event_name == 'pull_request' && github.base_ref == 'staging'
+        env:
+          PROMOTION_SOURCE_BRANCH: ${{ github.head_ref }}
+        run: |
+          if [ "$PROMOTION_SOURCE_BRANCH" != develop ]; then
+            echo 'Staging changes must arrive through a develop-to-staging pull request.' >&2
+            exit 1
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -33,6 +42,7 @@ jobs:
       - name: Deployment shell compatibility (Bash 4.3)
         run: |
           docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash tests/integration/test-deploy-shell.sh
+          docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash tests/integration/test-staging-deploy-shell.sh
           docker run --rm -v "$PWD:/repo:ro" -w /repo bash:4.3 bash tests/integration/test-container-shell.sh
       - name: Optional services tooling container
         run: |
@@ -42,7 +52,7 @@ jobs:
       - name: ODK transform
         run: python tests/unit/test_odk_transform.py
       - name: ODK geography matches the shared COSS seed
-        run: python -m pytest tests/unit/test_odk_location_media.py tests/unit/test_odk_geo_compatibility.py tests/unit/test_shared_geo_migration.py -q
+        run: python -m pytest tests/unit/test_odk_location_media.py tests/unit/test_odk_geo_compatibility.py tests/unit/test_shared_geo_migration.py tests/unit/test_odk_map_policy.py -q
       - name: Independent Commons and Registry projects
         run: python local/upstream/stack.py validate
       - uses: azure/setup-helm@v4

@@ -13,6 +13,13 @@ The Bash entrypoint also checks deployment shell behavior and the ODK transform.
 It runs unchanged in the Jenkins validation image without cloud credentials.
 Helm-specific tests skip when Helm is unavailable.
 
+The 2026-10-16 staging implementation was verified locally on Windows. In this
+restricted session Python's mode-0700 temporary directories were unreadable.
+The local pytest launcher used inherited directory ACLs only for disposable,
+synthetic test fixtures. Production backup modes were unchanged. Linux shell,
+Helm, container runtime and database restore checks still require their normal
+CI or trusted-host environments; the Windows unit result does not establish them.
+
 | Suite | Location | Environment |
 | --- | --- | --- |
 | Offline guards/metadata | `tests/unit/` | Python dependencies; Helm for chart cases |

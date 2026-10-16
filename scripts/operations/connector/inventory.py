@@ -15,7 +15,9 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "ci/services"))
 from coordinator import command  # noqa: E402
-from connector_cutover import backup, sha  # noqa: E402
+from connector_cutover import backup, sha
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "ci"))
+from environments import configuration, namespace, validate_cluster  # noqa: E402
 
 EXPORT = '''import asyncio,json,os
 import asyncpg
@@ -30,14 +32,21 @@ asyncio.run(main())
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--environment", choices=("dev", "staging"), required=True)
     parser.add_argument("--directory", type=Path, required=True)
     args = parser.parse_args()
+    selected_namespace = namespace(args.environment)
+    if args.environment == "staging":
+        validate_cluster("staging", os.environ.get("KUBECONFIG_CREDENTIAL"),
+                         json.loads(command(["kubectl", "config", "view", "--minify", "-o", "json"])))
     args.directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     exports = args.directory / "exports"
     exports.mkdir(mode=0o700)
-    deployment = json.loads(command(["kubectl", "get", "deploy", "farmer-connector-api", "-n", "farmer", "-o", "json"]))
+    deployment = json.loads(command(["kubectl", "get", "deploy", "farmer-connector-api", "-n", selected_namespace, "-o", "json"]))
     variables = {e["name"]: e.get("value") for c in deployment["spec"]["template"]["spec"]["containers"] for e in c.get("env", [])}
     database = variables["CONNECTOR_DB_DBNAME"]
+    if args.environment == "staging" and database != configuration("staging")["legacyConnectorDatabase"]:
+        raise ValueError("Wrong staging connector database")
     import re
     if not re.fullmatch(r"[a-z][a-z0-9_]+", database):
         raise ValueError("Unexpected database name")
@@ -57,6 +66,14 @@ def main():
     documents = {"pipelines.json": rows,
                  "mappings.json": [{key: row.get(key) for key in ("connector_id", "data_model_mnemonic", "mapper_expression", "mapper_version")} for row in rows],
                  "checkpoints.json": [{key: row.get(key) for key in ("connector_id", "poll_state_json", "source_config_json")} for row in rows]}
+    if args.environment == "staging":
+        # Preserve actual statuses and correlation IDs. This export is never
+        # used as an idempotency seed; the complete dump retains every table.
+        query = "SELECT coalesce(json_agg(row_to_json(r) ORDER BY run_id),'[]'::json) FROM ingestion_runs r"
+        documents["run-history.json"] = json.loads(command([
+            "kubectl", "exec", "-n", "commons", pg_pod, "--", "sh", "-c",
+            'PGPASSWORD="$POSTGRES_POSTGRES_PASSWORD" exec psql -X -U postgres -d "$1" -Atc "$2"',
+            "inventory-runs", database, query]))
     for name, value in documents.items():
         (exports / name).write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
     pg_secret = json.loads(command(["kubectl", "get", "secret", "commons-postgresql", "-n", "commons", "-o", "json"]))
@@ -87,7 +104,7 @@ def main():
             return ""
         return command(tool_args)
     snapshot = args.directory / "snapshot"
-    backup(snapshot, {name: exports / name for name in (*documents, "database.dump")}, run)
+    backup(snapshot, {name: exports / name for name in (*documents, "database.dump")}, run, args.environment)
     print(json.dumps({"directory": str(snapshot), "backupHash": sha(snapshot / "backup.json"),
                       "pipelines": len(rows), "databaseBytes": dump.stat().st_size}))
 
