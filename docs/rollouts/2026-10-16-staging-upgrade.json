@@ -1,8 +1,8 @@
 {
   "environment": "staging",
   "namespace": "far",
-  "status": "canonical-odk-live-dev-and-staging-shared-catalog-repaired-farmer-cutover-pending",
-  "branch": "feat/staging-rc544-signed-intake",
+  "status": "deployed-and-public-acceptance-passed-with-recorded-limitations",
+  "branch": "staging",
   "source": {
     "maintainedBase": "667b8fbbc2a55262c1e9c291e33b7bcb565be1dd",
     "cachedDevelop": "dd3287c839016ab41b1fd72f9bc4ee440696fd5e",
@@ -14,7 +14,7 @@
       "Optional public staff UI template and existing Service name"
     ],
     "pullRequestPublished": true,
-    "mergedIntoStaging": false,
+    "mergedIntoStaging": true,
     "developRefreshMerge": "32c9c5e",
     "pullRequest": "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry/pull/102",
     "pullRequestDraft": false,
@@ -27,7 +27,12 @@
       "develop",
       "staging"
     ],
-    "directFeatureToStagingPromotionAllowed": false
+    "directFeatureToStagingPromotionAllowed": false,
+    "deployedCommit": "40e03c9a71e4c3c79c0d897a4f681901e8b75993",
+    "developMerge": "37f844c3e2af2bfed4bb6b30b423ef3e97e1ab22",
+    "resetImplementation": "8c155255865b59b5ba4c1c44070f9b80bf6f13fa",
+    "resetPullRequest": 105,
+    "stagingPullRequest": 106
   },
   "target": {
     "platform": "1.2.2-rc.544",
@@ -55,62 +60,125 @@
     "automaticSchemaRollback": false
   },
   "liveExecution": {
-    "stagingAccessVerifiedThisSession": true,
-    "backupLocations": [
-      "staging:/var/backups/farmer-staging-20261016-initial/",
-      "staging:/var/backups/farmer-staging-20261016-odk-v2/"
-    ],
-    "restoredDumpEvidence": "Full Registry and connector dumps restored in isolated Docker networks; migration/seed/reporting and connector recovery checks passed",
-    "rehearsalEvidence": null,
+    "at": "2026-10-16T09:53:43.767868+00:00",
+    "jenkins": {
+      "build": 14,
+      "result": "SUCCESS",
+      "url": "https://jenkins.oanstaging.com/job/Gen2-Package/job/farmer-registry/job/staging/14/",
+      "previousBuild13": "FAILURE; setup Job TTL expired during ID Generator pull"
+    },
+    "helmRevisionsAfterUpgrade": {
+      "farmer-registry": 39,
+      "farmer-registry-connector": 4,
+      "farmer-connector-credentials": 1
+    },
     "registryImages": {
-      "component": "farmer-registry",
-      "namespace": "farmer",
-      "sourceCommit": "dd3287c839016ab41b1fd72f9bc4ee440696fd5e",
-      "images": {
-        "staff-api": {
-          "image": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/staff-api:dd3287c83901",
-          "digest": "sha256:bbcd815f4f3b2809ff6eae68a1361893051b78b577a5e542d4a1187aa05267a7"
-        },
-        "partner-api": {
-          "image": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/partner-api:dd3287c83901",
-          "digest": "sha256:064d34aa34a223582ecbafbb683457e1d63a8bac2fdb4e9ea198979b12894f8b"
-        },
-        "celery": {
-          "image": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/celery:dd3287c83901",
-          "digest": "sha256:323fae82ab37717676ec5f852a0a7032d7c4c10c6bb537844f40a54bf1198697"
-        },
-        "db-seed": {
-          "image": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/db-seed:dd3287c83901",
-          "digest": "sha256:730f6f4b3ac76d5d5106fc78005cbab10a55f76a8d66f7040da4911bd4368cea"
-        },
-        "sanity-tests": {
-          "image": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/sanity-tests:dd3287c83901",
-          "digest": "sha256:4211e0b6fa5bf7b8c5e134845911ba5967212d18d6f80cae09df3b64f580594c"
-        },
-        "staff-ui": {
-          "image": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/staff-ui:dd3287c83901",
-          "digest": "sha256:de99a8fe0ce7037359ee7ac9ca3344fe2b89ab00d1ba014443ce23668eb78f8e"
-        }
+      "staff-api": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/staff-api",
+        "tag": "266c70db8054",
+        "digest": "sha256:8b0bc050ba637c9b41e9b359adcfbbbab7a67690cfe348632dd017dbc31794d5",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
       },
-      "helmRevision": 25,
-      "outcome": "deployed"
+      "staff-ui": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/staff-ui",
+        "tag": "1a0d7598549f",
+        "digest": "sha256:0bb24ce4fc0a921a3ecbb05bf1dfd90414b3352cbdb01fc6bef07db1ff475593",
+        "sourceCommit": "1a0d7598549f8a8e34753bc90f103a576056abf5"
+      },
+      "partner-api": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/partner-api",
+        "tag": "266c70db8054",
+        "digest": "sha256:064d34aa34a223582ecbafbb683457e1d63a8bac2fdb4e9ea198979b12894f8b",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      },
+      "celery": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/celery",
+        "tag": "266c70db8054",
+        "digest": "sha256:15273f1e29b54f02df09b0bb69c5cf21d68432c1c34f0dd6521a1fbfe64b49c2",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      },
+      "db-seed": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/db-seed",
+        "tag": "266c70db8054",
+        "digest": "sha256:0b48d9f90be2734a131bcea08219c79cb9251307f13b422ead94f56fb7a00cd9",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      },
+      "sanity-tests": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/sanity-tests",
+        "tag": "266c70db8054",
+        "digest": "sha256:0793f4928debdf1246052f20639c8c06eafb4665452bde34d4057590621b20e7",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      }
     },
     "connectorImages": {
-      "api": "sha256:3a042f7a2d04e4e9ff8fdd2614f36a678cb6294f36ffc40d7d687bd33cb1c0c2",
-      "ui": "sha256:05a7e2c2e7de3088a5cd7092899c760387840e4236ca67aaa6620a830aa8cb6e",
-      "sourceCommit": "bc565efd47c129ff0ce25809bd946afc2b5e70f5",
-      "acceptedDevHelmRevision": 10
+      "api": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/registry-connector-api",
+        "tag": "bc565efd47c1-158e11f710bd",
+        "digest": "sha256:3a042f7a2d04e4e9ff8fdd2614f36a678cb6294f36ffc40d7d687bd33cb1c0c2"
+      },
+      "ui": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/registry-connector-ui",
+        "tag": "bc565efd47c1-158e11f710bd",
+        "digest": "sha256:05a7e2c2e7de3088a5cd7092899c760387840e4236ca67aaa6620a830aa8cb6e"
+      }
     },
-    "helmRevisionsAfterUpgrade": null,
-    "maintenanceEntered": false,
-    "odkFormPublished": true,
-    "syntheticApprovalsPerformed": false,
-    "realSubmissionIngested": false,
-    "schedulerActivated": false,
-    "legacyConnectorRetired": false,
-    "odkFormVersion": "1.0.5",
-    "odkPreviousVersionRetained": "1.0.1",
-    "odkExistingSubmissionXmlUnchanged": true
+    "idGenerator": {
+      "repository": "openg2p/openg2p-id-generator",
+      "version": "1.1.2",
+      "digest": "sha256:72e0b84b14b54aefc399104ad10139ea8b7ac1592cdde47ba15589a4c478945e"
+    },
+    "maintenanceEntered": true,
+    "maintenanceActive": false,
+    "publicAccess": {
+      "publicRoutes": {
+        "https://farmer-registry.oanstaging.com": 200,
+        "https://connector-farmer-registry.oanstaging.com": 200,
+        "https://odk-central.oanstaging.com": 200
+      },
+      "freshApproverOidcSession": true,
+      "aweStatisticsAndListing": true,
+      "maintenanceBypassUsed": false
+    },
+    "freshCredentialLogin": true,
+    "syntheticWebApprovedToRegister": true,
+    "syntheticSignedOdkApprovedToRegister": true,
+    "syntheticAcceptanceResourcesExportedAndRemoved": true,
+    "realSubmissionIngested": true,
+    "realSubmissionApproved": false,
+    "realSubmissionPending": true,
+    "registeredFarmers": 0,
+    "pendingRealIntakes": 1,
+    "samplesLoaded": false,
+    "metadataRegisters": 13,
+    "coordinateColumnsCompatible": 36,
+    "documentHistoryEventType": true,
+    "schedulerActivated": true,
+    "automaticPolling": {
+      "automaticPollNoDuplicates": true,
+      "singleScheduler": true,
+      "successfulKeys": 1,
+      "checkpointPreserved": true,
+      "lastAutomaticPoll": "2026-10-16T09:46:11.921652",
+      "fetched": 0
+    },
+    "legacyConnectorRetired": true,
+    "legacyDatabaseRetained": true,
+    "failedHistoryRetained": true,
+    "dedicatedOdkReader": {
+      "projectIds": [
+        1
+      ],
+      "role": "viewer"
+    },
+    "sharedCatalogModifiedDuringCutover": false,
+    "masterDataServiceSelectorOnlyRepaired": true,
+    "connectorImagesRebuilt": false,
+    "connectorAcceptedDevRevision": 10,
+    "connectorUpstreamCommit": "bc565efd47c129ff0ce25809bd946afc2b5e70f5",
+    "connectorCurrentWrapperArtifactGuardPassed": false,
+    "connectorOperatorDecisionRecorded": true,
+    "runtimeAndRestoredDatabaseTestsPassed": true,
+    "reportingRefreshPassed": true
   },
   "recovery": {
     "plannedBackupRoot": "/var/backups/farmer-staging-<run>/",
@@ -118,7 +186,16 @@
     "locationsCreatedOrVerified": true,
     "oldDatabaseMustBeRetained": true,
     "reconcileBeforeResume": true,
-    "unsignedLegacyMustNotResume": true
+    "unsignedLegacyMustNotResume": true,
+    "backupRoots": [
+      "/var/backups/farmer-staging-20261016-cutover-preflight/",
+      "/var/backups/farmer-staging-20261016-cutover-final/"
+    ],
+    "journalRoot": "/var/lib/registry-coordination/farmer-staging-20261016-cutover/",
+    "archivedRegistryDatabase": "farmer_registry_far_archive_20261016rc544",
+    "archivedRegistryConnectionsEnabled": false,
+    "secondProtectedCopyVerified": true,
+    "fullDumpsRestoredInIsolation": true
   },
   "executionBlockers": [
     "1537 seeded Farmer records retain unmatched fictitious Kamuntu selections; derived views account for another 650 reference occurrences; record-change approval is separate from the catalog repair",
@@ -494,5 +571,12 @@
       "finalHeadGithubChecks": "Required on the final PR head before merge"
     },
     "newDevRegisterPageSize": 20
-  }
+  },
+  "knownLimitations": [
+    "Unsigned requests blocked with HTTP500 rather than auth4xx; invalid requests created no records",
+    "Registry Master Data hierarchy helper lacks CSRF and complete staging credentials: HTTP403, lowest-level ID preserved but enrichment incomplete",
+    "Registry ingestion transient async database loop failure recovered on normal attempt2",
+    "Commons Service selector drift repaired independently; owning Commons chart must reconcile it"
+  ],
+  "executionRunbook": "../operations/staging-cutover-2026-10-16.md"
 }

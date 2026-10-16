@@ -46,7 +46,7 @@ def main():
         run(['docker', 'run', '-d', '--name', pg, '--network', network,
              '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', '-v', str(ROOT) + ':/repo:ro', 'postgres:16'], 'postgres')
         for _ in range(60):
-            if subprocess.run(['docker', 'exec', pg, 'pg_isready', '-U', 'postgres'], capture_output=True).returncode == 0:
+            if subprocess.run(['docker', 'exec', pg, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres'], capture_output=True).returncode == 0:
                 break
             time.sleep(.5)
         else:
