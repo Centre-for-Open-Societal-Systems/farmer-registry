@@ -5,6 +5,22 @@ global:
   keycloakRealm: staff
   keycloakIssuerUrl: https://keycloak.oanstaging.com/realms/staff
 registry:
+  # Retain setup Jobs for the entire Helm wait, including image pulls. A 100s
+  # TTL removed completed Jobs while Helm was still waiting during cutover.
+  postgres-init:
+    job:
+      ttlSecondsAfterFinished: 3600
+  keycloak-init:
+    job:
+      ttlSecondsAfterFinished: 3600
+  idgenerator:
+    postgres-init:
+      job:
+        ttlSecondsAfterFinished: 3600
+    idGenerator:
+      image:
+        repository: openg2p/openg2p-id-generator
+        tag: 1.1.2@sha256:72e0b84b14b54aefc399104ad10139ea8b7ac1592cdde47ba15589a4c478945e
   staffApi:
     envVars:
       REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
