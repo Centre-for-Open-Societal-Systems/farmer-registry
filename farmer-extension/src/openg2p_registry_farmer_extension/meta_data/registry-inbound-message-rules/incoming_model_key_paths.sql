@@ -16,4 +16,5 @@ INSERT INTO "public"."incoming_model_key_paths" (
     '$.body[''header'',''message'']',
     'FALSE',
     ''
-);
+)
+ON CONFLICT DO NOTHING;

@@ -1,0 +1,27 @@
+# Runtime shape from Commons Services 2.3.4-rc.245's audit-manager configmap.
+audit_manager:
+  service_id: openg2p.auditmanager
+  api_version: '1.0'
+  ingest:
+    queue_max_size: 10000
+    max_batch_size: 500
+  kafka:
+    bootstrap_servers: kafka:9092
+    topic: openg2p.audit.events
+    dlq_topic: openg2p.audit.dlq
+    client_id: openg2p-audit-manager
+    consumer_group: openg2p-audit-consumer
+    producer:
+      acks: '1'
+      linger_ms: 50
+      compression_type: gzip
+      max_batch_size: 524288
+    consumer:
+      batch_max_records: 500
+      flush_interval_ms: 1000
+      auto_offset_reset: earliest
+      enable_auto_commit: false
+  database:
+    partition_pre_create_months: 3
+    partition_retention_months: 84
+    partition_check_interval_seconds: 3600

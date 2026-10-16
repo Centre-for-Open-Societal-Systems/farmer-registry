@@ -1,0 +1,59 @@
+name: Build COSS images
+
+on:
+  pull_request:
+  push:
+    branches: [develop, feat/gen2-common-rc245]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [staff-api, partner-api, celery, db-seed, sanity-tests, staff-ui]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/${{ matrix.component }}/Dockerfile
+          push: false
+          load: true
+          tags: coss/${{ matrix.component }}:ci
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+      - name: COSS domain regression checks on the pinned platform
+        if: matrix.component == 'staff-api'
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -e PYTHONPATH=/repo/farmer-extension/src -w /repo/tests/runtime \
+            --entrypoint python coss/staff-api:ci -m unittest \
+            extension.test_domain_validation_utils extension.test_farmer_geo_sync \
+            extension.test_intake_record_image_urls extension.test_household_family_size -v
+      - name: Worker attribution runtime
+        if: matrix.component == 'celery'
+        run: docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python coss/celery:ci /repo/tests/runtime/odk_actor_worker_runtime.py
+      - name: Signed intake runtime
+        if: matrix.component == 'partner-api'
+        run: docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python coss/partner-api:ci /repo/tests/runtime/odk_signature_runtime.py
+      - name: Seed transaction and rollback integration
+        if: matrix.component == 'db-seed'
+        run: |
+          set -euo pipefail
+          docker network create seed-ci
+          trap 'docker rm -f seed-ci-db >/dev/null 2>&1; docker network rm seed-ci >/dev/null 2>&1' EXIT
+          docker run -d --name seed-ci-db --network seed-ci -e POSTGRES_PASSWORD=local-test -e POSTGRES_DB=coss_seed_test_ci postgres:16-alpine
+          ready=false
+          for attempt in $(seq 1 30); do
+            if docker exec seed-ci-db pg_isready -U postgres; then ready=true; break; fi
+            sleep 1
+          done
+          test "$ready" = true
+          docker run --rm --network seed-ci -v "$PWD:/repo:ro" \
+            -e PGHOST=seed-ci-db -e PGDATABASE=coss_seed_test_ci -e PGUSER=postgres -e PGPASSWORD=local-test \
+            --entrypoint python3 coss/db-seed:ci /repo/tests/runtime/test_seed_transaction.py

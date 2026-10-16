@@ -221,15 +221,8 @@ COORDINATE_BOUNDS = {
 COORDINATE_LABELS = {"latitude": "Latitude", "longitude": "Longitude", "altitude": "Altitude"}
 
 
-def _format_coordinate(value: float) -> str:
-    # 7 decimals is ~1 cm, and what the form's number widget shows; trim the
-    # trailing zeros so 9.03 is stored as "9.03", not "9.0300000".
-    text = f"{value:.7f}".rstrip("0").rstrip(".")
-    return "0" if text in ("", "-0") else text
-
-
 def normalize_coordinates(record: dict) -> None:
-    """Coerce latitude/longitude/altitude to the string form the columns hold.
+    """Coerce latitude/longitude/altitude to the rc.544 Float column type.
 
     Only keys the caller sent are touched (an absent key is a partial update).
     Blank clears the value; anything non-numeric or out of range is rejected
@@ -249,7 +242,7 @@ def normalize_coordinates(record: dict) -> None:
         bounds = COORDINATE_BOUNDS.get(field)
         if bounds and not bounds[0] <= value <= bounds[1]:
             validation_error(f"{label} must be between {bounds[0]:g} and {bounds[1]:g}")
-        record[field] = _format_coordinate(value)
+        record[field] = round(value, 7)
 
 
 def sync_ethiopic_date_pair(record: dict, gc_field: str, ec_field: str, label: str) -> None:

@@ -16,4 +16,5 @@ INSERT INTO "public"."incoming_model_semantic_patterns" (
     '$.body.message.search_response[0].data.reg_record_type=>^Farmer$',
     '$.body.message.search_response[0].data.reg_records[0]',
     'G2PDciFarmerCreateEnricherService'
-);
+)
+ON CONFLICT DO NOTHING;

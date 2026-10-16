@@ -1,0 +1,4 @@
+# Preserve the existing API's routing, credentials and configuration. The
+# coordinator changes only dashboardApi.image in the Farmer Registry release.
+_coordination:
+  namespace: farmer

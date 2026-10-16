@@ -17,8 +17,8 @@
 {%- set member = d.get('membership', {}) or {} -%}
 {%- set farm_in = d.get('agricultural_input', {}) or {} -%}
 {%- set loc_obj = d.get('farmer_location', {}) or d.get('location', {}) or {} -%}
-{%- set meta = d.get('survey_metadata', {}) or {} -%}
-{%- set sys = d.get('__system', {}) or {} -%}
+{%- set meta = d.get('survey_metadata', {}) if d.get('survey_metadata') is mapping else {} -%}
+{%- set sys = d.get('__system', {}) if d.get('__system') is mapping else {} -%}
 
 {# --- Names --- #}
 {%- set first_name = personal.get('first_name_english', '') or personal.get('first_name', '') or '' -%}
@@ -118,7 +118,10 @@
 {%- if kebele_code.isdigit() -%}
   {%- set geo_lowest = 'kebele-ET' ~ ('%012d' | format(kebele_code | int)) -%}
 {%- elif woreda_code.isdigit() -%}
-  {%- set geo_lowest = 'woreda-ET' ~ ('%06d' | format(woreda_code | int)) -%}
+  {# The supplied catalog has one seven-digit woreda P-code; keep its leading
+     zero when decoding the existing numeric XLSForm choice value. #}
+  {%- set woreda_pcode = '0420112' if woreda_code | int == 420112 else ('%06d' | format(woreda_code | int)) -%}
+  {%- set geo_lowest = 'woreda-ET' ~ woreda_pcode -%}
 {%- else -%}
   {%- set geo_lowest = None -%}
 {%- endif -%}
@@ -251,7 +254,9 @@
 {%- set income_src = (socio.get('income_source', '') or 'CROP_PRODUCTION') | upper -%}
 
 {# --- Enumerator Metadata --- #}
-{%- set enum_name = meta.get('enumerator_name', '') or sys.get('submitterName', '') -%}
+{%- set collector = (meta.get('enumerator_name') | trim) if meta.get('enumerator_name') is string else '' -%}
+{%- set submitter = (sys.get('submitterName') | trim) if sys.get('submitterName') is string else '' -%}
+{%- set enum_name = collector or submitter -%}
 {%- set enum_id = meta.get('enumerator_id', '') or sys.get('submitterId', '') -%}
 {%- set collection_date = (meta.get('survey_start', '') or sys.get('submissionDate', '') or '').split('T')[0] -%}
 

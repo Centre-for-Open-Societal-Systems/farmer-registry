@@ -1,0 +1,20 @@
+# Overlay for the EXISTING commons-services release, namespace commons.
+# Keep openg2p-commons-services pinned to 2.3.4-rc.245; merge with its saved values.
+# These are PM-owned overrides: do not change the shared IAM hostname globals.
+partner-management:
+  staffPortalApi:
+    envVars:
+      PARTNER_MANAGER_AUTH_ENABLED: "true"
+      PARTNER_MANAGER_AUTH_ADMIN_ROLE: partner_manager
+      PARTNER_MANAGER_AUTH_ADMIN_CLIENT_ID: commons-services-staff-portal
+      PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS: '["https://keycloak-development.oanstaging.com/realms/staff"]'
+      COMMON_AUTH_DEFAULT_ISSUERS: '["https://keycloak-development.oanstaging.com/realms/staff"]'
+      PARTNER_MANAGER_AUTH_DEFAULT_JWKS_URLS: '["http://commons-keycloak:80/realms/staff/protocol/openid-connect/certs"]'
+      COMMON_AUTH_DEFAULT_JWKS_URLS: '["http://commons-keycloak:80/realms/staff/protocol/openid-connect/certs"]'
+    istio:
+      virtualservice:
+        host: partner-management-staff-portal-api.commons-dev.oanstaging.com
+  staffPortalUi:
+    envVars:
+      # Logout is browser-facing; the cluster-only DNS name is not usable there.
+      KEYCLOAK_LOGOUT_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/logout

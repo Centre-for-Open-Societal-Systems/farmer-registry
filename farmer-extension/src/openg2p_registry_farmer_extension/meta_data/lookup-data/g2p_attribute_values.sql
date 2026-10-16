@@ -237,7 +237,7 @@ INSERT INTO "public"."g2p_attribute_values" ("value_id","attribute_id","value_co
 ('LANG_KEMBATISSATA','LANGUAGE','KEMBATISSATA','Kembatissata',NULL,13),
 ('LANG_ENGLISH','LANGUAGE','ENGLISH','English',NULL,14),
 ('LANG_OTHER','LANGUAGE','OTHER','Other',NULL,15)
-ON CONFLICT ("value_id") DO UPDATE SET
+ON CONFLICT ("value_id", "attribute_id") DO UPDATE SET
     "attribute_id" = EXCLUDED."attribute_id",
     "value_code" = EXCLUDED."value_code",
     "value_display" = EXCLUDED."value_display",
