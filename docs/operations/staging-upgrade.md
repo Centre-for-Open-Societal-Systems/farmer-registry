@@ -1,5 +1,10 @@
 # Farmer staging RC upgrade and signed ODK cutover
 
+For the newly authorized test-data reset, use the [reset procedure](staging-reset.md)
+instead of reconciling the old Kamuntu business records in place. The reset
+retains a protected archive and initializes metadata only; it does not change
+the requirements for backup, rehearsal, partner readiness or signed acceptance.
+
 Changes land in `develop` first. Promote the accepted `develop` branch into
 `staging`; do not merge a feature branch directly into `staging`. The migration
 branch includes the reviewed staging history, but its PR targets `develop`.

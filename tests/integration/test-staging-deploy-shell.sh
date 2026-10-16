@@ -19,6 +19,10 @@ MOCK
 cat > "$STATE/bin/kubectl" <<'MOCK'
 #!/bin/sh
 printf 'kubectl %s\n' "$*" >> "$CALLS"
+case "$1" in
+  create) printf 'job.batch/farmer-schema-test\n' ;;
+  wait) exit "${SCHEMA_EXIT:-0}" ;;
+esac
 MOCK
 chmod +x "$STATE/bin/"*
 export PATH="$STATE/bin:$PATH"
@@ -44,9 +48,19 @@ for CUTOVER_EXIT in 0 1; do
       echo 'Staging must not install or automatically revert schema-dependent images'; exit 1
     fi
     grep -q '^helm get hooks ' "$CALLS"
-    grep -q '^kubectl exec -i -n far ' "$CALLS"
+    grep -q 'schema-probe ' "$CALLS"
+    grep -q '^kubectl create -f ' "$CALLS"
+    grep -q '^kubectl wait -n far --for=condition=complete ' "$CALLS"
   fi
 done
+export CUTOVER_EXIT=0 SCHEMA_EXIT=1
+: > "$CALLS"
+if bash ci/deploy/deploy-rc.sh > "$STATE/output" 2>&1; then
+  echo 'Incompatible staging schema accepted'; exit 1
+fi
+if grep -q '^helm upgrade ' "$CALLS"; then echo 'Failed schema probe must block Helm'; exit 1; fi
+grep -q '^kubectl delete -n far job.batch/farmer-schema-test ' "$CALLS"
+unset SCHEMA_EXIT
 export HELM_NAMESPACE=farmer
 : > "$CALLS"
 if bash ci/deploy/deploy-rc.sh > "$STATE/output" 2>&1; then
