@@ -1,0 +1,202 @@
+{
+  "environment": "new-dev",
+  "canonicalUrl": "https://odk-central-development.oanstaging.com",
+  "compatibilityUrl": "https://odk.commons-dev.oanstaging.com",
+  "serverIp": "13.201.58.55",
+  "oldVmIp": "13.207.43.8",
+  "oldVmStopped": false,
+  "dnsChangedBy": "user through Route 53",
+  "stagingChanged": false,
+  "projects": {
+    "farmer": 1,
+    "crop": 2,
+    "livestock": 6
+  },
+  "sourceLivestockProject": 14,
+  "configuration": {
+    "canonical": "https://odk-central-development.oanstaging.com",
+    "compatibilityAlias": "https://odk.commons-dev.oanstaging.com",
+    "backendChangedOnly": [
+      "DOMAIN",
+      "EMAIL_FROM"
+    ],
+    "keycloakClient": "openg2p-odk",
+    "legacyCallbacksRetained": true,
+    "enketoLoginUrlCorrected": true,
+    "existingEnketoServerMatcherPreserved": true,
+    "noCommonsHelmUpgrade": true,
+    "noFrontendOrDatabaseRestart": true,
+    "backupRoot": "/var/backups/farmer-dev-odk-hostname-20261016",
+    "enketoTemplateSha256": "2ec10abc89b87d92284b5d38d5e49faf8986aafa310781d4bbb33f9e3a40090c"
+  },
+  "livestockMigration": {
+    "sourceProjectId": 14,
+    "targetProjectId": 6,
+    "formId": "livestock_registry",
+    "formVersionsVerified": 3,
+    "submissionsVerified": 8,
+    "submissionXmlByteIdentical": true,
+    "formXmlAndMediaByteIdentical": true,
+    "reviewStatesUnchanged": true,
+    "readerScope": "target Livestock project viewer",
+    "publisherGlobalAdminRemoved": true,
+    "targetFormClosedUntilReconciliation": true,
+    "originalActorAndReceiptMetadata": "retained in protected export and complete old-VM database archive; target REST imports have migration receipt/actor"
+  },
+  "archiveRestore": {
+    "sourceSha256": "924a602a62fdf206f4abeefb725ab0a71b207b4680d0989aa1c2682b7d2aa9cd",
+    "isolatedNetwork": true,
+    "fullRestorePassed": true,
+    "counts": {
+      "projects": 18,
+      "forms": 74,
+      "submissions": 207,
+      "currentLivestockSubmissions": 8
+    },
+    "archiveStoredIndependentlyOfOldVm": true
+  },
+  "owningOverlayRehearsal": {
+    "owningOdkChartVersion": "v2025.2.2",
+    "helmLint": true,
+    "renderPassed": true,
+    "canonicalBackendAndSecretReferencesMatchLive": true,
+    "enketoConfigMatchesLive": true,
+    "legacyAliasRoutePreserved": true,
+    "mapFixMatchesLive": true,
+    "noApply": true
+  },
+  "cleanup": {
+    "temporaryPublisherDeleted": true,
+    "removedAccountLoginRejected": true,
+    "farmerReaderLoginPreserved": true,
+    "livestockProjectReaderLoginPreserved": true,
+    "liveMigrationTestSubmissionsCreated": 0
+  },
+  "browser": {
+    "chrome": {
+      "formVersion": "1.0.5",
+      "loadedTileImages": 4,
+      "tileStatuses": [
+        200,
+        200,
+        200,
+        200
+      ],
+      "mapClickSavedPoint": true,
+      "centralPolicyUnchanged": true,
+      "noSubmissionCreated": true,
+      "pageErrors": []
+    },
+    "firefox": {
+      "formVersion": "1.0.5",
+      "loadedTileImages": 4,
+      "tileStatuses": [
+        200,
+        200,
+        200,
+        200
+      ],
+      "mapClickSavedPoint": true,
+      "centralPolicyUnchanged": true,
+      "noSubmissionCreated": true,
+      "pageErrors": []
+    }
+  },
+  "currentConnectorOutcomes": [
+    {
+      "namespace": "farmer",
+      "form": "farmer_profile",
+      "sourceUrl": "https://odk-central-development.oanstaging.com",
+      "project": 1,
+      "paused": false,
+      "lastPollAt": "2026-10-16T06:50:15.760365",
+      "lastPollStatus": "SUCCESS",
+      "lastPollFetched": 0,
+      "hasCheckpoint": true,
+      "idempotency": {
+        "count": 3,
+        "uniqueSourceKeys": 3
+      }
+    },
+    {
+      "namespace": "crop",
+      "form": "crop_sown_registry_prep",
+      "sourceUrl": "https://odk-central-development.oanstaging.com",
+      "project": 2,
+      "paused": false,
+      "lastPollAt": "2026-10-16T06:47:08.000177",
+      "lastPollStatus": "SUCCESS",
+      "lastPollFetched": 0,
+      "hasCheckpoint": false,
+      "idempotency": {
+        "count": 0,
+        "uniqueSourceKeys": 0
+      }
+    },
+    {
+      "namespace": "crop",
+      "form": "crop_sown_registry_plan",
+      "sourceUrl": "https://odk-central-development.oanstaging.com",
+      "project": 2,
+      "paused": true,
+      "lastPollAt": "2026-10-16T06:14:06.459769",
+      "lastPollStatus": "FAILED",
+      "lastPollFetched": 0,
+      "hasCheckpoint": false,
+      "idempotency": {
+        "count": 0,
+        "uniqueSourceKeys": 0
+      }
+    },
+    {
+      "namespace": "crop",
+      "form": "crop_sown_registry_sown",
+      "sourceUrl": "https://odk-central-development.oanstaging.com",
+      "project": 2,
+      "paused": false,
+      "lastPollAt": "2026-10-16T06:47:08.006168",
+      "lastPollStatus": "SUCCESS",
+      "lastPollFetched": 0,
+      "hasCheckpoint": false,
+      "idempotency": {
+        "count": 0,
+        "uniqueSourceKeys": 0
+      }
+    },
+    {
+      "namespace": "crop",
+      "form": "crop_sown_registry_harvest",
+      "sourceUrl": "https://odk-central-development.oanstaging.com",
+      "project": 2,
+      "paused": false,
+      "lastPollAt": "2026-10-16T06:47:07.93569",
+      "lastPollStatus": "SUCCESS",
+      "lastPollFetched": 0,
+      "hasCheckpoint": false,
+      "idempotency": {
+        "count": 0,
+        "uniqueSourceKeys": 0
+      }
+    },
+    {
+      "namespace": "livestock",
+      "form": "livestock_registry",
+      "sourceUrl": "https://odk-central-development.oanstaging.com",
+      "project": 6,
+      "paused": false,
+      "lastPollAt": "2026-10-16T06:47:16.243394",
+      "lastPollStatus": "SUCCESS",
+      "lastPollFetched": 0,
+      "hasCheckpoint": true,
+      "idempotency": {
+        "count": 7,
+        "uniqueSourceKeys": 7
+      }
+    }
+  ],
+  "remainingIssues": [
+    "Crop Plan remains an unpublished draft; connector paused pending publication decision",
+    "One pre-existing Livestock source instance remains failed with PARTNER_NOT_REGISTERED; seven successes retained; no approval performed",
+    "Live targeted configuration must be included in owning Commons values at its next deployment; Farmer merge does not apply Commons"
+  ]
+}

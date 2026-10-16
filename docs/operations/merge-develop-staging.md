@@ -14,7 +14,7 @@ Remote `develop` and `staging` were refreshed on 16 October 2026. Both were ance
 
 ## ODK target retained
 
-Public staging continues to use the separate Central server at [odk-central.oanstaging.com](https://odk-central.oanstaging.com), project `1`, form `farmer_profile`, on VM `odk-vm-2` (`16.4.11.90`). Do not replace it with `odk.commons.staging.openg2p.test`, which is a different Kubernetes installation. Further ODK server changes are deferred; this Farmer merge does not deploy Commons or the Central VM. New dev retains [odk.commons-dev.oanstaging.com](https://odk.commons-dev.oanstaging.com).
+Public staging continues to use the separate Central server at [odk-central.oanstaging.com](https://odk-central.oanstaging.com), project `1`, form `farmer_profile`, on VM `odk-vm-2` (`16.4.11.90`). Do not replace it with `odk.commons.staging.openg2p.test`, which is a different Kubernetes installation. Further staging ODK server changes are deferred; this Farmer merge does not deploy Commons or the Central VM. New dev now uses [odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com), with the former Commons address retained as an alias; see the [hostname migration](odk-dev-hostname.md).
 
 The existing map correction and form `1.0.5` were rechecked on the public staging VM. Chrome and Firefox rendered all visible tiles and saved a clicked point. The canonical Kebele dropdown and parent-change clearing passed. Its existing submission XML and attachment were preserved. See [map configuration and recovery](odk-map-tiles.md).
 
