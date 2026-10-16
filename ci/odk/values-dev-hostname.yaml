@@ -1,0 +1,53 @@
+# New-dev Commons Services values; not a Farmer Registry overlay.
+# Apply with values-map-tiles.yaml in the owning Commons release.
+# Both existing Istio VirtualServices are retained; see the hostname runbook.
+global:
+  odkHostname: odk-central-development.oanstaging.com
+odk-central:
+  hostname: odk-central-development.oanstaging.com
+  istio:
+    virtualservice:
+      host: odk.commons-dev.oanstaging.com
+  odk-central-enketo:
+    configJsonTemplate: |-
+      {
+        "app name": "Enketo",
+        "base path": "-",
+        "encryption key": "${ENKETO_SECRET}",
+        "id length": 31,
+        "less secure encryption key": "${ENKETO_LESS_SECRET}",
+        "linked form and data server": {
+            "api key": "${ENKETO_API_KEY}",
+            "authentication": {
+              "type": "cookie",
+              "url": "https://odk-central-development.oanstaging.com/#/login?next={RETURNURL}"
+            },
+            "name": "ODK Central",
+            "server url": "${DOMAIN}"
+        },
+        "logo": {
+          "source": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+          "href": ""
+        },
+        "offline enabled": true,
+        "payload limit": "1mb",
+        "port": "${ENKETO_PORT}",
+        "query parameter to pass to submission": "st",
+        "redis": {
+          "main": {
+            "host": "${REDIS_MAIN_HOST}",
+            "port": "6379"
+          },
+          "cache": {
+            "host": "${REDIS_CACHE_HOST}",
+            "port": "6379"
+          }
+        },
+        "support": {
+          "email": "${SUPPORT_EMAIL}"
+        },
+        "text field character limit": 1000000,
+        "exclude non-relevant": true
+      }
+    podAnnotations:
+      checksum/odk-central-hostname: 2ec10abc89b87d92284b5d38d5e49faf8986aafa310781d4bbb33f9e3a40090c

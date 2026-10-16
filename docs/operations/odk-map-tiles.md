@@ -3,6 +3,8 @@
 Dev and public staging are repaired. Both pass authenticated Chrome and Firefox
 checks of rendered tiles, origin-only Referer headers and point selection.
 
+New dev subsequently moved to [odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com); the former Commons address remains an alias. The same map checks passed on the canonical origin. See [hostname migration](odk-dev-hostname.md).
+
 The screenshot matches an [upstream Central issue](https://github.com/getodk/central/issues/1885).
 `Referrer-Policy: same-origin` suppresses the cross-origin Referer required by
 the [OSM tile policy](https://operations.osmfoundation.org/policies/tiles/).

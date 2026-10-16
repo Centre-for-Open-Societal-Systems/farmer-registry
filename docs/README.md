@@ -15,6 +15,7 @@
 - [Service coordination](operations/coordinated-services-rollout.md)
 - [Signing, checkpoints and recovery](operations/connector.md)
 - [ODK form and intake](odk/README.md)
+- [New-dev ODK hostname, Livestock migration and archive](operations/odk-dev-hostname.md)
 - [Cleanup inventory](operations/cleanup-inventory.md)
 
 ## Verification and evidence
