@@ -229,3 +229,8 @@ Publish only credential-free source commits, digests, actual Helm revisions,
 acceptance outcomes and recovery location references in the rollout manifest.
 Keep dumps, raw manifests, ODK credentials, tokens, keys and submission data in
 protected storage. Do not report any live criterion as passing until it was run.
+
+The [16 October 2026 execution record](staging-cutover-2026-10-16.md) records the
+deployed revisions, tested image/configuration repairs, acceptance results,
+remaining upstream defects and protected recovery locations. Consult it before
+the next deployment; the retired legacy connector must remain stopped.
