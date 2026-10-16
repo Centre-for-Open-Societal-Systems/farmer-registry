@@ -26,6 +26,12 @@ def call() {
                         env.SOURCE_COMMIT = sh(returnStdout: true, script: 'git rev-parse --verify HEAD').trim()
                         if (!(env.SOURCE_COMMIT ==~ /[0-9a-f]{40}/)) { error('Invalid source commit') }
                         env.IMAGE_TAG = env.SOURCE_COMMIT.take(12)
+                        if (!params.DEPLOY_STAGING) {
+                            currentBuild.description = 'VALIDATION ONLY — staging was not deployed'
+                            echo 'DEPLOY_STAGING=false: this successful build validates source only. The live Farmer release remains unchanged.'
+                        } else {
+                            currentBuild.description = 'Staging deployment requested — acceptance pending'
+                        }
                     }
                     sh '''
                       set -eu
@@ -58,6 +64,7 @@ def call() {
                             '''
                         }
                         archiveArtifacts artifacts: 'service-outcomes/*.json', allowEmptyArchive: true
+                        script { currentBuild.description = 'Registry deployed to far — signed intake acceptance remains a separate gate' }
                     }
                 }
             }

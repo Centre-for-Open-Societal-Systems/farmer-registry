@@ -38,6 +38,11 @@ out of artifacts. A failed release requires guarded recovery, never deletion.
 
 ## Staging
 
+The authorized [Farmer-only test-data reset](staging-reset.md) is a separate
+operator procedure. Its latest population choice is metadata only, with an empty
+register until Master Data is upgraded. It still follows develop → staging and
+does not reset shared services or ODK.
+
 Read-only SSH inspection reached `52.66.116.220` through the Jenkins VPN agent.
 Its RKE2 kubeconfig is `/etc/rancher/rke2/rke2.yaml`. Farmer runs in `far`.
 
