@@ -93,7 +93,10 @@ Commons upgrade or recovery was attempted.
 ## Follow-up: blocked basemap tiles
 
 The user's later screenshot reproduced a policy failure not established by the
-initial 200 tile responses. Public staging still suppresses tile Referer headers.
-Its ODK endpoint is served by a separate VM, not the staging Kubernetes Commons
-ODK installation. Dev is repaired; the [map repair runbook](../operations/odk-map-tiles.md)
-records the remaining server-access prerequisite and scoped staging correction.
+initial 200 tile responses. Its ODK endpoint is served by a separate VM, not the
+staging Kubernetes Commons ODK installation. Public staging is now repaired
+using the existing Jenkins backend SSH key: only Enketo's referrer policy and a
+persistent Nginx headers mount changed. Chrome and Firefox verified rendered
+tiles, origin-only Referer headers and point selection. The existing submission
+and attachment remain byte-identical. The [map repair runbook](../operations/odk-map-tiles.md)
+records the exact image, preserved containers/volumes, backup and recovery.

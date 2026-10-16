@@ -11,7 +11,7 @@ failure; optional services release independently and failures mark Jenkins unsta
 The [rollout manifest](../rollouts/2026-10-16-staging-upgrade.json) records current
 implementation and execution status. Historical revision 36 / connector revision 3
 are inspection findings, not permission to assume the cluster is still unchanged.
-Refresh remote refs and live inventories before review. The [map tile follow-up](odk-map-tiles.md) records the dev repair and public staging VM access prerequisite. The [ODK location update](../history/odk-staging-location-20261016.md) is published
+Refresh remote refs and live inventories before review. The [map tile follow-up](odk-map-tiles.md) records the verified dev and public staging repairs. The [ODK location update](../history/odk-staging-location-20261016.md) is published
 as form 1.0.5. Registry and legacy connector revisions remain 36 and 3. The latest
 inspection found legacy Farmer geography references and missing Farmer partner
 registration; do not enter maintenance or authorize deployment until those

@@ -392,15 +392,33 @@
     },
     "staging": {
       "host": "https://odk-central.oanstaging.com",
-      "applied": false,
-      "accepted": false,
+      "applied": true,
+      "accepted": true,
       "owner": "EC2 odk-vm-2",
       "centralVersion": "v2026.1.2",
-      "serverAccessRequired": true,
+      "serverAccessRequired": false,
       "centralApiCredentialsVerified": true,
       "kubernetesTrialReverted": true,
       "offlineHelperVerifiedAgainstPublishedSource": true,
-      "liveVmConfigurationInspected": false
+      "liveVmConfigurationInspected": true,
+      "serverAccessVerified": true,
+      "sshCredentialReference": "Jenkins backend-ssh-key via vpn-agent2",
+      "browsersPassed": [
+        "Chrome",
+        "Firefox"
+      ],
+      "originOnlyTileRefererVerified": true,
+      "allObservedVisibleTiles200": true,
+      "centralPolicyPreserved": true,
+      "backupRoot": "odk-vm-2:/var/backups/farmer-odk-map-20261016-vm/",
+      "protectedSecondBackupVerified": true,
+      "backupFilesVerified": 9,
+      "onlyNginxRecreated": true,
+      "existingVolumesPreserved": true,
+      "unrelatedContainersUnchanged": 7,
+      "exactImagePreserved": "sha256:836a820b8381c7551691b735aedb158f2ca3bbd63d4a68482fdd2dee29cf0854",
+      "completedAt": "2026-10-16T04:12:08.974743+00:00",
+      "existingSubmissionXmlAndAttachmentUnchanged": true
     },
     "publicStagingAndKubernetesOdkAreDifferentInstallations": true
   }

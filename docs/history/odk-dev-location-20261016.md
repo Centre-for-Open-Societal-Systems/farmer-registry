@@ -42,4 +42,4 @@ submissions and form history should never be deleted to refresh clients.
 The later user report exposed a referrer-policy failure that the initial tile
 status checks did not establish. Dev now has a scoped Nginx correction, verified
 in Chrome and Firefox with origin-only tile Referer headers and rendered map
-screenshots. See the [map repair and staging access status](../operations/odk-map-tiles.md).
+screenshots. See the [map repair outcomes](../operations/odk-map-tiles.md) for both environments.
