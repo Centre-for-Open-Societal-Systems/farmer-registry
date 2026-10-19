@@ -120,6 +120,18 @@ def identity_env(suffix, environment="dev"):
     return identity_overlay(environment)["registry"].get(component, {}).get("envVars", {})
 
 
+def location_overlay(environment="dev"):
+    if environment != "dev":
+        return {}
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-location.yaml")
+
+
+def location_env(suffix, environment="dev"):
+    component = {"staff-portal-ui": "staffUi", "staff-portal-api": "staffApi",
+                 "partner-api": "partnerApi", "celery-worker": "celeryWorker"}.get(suffix)
+    return location_overlay(environment).get("registry", {}).get(component, {}).get("envVars", {})
+
+
 def merge(target, overlay):
     for key, value in overlay.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
@@ -166,6 +178,10 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     values.setdefault("mapsContent", {}).setdefault("enabled", False)
     if migrate_identity:
         merge(values, identity_overlay(environment))
+    # Repair only Master Data routing, without changing identity providers,
+    # client IDs or credentials. A bare service name resolves in farmer, while
+    # the existing Master Data service is owned by commons.
+    merge(values, location_overlay(environment))
     if environment == "staging":
         # rc.544 stopped emitting legacy MDS DB settings and two UI toggles.
         # Carry their exact installed values/Secret refs through the owning
@@ -205,7 +221,8 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                 for name, value in variables.items():
                     if new_env.get(container, {}).get(name) != value:
                         suffix = key[1].removeprefix(RELEASE + "-")
-                        approved = identity_env(suffix, environment) if migrate_identity or environment == "staging" else {}
+                        approved = dict(identity_env(suffix, environment)) if migrate_identity or environment == "staging" else {}
+                        approved.update(location_env(suffix, environment))
                         if name not in approved or new_env.get(container, {}).get(name) != {"name": name, "value": approved[name]}:
                             raise ValueError(f"Existing environment/Secret reference changed: {key[1]}/{container}/{name}")
             if pod(previous).get("imagePullSecrets", []) != pod(current).get("imagePullSecrets", []):
@@ -244,6 +261,15 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
             for name, value in identity_env(suffix).items():
                 if environments[0].get(name) != {"name": name, "value": value}:
                     raise ValueError(f"Identity migration was not rendered: {suffix}/{name}")
+    if environment == "dev":
+        for suffix in ("staff-portal-ui", "staff-portal-api", "partner-api", "celery-worker"):
+            current = new.get(("Deployment", RELEASE + "-" + suffix), {})
+            environments = list(envs(current).values())
+            if len(environments) != 1:
+                raise ValueError("Master Data routing requires one application container per workload")
+            for name, value in location_env(suffix).items():
+                if environments[0].get(name) != {"name": name, "value": value}:
+                    raise ValueError(f"Master Data routing was not rendered: {suffix}/{name}")
     if environment == "staging":
         if not images:
             raise ValueError("Staging requires immutable image digests")

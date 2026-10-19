@@ -48,3 +48,6 @@ docker run --rm -v "$PWD:/repo:ro" -e PYTHONPATH=/repo/farmer-extension/src \
 Local approval launchers are under `tests/e2e/local/`; generated output is ignored.
 Never run live intake, approval or load scripts as unit-test checks. Historical
 load results do not establish current capacity. See [performance testing](performance/README.md).
+
+See [Location and livestock QA](location-livestock-qa.md) for the five-ticket
+regression matrix and isolated database/browser runners.

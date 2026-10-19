@@ -104,6 +104,10 @@ def release():
             existing[key] = workload(kind, suffix, "")
             after.append(existing[key])
         deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:{TAG}"
+    for doc in after:
+        suffix = doc["metadata"]["name"].removeprefix("farmer-registry-")
+        env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
+        env.extend({"name": name, "value": value} for name, value in deployment.location_env(suffix).items())
     return before, after
 
 
