@@ -118,7 +118,7 @@ def test_identity_migration_requires_explicit_allowlist_and_keeps_other_settings
         env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
         for name, value in deployment.identity_env(suffix).items():
             env[:] = [e for e in env if e["name"] != name]
-            env.append({"name": name, "value": value})
+            env.append(deployment.env_entry(name, value))
     deployment.validate(before, after, ECR, TAG, migrate_identity=True)
     # Secret references remain subject to the original preservation rules.
     deployment.pod(after[0])["containers"][0]["env"][1]["valueFrom"]["secretKeyRef"]["name"] = "wrong"
