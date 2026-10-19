@@ -186,7 +186,7 @@ def release_manifests(evidence):
         new = copy.deepcopy(old)
         container = deployment.pod(new)["containers"][0]
         container["image"] = images[name]["repository"] + ":" + images[name]["tag"] + "@" + DIGEST
-        container["env"] = [{"name": k, "value": v} for k, v in deployment.identity_env(suffix, "staging").items()]
+        container["env"] = [deployment.env_entry(k, v) for k, v in deployment.identity_env(suffix, "staging").items()]
         after.append(new)
     return before, after, images
 

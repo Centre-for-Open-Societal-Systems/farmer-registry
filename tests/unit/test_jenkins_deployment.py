@@ -104,6 +104,11 @@ def release():
             existing[key] = workload(kind, suffix, "")
             after.append(existing[key])
         deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:{TAG}"
+    for doc in after:
+        suffix = doc["metadata"]["name"].removeprefix("farmer-registry-")
+        env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
+        env.extend({"name": name, "value": value} for name, value in deployment.location_env(suffix).items())
+        env.extend(deployment.env_entry(name, value) for name, value in deployment.master_data_env(suffix).items())
     return before, after
 
 
@@ -118,7 +123,7 @@ def test_identity_migration_requires_explicit_allowlist_and_keeps_other_settings
         env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
         for name, value in deployment.identity_env(suffix).items():
             env[:] = [e for e in env if e["name"] != name]
-            env.append({"name": name, "value": value})
+            env.append(deployment.env_entry(name, value))
     deployment.validate(before, after, ECR, TAG, migrate_identity=True)
     # Secret references remain subject to the original preservation rules.
     deployment.pod(after[0])["containers"][0]["env"][1]["valueFrom"]["secretKeyRef"]["name"] = "wrong"

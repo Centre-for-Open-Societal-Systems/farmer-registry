@@ -16,6 +16,8 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
+COPY docker/common/patch_master_data_csrf.py /tmp/patch_master_data_csrf.py
+RUN python /tmp/patch_master_data_csrf.py && rm /tmp/patch_master_data_csrf.py
 
 # rc.544 finalizes background intake without forwarding an AWE bearer token.
 # Fail the build if the pinned platform's finalizer no longer matches.
