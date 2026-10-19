@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.cookies import SimpleCookie
 
 ROOT = Path(__file__).resolve().parents[2]
 META = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/register-metadata"
@@ -29,6 +30,11 @@ class MasterDataFixture(BaseHTTPRequestHandler):
         pass
 
     def do_POST(self):
+        cookie = SimpleCookie(self.headers.get("Cookie", ""))
+        csrf = self.headers.get("X-CSRF-Token")
+        if not csrf or "X-CSRF-Token" not in cookie or cookie["X-CSRF-Token"].value != csrf:
+            self.send_error(403, "Matching CSRF header and cookie required")
+            return
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         REQUESTS.append(self.path)
         if self.path == "/geo/get_all_geo_levels":

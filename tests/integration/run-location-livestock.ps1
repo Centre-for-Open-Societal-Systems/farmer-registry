@@ -1,4 +1,5 @@
 # Disposable local-only check. No kubeconfig, published database, or host port.
+param([string]$ApiImage = 'farmer-location-qa/staff-api:combined')
 $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $taskName = 'farmer-location-qa-' + [guid]::NewGuid().ToString('N').Substring(0, 10)
@@ -18,7 +19,7 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not $ready) { throw 'Disposable PostgreSQL did not become ready' }
-    docker run --rm --network $taskName -v "${repoRoot}:/repo:ro" -e PYTHONPATH=/repo/farmer-extension/src --entrypoint python openg2p/openg2p-registry-staff-api:1.2.2-rc.544 /repo/tests/integration/check_location_livestock.py
+    docker run --rm --network $taskName -v "${repoRoot}:/repo:ro" --entrypoint python $ApiImage /repo/tests/integration/check_location_livestock.py
     if ($LASTEXITCODE -ne 0) { throw 'Location/livestock integration failed' }
 } finally {
     if ($containerCreated) { docker rm -f $taskName | Out-Null }

@@ -117,7 +117,18 @@ def identity_overlay(environment="dev"):
 def identity_env(suffix, environment="dev"):
     component = {"staff-portal-ui": "staffUi", "staff-portal-api": "staffApi",
                  "partner-api": "partnerApi", "celery-worker": "celeryWorker"}.get(suffix)
-    return identity_overlay(environment)["registry"].get(component, {}).get("envVars", {})
+    values = identity_overlay(environment)["registry"].get(component, {})
+    return {**values.get("envVarsFrom", {}), **values.get("envVars", {})}
+
+
+def env_entry(name, value):
+    """Render the chart's literal-or-valueFrom env contract for validation."""
+    return {"name": name, "valueFrom" if isinstance(value, dict) else "value": value}
+
+
+def master_data_env(suffix, environment="dev"):
+    return {name: value for name, value in identity_env(suffix, environment).items()
+            if name.endswith(("_MASTER_DATA_CLIENT_ID", "_MASTER_DATA_CLIENT_SECRET"))}
 
 
 def location_overlay(environment="dev"):
@@ -176,11 +187,17 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     # Do not turn on new publishing/import jobs in shared Superset by default.
     values["analytics"].setdefault("dashboards", {}).setdefault("enabled", False)
     values.setdefault("mapsContent", {}).setdefault("enabled", False)
+    # This narrow credential repair also applies on normal dev promotions.
+    for component, (_, suffix, _) in COMPONENTS.items():
+        approved = master_data_env(suffix, environment)
+        for name, value in approved.items():
+            target, other = ("envVarsFrom", "envVars") if isinstance(value, dict) else ("envVars", "envVarsFrom")
+            config[component].setdefault(target, {})[name] = copy.deepcopy(value)
+            config[component].get(other, {}).pop(name, None)
     if migrate_identity:
         merge(values, identity_overlay(environment))
-    # Repair only Master Data routing, without changing identity providers,
-    # client IDs or credentials. A bare service name resolves in farmer, while
-    # the existing Master Data service is owned by commons.
+    # Repair stale Master Data endpoints alongside the approved service binding.
+    # Qualify the Commons service explicitly across namespace boundaries.
     merge(values, location_overlay(environment))
     if environment == "staging":
         # rc.544 stopped emitting legacy MDS DB settings and two UI toggles.
@@ -221,9 +238,9 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                 for name, value in variables.items():
                     if new_env.get(container, {}).get(name) != value:
                         suffix = key[1].removeprefix(RELEASE + "-")
-                        approved = dict(identity_env(suffix, environment)) if migrate_identity or environment == "staging" else {}
+                        approved = dict(identity_env(suffix, environment) if migrate_identity or environment == "staging" else master_data_env(suffix, environment))
                         approved.update(location_env(suffix, environment))
-                        if name not in approved or new_env.get(container, {}).get(name) != {"name": name, "value": approved[name]}:
+                        if name not in approved or new_env.get(container, {}).get(name) != env_entry(name, approved[name]):
                             raise ValueError(f"Existing environment/Secret reference changed: {key[1]}/{container}/{name}")
             if pod(previous).get("imagePullSecrets", []) != pod(current).get("imagePullSecrets", []):
                 raise ValueError(f"Image-pull credentials changed: {key}")
@@ -259,7 +276,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
             if len(environments) != 1:
                 raise ValueError("Identity migration requires one application container per workload")
             for name, value in identity_env(suffix).items():
-                if environments[0].get(name) != {"name": name, "value": value}:
+                if environments[0].get(name) != env_entry(name, value):
                     raise ValueError(f"Identity migration was not rendered: {suffix}/{name}")
     if environment == "dev":
         for suffix in ("staff-portal-ui", "staff-portal-api", "partner-api", "celery-worker"):
@@ -270,6 +287,9 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
             for name, value in location_env(suffix).items():
                 if environments[0].get(name) != {"name": name, "value": value}:
                     raise ValueError(f"Master Data routing was not rendered: {suffix}/{name}")
+            for name, value in master_data_env(suffix).items():
+                if environments[0].get(name) != env_entry(name, value):
+                    raise ValueError(f"Master Data credentials were not rendered: {suffix}/{name}")
     if environment == "staging":
         if not images:
             raise ValueError("Staging requires immutable image digests")
@@ -279,7 +299,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
         for suffix in ("staff-portal-api", "partner-api", "celery-worker"):
             current = next(iter(envs(new[("Deployment", RELEASE + "-" + suffix)]).values()))
             for name, value in identity_env(suffix, "staging").items():
-                if current.get(name) != {"name": name, "value": value}:
+                if current.get(name) != env_entry(name, value):
                     raise ValueError(f"Staging staff identity was not rendered: {suffix}/{name}")
     for key, d in new.items():
         if key[1].startswith(("commons-", "farmer-connector")):

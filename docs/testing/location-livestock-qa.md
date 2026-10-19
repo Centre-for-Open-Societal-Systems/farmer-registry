@@ -27,11 +27,15 @@ the same required flags for new installations.
 The existing deployment helper merges `helm/environments/dev/registry-location.yaml`
 over saved release values. It corrects Master Data API/token URLs for staff,
 partner and worker plus the UI backend URL. Global defaults are overridden too.
-Client IDs, client-secret references, identity providers and other service URLs
-remain governed by their existing preservation checks.
+PR #110's credential repair binds the existing required Farmer service Secret
+in dev and staging. Its build-time compatibility patch supplies matching CSRF
+headers/cookies on initial Master Data requests and token-refresh retries.
+Other credential references, identity providers and service URLs remain subject
+to their existing preservation checks.
 
-The manifest guard permits only the exact reviewed routing changes and requires
-them in all four rendered workloads. The staging path receives no routing overlay.
+The manifest guard permits only the exact reviewed changes and requires the dev
+routes in all four rendered workloads plus the approved service bindings in all
+three backend workloads. The staging path receives no dev routing overlay.
 This change does not apply the broader optional Commons identity migration.
 
 SSH work for this investigation was read-only: deployment metadata, selected
@@ -41,7 +45,10 @@ Master Data endpoint returned all four canonical geography levels. The installed
 token endpoint failed to connect. Later probes also saw a transient DNS failure,
 so these observations are not a continuous availability guarantee.
 
-No dev deployment, live data write, Jira update or branch push was performed.
+SSH was read-only during this investigation. No dev deployment, live data write
+or Jira update was performed during this work. PR #110 also retains its earlier
+guarded staging operator tools and recorded official ETH sample operation;
+that historical operation was not repeated as part of this consolidation.
 After deployment, repeat the five ticket scenarios through the full staff portal
 with a new labelled synthetic application before closing the tickets. The local
 checks below establish pinned component/service behavior, not a deployed portal
@@ -69,12 +76,14 @@ The explicit database check creates a disposable PostgreSQL on its own internal
 Docker network, exposes no host ports, and removes its own resources afterward:
 
 ```powershell
+docker build -f docker/staff-api/Dockerfile -t farmer-location-qa/staff-api:combined .
 & tests/integration/run-location-livestock.ps1
 ```
 
 It runs the actual pinned intake save/read service, domain validation, ORM and
 PostgreSQL. Master Data runs as a local HTTP fixture, with the real client making
-HTTP requests. Checks cover hierarchy and coordinates/languages, later-section
+HTTP requests; the fixture requires matching CSRF header/cookie values. It uses
+the built image's installed extension. Checks cover hierarchy and coordinates/languages, later-section
 preservation, atomic rejection of blank/mixed tables, zero count, an empty
 livestock section and repeated metadata repair preserving unrelated configuration.
 
@@ -103,17 +112,22 @@ provide the local runtime/browser evidence instead.
 
 ## Local results, 2026-10-19
 
-- Offline suite: 537 passed, 7 environment-dependent skips, 113 subtests passed.
-- Selected domain/runtime suites: 84 passed. A separate run against the built
-  API image's installed extension passed all 26 livestock/geography/coordinate checks.
+- Combined offline suite: 547 passed, 7 environment-dependent skips, 113 subtests passed.
+- Selected domain/runtime suites: 105 passed against the combined API image's
+  installed extension, including the livestock suite now included in CI.
+- CSRF client suite: 4 passed, covering hierarchy/cache, HTTP 403, bad credentials
+  and token-refresh retries. The existing mock JavaScript ran as a local Node
+  HTTP fixture with an in-memory state adapter; this was not a Postman CLI run.
 - Browser runner with the pinned JavaScript and CSS: passed entry, Next,
   read-only visibility/value checks, row validation, zero count and cancellation.
 - Disposable PostgreSQL and real-client/local-HTTP fixture check: passed,
   including repairing old metadata twice and preserving unrelated configuration.
-- API image build: passed. Rendered chart: all four expected Master Data routes
-  passed, with no duplicate environment entries, across 45 rendered documents.
-- Python syntax, documentation links and `git diff --check`: passed.
+- Combined API image build: passed. Rendered dev/staging chart checks verify
+  approved Master Data bindings, required Secret references and dev routes,
+  across 45 documents per environment.
+- Deployment shell integration checks, Python syntax, documentation links and
+  `git diff --check`: passed.
 
-The isolated branch starts at COSS develop `cc15ae18b66c`. Existing primary
-checkout edits were preserved. These results do not establish that dev has
-received the source changes.
+The isolated branch combines COSS develop `cc15ae18b66c` with PR #110's original
+`c45d374` commit. Existing primary checkout edits were preserved. These results
+do not establish that dev has received the source changes.
