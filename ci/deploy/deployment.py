@@ -14,12 +14,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from environments import configuration, namespace
 
 RELEASE = "farmer-registry"
-# Registry UI hostnames of the new-dev release. farmer-registry-development replaces
-# registry.farmer-dev now that the gen2-dev *-development names point at this box;
-# the original name stays accepted until the release itself has been renamed.
+# Exact verified Registry UI hostnames of the new-dev release. Keep installed
+# names valid during hostname migrations without rewriting the release's routes.
 NEW_DEV_HOSTNAMES = {
     "registry.farmer-dev.oanstaging.com",
     "farmer-registry-development.oanstaging.com",
+    "farmer-registry.development.oanstaging.com",
 }
 COMPONENTS = {
     "staffApi": ("Deployment", "staff-portal-api", "staff-api"),
@@ -164,6 +164,26 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
         raise ValueError("This pipeline targets only the verified new-dev Registry hostname" if environment == "dev"
                          else "Registry hostname does not match staging")
     config = values.setdefault("registry", {})
+    # Some installed dev gateways are in the release manifest but absent from
+    # saved values. Carry them into rc.544's owning values instead of falling
+    # back to "internal"; validate still requires the whole route unchanged.
+    if environment == "dev":
+        for suffix, path in {
+            "staff-portal-ui": ("staffUi",),
+            "staff-portal-api": ("staffApi",),
+            "partner-api": ("partnerApi",),
+            "id-generator": ("idgenerator", "idGenerator"),
+        }.items():
+            route = old.get(("VirtualService", RELEASE + "-" + suffix))
+            if route is None:
+                continue
+            gateways = route.get("spec", {}).get("gateways", [])
+            if not isinstance(gateways, list) or len(gateways) != 1 or not isinstance(gateways[0], str) or not gateways[0].strip():
+                raise ValueError(f"Installed gateway cannot be represented by the pinned chart: {suffix}")
+            target = config
+            for part in path:
+                target = target.setdefault(part, {})
+            target.setdefault("istio", {}).setdefault("virtualservice", {})["gateway"] = gateways[0]
     for component, (_, _, image) in COMPONENTS.items():
         pinned_tag = images[image]["tag"] + "@" + images[image]["digest"] if images else tag
         config.setdefault(component, {}).setdefault("image", {}).update(repository=root + "/" + image, tag=pinned_tag)

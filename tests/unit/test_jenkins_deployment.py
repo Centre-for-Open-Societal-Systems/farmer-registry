@@ -176,7 +176,11 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
     assert result["analytics"]["reportingViews"]["generate"] is False
 
 
-@pytest.mark.parametrize("hostname", sorted(deployment.NEW_DEV_HOSTNAMES))
+@pytest.mark.parametrize("hostname", [
+    "registry.farmer-dev.oanstaging.com",
+    "farmer-registry-development.oanstaging.com",
+    "farmer-registry.development.oanstaging.com",
+])
 def test_new_dev_hostnames_are_accepted(release, hostname):
     values = {"global": {"registryHostname": hostname}}
     assert deployment.prepare(values, release[0], ECR, TAG)["global"]["registryHostname"] == hostname
@@ -185,6 +189,36 @@ def test_new_dev_hostnames_are_accepted(release, hostname):
 def test_wrong_environment_is_rejected(release):
     with pytest.raises(ValueError, match="new-dev"):
         deployment.prepare({"global": {"registryHostname": "registry.production.example"}}, release[0], ECR, TAG)
+
+
+def test_prepare_retains_installed_dev_gateways_missing_from_saved_values(release):
+    before = copy.deepcopy(release[0])
+    routes = [("staff-portal-ui", ("staffUi",)), ("staff-portal-api", ("staffApi",)),
+              ("partner-api", ("partnerApi",)), ("id-generator", ("idgenerator", "idGenerator"))]
+    before[:] = [doc for doc in before if doc["kind"] != "VirtualService"]
+    for suffix, _ in routes:
+        before.append({"kind": "VirtualService", "metadata": {"name": "farmer-registry-" + suffix},
+                       "spec": {"hosts": [suffix + ".development.example"],
+                                "gateways": ["istio-system/development"]}})
+    values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}}
+    original = copy.deepcopy(values)
+    prepared = deployment.prepare(values, before, ECR, TAG)
+    for _, path in routes:
+        target = prepared["registry"]
+        for part in path:
+            target = target[part]
+        assert target["istio"]["virtualservice"]["gateway"] == "istio-system/development"
+    assert values == original
+
+
+@pytest.mark.parametrize("gateways", [[], ["first", "second"], [None], [""], None, "mesh"])
+def test_prepare_rejects_unrepresentable_installed_gateway(release, gateways):
+    before, _ = release
+    route = next(doc for doc in before if doc["kind"] == "VirtualService")
+    route["spec"]["gateways"] = gateways
+    values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}}
+    with pytest.raises(ValueError, match="Installed gateway cannot be represented"):
+        deployment.prepare(values, before, ECR, TAG)
 
 
 def test_dashboard_removal_is_rejected(release):
