@@ -4,4 +4,5 @@ local/upstream/generated
 **/.pytest_cache
 **/.env
 .ci-venv
+.ci-services-work
 .ci-odk-transform.log
