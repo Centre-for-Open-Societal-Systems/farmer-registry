@@ -207,8 +207,10 @@ def test_dashboard_api_guard_preserves_every_other_resource(mutation):
             coordinator.guard_dashboard_api(before, after, image)
 
 
-def test_embedded_api_deploy_uses_parent_chart_filters_jobs_and_keeps_registry_owner(tmp_path, monkeypatch):
+def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry_owner(tmp_path, monkeypatch):
     component = coordinator.configuration()[-1]
+    provenance = coordinator.dashboard_chart_provenance()
+    monkeypatch.setattr(coordinator, "dashboard_chart_provenance", lambda: provenance)
     monkeypatch.setattr(coordinator, "ROOT", tmp_path)
     source = tmp_path / "api-source"
     source.mkdir()
@@ -221,16 +223,27 @@ def test_embedded_api_deploy_uses_parent_chart_filters_jobs_and_keeps_registry_o
     values.write_text("_coordination:\n  namespace: farmer\n")
     built = record(component)
     built["chartHash"] = coordinator.chart_hash(chart)
+    built["deploymentChart"] = provenance
     image = coordinator.artifact(component, built, ECR)
     before = [deployment("farmer-registry-dashboard-api"), deployment("farmer-registry-celery-worker")]
     after = copy.deepcopy(before)
     coordinator.pod(after[0])["containers"][0]["image"] = image
     state = {"upgraded": False, "calls": []}
     monkeypatch.setattr(coordinator, "checkout", lambda *a, **kw: SHA)
+    def prepare(directory, values, previous, installed_chart):
+        assert installed_chart == "openg2p-farmer-registry-1.0.0-dev.5"
+        assert previous == before
+        archive = directory / "approved.tgz"
+        archive.write_bytes(b"verified fixture")
+        renderer = directory / "renderer"
+        renderer.write_text("import sys,yaml\nyaml.safe_dump_all([d for d in yaml.safe_load_all(sys.stdin) if d.get('kind')!='Job'],sys.stdout)\n")
+        state["chart"] = archive
+        return archive, renderer
+    monkeypatch.setattr(coordinator, "prepare_dashboard_chart", prepare)
     def run(args):
         state["calls"].append(args)
         if args[:2] == ["helm", "list"]:
-            return '[{"name":"farmer-registry"}]'
+            return '[{"name":"farmer-registry","chart":"openg2p-farmer-registry-1.0.0-dev.5"}]'
         if args[:2] == ["helm", "status"]:
             return json.dumps({"name": "farmer-registry", "namespace": "farmer", "version": 13 if state["upgraded"] else 12,
                                "info": {"status": "deployed"}})
@@ -239,7 +252,7 @@ def test_embedded_api_deploy_uses_parent_chart_filters_jobs_and_keeps_registry_o
         if args[:3] == ["helm", "get", "values"]:
             return "dashboardApi:\n  enabled: true\n"
         if args[:2] in (["helm", "template"], ["helm", "upgrade"]):
-            assert args[2] == "farmer-registry" and args[3] == str(chart)
+            assert args[2] == "farmer-registry" and args[3] == str(state["chart"])
             assert "--no-hooks" in args and "--post-renderer" in args
             renderer = Path(args[args.index("--post-renderer") + 1])
             filtered = subprocess.run([sys.executable, str(renderer)], input=yaml.safe_dump_all(after + [{"kind": "Job"}]),
@@ -256,6 +269,69 @@ def test_embedded_api_deploy_uses_parent_chart_filters_jobs_and_keeps_registry_o
         pytest.fail("Unexpected command")
     assert coordinator.deploy(component, "dev", built, source, ECR, run) == 13
     assert not any("uninstall" in call or "delete" in call for call in state["calls"])
+    assert not any(call[:3] in (["helm", "repo", "add"], ["helm", "dependency", "build"]) for call in state["calls"])
+
+
+@pytest.mark.parametrize("field", ["sha256", "version", "rendererHash"])
+def test_embedded_api_rejects_changed_approved_chart_before_any_tool_call(tmp_path, field):
+    component = coordinator.configuration()[-1]
+    built = record(component)
+    built["deploymentChart"] = coordinator.dashboard_chart_provenance()
+    built["deploymentChart"][field] = "tampered"
+    with pytest.raises(coordinator.ServiceError, match="approved-chart-provenance-mismatch"):
+        coordinator.deploy(component, "dev", built, tmp_path, ECR, lambda *_: pytest.fail("Unexpected tool call"))
+
+
+def test_embedded_api_rejects_wrong_installed_chart_before_download(tmp_path, monkeypatch):
+    monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: pytest.fail("Unexpected download"))
+    with pytest.raises(coordinator.ServiceError, match="installed-chart-mismatch"):
+        coordinator.prepare_dashboard_chart(tmp_path, {}, [], "another-chart-1.0.0")
+
+
+def test_embedded_api_rejects_corrupt_approved_archive(tmp_path, monkeypatch):
+    import io
+    monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: io.BytesIO(b"invalid chart bytes"))
+    with pytest.raises(coordinator.ServiceError, match="download-or-checksum-failed"):
+        coordinator.prepare_dashboard_chart(tmp_path, {}, [], "openg2p-farmer-registry-1.0.0-dev.5")
+
+
+def test_embedded_api_restores_selected_digest_after_registry_reconciliation(tmp_path, monkeypatch):
+    import io
+    import deployment
+    import oan_chart
+    selected = {"repository": ECR + "/openg2p/farmer-registry/dashboard-api", "tag": SHA[:12] + "@" + DIGEST}
+    values = {"dashboardApi": {"image": dict(selected, digest="old-digest")}}
+    monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: io.BytesIO(b"fixture"))
+    monkeypatch.setattr(oan_chart, "verify", lambda _path: oan_chart.profile())
+    def reconcile(candidate, _before):
+        candidate["dashboardApi"]["image"] = {"repository": "old", "digest": "old-digest"}
+    monkeypatch.setattr(deployment, "reconcile_dev", reconcile)
+    monkeypatch.setenv("OAN_CHART_ARCHIVE", "previous-archive")
+    archive, renderer = coordinator.prepare_dashboard_chart(tmp_path, values, [], "openg2p-farmer-registry-1.0.0-dev.5")
+    assert values["dashboardApi"]["image"] == dict(selected, digest=None)
+    assert coordinator.os.environ["OAN_CHART_ARCHIVE"] == "previous-archive"
+    assert archive.is_file() and renderer.is_file()
+
+
+@pytest.mark.parametrize("field", [None, "commit", "digest", "chartHash", "environment", "valuesHash", "harnessHash",
+                                 "noExternalNetwork", "hookJobs", "everyEnabledHook", "rerun", "failureRecovery", "isolatedDatabases"])
+def test_dashboard_hook_evidence_binds_image_chart_configuration_and_executed_checks(field):
+    component = next(c for c in coordinator.configuration() if c.get("chartSource") == "registry")
+    built = record(component)
+    overrides = {"iamSetup": {"grantUsers": []}}
+    import hashlib
+    built["hookRehearsal"] = {"commit": SHA, "digest": DIGEST, "chartHash": built["chartHash"], "environment": "dev",
+        "valuesHash": hashlib.sha256(json.dumps(overrides, sort_keys=True).encode()).hexdigest(),
+        "harnessHash": coordinator.chart_hash(ROOT / "scripts/operations/dashboard"),
+        "noExternalNetwork": True, "isolatedDatabases": True, "everyEnabledHook": True, "rerun": True, "failureRecovery": True,
+        "hookJobs": [component["name"]+suffix for suffix in ("-ecr-refresh-init", "-iam-setup", "-chart-smoke")],
+        "fixtureMode": "loopback-http-sqlite-kubectl-transport-shim"}
+    if field is None:
+        coordinator.rehearsal(component, "dev", built, overrides)
+    else:
+        built["hookRehearsal"].pop(field)
+        with pytest.raises(coordinator.ServiceError, match="rehearsal"):
+            coordinator.rehearsal(component, "dev", built, overrides)
 
 
 @pytest.mark.parametrize("failure", [coordinator.ServiceError("command-failed-docker"),
