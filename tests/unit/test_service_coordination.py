@@ -126,6 +126,14 @@ def test_configuration_rejects_other_registry_ownership(tmp_path, component):
         coordinator.configuration(config)
 
 
+@pytest.mark.parametrize("repository", ["untrusted/farmer-registry/dashboard-ui", "oan/../dashboard-ui", "oan/dashboard-ui:latest"])
+def test_configuration_rejects_invalid_image_repositories(tmp_path, component, repository):
+    config = tmp_path / "components.yaml"
+    config.write_text(yaml.safe_dump({"cossAddons": {"components": [dict(component, imageRepository=repository)]}}))
+    with pytest.raises(ValueError, match="Invalid image repository"):
+        coordinator.configuration(config)
+
+
 @pytest.mark.parametrize("field,value", [("release", "commons-services"), ("namespace", "commons"),
                                         ("imageValues", "registry.staffApi.image"),
                                         ("repository", "https://github.com/example/other.git")])

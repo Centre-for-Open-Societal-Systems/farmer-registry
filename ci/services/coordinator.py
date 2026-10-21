@@ -106,7 +106,7 @@ def configuration(path=MANIFEST, environment="dev"):
             raise ValueError("Dashboard API must retain its Farmer chart ownership")
         if item["release"] in ("commons", "commons-services", "farmer-connector") or (item["release"] == "farmer-registry" and not embedded):
             raise ValueError("Optional service must not adopt an existing shared/Registry/old connector release")
-        if item.get("imageRepository") and not re.fullmatch(r"openg2p/[a-z0-9/-]+", item["imageRepository"]):
+        if item.get("imageRepository") and not re.fullmatch(r"(?:openg2p|oan)/[a-z0-9/-]+", item["imageRepository"]):
             raise ValueError("Invalid image repository")
     if environment == "staging":
         items = copy.deepcopy(items)
