@@ -1,0 +1,17 @@
+# CI environment contract, not a Helm values overlay. Contains no credentials.
+environment: staging
+namespace: far
+release: farmer-registry
+kubeconfigCredential: staging-farmer-kubeconfig
+registryHostname: farmer-registry.oanstaging.com
+staffIssuer: https://keycloak.oanstaging.com/realms/staff
+connectorRelease: farmer-registry-connector
+registryDatabase: farmer_registry_far
+connectorDatabase: farmer_connector_v2_far
+legacyConnectorDatabase: farmer_connector_far
+connectorQueue: farmer-registry-connector-v2-far
+connectorHostname: connector-farmer-registry.far.staging.openg2p.test
+apiServers:
+  - https://10.0.1.212:6443
+  - https://52.66.116.220:6443
+platform: 1.2.2-rc.544

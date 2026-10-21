@@ -1,0 +1,8 @@
+apiVersion: v2
+name: farmer-connector-credentials
+description: Retained app database credential and signing key for Farmer's isolated replacement connector.
+type: application
+version: 0.1.0
+sources:
+  - https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
+  - https://github.com/OpenG2P/registry-connector

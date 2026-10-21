@@ -40,10 +40,11 @@ INSERT INTO public.data_models (
     'FARMER_ODK_MODEL',
     'FARMER_ODK_MODEL',
     '$.body.header.sender_id=>^.*$',
-    NULL,
+    '1f0953d4-f0fb-4336-a126-4d0519a74ffc',
     true
 ) ON CONFLICT (data_model_id) DO UPDATE SET
     pattern_for_data_model = EXCLUDED.pattern_for_data_model,
+    response_template_document_id = EXCLUDED.response_template_document_id,
     is_active = true;
 
 -- 2.2 Register Incoming Key Paths
@@ -64,12 +65,13 @@ INSERT INTO public.incoming_model_key_paths (
     '$.body.header.signature',
     '$.body.message',
     false,
-    NULL
+    ''
 ) ON CONFLICT (key_path_id) DO UPDATE SET
     key_path_for_message_id = EXCLUDED.key_path_for_message_id,
     key_path_for_sender = EXCLUDED.key_path_for_sender,
     key_path_for_signature = EXCLUDED.key_path_for_signature,
-    key_path_for_signature_payload = EXCLUDED.key_path_for_signature_payload;
+    key_path_for_signature_payload = EXCLUDED.key_path_for_signature_payload,
+    key_path_for_list_elements = EXCLUDED.key_path_for_list_elements;
 
 -- 2.3 Register Semantic Patterns for Ingest Classification Worker
 -- Maps the FARMER_ODK_MODEL payload to the Farmer Ingestion Intake form
@@ -93,7 +95,7 @@ INSERT INTO public.incoming_model_semantic_patterns (
     NULL,
     '$.body.header.sender_id=>^.*$',
     NULL,
-    '$.body.message',
+    '$.body.message.payload',
     'G2PDciFarmerCreateEnricherService'
 ) ON CONFLICT (semantic_pattern_id) DO UPDATE SET
     register_id = EXCLUDED.register_id,

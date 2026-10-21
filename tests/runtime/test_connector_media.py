@@ -1,0 +1,145 @@
+"""Run inside the built connector image, with its real upstream package."""
+import base64
+import json
+import unittest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+
+import httpx
+from coss_connector.odk_media import AttachmentTransferError, FarmerOdkTransport, embed
+from openg2p_connector_service.models import ConnectorDefinition
+from openg2p_connector_service.transports.base import SourceRecord
+from openg2p_connector_service.transports.checkpoints import Checkpoint, CheckpointMode
+from openg2p_connector_service.transports.odk_central import OdkCentralTransport
+from openg2p_connector_service.transports.registry import get_transport
+
+
+class MediaTests(unittest.IsolatedAsyncioTestCase):
+    def test_signed_message_binds_partner_payload_and_id(self):
+        import hashlib
+        import os
+        import jwt
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives import serialization
+        from coss_connector.signing import signed_envelope
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        private = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+        settings = SimpleNamespace(signing_enabled=True, signing_private_key_pem=private, signing_algorithm="RS256", signing_issuer="farmer-partner")
+        envelope = {"header": {"sender_id": "farmer-partner", "message_id": "synthetic"}, "message": {"payload": {"name": "Synthetic"}}}
+        with patch("coss_connector.signing.get_settings", return_value=settings), patch.dict(os.environ, CONNECTOR_SIGNING_KEY_ID="test-key"):
+            result = signed_envelope(envelope)
+        claims = jwt.decode(result["header"]["signature"], key.public_key(), algorithms=["RS256"], issuer="farmer-partner")
+        self.assertEqual(claims["message_id"], "synthetic")
+        self.assertEqual(claims["body_sha256"], hashlib.sha256(json.dumps(result["message"], sort_keys=True, separators=(",", ":")).encode()).hexdigest())
+        self.assertEqual(jwt.get_unverified_header(result["header"]["signature"])["kid"], "test-key")
+        settings.signing_enabled = False
+        with patch("coss_connector.signing.get_settings", return_value=settings), patch.dict(os.environ, CONNECTOR_REQUIRE_SIGNING="true"):
+            with self.assertRaises(ValueError): signed_envelope(envelope)
+
+    async def test_nested_attachments_preserve_source_identity(self):
+        entry = {"__id": "uuid:synthetic", "photo": "photo.jpg", "land": [{"certificate": "land.pdf"}]}
+        def handle(request):
+            if request.url.path.endswith('/attachments'):
+                return httpx.Response(200, json=[{"name": "photo.jpg", "exists": True}, {"name": "land.pdf", "exists": True}])
+            return httpx.Response(200, content=b"synthetic-bytes", headers={"content-type": "application/pdf"})
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            await embed(client, "https://odk.example/attachments", {}, entry, 100)
+        self.assertEqual(entry["__id"], "uuid:synthetic")
+        self.assertEqual(entry["photo"]["data"], base64.b64encode(b"synthetic-bytes").decode())
+        self.assertEqual(entry["land"][0]["certificate"]["__type"], "File")
+
+    async def test_missing_attachment_is_not_sent_as_a_filename(self):
+        def handle(request):
+            return httpx.Response(200, json=[{"name": "photo.jpg", "exists": False}])
+        entry = {"photo": "photo.jpg"}
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            with self.assertRaises(AttachmentTransferError):
+                await embed(client, "https://odk.example/attachments", {}, entry, 100)
+        self.assertEqual(entry, {"photo": "photo.jpg"})
+
+    async def test_streaming_limit_cannot_be_bypassed_by_absent_length_header(self):
+        def handle(request):
+            if request.url.path.endswith('/attachments'):
+                return httpx.Response(200, json=[{"name": "photo.jpg"}])
+            response = httpx.Response(200, content=b"too-many-bytes")
+            del response.headers["content-length"]
+            return response
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+            with self.assertRaises(AttachmentTransferError):
+                await embed(client, "https://odk.example/attachments", {}, {"photo": "photo.jpg"}, 4)
+
+    async def test_transport_retains_upstream_checkpoint_and_duplicate_key(self):
+        checkpoint = Checkpoint(mode=CheckpointMode.TIMESTAMP, value="2026-10-15T00:00:00Z", boundary_ids=["uuid:synthetic"])
+        record = SourceRecord("farmer:uuid:synthetic", {"__id": "uuid:synthetic", "photo": "photo.jpg"}, checkpoint=checkpoint)
+        async def fetch(_self, _connector):
+            yield record
+        def handle(request):
+            if request.url.path.endswith('/attachments'):
+                return httpx.Response(200, json=[{"name": "photo.jpg"}])
+            return httpx.Response(200, content=b"image")
+        actual_client = httpx.AsyncClient
+        connector = ConnectorDefinition(auth_type="none", source_config_json=json.dumps({"base_url": "https://odk.example", "project_id": 1, "form_id": "farmer"}))
+        auth = SimpleNamespace(get_auth_context=AsyncMock(return_value=SimpleNamespace(headers={}, base_url=None)))
+        with patch.object(OdkCentralTransport, "fetch", fetch), patch("coss_connector.odk_media.get_auth_strategy", return_value=auth), patch("coss_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(handle), **kw)):
+            result = [item async for item in FarmerOdkTransport().fetch(connector)]
+        self.assertEqual(len(result), 1)
+        self.assertIs(result[0].checkpoint, checkpoint)
+        self.assertEqual(result[0].source_event_id, "farmer:uuid:synthetic")
+        self.assertEqual(result[0].data["photo"]["__type"], "File")
+
+    async def test_no_record_is_yielded_after_attachment_failure(self):
+        record = SourceRecord("farmer:uuid:synthetic", {"__id": "uuid:synthetic", "photo": "photo.jpg"})
+        async def fetch(_self, _connector):
+            yield record
+        actual_client = httpx.AsyncClient
+        connector = ConnectorDefinition(auth_type="none", source_config_json=json.dumps({"base_url": "https://odk.example", "project_id": 1, "form_id": "farmer"}))
+        auth = SimpleNamespace(get_auth_context=AsyncMock(return_value=SimpleNamespace(headers={}, base_url=None)))
+        with patch.object(OdkCentralTransport, "fetch", fetch), patch("coss_connector.odk_media.get_auth_strategy", return_value=auth), patch("coss_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(lambda req: httpx.Response(503)), **kw)):
+            with self.assertRaises(httpx.HTTPStatusError):
+                _ = [item async for item in FarmerOdkTransport().fetch(connector)]
+
+    async def test_missing_draft_file_never_falls_back_to_other_submission_bytes(self):
+        record = SourceRecord("farmer:uuid:synthetic", {"__id": "uuid:synthetic", "photo": "photo.jpg"})
+        async def fetch(_self, _connector):
+            yield record
+        requested = []
+        def handle(request):
+            requested.append(request.url.path)
+            if request.url.path.endswith('/attachments'):
+                return httpx.Response(200, json=[{"name": "photo.jpg"}])
+            return httpx.Response(404)
+        actual_client = httpx.AsyncClient
+        connector = ConnectorDefinition(auth_type="none", source_config_json=json.dumps({"base_url": "https://odk.example", "project_id": 1, "form_id": "farmer", "use_draft": True}))
+        auth = SimpleNamespace(get_auth_context=AsyncMock(return_value=SimpleNamespace(headers={}, base_url=None)))
+        with patch.object(OdkCentralTransport, "fetch", fetch), patch("coss_connector.odk_media.get_auth_strategy", return_value=auth), patch("coss_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(handle), **kw)):
+            with self.assertRaises(httpx.HTTPStatusError):
+                _ = [item async for item in FarmerOdkTransport().fetch(connector)]
+        self.assertTrue(all('/draft/' in path for path in requested))
+
+    def test_adapter_is_registered_without_replacing_upstream_checkpoint_engine(self):
+        self.assertIsInstance(get_transport("odk_central"), FarmerOdkTransport)
+        self.assertTrue(issubclass(FarmerOdkTransport, OdkCentralTransport))
+
+    def test_replacement_worker_and_dispatch_do_not_consume_old_celery_queue(self):
+        from coss_connector.celery_config import configure
+        from openg2p_connector_service.worker import celery_app
+        configure(celery_app)
+        route = celery_app.amqp.router.route({}, 'connector.poll', args=('synthetic',), kwargs={})
+        self.assertEqual(route['queue'].name, 'farmer-registry-connector-v2')
+        self.assertNotEqual(route['queue'].name, 'celery')
+
+    def test_poll_clock_is_stored_as_naive_utc_without_changing_existing_values(self):
+        from datetime import datetime, timedelta, timezone
+        from coss_connector import utc_timestamps  # noqa: F401
+        connector = ConnectorDefinition()
+        connector.last_poll_at = datetime(2026, 10, 15, 12, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+        self.assertEqual(connector.last_poll_at, datetime(2026, 10, 15, 6, 30))
+        existing = datetime(2026, 10, 14, 9, 15)
+        connector.last_poll_at = existing
+        self.assertEqual(connector.last_poll_at, existing)
+        connector.last_poll_at = None
+        self.assertIsNone(connector.last_poll_at)
+
+
+if __name__ == "__main__":
+    unittest.main()

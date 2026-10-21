@@ -1,0 +1,39 @@
+{
+  "environment": "staging",
+  "namespace": "far",
+  "registryHelmRevision": 40,
+  "dataOperation": "completed",
+  "applicationFix": "pending develop then staging promotion",
+  "officialSampleSource": {
+    "image": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/db-seed@sha256:0b48d9f90be2734a131bcea08219c79cb9251307f13b422ead94f56fb7a00cd9",
+    "pack": "/openg2p-data/packs/ETH/samples",
+    "filesSha256": "6b991492a3b82a6630c8a2388230355f34bccc57b96c1df89bf2cfe1fdd77bad",
+    "farmersInserted": 21,
+    "householdsInserted": 6,
+    "kebeleAssigned": false,
+    "sourceCoordinatesPreserved": true
+  },
+  "verified": {
+    "farmerCount": 22,
+    "officialFarmerCount": 21,
+    "householdCount": 6,
+    "existingFarmerPreserved": true,
+    "existingFarmerLocationProjectionsRepaired": 1,
+    "rerunInserts": 0,
+    "connectorIdempotencyKeysUnchanged": true,
+    "sharedCatalogChanged": false,
+    "restoredDatabaseTests": 5,
+    "unitTestsPassed": 540,
+    "unitTestsSkipped": 7,
+    "postmanClientSimulationTests": 4,
+    "candidatePersistentResourcesPreserved": 30
+  },
+  "recovery": {
+    "protectedHostDirectory": "/var/lib/registry-coordination/farmer-staging-20261019-locations",
+    "databaseBackup": "/var/backups/farmer-staging-20261019-locations/farmer_registry_far.dump",
+    "backupSha256": "d28887ba9f770de684d4c1b1cfae62f0f084c2c151e16b0c24e8ff6f6de3d306",
+    "projectionAudit": "location-repair-audit.json",
+    "note": "Reconcile subsequent real writes before recovery; Helm rollback does not undo data changes."
+  },
+  "deploymentDefault": {"DEPLOY_STAGING": false}
+}

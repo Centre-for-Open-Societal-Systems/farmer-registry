@@ -10,6 +10,8 @@ from openg2p_registry_core.schemas import (
 class G2PSchemaHouseholdMember:
 
     is_disabled: Optional[bool] = None
+    certificate_provided: Optional[bool] = None
+    certificate_storage_id: Optional[str] = None
 
 
 class G2PRegisterSchemaHouseholdMember(G2PRegisterBaseSchema, G2PPersonSchema, G2PGeoSchema, G2PSchemaHouseholdMember):

@@ -172,9 +172,21 @@
       },
       "sex": {{ sex(farmer.get('gender')) | tojson }},
       "birth_date": {{ (farmer.get('birth_date') or '') | tojson }},
+      {#- The farmer row has no phone_number column: phones live in
+          g2p_register_farmer_phones and are projected into phone_numbers
+          (primary first). Emit the primary's +251 form, falling back to the
+          first phone, then to the legacy flat keys. -#}
+      {%- set dci_phone = namespace(primary='', first='') -%}
+      {%- set farmer_phones = farmer.get('phone_numbers') -%}
+      {%- for p in (farmer_phones if farmer_phones is sequence and farmer_phones is not string else []) if p is mapping -%}
+        {%- set p_value = p.get('e164') or p.get('number') or '' -%}
+        {%- if p.get('is_primary') and not dci_phone.primary -%}{%- set dci_phone.primary = p_value -%}{%- endif -%}
+        {%- if not dci_phone.first -%}{%- set dci_phone.first = p_value -%}{%- endif -%}
+      {%- endfor -%}
+      {%- set phone_value = dci_phone.primary or dci_phone.first or farmer.get('phone_number') or farmer.get('mobile_number') or '' %}
       "phone_number": [
-        {%- if farmer.get('phone_number') or farmer.get('mobile_number') or farmer.get('has_personal_phone') -%}
-        {{ (farmer.get('phone_number') or farmer.get('mobile_number') or '') | tojson }}
+        {%- if phone_value -%}
+        {{ phone_value | tojson }}
         {%- endif -%}
       ],
       "registration_date": {{ (farmer.get('registration_date') or farmer.get('created_at') or '') | tojson }},

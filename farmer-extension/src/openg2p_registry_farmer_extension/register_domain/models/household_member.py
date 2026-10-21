@@ -1,5 +1,5 @@
 from openg2p_registry_core.models.g2p_intake_form import G2PIntakeForm
-from sqlalchemy import Boolean, String, select
+from sqlalchemy import Boolean, String, Text, select
 from sqlalchemy.orm import Mapped, mapped_column
 from openg2p_registry_core.models import (
     G2PRegister, G2PRegisterHistory, G2PPerson, G2PGeo,
@@ -13,6 +13,10 @@ class G2PHouseholdMember:
     # Ethiopic twin of G2PPerson.birth_date, kept in step by the domain
     # service. A string, not a Date: Pagumen (month 13) does not fit a DATE.
     birth_date_ec: Mapped[str] = mapped_column(String, nullable=True)
+    # A member's own land certificate, as for G2PLand: a document_id, with the
+    # flag derived from it by the domain service.
+    certificate_provided: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    certificate_storage_id: Mapped[str] = mapped_column(Text, nullable=True)
 
 # All Register classes should have the prefix G2PRegister
 class G2PRegisterHouseholdMember(G2PRegister, G2PPerson, G2PGeo, G2PHouseholdMember):

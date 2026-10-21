@@ -12,6 +12,9 @@ class G2PFarmerPhone:
     phone_number: Mapped[str] = mapped_column(String, nullable=False)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     country_code: Mapped[str] = mapped_column(String, nullable=True)  # matches g2p.phone.number's country_id in the ATI Odoo source
+    # Derived from phone_number: +251 plus the national number (Gen1's storage
+    # form and the SRS's display form). Used by dedup and the DCI projection.
+    phone_e164: Mapped[str] = mapped_column(String, nullable=True)
 
 
 class G2PRegisterFarmerPhone(G2PRegister, G2PFarmerPhone):

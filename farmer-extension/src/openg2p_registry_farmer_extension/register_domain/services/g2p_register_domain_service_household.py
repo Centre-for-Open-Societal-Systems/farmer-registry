@@ -29,31 +29,33 @@ class G2PRegisterDomainServiceHousehold(G2PRegisterDomainService):
                 record[field] = as_bool(record.get(field))
 
     def _validate_household_size(self, record: dict) -> None:
-        size_of_group = as_int(record.get("size_of_group"))
         male = as_int(record.get("number_of_male_members"))
         female = as_int(record.get("number_of_female_members"))
         children = as_int(record.get("number_of_children"))
+        # Family size is derived, never an independent operator input. Counts
+        # include children and parents already; do not add them a second time.
+        # Other household sections omit both counts: leave their stored total
+        # untouched. A blank optional count contributes zero when the other is
+        # supplied; two unanswered counts retain an unknown (NULL) total.
+        count_fields = ("number_of_male_members", "number_of_female_members")
+        if any(field in record for field in count_fields):
+            record["size_of_group"] = (
+                None if male is None and female is None else (male or 0) + (female or 0)
+            )
+            for field, value in zip(count_fields, (male, female)):
+                if field in record:
+                    record[field] = value
+        else:
+            record.pop("size_of_group", None)
+        size_of_group = record.get("size_of_group")
 
-        # Messages use the form's own labels: they are shown to the enumerator
-        # verbatim in a toast, so "size_of_group must equal
-        # number_of_male_members + ..." read as a system fault, not as
-        # something they could fix (and the form now checks the same rules as
-        # they type -- see docker/staff-ui/assets/farmer-intake-rules.js).
         for label, value in (
-            ("Family Size", size_of_group),
             ("Number Of Males In The Family", male),
             ("Number Of Females In The Family", female),
             ("Number Of Children In The Family", children),
         ):
             if value is not None and value < 0:
                 validation_error(f"{label} cannot be negative")
-
-        if size_of_group is not None and male is not None and female is not None:
-            if size_of_group != male + female:
-                validation_error(
-                    f"Family Size must equal the number of males plus females "
-                    f"({male} + {female} = {male + female}, not {size_of_group})"
-                )
 
         if size_of_group is not None and children is not None and children > size_of_group:
             validation_error(

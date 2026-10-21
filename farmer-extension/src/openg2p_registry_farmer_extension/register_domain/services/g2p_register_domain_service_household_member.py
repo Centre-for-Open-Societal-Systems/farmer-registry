@@ -3,7 +3,14 @@ from datetime import date
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
-from .domain_validation_utils import as_bool, parse_date, sync_ethiopic_date_pair, validation_error
+from .domain_validation_utils import (
+    as_bool,
+    is_embedded_file,
+    parse_date,
+    sync_ethiopic_date_pair,
+    upload_embedded_file,
+    validation_error,
+)
 
 _logger = logging.getLogger("g2p-register-domain-service")
 
@@ -19,6 +26,30 @@ class G2PRegisterDomainServiceHouseholdMember(G2PRegisterDomainService):
             # the future-date check so both columns are checked as one date.
             sync_ethiopic_date_pair(record, "birth_date", "birth_date_ec", "Date of birth")
             self._validate_birth_date(record)
+            await self._persist_embedded_certificate(record)
+            self._synchronize_certificate_flag(record)
+
+    @staticmethod
+    async def _persist_embedded_certificate(record: dict) -> None:
+        """Same as a land's certificate: the 'file' widget (and the ODK
+        connector) embed the picked file as a base64 blob in the value, which
+        must become a document_id before it reaches the text column. The
+        upload applies the registry's document profile (PDF, JPG, PNG, WebP,
+        size cap), so a refused file refuses the save. A plain string (an
+        existing document_id, or None) passes through."""
+        value = record.get("certificate_storage_id")
+        if not is_embedded_file(value):
+            return
+        record["certificate_storage_id"] = await upload_embedded_file(
+            value, record.get("created_by"), purpose="member_certificate"
+        )
+
+    @staticmethod
+    def _synchronize_certificate_flag(record: dict) -> None:
+        # Derived, never typed: it reflects whether a certificate is on file.
+        record["certificate_provided"] = bool(
+            str(record.get("certificate_storage_id") or "").strip()
+        )
 
     def _validate_birth_date(self, record: dict) -> None:
         birth_date = parse_date(record.get("birth_date"))
@@ -48,6 +79,7 @@ class G2PRegisterDomainServiceHouseholdMember(G2PRegisterDomainService):
             "postal_code",
             "country_code",
             "is_disabled",
+            "certificate_provided",
         ]
         search_text = []
         if extra:

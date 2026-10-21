@@ -14,6 +14,7 @@ from openg2p_registry_core.helpers.file_validation_profiles import get_upload_va
 from openg2p_registry_core.models import G2PRegistryDocument
 from openg2p_registry_core.models.enum import DocumentBucket
 
+from ...ingest_log import log_event
 from .ethiopian_calendar import (
     ethiopic_to_gregorian,
     format_ethiopic,
@@ -91,17 +92,46 @@ def is_embedded_file(value) -> bool:
     return isinstance(value, dict) and value.get("__type") == "File"
 
 
-async def upload_embedded_file(value: dict, created_by) -> str:
+async def upload_embedded_file(value: dict, created_by, purpose: str = "file") -> str:
     """Upload an embedded-file value's bytes through the same path
     G2PDocumentService.upload_documents uses, and return the resulting
-    document_id. Raises via validation_error() on undecodable content."""
+    document_id. Raises via validation_error() on undecodable content.
+
+    *purpose* (farmer_photo, land_certificate, member_certificate) only labels
+    the ingestion log: every upload, and every refusal with its reason, is
+    written there, so a file that did not make it can be found afterwards."""
+    filename = value.get("name") or "upload"
+    try:
+        document_id = await _upload_embedded_file(value, created_by, filename)
+    except Exception as error:
+        log_event(
+            "files", "file_rejected", "ERROR",
+            purpose=purpose, file_name=filename, mime_type=value.get("type"),
+            size_bytes=_encoded_size(value), error_type=type(error).__name__,
+            error=str(error), outcome="save_refused",
+        )
+        raise
+    log_event(
+        "files", "file_stored", purpose=purpose, file_name=filename,
+        mime_type=value.get("type"), size_bytes=_encoded_size(value),
+        document_id=document_id,
+    )
+    return document_id
+
+
+def _encoded_size(value: dict) -> int:
+    """Decoded size from the base64 length, without decoding again."""
+    data = value.get("data") or ""
+    return max(0, len(data) * 3 // 4 - data[-2:].count("="))
+
+
+async def _upload_embedded_file(value: dict, created_by, filename: str) -> str:
     try:
         content = base64.b64decode(value.get("data") or "", validate=True)
     except Exception:
         validation_error("uploaded file could not be decoded")
         return ""
 
-    filename = value.get("name") or "upload"
     content_type = value.get("type") or "application/octet-stream"
 
     config = Settings.get_config(strict=False)
@@ -142,6 +172,43 @@ def is_blank(value) -> bool:
     return False
 
 
+def active_records(records: list[dict]) -> list[dict]:
+    """The rows a table section is keeping. A row the enumerator removed still
+    arrives, flagged edit_action=DELETE, and must not count towards a
+    duplicate or required check -- otherwise re-adding a row after deleting it
+    would be refused."""
+    return [
+        record
+        for record in records
+        if str(record.get("edit_action") or "").upper() != "DELETE"
+    ]
+
+
+def reject_duplicates(records: list[dict], key, message: str) -> None:
+    """Refuse the save when two kept rows share key(record).
+
+    key returns None for a row that has nothing to compare (blank value):
+    emptiness is a required-check concern, and two empty rows are not
+    "the same ID". Only rows within the submitted section are compared --
+    the intake and change-request paths both send the whole table.
+    """
+    seen = set()
+    for record in active_records(records):
+        value = key(record)
+        if value is None:
+            continue
+        if value in seen:
+            validation_error(message)
+        seen.add(value)
+
+
+def normalized_text(value) -> str | None:
+    """Trimmed, case-folded text for comparisons; None when blank."""
+    if is_blank(value):
+        return None
+    return " ".join(str(value).split()).casefold()
+
+
 # Coordinates. The platform stores latitude/longitude as VARCHAR (G2PGeo), but
 # the number widget submits a float, and asyncpg refuses to bind a float to a
 # VARCHAR parameter ("expected str, got float"). Every intake save of a
@@ -154,15 +221,8 @@ COORDINATE_BOUNDS = {
 COORDINATE_LABELS = {"latitude": "Latitude", "longitude": "Longitude", "altitude": "Altitude"}
 
 
-def _format_coordinate(value: float) -> str:
-    # 7 decimals is ~1 cm, and what the form's number widget shows; trim the
-    # trailing zeros so 9.03 is stored as "9.03", not "9.0300000".
-    text = f"{value:.7f}".rstrip("0").rstrip(".")
-    return "0" if text in ("", "-0") else text
-
-
 def normalize_coordinates(record: dict) -> None:
-    """Coerce latitude/longitude/altitude to the string form the columns hold.
+    """Coerce latitude/longitude/altitude to the rc.544 Float column type.
 
     Only keys the caller sent are touched (an absent key is a partial update).
     Blank clears the value; anything non-numeric or out of range is rejected
@@ -182,7 +242,7 @@ def normalize_coordinates(record: dict) -> None:
         bounds = COORDINATE_BOUNDS.get(field)
         if bounds and not bounds[0] <= value <= bounds[1]:
             validation_error(f"{label} must be between {bounds[0]:g} and {bounds[1]:g}")
-        record[field] = _format_coordinate(value)
+        record[field] = round(value, 7)
 
 
 def sync_ethiopic_date_pair(record: dict, gc_field: str, ec_field: str, label: str) -> None:

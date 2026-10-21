@@ -94,9 +94,9 @@ INSERT INTO public.g2p_register_sections (
                       "widget-required": false,
                       "widget-data-path": "phone_number",
                       "widget-data-validation": {
-                        "pattern": "^0?[1-9][0-9]{8}$",
-                        "patternMessage": "Enter the Ethiopian number without the country code, e.g. 0912345678",
-                        "maxLength": 10
+                        "pattern": "^([+]?251|0)?[1-9][0-9]{8}$",
+                        "patternMessage": "Enter an Ethiopian number, e.g. 0912345678 or +251912345678",
+                        "maxLength": 13
                       }
                     },
                     {

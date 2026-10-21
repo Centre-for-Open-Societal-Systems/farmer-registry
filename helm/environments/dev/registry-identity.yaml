@@ -1,0 +1,51 @@
+# Apply only after scripts/operations/identity/check.py readiness succeeds and Commons IAM's
+# existing provider 1 is configured for this SAME realm by its owning release.
+# Merge over saved release values; do not install this file by itself.
+global:
+  keycloakBaseUrl: https://keycloak-development.oanstaging.com
+  keycloakRealm: staff
+  keycloakIssuerUrl: https://keycloak-development.oanstaging.com/realms/staff
+registry:
+  staffUi:
+    iamPublicUrl: https://staff-iam-development.oanstaging.com
+    envVars:
+      IAM_URL: https://staff-iam-development.oanstaging.com
+      KEYCLOAK_LOGOUT_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/logout
+      LOGIN_PROVIDER_ID: '1'
+  staffApi:
+    envVars:
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_ID: farmer-registry-staff-portal
+      REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL: http://commons-services-iam-staff-portal-api.commons.svc.cluster.local
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token
+    envVarsFrom:
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_SECRET:
+        secretKeyRef:
+          name: farmer-registry-staff-portal
+          key: client_secret
+          optional: false
+  partnerApi:
+    envVars:
+      REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_ID: farmer-registry-staff-portal
+      REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_KEYMANAGER_AUTH_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token
+    envVarsFrom:
+      REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_SECRET:
+        secretKeyRef:
+          name: farmer-registry-staff-portal
+          key: client_secret
+          optional: false
+  celeryWorker:
+    envVars:
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_CLIENT_ID: farmer-registry-staff-portal
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL: https://keycloak-development.oanstaging.com
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_TOKEN_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token
+    envVarsFrom:
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_CLIENT_SECRET:
+        secretKeyRef:
+          name: farmer-registry-staff-portal
+          key: client_secret
+          optional: false

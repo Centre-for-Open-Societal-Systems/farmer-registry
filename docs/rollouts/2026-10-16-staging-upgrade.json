@@ -1,0 +1,582 @@
+{
+  "environment": "staging",
+  "namespace": "far",
+  "status": "deployed-and-public-acceptance-passed-with-recorded-limitations",
+  "branch": "staging",
+  "source": {
+    "maintainedBase": "667b8fbbc2a55262c1e9c291e33b7bcb565be1dd",
+    "cachedDevelop": "dd3287c839016ab41b1fd72f9bc4ee440696fd5e",
+    "cachedStaging": "0ee17a2874fb3035126d2a4b91a9190fc4c7ac47",
+    "stagingHistoryMerge": "63fb04304a5ccb07c3a204df896f6b47de5b9c4a",
+    "remoteRefsRefreshed": true,
+    "cachedStagingExclusiveCommitSourceDiff": false,
+    "reviewedPreservation": [
+      "Optional public staff UI template and existing Service name"
+    ],
+    "pullRequestPublished": true,
+    "mergedIntoStaging": true,
+    "developRefreshMerge": "32c9c5e",
+    "pullRequest": "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry/pull/102",
+    "pullRequestDraft": false,
+    "odkLocationFixCommit": "6c52951",
+    "stagingPreservationFixCommit": "8997f66",
+    "sharedGeographyReviewCommit": "85303af",
+    "pullRequestBase": "develop",
+    "promotionPath": [
+      "change branch",
+      "develop",
+      "staging"
+    ],
+    "directFeatureToStagingPromotionAllowed": false,
+    "deployedCommit": "40e03c9a71e4c3c79c0d897a4f681901e8b75993",
+    "developMerge": "37f844c3e2af2bfed4bb6b30b423ef3e97e1ab22",
+    "resetImplementation": "8c155255865b59b5ba4c1c44070f9b80bf6f13fa",
+    "resetPullRequest": 105,
+    "stagingPullRequest": 106
+  },
+  "target": {
+    "platform": "1.2.2-rc.544",
+    "registryRelease": "farmer-registry",
+    "registryDatabase": "farmer_registry_far",
+    "legacyConnectorRelease": "farmer-connector",
+    "legacyConnectorDatabase": "farmer_connector_far",
+    "connectorRelease": "farmer-registry-connector",
+    "connectorDatabase": "farmer_connector_v2_far",
+    "connectorRole": "far_farmer_connector_v2_user",
+    "queue": "farmer-registry-connector-v2-far",
+    "signingSecret": "farmer-connector-v2-far-signing",
+    "partner": "farmer-partner",
+    "staffIssuer": "https://keycloak.oanstaging.com/realms/staff",
+    "odkProject": "1",
+    "odkForm": "farmer_profile"
+  },
+  "delivery": {
+    "deployByDefault": false,
+    "protectedRehearsalRequired": true,
+    "finalMaintenanceBackupRequired": true,
+    "perImageSourceAndDigestRequired": true,
+    "rebuildConnectorOnStaging": false,
+    "schedulerPreparedDisabled": true,
+    "automaticSchemaRollback": false
+  },
+  "liveExecution": {
+    "at": "2026-10-16T09:53:43.767868+00:00",
+    "jenkins": {
+      "build": 14,
+      "result": "SUCCESS",
+      "url": "https://jenkins.oanstaging.com/job/Gen2-Package/job/farmer-registry/job/staging/14/",
+      "previousBuild13": "FAILURE; setup Job TTL expired during ID Generator pull"
+    },
+    "helmRevisionsAfterUpgrade": {
+      "farmer-registry": 39,
+      "farmer-registry-connector": 4,
+      "farmer-connector-credentials": 1
+    },
+    "registryImages": {
+      "staff-api": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/staff-api",
+        "tag": "266c70db8054",
+        "digest": "sha256:8b0bc050ba637c9b41e9b359adcfbbbab7a67690cfe348632dd017dbc31794d5",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      },
+      "staff-ui": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/staff-ui",
+        "tag": "1a0d7598549f",
+        "digest": "sha256:0bb24ce4fc0a921a3ecbb05bf1dfd90414b3352cbdb01fc6bef07db1ff475593",
+        "sourceCommit": "1a0d7598549f8a8e34753bc90f103a576056abf5"
+      },
+      "partner-api": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/partner-api",
+        "tag": "266c70db8054",
+        "digest": "sha256:064d34aa34a223582ecbafbb683457e1d63a8bac2fdb4e9ea198979b12894f8b",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      },
+      "celery": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/celery",
+        "tag": "266c70db8054",
+        "digest": "sha256:15273f1e29b54f02df09b0bb69c5cf21d68432c1c34f0dd6521a1fbfe64b49c2",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      },
+      "db-seed": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/db-seed",
+        "tag": "266c70db8054",
+        "digest": "sha256:0b48d9f90be2734a131bcea08219c79cb9251307f13b422ead94f56fb7a00cd9",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      },
+      "sanity-tests": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/sanity-tests",
+        "tag": "266c70db8054",
+        "digest": "sha256:0793f4928debdf1246052f20639c8c06eafb4665452bde34d4057590621b20e7",
+        "sourceCommit": "266c70db8054fd282923528fcbce27bc6725b22b"
+      }
+    },
+    "connectorImages": {
+      "api": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/registry-connector-api",
+        "tag": "bc565efd47c1-158e11f710bd",
+        "digest": "sha256:3a042f7a2d04e4e9ff8fdd2614f36a678cb6294f36ffc40d7d687bd33cb1c0c2"
+      },
+      "ui": {
+        "repository": "379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/registry-connector-ui",
+        "tag": "bc565efd47c1-158e11f710bd",
+        "digest": "sha256:05a7e2c2e7de3088a5cd7092899c760387840e4236ca67aaa6620a830aa8cb6e"
+      }
+    },
+    "idGenerator": {
+      "repository": "openg2p/openg2p-id-generator",
+      "version": "1.1.2",
+      "digest": "sha256:72e0b84b14b54aefc399104ad10139ea8b7ac1592cdde47ba15589a4c478945e"
+    },
+    "maintenanceEntered": true,
+    "maintenanceActive": false,
+    "publicAccess": {
+      "publicRoutes": {
+        "https://farmer-registry.oanstaging.com": 200,
+        "https://connector-farmer-registry.oanstaging.com": 200,
+        "https://odk-central.oanstaging.com": 200
+      },
+      "freshApproverOidcSession": true,
+      "aweStatisticsAndListing": true,
+      "maintenanceBypassUsed": false
+    },
+    "freshCredentialLogin": true,
+    "syntheticWebApprovedToRegister": true,
+    "syntheticSignedOdkApprovedToRegister": true,
+    "syntheticAcceptanceResourcesExportedAndRemoved": true,
+    "realSubmissionIngested": true,
+    "realSubmissionApproved": false,
+    "realSubmissionPending": true,
+    "registeredFarmers": 0,
+    "pendingRealIntakes": 1,
+    "samplesLoaded": false,
+    "metadataRegisters": 13,
+    "coordinateColumnsCompatible": 36,
+    "documentHistoryEventType": true,
+    "schedulerActivated": true,
+    "automaticPolling": {
+      "automaticPollNoDuplicates": true,
+      "singleScheduler": true,
+      "successfulKeys": 1,
+      "checkpointPreserved": true,
+      "lastAutomaticPoll": "2026-10-16T09:46:11.921652",
+      "fetched": 0
+    },
+    "legacyConnectorRetired": true,
+    "legacyDatabaseRetained": true,
+    "failedHistoryRetained": true,
+    "dedicatedOdkReader": {
+      "projectIds": [
+        1
+      ],
+      "role": "viewer"
+    },
+    "sharedCatalogModifiedDuringCutover": false,
+    "masterDataServiceSelectorOnlyRepaired": true,
+    "connectorImagesRebuilt": false,
+    "connectorAcceptedDevRevision": 10,
+    "connectorUpstreamCommit": "bc565efd47c129ff0ce25809bd946afc2b5e70f5",
+    "connectorCurrentWrapperArtifactGuardPassed": false,
+    "connectorOperatorDecisionRecorded": true,
+    "runtimeAndRestoredDatabaseTestsPassed": true,
+    "reportingRefreshPassed": true
+  },
+  "recovery": {
+    "plannedBackupRoot": "/var/backups/farmer-staging-<run>/",
+    "plannedJournalRoot": "/var/lib/registry-coordination/farmer-staging-<run>/",
+    "locationsCreatedOrVerified": true,
+    "oldDatabaseMustBeRetained": true,
+    "reconcileBeforeResume": true,
+    "unsignedLegacyMustNotResume": true,
+    "backupRoots": [
+      "/var/backups/farmer-staging-20261016-cutover-preflight/",
+      "/var/backups/farmer-staging-20261016-cutover-final/"
+    ],
+    "journalRoot": "/var/lib/registry-coordination/farmer-staging-20261016-cutover/",
+    "archivedRegistryDatabase": "farmer_registry_far_archive_20261016rc544",
+    "archivedRegistryConnectionsEnabled": false,
+    "secondProtectedCopyVerified": true,
+    "fullDumpsRestoredInIsolation": true
+  },
+  "executionBlockers": [
+    "1537 seeded Farmer records retain unmatched fictitious Kamuntu selections; derived views account for another 650 reference occurrences; record-change approval is separate from the catalog repair",
+    "Staging farmer-partner registration and signing keys are absent",
+    "Enabled external-hook rehearsals and live Registry acceptance remain incomplete; manifest preservation and isolated schema/seed/reporting rehearsals now pass"
+  ],
+  "verification": {
+    "localUnitTests": {
+      "passed": 490,
+      "skipped": 1,
+      "subtestsPassed": 109,
+      "exitCode": 0,
+      "testHarness": "Linux validation with Helm 3.19.0; staff UI asset test unavailable"
+    },
+    "documentationLinks": "passed, 42 files",
+    "environmentContracts": "dev and staging passed",
+    "pythonSyntaxAndErrorChecks": "passed",
+    "gitWhitespaceCheck": "passed",
+    "runtimeImagesAndDatabaseRehearsals": {
+      "registry": {
+        "isolatedNetwork": true,
+        "database": "coss_seed_rehearsal_far",
+        "sourceBackupSha256": "fda33aacd6448d237d35e76d99389cc7d03f1424eebdc1adfdc9ca17ba06f297",
+        "registryDumpRestored": true,
+        "invalidCoordinateRejectedWithoutTypeChanges": true,
+        "coordinateConversion36": true,
+        "documentHistoryEventType": true,
+        "existingRowsPreservedAcrossSchemaConversion": true,
+        "migrationRerun": true,
+        "applicationMigrations": true,
+        "metadataSeeding": true,
+        "reporting": true,
+        "seedTransactionsTested": true,
+        "complete": true
+      },
+      "partnerApiSignatureRuntime": {
+        "tests": 3,
+        "exitCode": 0,
+        "target": "exact recorded dev partner API digest"
+      },
+      "celeryOdkActorRuntime": {
+        "tests": 3,
+        "exitCode": 0,
+        "target": "exact recorded dev Celery digest"
+      },
+      "allEnabledHooks": "not-complete: external isolated dependencies still required"
+    },
+    "helmAndShellIntegrationChecks": "deployment and container shell integration passed; four credential Helm tests passed",
+    "liveWebAndSignedOdkAcceptance": "not-run",
+    "connectorRestoredDumpRehearsal": "passed: exact accepted dev API digest, complete staging dump, application role, rerun, failure rollback, retries, idempotency and checkpoint persistence",
+    "odkLocationBrowserAcceptance": {
+      "publishedVersion": "1.0.5",
+      "canonicalRealPlaces": 21053,
+      "largestKebeleDropdownChoices": 79,
+      "staleChildrenCleared": true,
+      "manualMapDesktopAndMobile": true,
+      "controlledGpsCallback": true,
+      "physicalDeviceGps": "not-tested",
+      "woredaChangeBeforeMs": 293.6,
+      "woredaChangePublishedMs": 151.1,
+      "compiledElementsBefore": 21143,
+      "compiledElementsAfter": 6784,
+      "submissionAttachmentsUnchanged": true,
+      "publishedMediaMatchesRepository": true
+    },
+    "geographyInspection": {
+      "missingIds": 0,
+      "extraIds": 0,
+      "differingRows": 2489,
+      "differingFields": {
+        "level_id": 0,
+        "parent_level_value_id": 289,
+        "level_value_mnemonic": 2201
+      },
+      "references": {
+        "coverage": "known",
+        "tables": 8,
+        "groups": 700,
+        "records": 2191,
+        "already_exact": false,
+        "exact_coss_ids": {
+          "groups": 3,
+          "records": 4
+        },
+        "legacy_et_pcode_candidates": {
+          "groups": 0,
+          "records": 0
+        },
+        "unmappable": {
+          "groups": 697,
+          "records": 2187
+        }
+      }
+    },
+    "manifestPreservation": {
+      "manifestPreservation": true,
+      "candidateResources": 38,
+      "installedResources": 33,
+      "removed": [],
+      "changedSelectors": []
+    },
+    "sharedCanonicalCatalog": "live applied and verified; authenticated API readback passed",
+    "promotionPathGuard": {
+      "developSourceAccepted": true,
+      "featureSourceRejected": true
+    }
+  },
+  "runbook": "docs/operations/staging-upgrade.md",
+  "sharedGeographyReview": {
+    "preparationAuthorized": true,
+    "liveApplyAuthorized": true,
+    "liveApplied": true,
+    "runbook": "docs/operations/staging-geography-review.md",
+    "proposal": {
+      "environment": "staging",
+      "database": "master_data",
+      "applyAuthorized": false,
+      "catalogRowsChanged": 2489,
+      "idsAddedOrRemoved": 0,
+      "parentChanges": 289,
+      "labelChanges": 2201,
+      "schemaChange": {
+        "replaceIndex": "ux_geo_level_values_mnemonic",
+        "withIndex": "ux_geo_level_values_sibling_mnemonic",
+        "uniqueColumns": [
+          "level_id",
+          "parent_level_value_id",
+          "level_value_mnemonic"
+        ],
+        "nullsNotDistinct": true
+      },
+      "farmerReferences": {
+        "coverage": "known",
+        "tables": 8,
+        "groups": 700,
+        "records": 2191,
+        "already_exact": false,
+        "exact_coss_ids": {
+          "groups": 3,
+          "records": 4
+        },
+        "legacy_et_pcode_candidates": {
+          "groups": 0,
+          "records": 0
+        },
+        "unmappable": {
+          "groups": 697,
+          "records": 2187
+        }
+      },
+      "farmerReferenceUpdatesIncluded": false,
+      "requiredBeforeApply": [
+        "restored-database rehearsal",
+        "all-consumer impact review",
+        "fresh verified backups",
+        "approved shared maintenance window",
+        "separate Farmer reference reconciliation",
+        "explicit repair approval"
+      ]
+    },
+    "rehearsal": {
+      "liveApply": false,
+      "restoredMasterDataDumpSha256": "3787fd4a30ee88b384485de60409be84bd1eec2b50ab851fa2d14262ae7d9fb4",
+      "fullDumpRestored": true,
+      "unreviewedDriftRejectedAtomically": true,
+      "unrelatedRowsFieldsAndIdsPreserved": true,
+      "exactCanonicalCatalog": true,
+      "idempotentRerun": true,
+      "isolatedNetwork": true,
+      "tablesPreserved": 7,
+      "catalogRows": 21053
+    },
+    "consumerImpact": [
+      {
+        "database": "farmer_registry_far",
+        "records": 2191,
+        "canonicalReferencesWithChangedPlaceOrAncestor": 1,
+        "unresolvedRecords": 2187
+      },
+      {
+        "database": "livestock_registry_live",
+        "records": 0,
+        "canonicalReferencesWithChangedPlaceOrAncestor": 0,
+        "unresolvedRecords": 0
+      },
+      {
+        "database": "cropsown_registry_crop",
+        "records": 98,
+        "canonicalReferencesWithChangedPlaceOrAncestor": 11,
+        "unresolvedRecords": 0
+      }
+    ],
+    "protectedReviewPackage": {
+      "path": "staging:/var/lib/registry-coordination/farmer-staging-20261016-geography-review/",
+      "sha256": "6ed25b41ebc83ebd2c1d7b0fa0b13fb355eb75fc14f71a3e893d69ac3394f369",
+      "filesVerified": 7
+    },
+    "liveEvidence": {
+      "userApprovedApply": true,
+      "scope": "Reviewed canonical catalog rows and mnemonic index; no domain record updates",
+      "reference": "User: Let go aheah then",
+      "state": "applied-and-verified",
+      "startedAt": "2026-10-15T22:48:28.875523+00:00",
+      "completedAt": "2026-10-15T22:48:34.232490+00:00",
+      "unrelatedTablesAndFieldsPreserved": true,
+      "canonicalRows": 21053
+    },
+    "freshBackupRoot": "staging:/var/backups/farmer-staging-20261016-approved-geo/",
+    "recoveryJournal": "staging:/var/lib/registry-coordination/farmer-staging-20261016-approved-geo/",
+    "freshDumpRehearsal": {
+      "liveApply": false,
+      "restoredMasterDataDumpSha256": "101ab56ec843a53674291d9423503df8285b9ce601a20e992b89433b3b3383be",
+      "fullDumpRestored": true,
+      "unreviewedDriftRejectedAtomically": true,
+      "unrelatedRowsFieldsAndIdsPreserved": true,
+      "inverseRecoveryAndRerun": true,
+      "exactCanonicalCatalog": true,
+      "idempotentRerun": true,
+      "isolatedNetwork": true,
+      "tablesPreserved": 7,
+      "catalogRows": 21053
+    },
+    "apiAcceptance": {
+      "authenticatedRequests": 4,
+      "canonicalNamesParentsAndIdsVerified": true,
+      "issuer": "https://keycloak.oanstaging.com/realms/staff",
+      "csrfChecksEnabled": true
+    },
+    "masterDataCredentialReferenceFix": {
+      "owningRelease": "commons-services",
+      "owningHelmValuesAlreadyCorrect": true,
+      "desiredHelmManifestDatabaseReferenceApplied": true,
+      "changedEnvironmentReferences": 1,
+      "otherSpecFieldsPreserved": true,
+      "databasePasswordNotRotated": true,
+      "masterDataReadyReplicas": 1,
+      "completedAt": "2026-10-15T22:57:33.085326+00:00",
+      "broaderCommonsReleaseRecovery": false
+    }
+  },
+  "devOdkUpdate": {
+    "publishedVersion": "1.0.5",
+    "state": "open",
+    "submissionsPreserved": 2,
+    "submissionXmlAndAttachmentsUnchanged": true,
+    "mediaMatchesRepository": true,
+    "versionsRetained": [
+      "1.0.5",
+      "1.0.4"
+    ],
+    "host": "https://odk.commons-dev.oanstaging.com",
+    "temporaryPublisherRemoved": true,
+    "backupRoot": "dev:/var/backups/farmer-dev-odk-location-20261016/",
+    "report": "docs/history/odk-dev-location-20261016.md"
+  },
+  "odkMapRepair": {
+    "report": "docs/operations/odk-map-tiles.md",
+    "rootCause": "same-origin Referrer-Policy suppresses tile Referer",
+    "dev": {
+      "host": "https://odk.commons-dev.oanstaging.com",
+      "applied": true,
+      "browsersPassed": [
+        "Chrome",
+        "Firefox"
+      ],
+      "originOnlyTileRefererVerified": true,
+      "allObservedVisibleTiles200": true,
+      "centralPolicyPreserved": true,
+      "backupRoot": "dev:/var/backups/farmer-odk-map-20261016/",
+      "temporaryBrowserAccountRemoved": true
+    },
+    "staging": {
+      "host": "https://odk-central.oanstaging.com",
+      "applied": true,
+      "accepted": true,
+      "owner": "EC2 odk-vm-2",
+      "centralVersion": "v2026.1.2",
+      "serverAccessRequired": false,
+      "centralApiCredentialsVerified": true,
+      "kubernetesTrialReverted": true,
+      "offlineHelperVerifiedAgainstPublishedSource": true,
+      "liveVmConfigurationInspected": true,
+      "serverAccessVerified": true,
+      "sshCredentialReference": "Jenkins backend-ssh-key via vpn-agent2",
+      "browsersPassed": [
+        "Chrome",
+        "Firefox"
+      ],
+      "originOnlyTileRefererVerified": true,
+      "allObservedVisibleTiles200": true,
+      "centralPolicyPreserved": true,
+      "backupRoot": "odk-vm-2:/var/backups/farmer-odk-map-20261016-vm/",
+      "protectedSecondBackupVerified": true,
+      "backupFilesVerified": 9,
+      "onlyNginxRecreated": true,
+      "existingVolumesPreserved": true,
+      "unrelatedContainersUnchanged": 7,
+      "exactImagePreserved": "sha256:836a820b8381c7551691b735aedb158f2ca3bbd63d4a68482fdd2dee29cf0854",
+      "completedAt": "2026-10-16T04:12:08.974743+00:00",
+      "existingSubmissionXmlAndAttachmentUnchanged": true
+    },
+    "publicStagingAndKubernetesOdkAreDifferentInstallations": true
+  },
+  "mergeReview": {
+    "status": "ready-for-develop-review-staging-deployment-remains-gated",
+    "checkedDevelop": "dd3287c839016ab41b1fd72f9bc4ee440696fd5e",
+    "checkedStaging": "0ee17a2874fb3035126d2a4b91a9190fc4c7ac47",
+    "checkedImplementationHead": "1fb8795d7900b7b04b4731b60e65ae0ef2a6a011",
+    "bothTargetBranchesAreAncestors": true,
+    "promotionPath": [
+      "feature branch",
+      "develop",
+      "staging"
+    ],
+    "mergeMethod": "Preserve migration and staging history with a merge commit",
+    "userRetainsMergeControl": true,
+    "stagingDeployDefault": false,
+    "odkDecision": "Retain the separate public staging Central VM; further ODK server changes deferred",
+    "livePreviews": {
+      "dev": {
+        "environment": "dev",
+        "namespace": "farmer",
+        "baselineRevision": 26,
+        "baselineState": "deployed",
+        "helmLint": true,
+        "candidateManifestPreservation": true,
+        "persistentBaselineResources": 32,
+        "candidateResources": 40,
+        "schemaReady": true,
+        "schemaSummary": "Coordinate schema OK: 36 Float-compatible columns; no schema/data was changed.",
+        "evidenceDirectory": "/var/lib/registry-coordination/farmer-merge-preview-ea94c8c4be98",
+        "noDeployOrMigrations": true
+      },
+      "staging": {
+        "environment": "staging",
+        "namespace": "far",
+        "baselineRevision": 36,
+        "baselineState": "deployed",
+        "helmLint": true,
+        "candidateManifestPreservation": true,
+        "persistentBaselineResources": 33,
+        "candidateResources": 38,
+        "schemaReady": false,
+        "schemaSummary": "FAIL: 36 coordinate columns are incompatible with rc.544:",
+        "evidenceDirectory": "/var/lib/registry-coordination/farmer-merge-preview-cdfa4a8cc1de",
+        "noDeployOrMigrations": true
+      }
+    },
+    "farmerCounts": {
+      "new-dev": {
+        "registeredTotal": 27,
+        "seeded": 21,
+        "other": 6,
+        "intakeTotal": 10
+      },
+      "staging": {
+        "registeredTotal": 1000501,
+        "seeded": 500,
+        "other": 1000001,
+        "intakeTotal": 32
+      }
+    },
+    "validation": {
+      "linuxUnitPassed": 493,
+      "helmCredentialCasesPassedSeparately": 4,
+      "distinctUnitCasesPassed": 497,
+      "unavailableStaffUiAssetSkipped": 1,
+      "subtestsPassed": 109,
+      "shellBash52": true,
+      "stagingShellBash43": true,
+      "jenkinsDevAndStagingDeclarativeValidation": true,
+      "documentationFilesChecked": 44,
+      "finalHeadGithubChecks": "Required on the final PR head before merge"
+    },
+    "newDevRegisterPageSize": 20
+  },
+  "knownLimitations": [
+    "Unsigned requests blocked with HTTP500 rather than auth4xx; invalid requests created no records",
+    "Registry Master Data hierarchy helper lacks CSRF and complete staging credentials: HTTP403, lowest-level ID preserved but enrichment incomplete",
+    "Registry ingestion transient async database loop failure recovered on normal attempt2",
+    "Commons Service selector drift repaired independently; owning Commons chart must reconcile it"
+  ],
+  "executionRunbook": "../operations/staging-cutover-2026-10-16.md"
+}

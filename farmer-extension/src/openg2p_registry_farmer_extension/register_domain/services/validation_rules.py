@@ -24,12 +24,19 @@ import re
 NAME_PATTERN = r"^[A-Za-z\u1200-\u137F][A-Za-z\u1200-\u137F\s'-]*$"
 NAME_MAX_LENGTH = 100
 
-# Gen2 splits the country out into its own column (defaulting to ETH), so this
-# is the national significant number only: 9 digits, optionally trunk-prefixed
-# with 0. Gen1 stored a single E.164 string, which is why migrated values have
-# to be split rather than copied (G2R-26 Q2).
-PHONE_PATTERN = r"^0?[1-9][0-9]{8}$"
-PHONE_MAX_LENGTH = 10
+# Gen2 splits the country out into its own column (ETH), so phone_number holds
+# the national significant number: 9 digits. Gen1 stored a single
+# E.164 string, and the SRS asks for +251, so input is accepted in every form
+# an operator or a Gen1 export will produce -- +2519..., 2519..., 09..., 9... --
+# and normalize_phone() reduces it to the 9 digits. [+] rather than \+ keeps the
+# pattern byte-identical between this file and the JSON in the seed SQL.
+PHONE_PATTERN = r"^([+]?251|0)?[1-9][0-9]{8}$"
+PHONE_MAX_LENGTH = 13
+PHONE_COUNTRY_CODE = "ETH"
+PHONE_DIALLING_CODE = "251"
+# Separators people type or spreadsheets keep; stripped before matching on the
+# server paths (bulk import, partner API). The form's pattern rejects them.
+_PHONE_SEPARATORS = re.compile(r"[\s\-().]")
 
 # Tuned against the real Gen1 dump, where 22 of the 25 g2p_reg_id rows are a
 # FAN- prefix plus 16 digits. The three that do not match are 5, 6 and 8 digits
@@ -37,7 +44,23 @@ PHONE_MAX_LENGTH = 10
 # farmers are named 'steve', 'test' and 'demo' -- so they read as junk rather
 # than as a shorter legitimate format. If a production Gen1 database turns out
 # to hold short values too, this bound is what has to move.
-NATIONAL_ID_PATTERN = r"^(FAN-)?[0-9]{12,17}$"
+#
+# UID is the Fayda number: the 12-digit FIN or the 16-digit FAN, the latter
+# optionally written with the FAN- prefix Gen1 stored. RID is the MOSIP
+# registration id printed on the enrolment slip, 29 digits. They used to share
+# one 12-17 digit rule, which let a UID be filed as an RID.
+UID_PATTERN = r"^(FAN-)?([0-9]{12}|[0-9]{16})$"
+RID_PATTERN = r"^[0-9]{29}$"
+
+# The form's value column takes a single pattern for every row whatever its
+# type, so it carries the union; the per-type rule below is what tells the
+# two apart, server-side.
+NATIONAL_ID_PATTERN = r"^((FAN-)?([0-9]{12}|[0-9]{16})|[0-9]{29})$"
+
+ID_TYPE_MESSAGES = {
+    "UID": "expected the 12-digit FIN or the 16-digit FAN (optionally prefixed with FAN-)",
+    "RID": "expected the 29-digit registration id from the Fayda enrolment slip",
+}
 
 # Per-ID-type value rules, keyed by IdTypeEnum member. This mapping exists
 # because the client cannot express one: WidgetValidation declares `custom` and
@@ -54,8 +77,8 @@ NATIONAL_ID_PATTERN = r"^(FAN-)?[0-9]{12,17}$"
 # FAN is not a type. Every FAN- value in the Gen1 dump is filed under UID, which
 # is why the prefix belongs in the pattern rather than the type list.
 ID_TYPE_PATTERNS = {
-    "UID": NATIONAL_ID_PATTERN,
-    "RID": NATIONAL_ID_PATTERN,
+    "UID": UID_PATTERN,
+    "RID": RID_PATTERN,
 }
 
 # Gen1 parity: the farmer's first name (94% fill) and the father's first name.
@@ -125,6 +148,28 @@ def matches(pattern: str, value) -> bool:
     if not text:
         return True
     return bool(_compiled(pattern).match(text))
+
+
+def normalize_phone(value) -> str | None:
+    """The 9-digit national number for any accepted form of an Ethiopian phone.
+
+    '+251 91-234-5678', '251912345678', '0912345678' and '912345678' all give
+    '912345678'. Returns None for anything PHONE_PATTERN does not accept
+    (including blank), so the caller decides between 'required' and 'invalid'.
+    The same reduction is done in SQL by the boot migration in app.py.
+    """
+    if value is None:
+        return None
+    text = _PHONE_SEPARATORS.sub("", str(value))
+    if not text or not _compiled(PHONE_PATTERN).match(text):
+        return None
+    digits = text.lstrip("+")
+    return digits[-9:]
+
+
+def phone_e164(national: str | None) -> str | None:
+    """+251 plus the national number, the form the SRS and DCI expect."""
+    return f"+{PHONE_DIALLING_CODE}{national}" if national else None
 
 
 def is_interactive(record: dict) -> bool:

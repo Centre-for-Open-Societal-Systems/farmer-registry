@@ -112,7 +112,7 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
         if not is_embedded_file(value):
             return
         record["record_image_document_id"] = await upload_embedded_file(
-            value, record.get("created_by")
+            value, record.get("created_by"), purpose="farmer_photo"
         )
 
     async def _sync_flattened_geo_names(self, record: dict) -> None:
@@ -469,6 +469,13 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             "foundational_id",
             "middle_name",
             "father_first_name",
+            # Local-script names, so the list search finds them (SRS FR-UI-02).
+            "first_name_amh",
+            "middle_name_amh",
+            "last_name_amh",
+            "first_name_om",
+            "middle_name_om",
+            "last_name_om",
             "given_name",
             "gender",
             "birth_date",
@@ -622,14 +629,16 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             if check_phones:
                 phone_query = text(
                     """
-                    SELECT 
-                        p.phone_number, 
+                    SELECT
+                        COALESCE(p.phone_e164, TRIM(p.phone_number)) AS phone,
                         array_agg(DISTINCT p.link_internal_record_id) AS dup_ids
                     FROM public.g2p_register_farmer_phones p
                     JOIN public.g2p_register_farmers f ON f.internal_record_id = p.link_internal_record_id
-                    WHERE p.phone_number IS NOT NULL 
+                    WHERE p.phone_number IS NOT NULL
                       AND TRIM(p.phone_number) != ''
-                    GROUP BY p.phone_number
+                    -- phone_e164 is one form per number; the raw column held
+                    -- 0912... and 912... as two different values.
+                    GROUP BY COALESCE(p.phone_e164, TRIM(p.phone_number))
                     HAVING count(DISTINCT p.link_internal_record_id) > 1
                     """
                 )

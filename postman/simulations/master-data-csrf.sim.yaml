@@ -1,0 +1,5 @@
+simulation: farmer-master-data-csrf
+routing: path
+mocks:
+  - routeKey: mds
+    path: ../mocks/master-data/config.yaml

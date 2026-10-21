@@ -1,4 +1,3 @@
-Chart.lock
 *.tgz
 charts/*
 # Generated at package time from the pinned openg2p-registry dependency

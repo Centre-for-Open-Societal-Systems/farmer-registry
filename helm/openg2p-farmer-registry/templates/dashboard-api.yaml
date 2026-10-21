@@ -5,7 +5,8 @@ The farmer registry dashboard service (farmer-registry-dashboard-api).
 A read-only FastAPI service that serves aggregate statistics to the OAN
 dashboards backend-for-frontend, one endpoint per chart. Its source lives in its
 own repository (Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api);
-the Jenkinsfile clones it and builds the image beside the registry's own.
+its existing image is retained during registry upgrades. Build and publish it
+from that owning repository before explicitly changing dashboardApi.image.
 
 It lives in this chart rather than the openg2p-registry subchart for the same
 reason the analytics jobs do: it reads farmer's own reporting views

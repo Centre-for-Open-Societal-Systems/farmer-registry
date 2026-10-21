@@ -1,0 +1,25 @@
+# Existing new-dev route; preserve alongside the Commons-owned compatibility alias.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+spec:
+  gateways:
+  - internal
+  hosts:
+  - odk-central-development.oanstaging.com
+  http:
+  - headers:
+      request:
+        set:
+          x-forwarded-host: odk-central-development.oanstaging.com
+          x-forwarded-proto: https
+    match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: commons-services-odk-central-frontend
+        port:
+          number: 80
+metadata:
+  name: odk-central-development
+  namespace: commons

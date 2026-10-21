@@ -1,0 +1,126 @@
+name,label,region
+102,Central,1
+103,Eastern,1
+107,Mekelle,1
+101,North Western,1
+106,South Eastern,1
+104,Southern,1
+105,Western,1
+201,Awsi /Zone 1,2
+204,Fanti /Zone 4,2
+203,Gabi /Zone 3,2
+205,Hari /Zone 5,2
+202,Kilbati /Zone2,2
+206,Mahi /Zone 6,2
+309,Awi,3
+314,Bahir Dar,3
+311,Central Gondar,3
+306,East Gojam,3
+313,North Gojam,3
+301,North Gondar,3
+305,North Shewa (AM),3
+303,North Wello,3
+310,Oromia,3
+302,South Gondar,3
+304,South Wello,3
+308,Wag Hamra,3
+307,West Gojam,3
+312,West Gondar,3
+434,Ambo City Admin,4
+408,Arsi,4
+411,Bale,4
+435,Batu Liyu Zone,4
+439,Bishan Guracha Liyu Zone,4
+423,Bishoftu Liyu Zone,4
+412,Borena,4
+416,Buno Bedele,4
+425,Dukam Liyu Zone,4
+421,East Bale,4
+422,East Borena,4
+410,East Hararge,4
+407,East Shewa,4
+402,East Wellega,4
+414,Guji,4
+437,Holeta Liyu Zone,4
+419,Horo Gudru Wellega,4
+403,Ilu Aba Bora,4
+404,Jimma,4
+429,Jimma Liyu,4
+418,Kelem Wellega,4
+436,Modjo Liyu Zone,4
+428,Nekemte Liyu Zone,4
+406,North Shewa (OR),4
+433,Robe Liyu Zone,4
+420,Shager,4
+431,Shashamane Liyu Zone,4
+413,South West Shewa,4
+417,West Arsi,4
+415,West Guji,4
+409,West Hararge,4
+405,West Shewa,4
+401,West Wellega,4
+438,Woliso Liyu Zone,4
+508,Afder,5
+511,Daawa,5
+507,Doolo,5
+504,Erer,5
+502,Fafan,5
+503,Jarar,5
+505,Korahe,5
+509,Liban,5
+510,Nogob,5
+506,Shabelle,5
+501,Siti,5
+603,Assosa,6
+604,Kamashi,6
+605,Mao Komo Special,6
+602,Metekel,6
+713,Dilla City Admin,7
+704,East Guraghe,7
+701,Guraghe,7
+702,Hadiya,7
+714,Halaba,7
+705,Kebena Special,7
+703,Kembata,7
+711,korey,7
+706,Mareko Special,7
+720,Siltie,7
+707,Tembaro Special,7
+724,Yem,7
+806,Alle,8
+808,Amaro,8
+804,Basketo,8
+810,Burji,8
+807,Derashe,8
+802,Gamo,8
+811,Gedeo,8
+803,Gofa,8
+809,Konso,8
+805,South Omo Agr,8
+812,South Omo Pas,8
+801,Wolayita,8
+1103,Bench Sheko,11
+1104,Dawuro,11
+1102,Kefa,11
+1106,Konta,11
+1105,Mirab Omo,11
+1101,Sheka,11
+1202,Agnewak,12
+1204,Itang Special woreda,12
+1203,Majang,12
+1201,Nuwer,12
+1301,Harari,13
+1401,Addis Ababa,14
+1402,Addis Ketema Subcity,14
+1410,Akaki Kaliti Subcity,14
+1406,Arada Subcity,14
+1408,Bole Subcity,14
+1405,Kerkos Subcity,14
+1403,Kolfe Keraniyo Subcity,14
+1411,Lemi kura,14
+1404,Lideta Subcity,14
+1409,Nifas Slik Lafto Subcity,14
+1407,Yeka Subcity,14
+1502,Dire Dawa rural,15
+1501,Dire Dawa urban,15
+1600,Sidama,16

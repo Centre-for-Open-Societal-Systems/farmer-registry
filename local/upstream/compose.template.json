@@ -1,0 +1,1446 @@
+{
+  "name": "farmer-upstream-trial",
+  "services": {
+    "postgres": {
+      "image": "postgres:16",
+      "container_name": "farmer-upstream-postgres",
+      "command": [
+        "postgres",
+        "-c",
+        "max_connections=300"
+      ],
+      "environment": {
+        "POSTGRES_USER": "${POSTGRES_SUPERUSER:-postgres}",
+        "POSTGRES_PASSWORD": "${POSTGRES_PASSWORD:-postgres}"
+      },
+      "volumes": [
+        "postgres-data:/var/lib/postgresql/data",
+        "@ROOT@/local/upstream/assets/postgres-init:/docker-entrypoint-initdb.d:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_SUPERUSER:-postgres}"
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 10
+      },
+      "restart": "unless-stopped",
+      "depends_on": {},
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "redis": {
+      "image": "redis:7-alpine",
+      "container_name": "farmer-upstream-redis",
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ],
+        "interval": "5s",
+        "timeout": "3s",
+        "retries": 10
+      },
+      "restart": "unless-stopped",
+      "depends_on": {},
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "minio": {
+      "image": "minio/minio:latest",
+      "container_name": "farmer-upstream-minio",
+      "command": "server /data --console-address \":9001\"",
+      "networks": [
+        "default"
+      ],
+      "environment": {
+        "MINIO_ROOT_USER": "${MINIO_ROOT_USER:-admin}",
+        "MINIO_ROOT_PASSWORD": "${MINIO_ROOT_PASSWORD:-adminsecret}"
+      },
+      "ports": [
+        "127.0.0.1:9200:9000",
+        "127.0.0.1:9201:9001"
+      ],
+      "volumes": [
+        "minio-data:/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:9000/minio/health/live"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 10
+      },
+      "restart": "unless-stopped",
+      "depends_on": {},
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "minio-init": {
+      "image": "minio/mc:latest",
+      "container_name": "farmer-upstream-minio-init",
+      "depends_on": {
+        "minio": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "MINIO_ROOT_USER": "${MINIO_ROOT_USER:-admin}",
+        "MINIO_ROOT_PASSWORD": "${MINIO_ROOT_PASSWORD:-adminsecret}",
+        "MINIO_BUCKET_NAME": "${MINIO_BUCKET_NAME:-default-bucket}"
+      },
+      "entrypoint": [
+        "/bin/sh",
+        "-c"
+      ],
+      "command": [
+        "set -e\nmc alias set local http://minio:9000 \"$${MINIO_ROOT_USER}\" \"$${MINIO_ROOT_PASSWORD}\"\nmc mb --ignore-existing \"local/$${MINIO_BUCKET_NAME}\"\nmc mb --ignore-existing local/templates\nmc mb --ignore-existing local/registrant-photos\nmc mb --ignore-existing local/documents\nexit 0\n"
+      ],
+      "restart": "no",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "profiles": [
+        "setup"
+      ]
+    },
+    "keycloak": {
+      "image": "quay.io/keycloak/keycloak:26.0",
+      "platform": "linux/amd64",
+      "container_name": "farmer-upstream-keycloak",
+      "command": [
+        "start-dev"
+      ],
+      "environment": {
+        "KC_BOOTSTRAP_ADMIN_USERNAME": "${KEYCLOAK_ADMIN:-admin}",
+        "KC_BOOTSTRAP_ADMIN_PASSWORD": "${KEYCLOAK_ADMIN_PASSWORD:-admin}",
+        "KC_HTTP_PORT": "8080",
+        "KC_HOSTNAME": "http://keycloak.farmer-upstream.localtest.me:8180",
+        "KC_DB": "postgres",
+        "KC_DB_URL": "jdbc:postgresql://postgres:5432/keycloak",
+        "KC_DB_USERNAME": "postgres",
+        "KC_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "KC_HTTP_ENABLED": "true",
+        "KC_HEALTH_ENABLED": "true",
+        "JAVA_OPTS_KC_HEAP": "-XX:MaxRAMPercentage=15 -XX:InitialRAMPercentage=5"
+      },
+      "ports": [
+        "127.0.0.1:8180:8080"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "exec 3<>/dev/tcp/127.0.0.1/8080"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 20,
+        "start_period": "30s"
+      },
+      "restart": "unless-stopped",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "keycloak-init": {
+      "image": "quay.io/keycloak/keycloak:26.0",
+      "platform": "linux/amd64",
+      "container_name": "farmer-upstream-keycloak-init",
+      "depends_on": {
+        "keycloak": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "KEYCLOAK_URL": "http://keycloak:8080",
+        "KEYCLOAK_HOST": "keycloak",
+        "KEYCLOAK_PORT": "8080",
+        "KEYCLOAK_ADMIN": "${KEYCLOAK_ADMIN:-admin}",
+        "KEYCLOAK_ADMIN_PASSWORD": "${KEYCLOAK_ADMIN_PASSWORD:-admin}",
+        "KEYCLOAK_REALM": "farmer",
+        "KEYCLOAK_IAM_CLIENT_SECRET": "${KEYCLOAK_IAM_CLIENT_SECRET:-dev-iam-staff-secret}",
+        "KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET": "${KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET:-dev-awe-resolver-secret}",
+        "KEYCLOAK_INGESTION_CLIENT_SECRET": "${KEYCLOAK_INGESTION_CLIENT_SECRET:-dev-registry-ingestion-secret}",
+        "KEYCLOAK_DEV_USER": "${KEYCLOAK_DEV_USER:-staff}",
+        "KEYCLOAK_DEV_PASSWORD": "${KEYCLOAK_DEV_PASSWORD:-staff}",
+        "KEYCLOAK_STAFF_ADMIN_USER": "${KEYCLOAK_STAFF_ADMIN_USER:-admin}",
+        "KEYCLOAK_STAFF_ADMIN_PASSWORD": "${KEYCLOAK_STAFF_ADMIN_PASSWORD:-admin}",
+        "KEYCLOAK_AWE_APPROVER_PASSWORD": "${KEYCLOAK_AWE_APPROVER_PASSWORD:-pass}",
+        "IAM_STAFF_PORT": "8200",
+        "FARMER_REGISTRY_UI_PORT": "3200",
+        "AWE_UI_PORT": "8231",
+        "COMMONS_CLIENT_SECRET": "${COMMONS_CLIENT_SECRET:-dev-commons-client-secret}"
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/assets/generated/keycloak-init.sh:/keycloak-init.sh:ro"
+      ],
+      "entrypoint": [
+        "/bin/bash",
+        "/keycloak-init.sh"
+      ],
+      "restart": "no",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "profiles": [
+        "setup"
+      ]
+    },
+    "iam-staff-api": {
+      "image": "openg2p/iam-staff-portal-api:1.4.4-rc.125",
+      "container_name": "farmer-upstream-iam-staff-api",
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        },
+        "redis": {
+          "condition": "service_healthy"
+        },
+        "minio": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "IAM_STAFF_APP_HOST": "0.0.0.0",
+        "IAM_STAFF_APP_PORT": "8000",
+        "IAM_STAFF_AUTH_REDIS_URL": "redis://redis:6379/4",
+        "IAM_STAFF_AUTH_TRANSACTION_STORE_BACKEND": "redis",
+        "IAM_STAFF_DB_DRIVER": "postgresql+asyncpg",
+        "IAM_STAFF_DB_HOSTNAME": "postgres",
+        "IAM_STAFF_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "IAM_STAFF_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "IAM_STAFF_DB_DBNAME": "farmer_iam",
+        "IAM_STAFF_DB_PORT": "5432",
+        "IAM_STAFF_OPENAPI_ROOT_PATH": "/",
+        "IAM_STAFF_LOGIN_PROVIDERS_TABLE_ENABLED": "true",
+        "IAM_STAFF_AUTH_ENABLED": "true",
+        "IAM_STAFF_AUTH_COOKIE_HTTPONLY": "true",
+        "IAM_STAFF_AUTH_COOKIE_PATH": "/",
+        "IAM_STAFF_AUTH_COOKIE_DOMAIN": "farmer-upstream.localtest.me",
+        "IAM_STAFF_AUTH_COOKIE_MAX_AGE": "1800",
+        "IAM_STAFF_AUTH_COOKIE_SET_EXPIRES": "true",
+        "IAM_STAFF_AUTH_COOKIE_SECURE": "false",
+        "IAM_STAFF_DATA_DIR": "/opt/iam-staff-portal-data",
+        "IAM_STAFF_DATA_APPLICATION_URLS__KEYCLOAK_APPLICATION_URL": "http://keycloak.farmer-upstream.localtest.me:8180",
+        "IAM_STAFF_DATA_APPLICATION_URLS__REGISTRY_APPLICATION_URL": "http://portal.farmer-upstream.localtest.me:3200",
+        "IAM_STAFF_DATA_APPLICATION_URLS__MINIO_APPLICATION_URL": "http://minio.farmer-upstream.localtest.me:9201",
+        "IAM_STAFF_DATA_CLIENT_SECRETS__STAFF_KEYCLOAK_CLIENT_SECRET": "${KEYCLOAK_IAM_CLIENT_SECRET:-dev-iam-staff-secret}",
+        "IAM_STAFF_CORS_ALLOW_ORIGINS": "[\"*\"]",
+        "IAM_STAFF_KEYCLOAK_BASE_URL": "http://keycloak.farmer-upstream.localtest.me:8180",
+        "IAM_STAFF_KEYCLOAK_ISSUER_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer",
+        "IAM_STAFF_KEYCLOAK_REALM": "farmer",
+        "IAM_STAFF_CSRF_ENABLED": "true"
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/assets/generated/iam-login-providers.json:/opt/iam-staff-portal-data/login_providers.json:ro"
+      ],
+      "ports": [
+        "127.0.0.1:8200:8000"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping')\""
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 18,
+        "start_period": "40s"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ]
+    },
+    "awe": {
+      "image": "openg2p/openg2p-awe:1.2.2",
+      "container_name": "farmer-upstream-awe",
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "UVICORN_HOST": "0.0.0.0",
+        "UVICORN_PORT": "8000",
+        "DB_HOST": "postgres",
+        "DB_PORT": "5432",
+        "DB_NAME": "farmer_awe",
+        "DB_USER": "${POSTGRES_SUPERUSER:-postgres}",
+        "DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "CONFIG_PATH": "/app/config/default.yaml",
+        "AWE__KEYCLOAK__BASE_URL": "http://keycloak.farmer-upstream.localtest.me:8180",
+        "AWE__KEYCLOAK__REALM": "farmer",
+        "AWE__KEYCLOAK__ADMIN_CLIENT_ID": "awe-admin-resolver",
+        "AWE__KEYCLOAK__ADMIN_CLIENT_SECRET": "${KEYCLOAK_AWE_RESOLVER_CLIENT_SECRET:-dev-awe-resolver-secret}",
+        "AWE__KEYCLOAK__ISSUER": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer",
+        "AWE__KEYCLOAK__JWKS_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/certs",
+        "AWE__KEYCLOAK__AUDIENCE": ""
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/assets/generated/awe-config.yaml:/app/config/default.yaml:ro"
+      ],
+      "ports": [
+        "127.0.0.1:8230:8000"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/awe/health')\""
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 18,
+        "start_period": "30s"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ]
+    },
+    "awe-ui": {
+      "image": "openg2p/openg2p-awe-ui:1.2.2",
+      "container_name": "farmer-upstream-awe-ui",
+      "depends_on": {
+        "awe": {
+          "condition": "service_healthy"
+        }
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/assets/generated/awe-ui-config.json:/usr/share/nginx/html/config.json:ro"
+      ],
+      "ports": [
+        "127.0.0.1:8231:8080"
+      ],
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "wget",
+          "-q",
+          "--spider",
+          "http://127.0.0.1:8080/"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 12
+      }
+    },
+    "farmer-master-data-api": {
+      "image": "openg2p/master-data-api:1.1.4-rc.104",
+      "container_name": "farmer-upstream-farmer-master-data-api",
+      "depends_on": {
+        "postgres": {
+          "condition": "service_healthy"
+        },
+        "redis": {
+          "condition": "service_healthy"
+        },
+        "minio": {
+          "condition": "service_healthy"
+        },
+        "iam-staff-api": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "MASTER_DATA_API_HOST": "0.0.0.0",
+        "MASTER_DATA_API_PORT": "8000",
+        "MASTER_DATA_API_NO_OF_WORKERS": "1",
+        "MASTER_DATA_API_OPENAPI_ROOT_PATH": "/",
+        "MASTER_DATA_API_WORKER_TYPE": "gunicorn",
+        "MASTER_DATA_API_DB_DRIVER": "postgresql+asyncpg",
+        "MASTER_DATA_API_DB_HOSTNAME": "postgres",
+        "MASTER_DATA_API_DB_PORT": "5432",
+        "MASTER_DATA_API_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "MASTER_DATA_API_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "MASTER_DATA_API_DB_DBNAME": "farmer_master_data_db",
+        "MASTER_DATA_API_AUTH_ENABLED": "true",
+        "MASTER_DATA_API_AUTH_PROVIDER_API_URL": "http://iam-staff-api:8000",
+        "MASTER_DATA_API_KEYCLOAK_CLIENT_ID": "master-data",
+        "MASTER_DATA_API_AUTH_REDIS_URL": "redis://redis:6379/4",
+        "MASTER_DATA_API_AUTH_VERIFY_SSL": "false",
+        "MASTER_DATA_API_CSRF_ENABLED": "true"
+      },
+      "ports": [
+        "127.0.0.1:8210:8000"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping')\""
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 18,
+        "start_period": "60s"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "staff-portal": {
+      "image": "openg2p/openg2p-staff-portal-ui:1.2.0",
+      "ports": [
+        "127.0.0.1:3202:3000"
+      ],
+      "environment": {
+        "HOSTNAME": "0.0.0.0",
+        "IAM_URL": "http://iam.farmer-upstream.localtest.me:8200",
+        "LOGIN_PROVIDER_ID": "1",
+        "COOKIE_DOMAIN": "farmer-upstream.localtest.me"
+      },
+      "extra_hosts": [
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "restart": "unless-stopped",
+      "entrypoint": [
+        "node",
+        "/local-http.js"
+      ],
+      "volumes": [
+        "@ROOT@/local/upstream/assets/staff-portal-http.js:/local-http.js:ro"
+      ],
+      "networks": [
+        "default"
+      ],
+      "container_name": "farmer-upstream-staff-portal",
+      "depends_on": {}
+    },
+    "sync-login-provider": {
+      "image": "openg2p/iam-staff-portal-api:1.4.4-rc.125",
+      "profiles": [
+        "setup"
+      ],
+      "entrypoint": [
+        "python",
+        "/setup/sync_login_provider.py"
+      ],
+      "environment": {
+        "IAM_STAFF_APP_HOST": "0.0.0.0",
+        "IAM_STAFF_APP_PORT": "8000",
+        "IAM_STAFF_AUTH_REDIS_URL": "redis://redis:6379/4",
+        "IAM_STAFF_AUTH_TRANSACTION_STORE_BACKEND": "redis",
+        "IAM_STAFF_DB_DRIVER": "postgresql+asyncpg",
+        "IAM_STAFF_DB_HOSTNAME": "postgres",
+        "IAM_STAFF_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "IAM_STAFF_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "IAM_STAFF_DB_DBNAME": "farmer_iam",
+        "IAM_STAFF_DB_PORT": "5432",
+        "IAM_STAFF_OPENAPI_ROOT_PATH": "/",
+        "IAM_STAFF_LOGIN_PROVIDERS_TABLE_ENABLED": "true",
+        "IAM_STAFF_AUTH_ENABLED": "true",
+        "IAM_STAFF_AUTH_COOKIE_HTTPONLY": "true",
+        "IAM_STAFF_AUTH_COOKIE_PATH": "/",
+        "IAM_STAFF_AUTH_COOKIE_DOMAIN": "farmer-upstream.localtest.me",
+        "IAM_STAFF_AUTH_COOKIE_MAX_AGE": "1800",
+        "IAM_STAFF_AUTH_COOKIE_SET_EXPIRES": "true",
+        "IAM_STAFF_AUTH_COOKIE_SECURE": "false",
+        "IAM_STAFF_DATA_DIR": "/opt/iam-staff-portal-data",
+        "IAM_STAFF_DATA_APPLICATION_URLS__KEYCLOAK_APPLICATION_URL": "http://keycloak.farmer-upstream.localtest.me:8180",
+        "IAM_STAFF_DATA_APPLICATION_URLS__REGISTRY_APPLICATION_URL": "http://portal.farmer-upstream.localtest.me:3200",
+        "IAM_STAFF_DATA_APPLICATION_URLS__MINIO_APPLICATION_URL": "http://minio.farmer-upstream.localtest.me:9201",
+        "IAM_STAFF_DATA_CLIENT_SECRETS__STAFF_KEYCLOAK_CLIENT_SECRET": "${KEYCLOAK_IAM_CLIENT_SECRET:-dev-iam-staff-secret}",
+        "IAM_STAFF_CORS_ALLOW_ORIGINS": "[\"*\"]",
+        "IAM_STAFF_KEYCLOAK_BASE_URL": "http://keycloak.farmer-upstream.localtest.me:8180",
+        "IAM_STAFF_KEYCLOAK_ISSUER_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer",
+        "IAM_STAFF_KEYCLOAK_REALM": "farmer",
+        "IAM_STAFF_CSRF_ENABLED": "true"
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/assets:/setup:ro"
+      ],
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-sync-login-provider",
+      "depends_on": {}
+    },
+    "register-apps": {
+      "image": "openg2p/iam-staff-portal-api:1.4.4-rc.125",
+      "profiles": [
+        "setup"
+      ],
+      "entrypoint": [
+        "python",
+        "/setup/register_apps.py"
+      ],
+      "environment": {
+        "COMMONS_CLIENT_SECRET": "${COMMONS_CLIENT_SECRET:-dev-commons-client-secret}"
+      },
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "volumes": [
+        "@ROOT@/local/upstream/assets:/setup:ro"
+      ],
+      "networks": [
+        "default"
+      ],
+      "container_name": "farmer-upstream-register-apps",
+      "depends_on": {}
+    },
+    "kafka": {
+      "image": "apache/kafka:3.9.0",
+      "profiles": [
+        "audit"
+      ],
+      "environment": {
+        "KAFKA_NODE_ID": "1",
+        "KAFKA_PROCESS_ROLES": "broker,controller",
+        "KAFKA_LISTENERS": "PLAINTEXT://:9092,CONTROLLER://:9093",
+        "KAFKA_ADVERTISED_LISTENERS": "PLAINTEXT://kafka:9092",
+        "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+        "KAFKA_CONTROLLER_LISTENER_NAMES": "CONTROLLER",
+        "KAFKA_CONTROLLER_QUORUM_VOTERS": "1@kafka:9093",
+        "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR": "1",
+        "KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR": "1",
+        "KAFKA_TRANSACTION_STATE_LOG_MIN_ISR": "1",
+        "KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS": "0",
+        "KAFKA_HEAP_OPTS": "-Xms256m -Xmx512m",
+        "KAFKA_LOG_DIRS": "/var/lib/kafka/data"
+      },
+      "volumes": [
+        "kafka-data:/var/lib/kafka/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null"
+        ],
+        "interval": "10s",
+        "timeout": "10s",
+        "retries": 18
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-kafka",
+      "depends_on": {}
+    },
+    "audit-manager": {
+      "image": "openg2p/openg2p-audit-manager:1.2.0",
+      "profiles": [
+        "audit"
+      ],
+      "environment": {
+        "DB_HOST": "postgres",
+        "DB_PORT": "5432",
+        "DB_NAME": "audit_manager",
+        "DB_USER": "${POSTGRES_SUPERUSER:-postgres}",
+        "DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "CONFIG_PATH": "/app/config/config.yaml"
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/assets/audit-config.yaml:/app/config/config.yaml:ro"
+      ],
+      "depends_on": {
+        "kafka": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-audit-manager"
+    },
+    "master-data-ui": {
+      "image": "openg2p/master-data-ui:1.1.4-rc.104",
+      "environment": {
+        "BACKEND_URL": "http://farmer-master-data-api:8000",
+        "IAM_URL": "http://iam.farmer-upstream.localtest.me:8200",
+        "LOGIN_PROVIDER_ID": "1",
+        "APPLICATION_MNEMONIC": "master-data",
+        "COOKIE_DOMAIN": "farmer-upstream.localtest.me",
+        "DEFAULT_LOCALE": "en"
+      },
+      "ports": [
+        "127.0.0.1:3210:3000"
+      ],
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-master-data-ui",
+      "depends_on": {}
+    },
+    "pm-staff-api": {
+      "image": "openg2p/partner-management-staff-portal-api:1.0.2",
+      "environment": {
+        "PARTNER_MANAGER_DB_DRIVER": "postgresql+asyncpg",
+        "PARTNER_MANAGER_DB_HOSTNAME": "postgres",
+        "PARTNER_MANAGER_DB_PORT": "5432",
+        "PARTNER_MANAGER_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "PARTNER_MANAGER_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "PARTNER_MANAGER_DB_DBNAME": "partner_management_db",
+        "PARTNER_MANAGER_NO_OF_WORKERS": "1",
+        "PARTNER_MANAGER_AUTH_ENABLED": "true",
+        "PARTNER_MANAGER_AUTH_ADMIN_ROLE": "partner_manager",
+        "PARTNER_MANAGER_AUTH_ADMIN_CLIENT_ID": "commons-services-staff-portal",
+        "PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS": "[\"http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer\"]",
+        "PARTNER_MANAGER_AUTH_DEFAULT_JWKS_URLS": "[\"http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/certs\"]",
+        "COMMON_AUTH_DEFAULT_ISSUERS": "[\"http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer\"]",
+        "COMMON_AUTH_DEFAULT_JWKS_URLS": "[\"http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/certs\"]",
+        "PARTNER_MANAGER_CRYPTO_ALLOWED_ALGORITHMS": "[\"RS256\",\"ES256\",\"EdDSA\"]",
+        "PARTNER_MANAGER_AUDIT_ENABLED": "${AUDIT_ENABLED:-false}",
+        "PARTNER_MANAGER_AUDIT_MANAGER_URL": "http://audit-manager:8000"
+      },
+      "ports": [
+        "127.0.0.1:8250:8000"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping', timeout=5)"
+        ],
+        "interval": "10s",
+        "timeout": "6s",
+        "retries": 18,
+        "start_period": "40s"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-pm-staff-api",
+      "depends_on": {}
+    },
+    "pm-partner-api": {
+      "image": "openg2p/partner-management-partner-api:1.0.2",
+      "environment": {
+        "PARTNER_MANAGER_DB_DRIVER": "postgresql+asyncpg",
+        "PARTNER_MANAGER_DB_HOSTNAME": "postgres",
+        "PARTNER_MANAGER_DB_PORT": "5432",
+        "PARTNER_MANAGER_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "PARTNER_MANAGER_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "PARTNER_MANAGER_DB_DBNAME": "partner_management_db",
+        "PARTNER_MANAGER_NO_OF_WORKERS": "1",
+        "PARTNER_MANAGER_AUTH_ENABLED": "false",
+        "PARTNER_MANAGER_AUTH_ADMIN_ROLE": "partner_manager",
+        "PARTNER_MANAGER_AUTH_ADMIN_CLIENT_ID": "commons-services-staff-portal",
+        "PARTNER_MANAGER_AUTH_DEFAULT_ISSUERS": "[\"http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer\"]",
+        "PARTNER_MANAGER_AUTH_DEFAULT_JWKS_URLS": "[\"http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/certs\"]",
+        "COMMON_AUTH_DEFAULT_ISSUERS": "[\"http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer\"]",
+        "COMMON_AUTH_DEFAULT_JWKS_URLS": "[\"http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/certs\"]",
+        "PARTNER_MANAGER_CRYPTO_ALLOWED_ALGORITHMS": "[\"RS256\",\"ES256\",\"EdDSA\"]",
+        "PARTNER_MANAGER_AUDIT_ENABLED": "${AUDIT_ENABLED:-false}",
+        "PARTNER_MANAGER_AUDIT_MANAGER_URL": "http://audit-manager:8000"
+      },
+      "ports": [
+        "127.0.0.1:8251:8000"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping', timeout=5)"
+        ],
+        "interval": "10s",
+        "timeout": "6s",
+        "retries": 18,
+        "start_period": "40s"
+      },
+      "depends_on": {
+        "pm-staff-api": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-pm-partner-api"
+    },
+    "pm-ui": {
+      "image": "openg2p/partner-management-staff-portal-ui:1.0.2",
+      "environment": {
+        "IAM_URL": "http://iam.farmer-upstream.localtest.me:8200",
+        "STAFF_PORTAL_API_URL": "http://pm-staff-api:8000",
+        "LOGIN_PROVIDER_ID": "1",
+        "COOKIE_DOMAIN": "farmer-upstream.localtest.me",
+        "REDIRECT_URL": "http://pm.farmer-upstream.localtest.me:3250",
+        "KEYCLOAK_LOGOUT_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/logout"
+      },
+      "ports": [
+        "127.0.0.1:3250:3000"
+      ],
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-pm-ui",
+      "depends_on": {}
+    },
+    "consent-manager-api": {
+      "image": "openg2p/consent-manager-api:1.0.2",
+      "environment": {
+        "CONSENT_MANAGER_DB_DRIVER": "postgresql+asyncpg",
+        "CONSENT_MANAGER_DB_HOSTNAME": "postgres",
+        "CONSENT_MANAGER_DB_PORT": "5432",
+        "CONSENT_MANAGER_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "CONSENT_MANAGER_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "CONSENT_MANAGER_DB_DBNAME": "consent_manager_db",
+        "CONSENT_MANAGER_NO_OF_WORKERS": "1",
+        "CONSENT_MANAGER_API_AUDIENCE": "staff",
+        "CONSENT_MANAGER_AUTH_ENABLED": "true",
+        "CONSENT_MANAGER_AUTH_ISSUER": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer",
+        "CONSENT_MANAGER_AUTH_JWKS_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/certs",
+        "CONSENT_MANAGER_AUTH_ADMIN_ROLE": "CONSENT_MANAGER_ADMIN",
+        "CONSENT_MANAGER_AUTH_APPROVER_ROLE": "CONSENT_MANAGER_APPROVER",
+        "CONSENT_MANAGER_CRYPTO_BACKEND": "partner-mgmt",
+        "CONSENT_MANAGER_PARTNER_MGMT_API_URL": "http://pm-partner-api:8000",
+        "CONSENT_MANAGER_CM_SIGNING_KID": "cm-demo-INSECURE",
+        "CONSENT_MANAGER_CM_SIGNING_IS_DEMO": "true",
+        "CONSENT_MANAGER_CM_SIGNING_P12_PATH": "/app/secrets/cm_signing.p12",
+        "CONSENT_MANAGER_CM_SIGNING_P12_PASSWORD": "openg2p",
+        "CONSENT_MANAGER_AWE_ENABLED": "false",
+        "CONSENT_MANAGER_AWE_BASE_URL": "http://awe:8000"
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/assets/cm_signing_demo.p12:/app/secrets/cm_signing.p12:ro"
+      ],
+      "ports": [
+        "127.0.0.1:8260:8000"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping', timeout=5)"
+        ],
+        "interval": "10s",
+        "timeout": "6s",
+        "retries": 18,
+        "start_period": "40s"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-consent-manager-api",
+      "depends_on": {}
+    },
+    "cm-partner-api": {
+      "image": "openg2p/consent-manager-api:1.0.2",
+      "environment": {
+        "CONSENT_MANAGER_DB_DRIVER": "postgresql+asyncpg",
+        "CONSENT_MANAGER_DB_HOSTNAME": "postgres",
+        "CONSENT_MANAGER_DB_PORT": "5432",
+        "CONSENT_MANAGER_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "CONSENT_MANAGER_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "CONSENT_MANAGER_DB_DBNAME": "consent_manager_db",
+        "CONSENT_MANAGER_NO_OF_WORKERS": "1",
+        "CONSENT_MANAGER_API_AUDIENCE": "partner",
+        "CONSENT_MANAGER_AUTH_ENABLED": "false",
+        "CONSENT_MANAGER_AUTH_ISSUER": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer",
+        "CONSENT_MANAGER_AUTH_JWKS_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/certs",
+        "CONSENT_MANAGER_AUTH_ADMIN_ROLE": "CONSENT_MANAGER_ADMIN",
+        "CONSENT_MANAGER_AUTH_APPROVER_ROLE": "CONSENT_MANAGER_APPROVER",
+        "CONSENT_MANAGER_CRYPTO_BACKEND": "partner-mgmt",
+        "CONSENT_MANAGER_PARTNER_MGMT_API_URL": "http://pm-partner-api:8000",
+        "CONSENT_MANAGER_CM_SIGNING_KID": "cm-demo-INSECURE",
+        "CONSENT_MANAGER_CM_SIGNING_IS_DEMO": "true",
+        "CONSENT_MANAGER_CM_SIGNING_P12_PATH": "/app/secrets/cm_signing.p12",
+        "CONSENT_MANAGER_CM_SIGNING_P12_PASSWORD": "openg2p",
+        "CONSENT_MANAGER_AWE_ENABLED": "false",
+        "CONSENT_MANAGER_AWE_BASE_URL": "http://awe:8000"
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/assets/cm_signing_demo.p12:/app/secrets/cm_signing.p12:ro"
+      ],
+      "ports": [
+        "127.0.0.1:8261:8000"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping', timeout=5)"
+        ],
+        "interval": "10s",
+        "timeout": "6s",
+        "retries": 18,
+        "start_period": "40s"
+      },
+      "depends_on": {
+        "consent-manager-api": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-cm-partner-api"
+    },
+    "cm-ui": {
+      "image": "openg2p/consent-manager-ui:1.0.2",
+      "volumes": [
+        "@ROOT@/local/upstream/assets/cm-ui-config.json:/usr/share/nginx/html/config.json:ro"
+      ],
+      "ports": [
+        "127.0.0.1:3260:8080"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "wget",
+          "-q",
+          "--spider",
+          "http://127.0.0.1:8080/"
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 12
+      },
+      "depends_on": {
+        "consent-manager-api": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-cm-ui"
+    },
+    "master-data-seed": {
+      "image": "openg2p/master-data-db-seed:1.1.4-rc.104",
+      "profiles": [
+        "seed"
+      ],
+      "entrypoint": [
+        "python",
+        "/seed/load_geo_pack.py"
+      ],
+      "command": [
+        "--pack",
+        "/openg2p-data/packs/ETH",
+        "--load",
+        "geo,codelists"
+      ],
+      "environment": {
+        "PGHOST": "postgres",
+        "PGPORT": "5432",
+        "MDS_DB": "farmer_master_data_db",
+        "PGUSER": "${POSTGRES_SUPERUSER:-postgres}",
+        "PGPASSWORD": "${POSTGRES_PASSWORD:-postgres}"
+      },
+      "depends_on": {
+        "farmer-master-data-api": {
+          "condition": "service_healthy"
+        }
+      },
+      "restart": "no",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "container_name": "farmer-upstream-master-data-seed"
+    },
+    "id-generator": {
+      "image": "${ID_GENERATOR_IMAGE:-openg2p/openg2p-id-generator:1.0.0}",
+      "platform": "linux/amd64",
+      "container_name": "farmer-upstream-id-generator",
+      "depends_on": {},
+      "environment": {
+        "DB_HOST": "postgres",
+        "DB_PORT": "5432",
+        "DB_NAME": "farmer_idgenerator",
+        "DB_USER": "${POSTGRES_SUPERUSER:-postgres}",
+        "DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "CONFIG_PATH": "/app/config/default.yaml",
+        "UVICORN_HOST": "0.0.0.0",
+        "UVICORN_PORT": "8000",
+        "UVICORN_LOG_LEVEL": "info"
+      },
+      "ports": [
+        "127.0.0.1:8240:8000"
+      ],
+      "volumes": [
+        "@ROOT@/local/upstream/assets/id-generator.yaml:/app/config/default.yaml:ro"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/v1/idgenerator/health')\""
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 12,
+        "start_period": "20s"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "farmer-registry-staff-api": {
+      "build": {
+        "context": "@ROOT@",
+        "dockerfile": "docker/staff-api/Dockerfile"
+      },
+      "image": "farmer-upstream-trial/staff-api:rc544-coss",
+      "container_name": "farmer-upstream-staff-api",
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "depends_on": {},
+      "environment": {
+        "REGISTRY_STAFF_PORTAL_API_APP_HOST": "0.0.0.0",
+        "REGISTRY_STAFF_PORTAL_API_APP_PORT": "8000",
+        "REGISTRY_STAFF_PORTAL_API_DB_DRIVER": "postgresql+asyncpg",
+        "REGISTRY_STAFF_PORTAL_API_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "REGISTRY_STAFF_PORTAL_API_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "REGISTRY_STAFF_PORTAL_API_DB_HOSTNAME": "postgres",
+        "REGISTRY_STAFF_PORTAL_API_DB_PORT": "5432",
+        "REGISTRY_STAFF_PORTAL_API_DB_DBNAME": "farmer_registry_db",
+        "REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT": "minio.farmer-upstream.localtest.me:9200",
+        "REGISTRY_STAFF_PORTAL_API_MINIO_ACCESS_KEY": "${MINIO_ROOT_USER:-admin}",
+        "REGISTRY_STAFF_PORTAL_API_MINIO_SECRET_KEY": "${MINIO_ROOT_PASSWORD:-adminsecret}",
+        "REGISTRY_STAFF_PORTAL_API_MINIO_SECURE": "false",
+        "REGISTRY_STAFF_PORTAL_API_MINIO_BUCKET_NAME": "${MINIO_BUCKET_NAME:-default-bucket}",
+        "REGISTRY_STAFF_PORTAL_API_TEMPLATE_BUCKET_NAME": "templates",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_DRIVER": "postgresql+asyncpg",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_HOSTNAME": "postgres",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_PORT": "5432",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_DB_DBNAME": "farmer_master_data_db",
+        "REGISTRY_STAFF_PORTAL_API_AUTH_ENABLED": "true",
+        "REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL": "http://iam-staff-api:8000",
+        "REGISTRY_STAFF_PORTAL_API_KEYCLOAK_CLIENT_ID": "farmer-registry-staff-portal",
+        "REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL": "redis://redis:6379/4",
+        "REGISTRY_STAFF_PORTAL_API_REGISTRANT_AUTH_REDIS_URL": "redis://redis:6379/4",
+        "REGISTRY_STAFF_PORTAL_API_AUDIT_ENABLED": "${AUDIT_ENABLED:-false}",
+        "REGISTRY_STAFF_PORTAL_API_OPENAPI_ROOT_PATH": "/",
+        "REGISTRY_STAFF_PORTAL_API_CORS_ALLOW_ORIGINS": "[\"*\"]",
+        "REGISTRY_STAFF_PORTAL_API_AWE_ENABLED": "true",
+        "REGISTRY_STAFF_PORTAL_API_AWE_BASE_URL": "http://awe:8000",
+        "REGISTRY_STAFF_PORTAL_API_AWE_DEFAULT_CALLBACK_URL": "http://farmer-registry-staff-api:8000/awe/webhooks/decision",
+        "REGISTRY_STAFF_PORTAL_API_AWE_CALLBACK_SECRET_ID": "${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}",
+        "REGISTRY_STAFF_PORTAL_API_AWE_CALLBACK_HMAC_SECRET": "${AWE_REGISTRY_CALLBACK_HMAC_SECRET:-dev-registry-awe-callback-secret}",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_API_URL": "http://farmer-master-data-api:8000",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/token",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_ID": "commons-services-staff-portal",
+        "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_SECRET": "${COMMONS_CLIENT_SECRET:-dev-commons-client-secret}",
+        "REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_API_URL": "http://pm-partner-api:8000",
+        "REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_API_URL": "http://pm-staff-api:8000",
+        "REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_TOKEN_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/token",
+        "REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_CLIENT_ID": "commons-services-staff-portal",
+        "REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_CLIENT_SECRET": "${COMMONS_CLIENT_SECRET:-dev-commons-client-secret}",
+        "REGISTRY_STAFF_PORTAL_API_AUDIT_MANAGER_URL": "http://audit-manager:8000",
+        "REGISTRY_STAFF_PORTAL_API_CSRF_ENABLED": "true",
+        "STAFF_PORTAL_NO_OF_WORKERS": "1"
+      },
+      "ports": [
+        "127.0.0.1:8201:8000"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ping')\""
+        ],
+        "interval": "10s",
+        "timeout": "5s",
+        "retries": 18,
+        "start_period": "60s"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ]
+    },
+    "farmer-registry-partner-api": {
+      "build": {
+        "context": "@ROOT@",
+        "dockerfile": "docker/partner-api/Dockerfile"
+      },
+      "image": "farmer-upstream-trial/partner-api:rc544-coss",
+      "container_name": "farmer-upstream-partner-api",
+      "depends_on": {
+        "farmer-registry-staff-api": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "REGISTRY_PARTNER_API_APP_HOST": "0.0.0.0",
+        "REGISTRY_PARTNER_API_APP_PORT": "8000",
+        "REGISTRY_PARTNER_API_DB_DRIVER": "postgresql+asyncpg",
+        "REGISTRY_PARTNER_API_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "REGISTRY_PARTNER_API_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "REGISTRY_PARTNER_API_DB_HOSTNAME": "postgres",
+        "REGISTRY_PARTNER_API_DB_PORT": "5432",
+        "REGISTRY_PARTNER_API_DB_DBNAME": "farmer_registry_db",
+        "REGISTRY_PARTNER_API_MINIO_ENDPOINT": "minio.farmer-upstream.localtest.me:9200",
+        "REGISTRY_PARTNER_API_MINIO_ACCESS_KEY": "${MINIO_ROOT_USER:-admin}",
+        "REGISTRY_PARTNER_API_MINIO_SECRET_KEY": "${MINIO_ROOT_PASSWORD:-adminsecret}",
+        "REGISTRY_PARTNER_API_MINIO_SECURE": "false",
+        "REGISTRY_PARTNER_API_DOCUMENT_STORAGE_BACKEND": "minio",
+        "REGISTRY_PARTNER_API_MINIO_BUCKET_NAME": "${MINIO_BUCKET_NAME:-default-bucket}",
+        "REGISTRY_PARTNER_API_TEMPLATE_BUCKET_NAME": "templates",
+        "REGISTRY_PARTNER_API_MASTER_DATA_DB_DRIVER": "postgresql+asyncpg",
+        "REGISTRY_PARTNER_API_MASTER_DATA_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "REGISTRY_PARTNER_API_MASTER_DATA_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "REGISTRY_PARTNER_API_MASTER_DATA_DB_HOSTNAME": "postgres",
+        "REGISTRY_PARTNER_API_MASTER_DATA_DB_PORT": "5432",
+        "REGISTRY_PARTNER_API_MASTER_DATA_DB_DBNAME": "farmer_master_data_db",
+        "REGISTRY_PARTNER_API_KEYMANAGER_AUTH_ENABLED": "false",
+        "REGISTRY_PARTNER_API_AUDIT_ENABLED": "${AUDIT_ENABLED:-false}",
+        "REGISTRY_PARTNER_API_OPENAPI_ROOT_PATH": "/",
+        "REGISTRY_PARTNER_API_CORS_ALLOW_ORIGINS": "[\"*\"]",
+        "REGISTRY_PARTNER_API_MASTER_DATA_API_URL": "http://farmer-master-data-api:8000",
+        "REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/token",
+        "REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_ID": "commons-services-staff-portal",
+        "REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_SECRET": "${COMMONS_CLIENT_SECRET:-dev-commons-client-secret}",
+        "REGISTRY_PARTNER_API_PARTNER_MGMT_API_URL": "http://pm-partner-api:8000",
+        "REGISTRY_PARTNER_API_PARTNER_MGMT_ADMIN_API_URL": "http://pm-staff-api:8000",
+        "REGISTRY_PARTNER_API_PARTNER_MGMT_ADMIN_TOKEN_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/token",
+        "REGISTRY_PARTNER_API_PARTNER_MGMT_ADMIN_CLIENT_ID": "commons-services-staff-portal",
+        "REGISTRY_PARTNER_API_PARTNER_MGMT_ADMIN_CLIENT_SECRET": "${COMMONS_CLIENT_SECRET:-dev-commons-client-secret}",
+        "REGISTRY_PARTNER_API_AUDIT_MANAGER_URL": "http://audit-manager:8000",
+        "PARTNER_NO_OF_WORKERS": "1",
+        "REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED": "true",
+        "REGISTRY_PARTNER_API_CONSENT_ENFORCEMENT_ENABLED": "true",
+        "REGISTRY_PARTNER_API_CRYPTO_BACKEND": "partner-mgmt",
+        "REGISTRY_PARTNER_API_CONSENT_MANAGER_URL": "http://cm-partner-api:8000"
+      },
+      "ports": [
+        "127.0.0.1:8202:8000"
+      ],
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "farmer-registry-celery-worker": {
+      "build": {
+        "context": "@ROOT@",
+        "dockerfile": "docker/celery/Dockerfile"
+      },
+      "image": "farmer-upstream-trial/celery:rc544-coss",
+      "container_name": "farmer-upstream-celery-worker",
+      "depends_on": {
+        "id-generator": {
+          "condition": "service_healthy"
+        },
+        "farmer-registry-staff-api": {
+          "condition": "service_healthy"
+        },
+        "queue": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "CELERY_APP": "openg2p_registry_celery_worker.main.celery_app",
+        "CELERY_OPTS": "worker -Q farmer_registry_worker_queue --loglevel=info --concurrency=2",
+        "REGISTRY_CELERY_WORKERS_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "REGISTRY_CELERY_WORKERS_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "REGISTRY_CELERY_WORKERS_DB_HOSTNAME": "postgres",
+        "REGISTRY_CELERY_WORKERS_DB_PORT": "5432",
+        "REGISTRY_CELERY_WORKERS_DB_DBNAME": "farmer_registry_db",
+        "REGISTRY_CELERY_WORKERS_CELERY_BROKER_URL": "redis://queue:6379/0",
+        "REGISTRY_CELERY_WORKERS_CELERY_BACKEND_URL": "redis://queue:6379/0",
+        "REGISTRY_CELERY_WORKERS_WORKER_QUEUE": "farmer_registry_worker_queue",
+        "REGISTRY_CELERY_WORKERS_BATCH_SIZE": "2000",
+        "REGISTRY_CELERY_WORKERS_AWE_ENABLED": "true",
+        "REGISTRY_CELERY_WORKERS_AWE_BASE_URL": "http://awe:8000",
+        "REGISTRY_CELERY_WORKERS_AWE_DEFAULT_CALLBACK_URL": "http://farmer-registry-staff-api:8000/awe/webhooks/decision",
+        "REGISTRY_CELERY_WORKERS_AWE_CALLBACK_SECRET_ID": "${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}",
+        "REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL": "http://keycloak:8080/realms/farmer/protocol/openid-connect/token",
+        "REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL": "http://keycloak.farmer-upstream.localtest.me:8180",
+        "REGISTRY_CELERY_WORKERS_AWE_CLIENT_ID": "farmer-registry-ingestion",
+        "REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET": "${KEYCLOAK_INGESTION_CLIENT_SECRET:-dev-registry-ingestion-secret}",
+        "REGISTRY_CELERY_WORKERS_WORKER_MAX_ATTEMPTS": "5",
+        "REGISTRY_CELERY_WORKERS_MINIO_ENDPOINT": "minio.farmer-upstream.localtest.me:9200",
+        "REGISTRY_CELERY_WORKERS_MINIO_ACCESS_KEY": "${MINIO_ROOT_USER:-admin}",
+        "REGISTRY_CELERY_WORKERS_MINIO_SECRET_KEY": "${MINIO_ROOT_PASSWORD:-adminsecret}",
+        "REGISTRY_CELERY_WORKERS_MINIO_SECURE": "false",
+        "REGISTRY_CELERY_WORKERS_MINIO_BUCKET_NAME": "templates",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_DRIVER": "postgresql+asyncpg",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_HOSTNAME": "postgres",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_PORT": "5432",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_DB_DBNAME": "farmer_master_data_db",
+        "REGISTRY_CELERY_WORKERS_FUNCTIONAL_ID_GENERATION_URL": "http://id-generator:8000/v1",
+        "REGISTRY_CELERY_WORKERS_ID_GENERATION_ALLOCATION_PATH": "/idgenerator/{id_type}/id",
+        "REGISTRY_CELERY_WORKERS_ID_GENERATION_UPDATION_PATH": "",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_API_URL": "http://farmer-master-data-api:8000",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_TOKEN_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/token",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_CLIENT_ID": "commons-services-staff-portal",
+        "REGISTRY_CELERY_WORKERS_MASTER_DATA_CLIENT_SECRET": "${COMMONS_CLIENT_SECRET:-dev-commons-client-secret}",
+        "REGISTRY_CELERY_WORKERS_PARTNER_MGMT_API_URL": "http://pm-partner-api:8000",
+        "REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_API_URL": "http://pm-staff-api:8000",
+        "REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_TOKEN_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/token",
+        "REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_CLIENT_ID": "commons-services-staff-portal",
+        "REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_CLIENT_SECRET": "${COMMONS_CLIENT_SECRET:-dev-commons-client-secret}"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "farmer-registry-celery-beat": {
+      "image": "farmer-upstream-trial/celery:rc544-coss",
+      "pull_policy": "never",
+      "container_name": "farmer-upstream-celery-beat",
+      "depends_on": {
+        "farmer-registry-celery-worker": {
+          "condition": "service_started"
+        },
+        "queue": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "CELERY_APP": "openg2p_registry_celery_beat.main.celery_app",
+        "CELERY_OPTS": "worker --beat -Q celery --loglevel=info --concurrency=1 --schedule=/tmp/celery-beat-schedule.db",
+        "REGISTRY_CELERY_BEAT_DB_USERNAME": "${POSTGRES_SUPERUSER:-postgres}",
+        "REGISTRY_CELERY_BEAT_DB_PASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "REGISTRY_CELERY_BEAT_DB_HOSTNAME": "postgres",
+        "REGISTRY_CELERY_BEAT_DB_PORT": "5432",
+        "REGISTRY_CELERY_BEAT_DB_DBNAME": "farmer_registry_db",
+        "REGISTRY_CELERY_BEAT_CELERY_BROKER_URL": "redis://queue:6379/0",
+        "REGISTRY_CELERY_BEAT_CELERY_BACKEND_URL": "redis://queue:6379/0",
+        "REGISTRY_CELERY_BEAT_WORKER_QUEUE": "farmer_registry_worker_queue",
+        "REGISTRY_CELERY_BEAT_BATCH_SIZE": "2000",
+        "REGISTRY_CELERY_BEAT_NO_OF_TASKS_TO_PROCESS": "4",
+        "REGISTRY_CELERY_BEAT_DATA_TRANSFORMATION_BEAT_PRODUCER_FREQUENCY": "20",
+        "REGISTRY_CELERY_BEAT_INGEST_DATA_BEAT_PRODUCER_FREQUENCY": "20",
+        "REGISTRY_CELERY_BEAT_INGEST_DATA_CLASSIFICATION_BEAT_PRODUCER_FREQUENCY": "20",
+        "REGISTRY_CELERY_BEAT_OUTGEST_DATA_PUBLISH_BEAT_PRODUCER_FREQUENCY": "20",
+        "REGISTRY_CELERY_BEAT_OUTGEST_TOPIC_REGISTER_BEAT_PRODUCER_FREQUENCY": "20",
+        "REGISTRY_CELERY_BEAT_DEDUPLICATION_BEAT_PRODUCER_FREQUENCY": "30"
+      },
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "farmer-registry-staff-ui": {
+      "image": "farmer-upstream-trial/staff-ui:rc544-coss",
+      "container_name": "farmer-upstream-staff-ui",
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "depends_on": {
+        "farmer-registry-staff-api": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "PORT": "3000",
+        "HOSTNAME": "0.0.0.0",
+        "BACKEND_API_URL": "http://farmer-registry-staff-api:8000",
+        "MASTERDATA_BACKEND_API_URL": "http://farmer-master-data-api:8000",
+        "DEFAULT_LOCALE": "en",
+        "PARTNER_IMPORT_EXPORT_ENABLE": "true",
+        "PAGE_SIZE": "10",
+        "IAM_URL": "http://iam.farmer-upstream.localtest.me:8200",
+        "KEYCLOAK_LOGOUT_URL": "http://keycloak.farmer-upstream.localtest.me:8180/realms/farmer/protocol/openid-connect/logout",
+        "LOGIN_PROVIDER_ID": "1",
+        "APPLICATION_MNEMONIC": "farmer-registry-staff-portal",
+        "COOKIE_DOMAIN": "farmer-upstream.localtest.me",
+        "REDIRECT_URL": "http://portal.farmer-upstream.localtest.me:3200",
+        "CSP_HEADER": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: http://minio.farmer-upstream.localtest.me:9200; font-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+      },
+      "ports": [
+        "127.0.0.1:3200:3000"
+      ],
+      "restart": "unless-stopped",
+      "networks": [
+        "default"
+      ],
+      "build": {
+        "context": "@ROOT@",
+        "dockerfile": "docker/staff-ui/Dockerfile"
+      }
+    },
+    "farmer-registry-db-seed": {
+      "build": {
+        "context": "@ROOT@",
+        "dockerfile": "docker/db-seed/Dockerfile"
+      },
+      "image": "farmer-upstream-trial/db-seed:rc544-coss",
+      "container_name": "farmer-upstream-db-seed",
+      "depends_on": {
+        "farmer-registry-staff-api": {
+          "condition": "service_healthy"
+        }
+      },
+      "environment": {
+        "PGHOST": "postgres",
+        "PGPORT": "5432",
+        "PGDATABASE": "farmer_registry_db",
+        "PGUSER": "${POSTGRES_SUPERUSER:-postgres}",
+        "PGPASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "MD_PGHOST": "postgres",
+        "MD_PGPORT": "5432",
+        "MD_PGDATABASE": "farmer_master_data_db",
+        "MD_PGUSER": "${POSTGRES_SUPERUSER:-postgres}",
+        "MD_PGPASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "AWE_DB_SEED_ENABLED": "${AWE_DB_SEED_ENABLED:-true}",
+        "AWE_PGHOST": "postgres",
+        "AWE_PGPORT": "5432",
+        "AWE_PGDATABASE": "farmer_awe",
+        "AWE_PGUSER": "${POSTGRES_SUPERUSER:-postgres}",
+        "AWE_PGPASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "AWE_CALLBACK_SECRET_ID": "${AWE_REGISTRY_CALLBACK_SECRET_ID:-00000000-0000-4000-8000-000000000001}",
+        "AWE_CALLBACK_HMAC_SECRET": "${AWE_REGISTRY_CALLBACK_HMAC_SECRET:-dev-registry-awe-callback-secret}",
+        "AWE_CALLBACK_CALLER_SERVICE": "http://farmer-registry-staff-api:8000/awe/webhooks/decision",
+        "LOAD_SAMPLE_DATA": "false",
+        "LOAD_GEO_DATA": "false",
+        "LOAD_IMAGES": "false",
+        "LOAD_TEMPLATES": "${LOAD_TEMPLATES:-true}",
+        "MINIO_ENDPOINT": "minio.farmer-upstream.localtest.me:9200",
+        "MINIO_ACCESS_KEY": "${MINIO_ROOT_USER:-admin}",
+        "MINIO_SECRET_KEY": "${MINIO_ROOT_PASSWORD:-adminsecret}",
+        "MINIO_SECURE": "false",
+        "TEMPLATE_BUCKET_NAME": "templates",
+        "IMAGE_BUCKET_NAME": "documents",
+        "SYNC_GEO_WIDGETS": "true"
+      },
+      "restart": "no",
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway",
+        "iam.farmer-upstream.localtest.me:host-gateway",
+        "minio.farmer-upstream.localtest.me:host-gateway"
+      ],
+      "profiles": [
+        "seed"
+      ],
+      "entrypoint": [
+        "python",
+        "/trial/seed.py"
+      ],
+      "volumes": [
+        "@ROOT@/local/upstream/seed.py:/trial/seed.py:ro"
+      ]
+    },
+    "queue": {
+      "image": "redis:7-alpine",
+      "restart": "unless-stopped",
+      "command": [
+        "redis-server",
+        "--appendonly",
+        "yes"
+      ],
+      "volumes": [
+        "queue-data:/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "redis-cli",
+          "ping"
+        ],
+        "interval": "5s",
+        "timeout": "3s",
+        "retries": 10
+      },
+      "container_name": "farmer-upstream-queue",
+      "networks": [
+        "default"
+      ],
+      "depends_on": {}
+    },
+    "sanity": {
+      "image": "farmer-upstream-trial/sanity-tests:rc544-coss",
+      "build": {
+        "context": "@ROOT@",
+        "dockerfile": "docker/sanity-tests/Dockerfile"
+      },
+      "profiles": [
+        "test"
+      ],
+      "networks": [
+        "default"
+      ],
+      "extra_hosts": [
+        "keycloak.farmer-upstream.localtest.me:host-gateway"
+      ]
+    },
+    "coss-geo-seed": {
+      "image": "farmer-upstream-trial/db-seed:rc544-coss",
+      "profiles": [
+        "seed"
+      ],
+      "entrypoint": [
+        "python",
+        "/trial/geo_override.py"
+      ],
+      "environment": {
+        "PGHOST": "postgres",
+        "PGPORT": "5432",
+        "PGDATABASE": "farmer_registry_db",
+        "PGUSER": "${POSTGRES_SUPERUSER:-postgres}",
+        "PGPASSWORD": "${POSTGRES_PASSWORD:-postgres}",
+        "MD_PGHOST": "postgres",
+        "MD_PGPORT": "5432",
+        "MD_PGDATABASE": "farmer_master_data_db",
+        "MD_PGUSER": "${POSTGRES_SUPERUSER:-postgres}",
+        "MD_PGPASSWORD": "${POSTGRES_PASSWORD:-postgres}"
+      },
+      "volumes": [
+        "@ROOT@/local/upstream/geo_override.py:/trial/geo_override.py:ro",
+        "@ROOT@/local/upstream/assets/geo:/trial/geo:ro",
+        "@ROOT@/local/upstream/generated:/trial/state"
+      ]
+    }
+  },
+  "networks": {
+    "default": {
+      "name": "farmer-upstream-trial"
+    }
+  },
+  "volumes": {
+    "postgres-data": {},
+    "minio-data": {},
+    "queue-data": {},
+    "kafka-data": {}
+  }
+}
