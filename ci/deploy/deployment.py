@@ -91,15 +91,73 @@ def pod(d):
     return spec.get("template", {}).get("spec", {})
 
 
-def envs(d):
+def envs(d, include_init=True):
     result = {}
-    for container in pod(d).get("containers", []):
+    for container in pod(d).get("containers", []) + (pod(d).get("initContainers", []) if include_init else []):
         entries = container.get("env", [])
         variables = {e["name"]: e for e in entries}
         if container["name"] in result or len(variables) != len(entries):
             raise ValueError("Duplicate workload container/environment entry")
         result[container["name"]] = variables
     return result
+
+
+def reconcile_dev(values, before):
+    """Carry installed literals and references through the chart's public values."""
+    old = index(before)
+    packaged = {}
+    if os.environ.get('OAN_CHART_ARCHIVE'):
+        from oan_chart import defaults
+        packaged = defaults(os.environ['OAN_CHART_ARCHIVE'])
+    for component, (kind, suffix, _) in COMPONENTS.items():
+        if kind != 'Deployment':
+            continue
+        previous = old.get((kind, RELEASE + '-' + suffix))
+        if previous is None:
+            continue
+        target = values['registry'].setdefault(component, {})
+        installed = {}
+        for variables in envs(previous).values():
+            for name, entry in variables.items():
+                if name in installed and installed[name] != entry:
+                    raise ValueError('Installed init/application environments cannot share chart values')
+                installed[name] = entry
+        for field in ('envVars', 'envVarsFrom'):
+            for name in packaged.get('registry', {}).get(component, {}).get(field, {}):
+                if name not in installed:
+                    target.setdefault(field, {})[name] = None
+        for name, entry in installed.items():
+            field, other = ('envVarsFrom', 'envVars') if 'valueFrom' in entry else ('envVars', 'envVarsFrom')
+            value = entry.get('valueFrom', entry.get('value', ''))
+            if '{{' in json.dumps(value):
+                raise ValueError('Installed environment contains template syntax; explicit reconciliation required')
+            target.setdefault(field, {})[name] = copy.deepcopy(value)
+            # Null removes a packaged default from the other Helm map.
+            target.setdefault(other, {})[name] = None
+    dashboard = old.get(('Deployment', RELEASE + '-dashboard-api'))
+    if dashboard:
+        containers = pod(dashboard)['containers']
+        if len(containers) != 1:
+            raise ValueError('Dashboard container layout cannot be represented')
+        image = containers[0]['image']
+        repository, sep, digest = image.partition('@')
+        target = values.setdefault('dashboardApi', {})
+        target['enabled'] = True
+        if sep:
+            target['image'] = {'repository': repository, 'digest': digest}
+        else:
+            repository, sep, tag = image.rpartition(':')
+            if not sep:
+                raise ValueError('Installed dashboard requires an explicit image tag')
+            target['image'] = {'repository': repository, 'tag': tag, 'digest': None}
+        variables = envs(dashboard)[containers[0]['name']]
+        for name, field in [('GEO_LEVEL_TOTALS', 'geoLevelTotals'), ('ALLOWED_ORIGINS', 'allowedOrigins')]:
+            if name in variables:
+                target[field] = json.loads(variables[name]['value'])
+        for name, field in [('DB_POOL_MIN_SIZE', 'minSize'), ('DB_POOL_MAX_SIZE', 'maxSize')]:
+            if name in variables:
+                target.setdefault('dbPool', {})[field] = int(variables[name]['value'])
+    return values
 
 
 def image_root(registry, tag):
@@ -164,6 +222,8 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
         raise ValueError("This pipeline targets only the verified new-dev Registry hostname" if environment == "dev"
                          else "Registry hostname does not match staging")
     config = values.setdefault("registry", {})
+    if environment == 'dev':
+        reconcile_dev(values, before)
     # Some installed dev gateways are in the release manifest but absent from
     # saved values. Carry them into rc.544's owning values instead of falling
     # back to "internal"; validate still requires the whole route unchanged.
@@ -187,6 +247,13 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     for component, (_, _, image) in COMPONENTS.items():
         pinned_tag = images[image]["tag"] + "@" + images[image]["digest"] if images else tag
         config.setdefault(component, {}).setdefault("image", {}).update(repository=root + "/" + image, tag=pinned_tag)
+        if images:
+            # Bitnami image helpers prefer digest to tag; overwrite saved pins.
+            config[component]['image']['digest'] = ''
+    if environment == 'dev' and images:
+        values.setdefault('analytics', {})['image'] = {
+            'repository': root + '/db-seed',
+            'tag': images['db-seed']['tag'] + '@' + images['db-seed']['digest']}
     # rc.544's chart omits AWE worker variables previously added by COSS. Carry
     # their exact literals/Secret refs forward, without capturing Secret data.
     worker = old.get(("Deployment", RELEASE + "-celery-worker"), {})
@@ -250,10 +317,28 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
         if key not in new:
             raise ValueError(f"Upgrade would remove {key}; explicit ownership migration required")
         current = new[key]
+        if previous.get('metadata', {}).get('labels', {}).get('app.kubernetes.io/managed-by') != current.get('metadata', {}).get('labels', {}).get('app.kubernetes.io/managed-by'):
+            raise ValueError(f'Existing Helm manager changed: {key}')
+        for field in ('ownerReferences',):
+            if previous.get('metadata', {}).get(field) != current.get('metadata', {}).get(field):
+                raise ValueError(f'Existing ownership changed: {key}')
+        for field in ('meta.helm.sh/release-name', 'meta.helm.sh/release-namespace'):
+            if previous.get('metadata', {}).get('annotations', {}).get(field) != current.get('metadata', {}).get('annotations', {}).get(field):
+                raise ValueError(f'Existing Helm ownership changed: {key}')
         if key[0] in ("Deployment", "StatefulSet"):
             if previous["spec"].get("selector") != current["spec"].get("selector"):
                 raise ValueError(f"Immutable selector changed: {key}")
             old_env, new_env = envs(previous), envs(current)
+            for group in ('containers', 'initContainers'):
+                old_containers = {c['name']: c for c in pod(previous).get(group, [])}
+                new_containers = {c['name']: c for c in pod(current).get(group, [])}
+                if old_containers.keys() != new_containers.keys():
+                    raise ValueError(f'Existing container layout changed: {key}/{group}')
+                for name, container in old_containers.items():
+                    if container.get('envFrom') != new_containers[name].get('envFrom'):
+                        raise ValueError(f'Existing environment/Secret sources changed: {key}/{name}')
+                    if group == 'initContainers' and container.get('image') != new_containers[name].get('image'):
+                        raise ValueError(f'Existing init image changed: {key}/{name}')
             for container, variables in old_env.items():
                 for name, value in variables.items():
                     if new_env.get(container, {}).get(name) != value:
@@ -277,6 +362,14 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
         if key == ("Deployment", RELEASE + "-dashboard-api"):
             if [c["image"] for c in pod(previous)["containers"]] != [c["image"] for c in pod(current)["containers"]]:
                 raise ValueError("Dashboard image must be retained by this Registry deployment")
+        if environment == 'dev' and images:
+            for group in ('containers', 'initContainers'):
+                current_images = {c['name']: c.get('image') for c in pod(current).get(group, [])}
+                for container in pod(previous).get(group, []):
+                    previous_image = container.get('image', '')
+                    built = any(previous_image.startswith(root + '/' + component + ':') or previous_image.startswith(root + '/' + component + '@') for component in images)
+                    if not built and container.get('image') != current_images.get(container['name']):
+                        raise ValueError(f'Optional component image changed: {key}/{container["name"]}')
     for _, (kind, suffix, component) in COMPONENTS.items():
         key = (kind, RELEASE + "-" + suffix)
         if key not in new or not pod(new[key]).get("containers"):
@@ -292,7 +385,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
     if migrate_identity:
         for suffix in ("staff-portal-ui", "staff-portal-api", "partner-api", "celery-worker"):
             current = new[("Deployment", RELEASE + "-" + suffix)]
-            environments = list(envs(current).values())
+            environments = list(envs(current, include_init=False).values())
             if len(environments) != 1:
                 raise ValueError("Identity migration requires one application container per workload")
             for name, value in identity_env(suffix).items():
@@ -301,7 +394,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
     if environment == "dev":
         for suffix in ("staff-portal-ui", "staff-portal-api", "partner-api", "celery-worker"):
             current = new.get(("Deployment", RELEASE + "-" + suffix), {})
-            environments = list(envs(current).values())
+            environments = list(envs(current, include_init=False).values())
             if len(environments) != 1:
                 raise ValueError("Master Data routing requires one application container per workload")
             for name, value in location_env(suffix).items():
@@ -322,6 +415,8 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                 if current.get(name) != env_entry(name, value):
                     raise ValueError(f"Staging staff identity was not rendered: {suffix}/{name}")
     for key, d in new.items():
+        if environment == 'dev' and key not in old and key[0] != 'Job':
+            raise ValueError(f'Unexpected persistent resource: {key}')
         if key[1].startswith(("commons-", "farmer-connector")):
             raise ValueError(f"Registry must not own shared/connector resource: {key}")
         if key[0] in ("ClusterRole", "ClusterRoleBinding", "Namespace", "PersistentVolume",
@@ -329,6 +424,12 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                       "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration"):
             raise ValueError(f"Registry must remain namespace-scoped: {key}")
         for container in pod(d).get("containers", []):
+            if environment == 'dev' and images:
+                for component in images:
+                    prefix = root + '/' + component
+                    image = container.get('image', '')
+                    if image.startswith((prefix + ':', prefix + '@')) and image != prefix + ':' + images[component]['tag'] + '@' + images[component]['digest']:
+                        raise ValueError(f'Built component did not use recorded digest: {key}')
             for e in container.get("env", []):
                 if e["name"] in ("LOAD_GEO_DATA", "LOAD_SAMPLE_DATA", "LOAD_IMAGES") and e.get("value") != "false":
                     raise ValueError(f"Demo/geography loader enabled: {key}/{e['name']}")
@@ -366,7 +467,7 @@ def registry_provenance(registry, tag, commit):
             raise ValueError("Invalid Registry image provenance")
         if image != root + "/" + component + ":" + tag or component in images:
             raise ValueError("Invalid Registry image provenance")
-        images[component] = {"image": image, "digest": digest}
+        images[component] = {"image": image, "tag": tag, "digest": digest}
     if set(images) != {c[2] for c in COMPONENTS.values()}:
         raise ValueError("Missing Registry image provenance")
     return images
@@ -400,6 +501,8 @@ def main():
         images = record["registry"]["images"]
         os.environ["ECR_REGISTRY"] = record["registry"]["registry"]
         os.environ["IMAGE_TAG"] = record["registry"]["sourceCommit"][:12]
+    elif action in ('prepare', 'validate', 'provenance', 'outcome', 'attempt'):
+        images = registry_provenance(os.environ['ECR_REGISTRY'], os.environ['IMAGE_TAG'], os.environ.get('SOURCE_COMMIT', ''))
     migrate_identity = os.environ.get("APPLY_COMMONS_IDENTITY", "false") == "true"
     if environment == "staging" and migrate_identity:
         raise ValueError("Dev Commons identity migration cannot be used for staging")
@@ -429,16 +532,27 @@ def main():
     elif action == "diagnose":
         for message in upgrade_diagnostic(Path(args[0]).read_text(encoding="utf-8", errors="replace")):
             print("Helm diagnostic: " + message)
-    elif action in ("provenance", "outcome"):
+    elif action in ("provenance", "outcome", "attempt"):
         commit = os.environ.get("SOURCE_COMMIT", "")
         if environment == "dev":
             images = registry_provenance(os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], commit)
+        if action == 'attempt':
+            if environment != 'dev':
+                raise ValueError('OAN attempt record is dev only')
+            from oan_chart import profile
+            Path(args[0]).write_text(json.dumps({'component': RELEASE, 'namespace': 'farmer',
+                'sourceCommit': commit, 'images': images, 'chart': profile(),
+                'helmRevision': None, 'outcome': 'not-completed',
+                'verification': 'deployment-did-not-complete-all-gates'}) + '\n', encoding='utf-8')
         if action == "outcome":
+            if environment == 'dev':
+                from oan_chart import profile
             status = load(args[0])
             release_status(status, require_deployed=True, environment=environment)
             Path(args[1]).write_text(json.dumps({"component": RELEASE, "namespace": namespace(environment),
                                            "sourceCommit": commit, "images": images,
-                                           "helmRevision": status["version"], "outcome": "deployed"}) + "\n", encoding="utf-8")
+                                           "helmRevision": status["version"], "outcome": "deployed",
+                                           **({"chart": profile(), "verification": "preservation-rollout-schema-passed"} if environment == 'dev' else {})}) + "\n", encoding="utf-8")
     elif action == "prepare":
         result = prepare(load(args[0]), documents(args[1]), os.environ["ECR_REGISTRY"], os.environ["IMAGE_TAG"], migrate_identity, environment, images)
         Path(args[2]).write_text(yaml.safe_dump(result, sort_keys=False), encoding="utf-8")

@@ -103,6 +103,10 @@ def release():
         if key not in existing:
             existing[key] = workload(kind, suffix, "")
             after.append(existing[key])
+            if kind != 'Job':
+                previous = copy.deepcopy(existing[key])
+                deployment.pod(previous)['containers'][0]['image'] = 'old/' + image + ':previous'
+                before.append(previous)
         deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:{TAG}"
     for doc in after:
         suffix = doc["metadata"]["name"].removeprefix("farmer-registry-")
@@ -169,7 +173,7 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
     worker = result["registry"]["celeryWorker"]
     assert worker["envVars"]["REGISTRY_CELERY_WORKERS_AWE_BASE_URL"] == "http://commons-services-awe"
     assert worker["envVarsFrom"]["REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET"]["secretKeyRef"]["key"] == "client_secret"
-    assert result["dashboardApi"] == values["dashboardApi"]
+    assert result['dashboardApi']['image'] == {'repository': 'independent/dashboard', 'tag': 'existing', 'digest': None}
     assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".oanstaging.com"
     assert result["registry"]["dbSeed"]["loadSampleData"] is False
     assert result["registry"]["sanity"]["runE2e"] is False
@@ -254,7 +258,7 @@ def test_browser_route_change_is_rejected(release):
 def test_connector_ownership_is_rejected(release):
     before, after = release
     after.append({"kind": "Service", "metadata": {"name": "farmer-connector-api"}, "spec": {}})
-    with pytest.raises(ValueError, match="shared/connector"):
+    with pytest.raises(ValueError, match="persistent resource|shared/connector"):
         deployment.validate(before, after, ECR, TAG)
 
 

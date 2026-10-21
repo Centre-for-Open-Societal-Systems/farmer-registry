@@ -29,7 +29,7 @@ trap cleanup EXIT
 # existing VPN access. The helper receives no kubeconfig or Docker socket.
 guard() {
   # Bash 4.3 + nounset cannot expand an empty array. Keep this nonempty.
-  local evidence_args=(-e APPLY_COMMONS_IDENTITY -e DELIVERY_ENVIRONMENT -e KUBECONFIG_CREDENTIAL)
+  local evidence_args=(-e APPLY_COMMONS_IDENTITY -e DELIVERY_ENVIRONMENT -e KUBECONFIG_CREDENTIAL -e HELM_NAMESPACE -e HELM_RELEASE)
   if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
     evidence_args+=(-v "$STAGING_EVIDENCE_FILE:/staging-evidence.json:ro" -e STAGING_EVIDENCE_FILE=/staging-evidence.json)
   fi
@@ -38,7 +38,7 @@ guard() {
     evidence_args+=(-v "$IDENTITY_EVIDENCE_FILE:/identity-evidence.json:ro" -e IDENTITY_EVIDENCE_FILE=/identity-evidence.json)
   fi
   docker run --rm --network none --user "$(id -u):$(id -g)" \
-    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT "${evidence_args[@]}" \
+    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE "${evidence_args[@]}" \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
     "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
 }
@@ -52,9 +52,19 @@ fi
 # after a credential, namespace or context mistake. Private manifests stay local.
 if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
   guard provenance
+  if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
+    guard attempt "$STATE/attempt.json"
+    mkdir -p "$(dirname "$REGISTRY_OUTCOME_FILE")"
+    cp "$STATE/attempt.json" "$REGISTRY_OUTCOME_FILE"
+  fi
 fi
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json"
 guard status "$STATE/status.json"
+if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
+  helm list -n "$HELM_NAMESPACE" --filter '^farmer-registry$' -o json > "$STATE/chart.json"
+  # Application updates start only after the separate chart-only cutover.
+  GUARD_SCRIPT=ci/deploy/cutover.py guard adopted "$STATE/chart.json"
+fi
 MODE=$(guard upgrade-mode "$STATE/status.json")
 UPGRADE_FLAGS=(--wait --wait-for-jobs --timeout 20m)
 if [[ "$MODE" == normal && "$DELIVERY_ENVIRONMENT" == dev ]]; then
@@ -68,6 +78,14 @@ helm get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/values.js
 helm get manifest "$HELM_RELEASE" -n "$HELM_NAMESPACE" > "$STATE/before.yaml"
 if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
   GUARD_SCRIPT=ci/deploy/staging.py guard cutover "$STATE/status.json" "$STATE/values.json" "$STATE/before.yaml"
+fi
+if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
+  CHART="$STATE/oan-farmer.tgz"
+  URL=$(GUARD_SCRIPT=ci/deploy/oan_chart.py guard url)
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    --output "$CHART" "$URL"
+  GUARD_SCRIPT=ci/deploy/oan_chart.py guard verify "$CHART"
+  export OAN_CHART_ARCHIVE="$CHART"
 fi
 guard prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
 
@@ -92,8 +110,10 @@ check_schema() {
   fi
 }
 check_schema
-helm repo add openg2p https://openg2p.github.io/openg2p-helm --force-update
-helm dependency build "$CHART"
+if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
+  helm repo add openg2p https://openg2p.github.io/openg2p-helm --force-update
+  helm dependency build "$CHART"
+fi
 helm lint "$CHART" --strict -f "$STATE/values.yaml" > "$STATE/lint.log"
 helm template "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
   -f "$STATE/values.yaml" --is-upgrade --dry-run=server > "$STATE/after.yaml"
@@ -117,6 +137,10 @@ if ! helm upgrade "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
 fi
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/final-status.json"
 guard complete "$STATE/final-status.json"
+if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
+  helm list -n "$HELM_NAMESPACE" --filter '^farmer-registry$' -o json > "$STATE/chart.json"
+  GUARD_SCRIPT=ci/deploy/cutover.py guard installed "$STATE/chart.json"
+fi
 for component in staff-portal-api partner-api staff-portal-ui celery-worker celery-beat-producer; do
   kubectl rollout status "deployment/$HELM_RELEASE-$component" -n "$HELM_NAMESPACE" --timeout=180s
 done

@@ -13,6 +13,7 @@ No dependencies beyond the stdlib + pytest — runs anywhere the other tests do.
 """
 
 import pathlib
+import json
 import re
 
 import pytest
@@ -44,7 +45,8 @@ def test_rp_pin_is_in_lockstep():
     assert docker, "no ARG RP_VERSION found in any docker/*/Dockerfile"
     assert chart, "no openg2p-registry dependency version found in Chart.yaml"
 
-    all_pins = set(docker.values()) | {chart}
+    oan_pin = json.loads((REPO / 'ci/deploy/oan-chart.json').read_text())['platformVersion']
+    all_pins = set(docker.values()) | {chart, oan_pin}
     if len(all_pins) != 1:
         lines = [f"  Chart.yaml openg2p-registry dependency: {chart}"]
         lines += [f"  {p}: {v}" for p, v in docker.items()]

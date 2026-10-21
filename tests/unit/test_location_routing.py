@@ -22,7 +22,9 @@ def test_prepare_repairs_saved_dev_routes_and_approved_service_binding(release):
     assert staff["envVars"]["REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_ID"] == "farmer-registry-staff-portal"
     assert staff["envVarsFrom"]["REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_SECRET"] == {
         "secretKeyRef": {"name": "farmer-registry-staff-portal", "key": "client_secret", "optional": False}}
-    assert staff["envVarsFrom"]["REGISTRY_STAFF_PORTAL_API_DB_PASSWORD"] == reference
+    # Installed Secret wiring takes precedence over stale saved values.
+    assert staff['envVarsFrom']['REGISTRY_STAFF_PORTAL_API_DB_PASSWORD'] == {
+        'secretKeyRef': {'name': 'farmer-registry', 'key': 'farmer-registry-db-user'}}
     assert values == previous
     assert "keycloakBaseUrl" not in prepared["global"]
     assert deployment.location_overlay("staging") == {}
