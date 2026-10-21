@@ -68,11 +68,9 @@ for TEST_MODE in normal recovery; do
     if [ "$TEST_UPGRADE_EXIT" -eq 1 ]; then
       grep -q ' diagnose ' "$GUARD_CALLS"
       grep -q '^history ' "$HELM_CALLS"
-      if grep -q '^get hooks ' "$HELM_CALLS"; then
-        echo 'Failed upgrade must stop before post-upgrade validation'; exit 1
-      fi
+      test "$(grep -c '^get hooks ' "$HELM_CALLS")" = 1
     else
-      grep -q '^get hooks ' "$HELM_CALLS"
+      test "$(grep -c '^get hooks ' "$HELM_CALLS")" = 2
     fi
     if [ "$APPLY_COMMONS_IDENTITY" = true ]; then
       grep -q ':/identity-evidence.json:ro' "$GUARD_CALLS"

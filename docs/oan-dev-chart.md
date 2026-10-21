@@ -80,6 +80,9 @@ again, and operates during both dev render and upgrade. It leaves commands,
 images, routes, Secret references and all other configuration untouched.
 Unknown changes still fail the independent preservation guard. This is a
 deployment adapter for the pinned package; chart sources/packages are unchanged.
+Normal dev preflight reads both the installed manifest and stored hooks, so the
+existing IAM hook ConfigMap is covered by the resource inventory rather than
+requiring an exception for new resources.
 
 Archive only `service-outcomes/*.json` and `service-outcomes/*.tsv`, including
 the cutover result and later normal deployment results. Do not publish exported

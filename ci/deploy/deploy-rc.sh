@@ -76,6 +76,12 @@ else
 fi
 helm get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/values.json"
 helm get manifest "$HELM_RELEASE" -n "$HELM_NAMESPACE" > "$STATE/before.yaml"
+if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
+  # Helm stores hook ConfigMaps separately. Include their existing identities
+  # rather than treating them as unreviewed new persistent resources.
+  printf '\n---\n' >> "$STATE/before.yaml"
+  helm get hooks "$HELM_RELEASE" -n "$HELM_NAMESPACE" >> "$STATE/before.yaml"
+fi
 if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
   GUARD_SCRIPT=ci/deploy/staging.py guard cutover "$STATE/status.json" "$STATE/values.json" "$STATE/before.yaml"
 fi
