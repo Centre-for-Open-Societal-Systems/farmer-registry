@@ -12,6 +12,11 @@ cat > "$STATE/bin/stat" <<'MOCK'
 #!/bin/sh
 printf '1000\n'
 MOCK
+cat > "$STATE/bin/kubectl" <<'MOCK'
+#!/bin/sh
+echo 'The container wrapper must mount kubectl, not execute it on the host' >&2
+exit 1
+MOCK
 chmod +x "$STATE/bin/"*
 export PATH="$STATE/bin:$PATH"
 export CONTAINER_TEST_CALLS="$STATE/calls"
@@ -21,6 +26,11 @@ export KUBECONFIG="$STATE/private kubeconfig"
 export DEV_MANIFEST="$STATE/private manifest.json"
 export DEV_ACCEPTANCE="$STATE/private acceptance.json"
 touch "$KUBECONFIG" "$DEV_MANIFEST" "$DEV_ACCEPTANCE"
+# Validation mounts /repo read-only; exercise Jenkins's writable workspace
+# contract using a separate fixture rather than writing into the source mount.
+mkdir -p "$STATE/workspace/ci/services"
+cp ci/services/run-container.sh ci/services/Dockerfile "$STATE/workspace/ci/services/"
+cd "$STATE/workspace"
 for action in build deploy; do
   : > "$CONTAINER_TEST_CALLS"
   bash ci/services/run-container.sh "$action" --environment dev --registry example.invalid --output /tmp/test-only.json
@@ -31,10 +41,15 @@ for action in build deploy; do
   grep -Fxq "<$KUBECONFIG:$KUBECONFIG:ro>" "$CONTAINER_TEST_CALLS"
   grep -Fxq "<$DEV_MANIFEST:$DEV_MANIFEST:ro>" "$CONTAINER_TEST_CALLS"
   grep -Fxq "<$DEV_ACCEPTANCE:$DEV_ACCEPTANCE:ro>" "$CONTAINER_TEST_CALLS"
+  test -d "$PWD/.ci-services-work"
+  grep -Fxq "<TMPDIR=$PWD/.ci-services-work>" "$CONTAINER_TEST_CALLS"
   if [[ "$action" == build ]]; then
     grep -Fq '</var/run/docker.sock:/var/run/docker.sock>' "$CONTAINER_TEST_CALLS"
-  elif grep -Fq '/var/run/docker.sock' "$CONTAINER_TEST_CALLS"; then
-    echo 'Deployment must not mount a Docker socket'; exit 1
+  else
+    grep -Fxq "<$STATE/bin/kubectl:/usr/local/bin/kubectl:ro>" "$CONTAINER_TEST_CALLS"
+    if grep -Fq '/var/run/docker.sock' "$CONTAINER_TEST_CALLS"; then
+      echo 'Deployment must not mount a Docker socket'; exit 1
+    fi
   fi
   echo "PASS: Bash $BASH_VERSION optional $action secret-file mounts and credential boundaries"
 done
