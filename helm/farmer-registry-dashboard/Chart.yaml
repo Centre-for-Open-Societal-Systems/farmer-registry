@@ -1,0 +1,6 @@
+apiVersion: v2
+name: farmer-registry-dashboard
+description: Farmer registry dashboard (Next.js UI and its backend-for-frontend), signed in through the registry's IAM.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

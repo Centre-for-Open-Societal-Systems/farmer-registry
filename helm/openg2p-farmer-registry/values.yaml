@@ -389,6 +389,13 @@ publicStaffUi:
 # COSS optional dashboard API: retain the existing release-owned service.
 # Its image is independently built; registry CI preserves the deployed tag.
 dashboardApi:
+  # Generic auth interface; environment-specific trust remains in registry Helm.
+  auth:
+    enabled: true
+    issuer: '{{ tpl .Values.global.keycloakBaseUrl $ }}/realms/{{ .Values.global.keycloakRealm | default "staff" }}'
+    iamUrl: ""
+    audience: farmer-registry-dashboard-api
+    role: charts:read
   enabled: false
   image:
     repository: ''
@@ -415,7 +422,7 @@ dashboardApi:
 # COSS add-ons: application Git repositories and separate-release coordination.
 # Jenkins reads this catalogue directly; these are not Helm repository URLs.
 # The dashboard API's resources remain in this chart. The dashboard and connector
-# use their owning repositories' charts and independent Helm releases. Keeping
+# are coordinated by registry CI; the dashboard chart is maintained here. Keeping
 # them out of dependencies prevents a Registry upgrade from starting ingestion
 # or deleting a service when its application code is absent.
 cossAddons:
@@ -445,6 +452,8 @@ cossAddons:
       repository: https://github.com/Centre-for-Open-Societal-Systems/oan_farmerregistry_dashboard.git
       dockerfile: Dockerfile
       chart: helm/farmer-registry-dashboard
+      chartSource: registry
+      dependsOn: farmer-registry-dashboard-api
       release: farmer-registry-dashboard
       namespace: farmer
       imageValues: image
