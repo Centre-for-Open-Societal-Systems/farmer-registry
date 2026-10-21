@@ -54,6 +54,8 @@ for TEST_MODE in normal recovery; do
     test "$lint" = "$package" && test "$render" = "$package"
     case "$package" in */oan-farmer.tgz) ;; *) exit 1 ;; esac
     if grep -Eq '^dependency |^repo ' "$HELM_CALLS"; then exit 1; fi
+    grep -q '^template .*--post-renderer ci/deploy/oan-renderer.sh' "$HELM_CALLS"
+    printf '%s' "$upgrade" | grep -q -- '--post-renderer ci/deploy/oan-renderer.sh'
     case "$upgrade" in
       *'--wait --wait-for-jobs --timeout 20m'*) ;;
       *) echo 'Missing readiness flags'; exit 1 ;;

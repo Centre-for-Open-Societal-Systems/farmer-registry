@@ -115,8 +115,14 @@ if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
   helm dependency build "$CHART"
 fi
 helm lint "$CHART" --strict -f "$STATE/values.yaml" > "$STATE/lint.log"
+RENDER_FLAGS=(--is-upgrade --dry-run=server)
+if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
+  export OAN_VALUES_FILE="$STATE/values.yaml" OAN_CHART_ONLY=false
+  RENDER_FLAGS+=(--post-renderer ci/deploy/oan-renderer.sh)
+  UPGRADE_FLAGS+=(--post-renderer ci/deploy/oan-renderer.sh)
+fi
 helm template "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
-  -f "$STATE/values.yaml" --is-upgrade --dry-run=server > "$STATE/after.yaml"
+  -f "$STATE/values.yaml" "${RENDER_FLAGS[@]}" > "$STATE/after.yaml"
 guard validate "$STATE/before.yaml" "$STATE/after.yaml"
 
 # Another operator may have changed the release while images/chart were checked.

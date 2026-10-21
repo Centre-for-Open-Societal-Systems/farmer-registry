@@ -126,6 +126,8 @@ def reconcile_dev(values, before):
             for name in packaged.get('registry', {}).get(component, {}).get(field, {}):
                 if name not in installed:
                     target.setdefault(field, {})[name] = None
+                    other = 'envVarsFrom' if field == 'envVars' else 'envVars'
+                    target.setdefault(other, {})[name] = None
         for name, entry in installed.items():
             field, other = ('envVarsFrom', 'envVars') if 'valueFrom' in entry else ('envVars', 'envVarsFrom')
             value = entry.get('valueFrom', entry.get('value', ''))

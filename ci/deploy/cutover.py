@@ -124,15 +124,18 @@ def main():
         allowed = ('deployed', 'failed') if action == 'adopted' else ('deployed',)
         if len(releases) != 1 or releases[0]['name'] != 'farmer-registry' or releases[0]['namespace'] != 'farmer' or releases[0]['chart'] != expected or releases[0]['status'] not in allowed:
             raise ValueError('Expected the approved OAN chart in the live release')
-    elif action in ('outcome', 'attempt'):
+    elif action in ('outcome', 'attempt', 'rehearsal'):
         status = load(args[0])
         release_status(status, require_deployed=True)
         images = {d['metadata']['name']: {c['name']: c['image'] for c in pod(d).get('containers', [])}
                   for d in documents(args[1]) if pod(d).get('containers')}
         Path(args[2]).write_text(json.dumps({'component': 'farmer-registry', 'namespace': 'farmer',
-            'mode': 'chart-only', 'chart': profile(), 'helmRevision': status['version'], 'images': images,
-            'sourceCommit': load('/backup/cutover-evidence.json')['applicationCommit'],
-            'verification': 'metadata-only-preservation-and-helm-readiness-passed' if action == 'outcome' else 'cutover-not-completed',
+            'mode': 'read-only-rehearsal' if action == 'rehearsal' else 'chart-only',
+            'chart': profile(), 'helmRevision': status['version'], 'images': images,
+            'sourceCommit': None if action == 'rehearsal' else load('/backup/cutover-evidence.json')['applicationCommit'],
+            'verification': {'outcome': 'metadata-only-preservation-and-helm-readiness-passed',
+                             'rehearsal': 'metadata-only-preservation-and-revision-passed',
+                             'attempt': 'cutover-not-completed'}[action],
             'acceptance': 'pending-operational-checks'}) + '\n', encoding='utf-8')
     else:
         raise ValueError('Unknown cutover action')

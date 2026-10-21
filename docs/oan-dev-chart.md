@@ -26,6 +26,14 @@ directory on that agent and `REGISTRY_OUTCOME_FILE` to
 bash ci/deploy/cutover-dev.sh
 ```
 
+Before pausing builds or preparing backup evidence, run the same command with
+`--rehearse`. It downloads/verifies the exact archive, reads a protected release
+snapshot, lints, server-renders with the same post-renderer used for upgrade,
+checks metadata-only preservation, and rechecks the Helm revision. It exits
+before any upgrade or Job creation and writes a sanitized rehearsal artifact.
+Backup evidence is mandatory for the actual upgrade; rehearsal does not attest
+backup recovery or operational acceptance.
+
 The private directory must contain `release.json` (`helm status -o json`),
 `values.json` (`helm get values -o json`), `manifest.yaml` (`helm get manifest`),
 `hooks.yaml` (`helm get hooks`), `registry.dump`, `connector.dump`, and
@@ -63,6 +71,16 @@ Persistent resources must remain identical except the reviewed `helm.sh/chart`
 metadata label. Named environment order is compared semantically. Unsupported
 installed configuration blocks deployment. There is no automatic rollback.
 
+Helm's parent/child values coalescing reintroduces some explicitly nulled
+environment defaults in this package. The reviewed `oan_compat.py` post-renderer
+removes only its fixed allowlist of absent-installed defaults, only when BOTH
+prepared `envVars` and `envVarsFrom` maps explicitly set the name to null. It
+handles application and init containers together, verifies the dev.5 archive
+again, and operates during both dev render and upgrade. It leaves commands,
+images, routes, Secret references and all other configuration untouched.
+Unknown changes still fail the independent preservation guard. This is a
+deployment adapter for the pinned package; chart sources/packages are unchanged.
+
 Archive only `service-outcomes/*.json` and `service-outcomes/*.tsv`, including
 the cutover result and later normal deployment results. Do not publish exported
 values, rendered manifests, raw errors, DB dumps, tokens or login responses.
@@ -80,14 +98,19 @@ guarded upgrade, rollout/schema/preservation checks, sanitized Jenkins outcome.
 Keep schema migrations explicit, backed up and separately recoverable; Helm
 rollback does not restore databases.
 
-## Blocked rehearsal, 2026-10-21
+## Corrected rehearsal, 2026-10-21
 
-The exact COSS dev.5 archive passed checksum/platform verification. A read-only
-server render against installed revision 39 retained 32 persistent resources
-and installed images but failed metadata-only preservation: added environment
-defaults in API/Celery app and init containers, plus Unicode em-dash encoding
-changes inside the reporting refresh CronJob command. That command has no chart
-values override. No cutover, schema mutation, Job execution or connector change
-was performed. Resolve this incompatibility through review before merging this
-integration or enabling normal dev builds. Do not relax the guard or silently
-change the approved package.
+The exact COSS dev.5 archive passes checksum/platform verification and strict
+lint. A corrected read-only server rehearsal against installed revision 39
+passes metadata-only preservation for all 32 persistent resources with installed
+images retained. The deployment adapter resolves the environment-default issue.
+The earlier apparent reporting-command encoding change came from Windows'
+default subprocess decoding in the rehearsal tool. Explicit UTF-8 decoding shows
+that the commands match; no command correction or comparison exception is used.
+
+The production shell's `--rehearse` path also passes with a host-Python container
+adapter on the dev host, which lacks Docker. CI separately exercises the Docker
+helpers and Bash 4.3 shell control flow. This is preflight evidence only: no
+cutover, schema mutation, Job execution, connector change or operational
+acceptance was performed. Pause automatic dev deployments before merging the
+Farmer PR, then use the backup-gated upgrade and acceptance sequence above.
