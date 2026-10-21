@@ -57,6 +57,11 @@ def command(args, cwd=None, input=None):
             raise ServiceError("tool-authentication-or-authorization-failed")
         if "RepositoryNotFoundException" in result.stderr:
             raise ServiceError("image-repository-missing")
+        if Path(args[0]).stem == "helm":
+            from deployment import upgrade_diagnostic
+            raise ServiceError("command-failed-helm", {
+                "diagnostics": upgrade_diagnostic(result.stdout + "\n" + result.stderr),
+            })
         raise ServiceError("command-failed-" + Path(args[0]).name)
     return result.stdout
 
@@ -476,8 +481,19 @@ def signing_preparation_before(before, after, environment="dev"):
     return result
 
 
-def guard_dashboard_api(before, after, image, namespace="farmer"):
-    """An embedded API update may change only its image in the Registry release."""
+def dashboard_auth(overrides):
+    """Only reviewed dev authentication literals may accompany the API image."""
+    auth = overrides.get("dashboardApi", {}).get("env", {})
+    required = {"AUTH_ENABLED", "AUTH_IAM_URL", "AUTH_AUDIENCE", "AUTH_ROLE"}
+    if (not isinstance(auth, dict) or set(auth) != required
+            or any(not isinstance(v, str) or not v.strip() for v in auth.values())
+            or auth["AUTH_ENABLED"] != "true"):
+        raise ServiceError("dashboard-api-reviewed-authentication-required")
+    return auth
+
+
+def guard_dashboard_api(before, after, image, namespace="farmer", auth=None):
+    """Allow the API image and reviewed auth literals; preserve all other fields."""
     def index(items):
         result = {}
         for item in items:
@@ -499,6 +515,14 @@ def guard_dashboard_api(before, after, image, namespace="farmer"):
     if len(previous) != 1 or len(current) != 1 or current[0].get("image") != image:
         raise ServiceError("dashboard-api-pinned-image-required")
     current[0]["image"] = previous[0]["image"]
+    if auth is not None:
+        dashboard_auth({"dashboardApi": {"env": auth}})
+        entries = current[0].get("env", [])
+        for name, value in auth.items():
+            if [e for e in entries if e.get("name") == name] != [{"name": name, "value": value}]:
+                raise ServiceError("dashboard-api-authentication-mismatch")
+        for container in (previous[0], current[0]):
+            container["env"] = [e for e in container.get("env", []) if e.get("name") not in auth]
     if old != new:
         raise ServiceError("dashboard-api-would-change-unrelated-resources")
 
@@ -624,6 +648,7 @@ def deploy(component, environment, record, source, registry, run=command):
         before, values = [], {}
     if component.get("kind") == "connector" and values.get("cossCutover", {}).get("phase") == "active":
         raise SkipService("active-connector-requires-accepted-image-rollout")
+    auth = dashboard_auth(overrides) if approved_dashboard else None
     merge(values, overrides)
     for role, spec in image_specs(component).items():
         selected = record["images"][role] if component.get("images") else record
@@ -658,7 +683,7 @@ def deploy(component, environment, record, source, registry, run=command):
                           "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
         guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" else before
         if embedded:
-            guard_dashboard_api(before, after, images["main"], namespace)
+            guard_dashboard_api(before, after, images["main"], namespace, auth=auth)
         else:
             guard(guard_before, after, namespace, images.values(), release)
         if component.get("kind") == "connector":
@@ -690,7 +715,7 @@ def deploy(component, environment, record, source, registry, run=command):
         raise ServiceError("release-not-deployed")
     final_manifest = docs(run(["helm", "get", "manifest", release, *args]))
     if embedded:
-        guard_dashboard_api(before, final_manifest, images["main"], namespace)
+        guard_dashboard_api(before, final_manifest, images["main"], namespace, auth=auth)
     else:
         guard(signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" else before,
               final_manifest, namespace, images.values(), release)

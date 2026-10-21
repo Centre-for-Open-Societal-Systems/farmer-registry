@@ -1,4 +1,10 @@
-# Preserve the existing API's routing, credentials and configuration. The
-# coordinator changes only dashboardApi.image in the Farmer Registry release.
+# Preserve routing and credentials while promoting the authenticated API.
+# Use the Commons namespace explicitly; the API runs in the farmer namespace.
 _coordination:
   namespace: farmer
+dashboardApi:
+  env:
+    AUTH_ENABLED: "true"
+    AUTH_IAM_URL: http://commons-services-iam-staff-portal-api.commons.svc.cluster.local
+    AUTH_AUDIENCE: farmer-registry-dashboard-api
+    AUTH_ROLE: charts:read

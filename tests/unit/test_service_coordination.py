@@ -26,6 +26,8 @@ identity = module("identity_check", "scripts/operations/identity/check.py")
 ECR = "123456789012.dkr.ecr.ap-south-1.amazonaws.com"
 SHA = "a" * 40
 DIGEST = "sha256:" + "b" * 64
+DEV_API_OVERLAY = yaml.safe_load((ROOT / "helm/environments/dev/services/farmer-registry-dashboard-api.yaml").read_text())
+DEV_API_AUTH = DEV_API_OVERLAY["dashboardApi"]["env"]
 
 
 @pytest.fixture
@@ -178,8 +180,9 @@ def test_staging_components_target_far_without_adopting_the_legacy_connector():
     assert all(c["release"] != "farmer-connector" for c in staging)
 
 
+@pytest.mark.parametrize("auth_migration", [False, True])
 @pytest.mark.parametrize("mutation", ["none", "worker", "secret", "route", "job", "remove", "database"])
-def test_dashboard_api_guard_preserves_every_other_resource(mutation):
+def test_dashboard_api_guard_preserves_every_other_resource(mutation, auth_migration):
     api = deployment("farmer-registry-dashboard-api")
     worker = deployment("farmer-registry-celery-worker")
     secret = {"kind": "Secret", "metadata": {"name": "farmer-registry"}, "data": {"password": "fixture"}}
@@ -188,6 +191,10 @@ def test_dashboard_api_guard_preserves_every_other_resource(mutation):
     after = copy.deepcopy(before)
     image = "api:new@" + DIGEST
     coordinator.pod(after[0])["containers"][0]["image"] = image
+    auth = DEV_API_AUTH if auth_migration else None
+    if auth:
+        coordinator.pod(after[0])["containers"][0]["env"].extend(
+            {"name": name, "value": value} for name, value in auth.items())
     if mutation == "worker":
         coordinator.pod(after[1])["containers"][0]["image"] = image
     elif mutation == "secret":
@@ -201,10 +208,75 @@ def test_dashboard_api_guard_preserves_every_other_resource(mutation):
     elif mutation == "database":
         coordinator.pod(after[0])["containers"][0]["env"][0]["valueFrom"]["secretKeyRef"]["name"] = "another-db"
     if mutation == "none":
-        coordinator.guard_dashboard_api(before, after, image)
+        coordinator.guard_dashboard_api(before, after, image, auth=auth)
     else:
         with pytest.raises(coordinator.ServiceError):
-            coordinator.guard_dashboard_api(before, after, image)
+            coordinator.guard_dashboard_api(before, after, image, auth=auth)
+
+
+@pytest.mark.parametrize("mutation", ["missing", "disabled", "issuer", "audience", "role", "duplicate", "secret", "unrelated"])
+def test_auth_promotion_rejects_missing_or_unreviewed_configuration(mutation):
+    before = [deployment("farmer-registry-dashboard-api")]
+    after = copy.deepcopy(before)
+    container = coordinator.pod(after[0])["containers"][0]
+    container["image"] = "api:new"
+    container["env"].extend({"name": k, "value": v} for k, v in DEV_API_AUTH.items())
+    entries = {e["name"]: e for e in container["env"]}
+    if mutation == "missing":
+        container["env"].remove(entries["AUTH_IAM_URL"])
+    elif mutation == "disabled":
+        entries["AUTH_ENABLED"]["value"] = "false"
+    elif mutation in ("issuer", "audience", "role"):
+        key = {"issuer": "AUTH_IAM_URL", "audience": "AUTH_AUDIENCE", "role": "AUTH_ROLE"}[mutation]
+        entries[key]["value"] = "unreviewed"
+    elif mutation == "duplicate":
+        container["env"].append(dict(entries["AUTH_ENABLED"]))
+    elif mutation == "secret":
+        entries["AUTH_IAM_URL"].pop("value")
+        entries["AUTH_IAM_URL"]["valueFrom"] = {"secretKeyRef": {"name": "other", "key": "url"}}
+    else:
+        container["env"].append({"name": "AUTH_ISSUER", "value": "https://unreviewed.example"})
+    with pytest.raises(coordinator.ServiceError):
+        coordinator.guard_dashboard_api(before, after, "api:new", auth=DEV_API_AUTH)
+
+
+def test_auth_promotion_repairs_disabled_auth_and_is_repeatable_without_mutating_input():
+    before = [deployment("farmer-registry-dashboard-api")]
+    coordinator.pod(before[0])["containers"][0]["env"].append({"name": "AUTH_ENABLED", "value": "false"})
+    saved = copy.deepcopy(before)
+    after = copy.deepcopy(before)
+    container = coordinator.pod(after[0])["containers"][0]
+    container["image"] = "api:new"
+    container["env"] = [e for e in container["env"] if e["name"] != "AUTH_ENABLED"]
+    container["env"].extend({"name": k, "value": v} for k, v in DEV_API_AUTH.items())
+    coordinator.guard_dashboard_api(before, after, "api:new", auth=DEV_API_AUTH)
+    coordinator.guard_dashboard_api(after, after, "api:new", auth=DEV_API_AUTH)
+    assert before == saved
+    assert {e["name"]: e.get("value") for e in container["env"]}["AUTH_ENABLED"] == "true"
+
+
+@pytest.mark.parametrize("auth", [{}, {**DEV_API_AUTH, "AUTH_ENABLED": "false"},
+                                  {**DEV_API_AUTH, "DATABASE_URL": "unreviewed"},
+                                  {**DEV_API_AUTH, "AUTH_IAM_URL": ""}])
+def test_auth_allowlist_cannot_be_widened_or_disabled(auth):
+    with pytest.raises(coordinator.ServiceError, match="reviewed-authentication-required"):
+        coordinator.dashboard_auth({"dashboardApi": {"env": auth}})
+
+
+@pytest.mark.parametrize("message,expected", [
+    ("UPGRADE FAILED: context deadline exceeded", "Helm timed out waiting for resources or hooks."),
+    ("ImagePullBackOff", "A workload could not pull its image."),
+    ("cannot patch: field is immutable", "Kubernetes rejected a resource update."),
+    ("failed post-upgrade: BackoffLimitExceeded", "A hook Job exhausted its retries."),
+])
+def test_helm_failure_retains_safe_diagnostics_without_private_output(monkeypatch, message, expected):
+    private = "postgresql://user:private-password@database/private"
+    monkeypatch.setattr(coordinator.subprocess, "run", lambda *a, **k:
+                        subprocess.CompletedProcess(a, 1, private, message + "\n" + private))
+    with pytest.raises(coordinator.ServiceError) as failure:
+        coordinator.command(["helm", "upgrade", "farmer-registry"])
+    assert expected in failure.value.provenance["diagnostics"]
+    assert "private" not in str(failure.value) + json.dumps(failure.value.provenance)
 
 
 def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry_owner(tmp_path, monkeypatch):
@@ -220,7 +292,7 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
     (chart / "Chart.yaml").write_text("apiVersion: v2\nname: farmer\nversion: 1.0.0\n")
     values = tmp_path / "helm/environments/dev/services/farmer-registry-dashboard-api.yaml"
     values.parent.mkdir(parents=True)
-    values.write_text("_coordination:\n  namespace: farmer\n")
+    values.write_text(yaml.safe_dump(DEV_API_OVERLAY))
     built = record(component)
     built["chartHash"] = coordinator.chart_hash(chart)
     built["deploymentChart"] = provenance
@@ -228,6 +300,8 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
     before = [deployment("farmer-registry-dashboard-api"), deployment("farmer-registry-celery-worker")]
     after = copy.deepcopy(before)
     coordinator.pod(after[0])["containers"][0]["image"] = image
+    coordinator.pod(after[0])["containers"][0]["env"].extend(
+        {"name": name, "value": value} for name, value in DEV_API_AUTH.items())
     state = {"upgraded": False, "calls": []}
     monkeypatch.setattr(coordinator, "checkout", lambda *a, **kw: SHA)
     def prepare(directory, values, previous, installed_chart):
@@ -260,6 +334,7 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
             assert coordinator.docs(filtered.stdout) == after
             selected = yaml.safe_load(Path(args[args.index("-f") + 1]).read_text())
             assert selected["dashboardApi"]["enabled"] is True
+            assert selected["dashboardApi"]["env"] == DEV_API_AUTH
             assert selected["dashboardApi"]["image"]["repository"] == ECR + "/openg2p/farmer-registry/dashboard-api"
             if args[1] == "upgrade":
                 state["upgraded"] = True
