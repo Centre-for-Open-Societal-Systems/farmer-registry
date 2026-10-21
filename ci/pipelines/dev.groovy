@@ -116,12 +116,17 @@ pipeline {
                     withCredentials([file(credentialsId: 'farmer-dev-kubeconfig', variable: 'KUBECONFIG')]) {
                         script {
                           def deployRegistry = {
-                            sh '''
+                            try {
+                              sh '''
                             set -eu
                             export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
                             docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
                             bash ci/deploy/deploy-dev.sh
                             '''
+                            } finally {
+                              // Retain sanitized failure provenance on the VPN agent too.
+                              archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
+                            }
                           }
                           withEnv(["APPLY_COMMONS_IDENTITY=${params.APPLY_COMMONS_IDENTITY}"]) {
                             if (params.APPLY_COMMONS_IDENTITY) {

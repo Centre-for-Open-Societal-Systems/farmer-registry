@@ -44,6 +44,9 @@ for CUTOVER_EXIT in 0 1; do
     if grep -q '^helm upgrade ' "$CALLS"; then echo 'Unrehearsed staging deployment ran'; exit 1; fi
   else
     grep -q '^helm upgrade .* -n far ' "$CALLS"
+    if grep -q -- '--post-renderer' "$CALLS"; then
+      echo 'Staging must not use the dev compatibility renderer'; exit 1
+    fi
     if grep '^helm upgrade ' "$CALLS" | grep -Eq -- '--atomic|--install'; then
       echo 'Staging must not install or automatically revert schema-dependent images'; exit 1
     fi

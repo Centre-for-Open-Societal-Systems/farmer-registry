@@ -9,7 +9,13 @@ cat > "$TEST_ROOT/bin/docker" <<'MOCK'
 printf '%s\n' "$*" >> "$GUARD_CALLS"
 case "$*" in
   *upgrade-mode*) printf '%s\n' "$TEST_MODE" ;;
+  *'oan_chart.py url'*) printf 'https://approved.example/chart.tgz\n' ;;
+  *'oan_chart.py verify '*) exit "${TEST_VERIFY_EXIT:-0}" ;;
 esac
+MOCK
+cat > "$TEST_ROOT/bin/curl" <<'MOCK'
+#!/bin/sh
+exit "${TEST_DOWNLOAD_EXIT:-0}"
 MOCK
 cat > "$TEST_ROOT/bin/helm" <<'MOCK'
 #!/bin/sh
@@ -42,6 +48,14 @@ for TEST_MODE in normal recovery; do
       exit 1
     fi
     upgrade=$(grep '^upgrade ' "$HELM_CALLS")
+    lint=$(grep '^lint ' "$HELM_CALLS" | cut -d ' ' -f2)
+    render=$(grep '^template ' "$HELM_CALLS" | cut -d ' ' -f3)
+    package=$(printf '%s' "$upgrade" | cut -d ' ' -f3)
+    test "$lint" = "$package" && test "$render" = "$package"
+    case "$package" in */oan-farmer.tgz) ;; *) exit 1 ;; esac
+    if grep -Eq '^dependency |^repo ' "$HELM_CALLS"; then exit 1; fi
+    grep -q '^template .*--post-renderer ci/deploy/oan-renderer.sh' "$HELM_CALLS"
+    printf '%s' "$upgrade" | grep -q -- '--post-renderer ci/deploy/oan-renderer.sh'
     case "$upgrade" in
       *'--wait --wait-for-jobs --timeout 20m'*) ;;
       *) echo 'Missing readiness flags'; exit 1 ;;
@@ -54,11 +68,9 @@ for TEST_MODE in normal recovery; do
     if [ "$TEST_UPGRADE_EXIT" -eq 1 ]; then
       grep -q ' diagnose ' "$GUARD_CALLS"
       grep -q '^history ' "$HELM_CALLS"
-      if grep -q '^get hooks ' "$HELM_CALLS"; then
-        echo 'Failed upgrade must stop before post-upgrade validation'; exit 1
-      fi
+      test "$(grep -c '^get hooks ' "$HELM_CALLS")" = 1
     else
-      grep -q '^get hooks ' "$HELM_CALLS"
+      test "$(grep -c '^get hooks ' "$HELM_CALLS")" = 2
     fi
     if [ "$APPLY_COMMONS_IDENTITY" = true ]; then
       grep -q ':/identity-evidence.json:ro' "$GUARD_CALLS"
@@ -69,3 +81,14 @@ for TEST_MODE in normal recovery; do
   done
 done
 done
+export TEST_UPGRADE_EXIT=0 TEST_MODE=normal APPLY_COMMONS_IDENTITY=false
+for gate in download verify; do
+  export TEST_DOWNLOAD_EXIT=0 TEST_VERIFY_EXIT=0
+  if [[ "$gate" = download ]]; then export TEST_DOWNLOAD_EXIT=1; else export TEST_VERIFY_EXIT=1; fi
+  : > "$HELM_CALLS"
+  if bash ci/deploy/deploy-dev.sh > "$TEST_ROOT/output" 2>&1; then
+    echo 'Failed OAN package gate was accepted'; exit 1
+  fi
+  if grep -Eq '^upgrade |^lint |^template ' "$HELM_CALLS"; then exit 1; fi
+done
+echo 'PASS: download/checksum failures stop before any chart use'
