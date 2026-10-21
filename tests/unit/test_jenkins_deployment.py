@@ -104,6 +104,11 @@ def release():
             existing[key] = workload(kind, suffix, "")
             after.append(existing[key])
         deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:{TAG}"
+    for doc in after:
+        suffix = doc["metadata"]["name"].removeprefix("farmer-registry-")
+        env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
+        env.extend({"name": name, "value": value} for name, value in deployment.location_env(suffix).items())
+        env.extend(deployment.env_entry(name, value) for name, value in deployment.master_data_env(suffix).items())
     return before, after
 
 
@@ -118,7 +123,7 @@ def test_identity_migration_requires_explicit_allowlist_and_keeps_other_settings
         env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
         for name, value in deployment.identity_env(suffix).items():
             env[:] = [e for e in env if e["name"] != name]
-            env.append({"name": name, "value": value})
+            env.append(deployment.env_entry(name, value))
     deployment.validate(before, after, ECR, TAG, migrate_identity=True)
     # Secret references remain subject to the original preservation rules.
     deployment.pod(after[0])["containers"][0]["env"][1]["valueFrom"]["secretKeyRef"]["name"] = "wrong"
@@ -171,7 +176,11 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
     assert result["analytics"]["reportingViews"]["generate"] is False
 
 
-@pytest.mark.parametrize("hostname", sorted(deployment.NEW_DEV_HOSTNAMES))
+@pytest.mark.parametrize("hostname", [
+    "registry.farmer-dev.oanstaging.com",
+    "farmer-registry-development.oanstaging.com",
+    "farmer-registry.development.oanstaging.com",
+])
 def test_new_dev_hostnames_are_accepted(release, hostname):
     values = {"global": {"registryHostname": hostname}}
     assert deployment.prepare(values, release[0], ECR, TAG)["global"]["registryHostname"] == hostname
@@ -180,6 +189,36 @@ def test_new_dev_hostnames_are_accepted(release, hostname):
 def test_wrong_environment_is_rejected(release):
     with pytest.raises(ValueError, match="new-dev"):
         deployment.prepare({"global": {"registryHostname": "registry.production.example"}}, release[0], ECR, TAG)
+
+
+def test_prepare_retains_installed_dev_gateways_missing_from_saved_values(release):
+    before = copy.deepcopy(release[0])
+    routes = [("staff-portal-ui", ("staffUi",)), ("staff-portal-api", ("staffApi",)),
+              ("partner-api", ("partnerApi",)), ("id-generator", ("idgenerator", "idGenerator"))]
+    before[:] = [doc for doc in before if doc["kind"] != "VirtualService"]
+    for suffix, _ in routes:
+        before.append({"kind": "VirtualService", "metadata": {"name": "farmer-registry-" + suffix},
+                       "spec": {"hosts": [suffix + ".development.example"],
+                                "gateways": ["istio-system/development"]}})
+    values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}}
+    original = copy.deepcopy(values)
+    prepared = deployment.prepare(values, before, ECR, TAG)
+    for _, path in routes:
+        target = prepared["registry"]
+        for part in path:
+            target = target[part]
+        assert target["istio"]["virtualservice"]["gateway"] == "istio-system/development"
+    assert values == original
+
+
+@pytest.mark.parametrize("gateways", [[], ["first", "second"], [None], [""], None, "mesh"])
+def test_prepare_rejects_unrepresentable_installed_gateway(release, gateways):
+    before, _ = release
+    route = next(doc for doc in before if doc["kind"] == "VirtualService")
+    route["spec"]["gateways"] = gateways
+    values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}}
+    with pytest.raises(ValueError, match="Installed gateway cannot be represented"):
+        deployment.prepare(values, before, ECR, TAG)
 
 
 def test_dashboard_removal_is_rejected(release):

@@ -33,7 +33,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/repo:ro" -e PYTHONPATH=/repo/farmer-extension/src -w /repo/tests/runtime \
             --entrypoint python coss/staff-api:ci -m unittest \
-            extension.test_domain_validation_utils extension.test_farmer_geo_sync \
+            extension.test_domain_validation_utils extension.test_farmer_geo_sync extension.test_livestock_validation \
             extension.test_intake_record_image_urls extension.test_household_family_size -v
       - name: Worker attribution runtime
         if: matrix.component == 'celery'

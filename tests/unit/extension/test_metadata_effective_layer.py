@@ -159,6 +159,28 @@ def effective_widgets(section_id):
     return _widgets(effective_schema(section_id), {})
 
 
+class TestLocationAndLivestockQA(unittest.TestCase):
+    def test_location_fields_survive_late_seed_overrides(self):
+        widgets = effective_widgets("farmer_farmer_location_section_03")
+        geo = widgets["farmer_geo_hierarchy"]
+        self.assertEqual(geo["widget"], "geo-hierarchy")
+        self.assertEqual(geo["widget-data-source"]["service"], "master-data")
+        self.assertEqual(geo["widget-data-path"]["value"], f"{FARMER_REGISTER}.geo_lowest_level_value_id")
+        for field in ("latitude", "longitude", "language_spoken", "local_language"):
+            with self.subTest(field=field):
+                self.assertIn(field, widgets)
+                self.assertEqual(widgets[field]["widget-data-path"], f"{FARMER_REGISTER}.{field}")
+                self.assertNotIn("widget-visible-if", widgets[field])
+
+    def test_only_type_and_count_are_required_in_a_livestock_row(self):
+        widgets = effective_widgets("farmer_livestock_livestock_details_section_01")
+        self.assertEqual({key for key, widget in widgets.items() if widget.get("widget-required")},
+                         {"livestock_type", "head_count"})
+        self.assertFalse(widgets["livestock_table"].get("widget-required", False))
+        self.assertEqual(widgets["head_count"]["widget-data-format"]["numericType"], "integer")
+        self.assertEqual(widgets["head_count"]["widget-data-validation"]["min"], 0)
+
+
 class TestEffectiveLayer(unittest.TestCase):
     def test_family_size_is_hidden_in_both_household_forms(self):
         for section in (
