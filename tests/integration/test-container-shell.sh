@@ -43,6 +43,7 @@ for action in build deploy; do
   grep -Fxq "<$DEV_ACCEPTANCE:$DEV_ACCEPTANCE:ro>" "$CONTAINER_TEST_CALLS"
   test -d "$PWD/.ci-services-work"
   grep -Fxq "<TMPDIR=$PWD/.ci-services-work>" "$CONTAINER_TEST_CALLS"
+  grep -Fxq "<COORDINATOR_IMAGE=coss-ci/services:$IMAGE_TAG>" "$CONTAINER_TEST_CALLS"
   if [[ "$action" == build ]]; then
     grep -Fq '</var/run/docker.sock:/var/run/docker.sock>' "$CONTAINER_TEST_CALLS"
   else

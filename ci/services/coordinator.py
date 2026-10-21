@@ -17,12 +17,14 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.request
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ci"))
 from environments import connector_settings, validate_cluster
+sys.path.insert(0, str(ROOT / "ci/deploy"))
 sys.path.insert(0, str(ROOT / "scripts/operations/connector"))
 MANIFEST = ROOT / "helm/openg2p-farmer-registry/values.yaml"
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -191,6 +193,93 @@ def chart_hash(chart):
     return digest.hexdigest()
 
 
+def dashboard_chart_provenance():
+    """Bind dev API promotion to the Registry's approved OAN chart and renderer."""
+    from oan_chart import profile
+    pin = profile()
+    if any(pin.get(key) != value for key, value in {
+        "name": "openg2p-farmer-registry", "version": "1.0.0-dev.5",
+        "environment": "dev", "namespace": "farmer", "release": "farmer-registry",
+    }.items()):
+        raise ServiceError("dashboard-api-approved-chart-profile-mismatch")
+    return {"name": pin["name"], "version": pin["version"], "sha256": pin["sha256"],
+            "rendererHash": chart_hash(ROOT / "ci/deploy")}
+
+
+def prepare_dashboard_chart(state, values, before, installed_chart):
+    """Render the installed OAN chart with its existing bounded compatibility fixes."""
+    from oan_chart import profile, verify
+    from deployment import reconcile_dev
+    pin = profile()
+    provenance = dashboard_chart_provenance()
+    if installed_chart != provenance["name"] + "-" + provenance["version"]:
+        raise ServiceError("dashboard-api-installed-chart-mismatch")
+    archive = state / (pin["name"] + "-" + pin["version"] + ".tgz")
+    try:
+        with urllib.request.urlopen(pin["repository"] + archive.name, timeout=30) as response:
+            content = response.read(20 * 1024 * 1024 + 1)
+        if len(content) > 20 * 1024 * 1024:
+            raise ValueError("Chart archive too large")
+        archive.write_bytes(content)
+        verify(archive)
+    except (OSError, ValueError):
+        raise ServiceError("dashboard-api-approved-chart-download-or-checksum-failed") from None
+    selected_image = copy.deepcopy(values["dashboardApi"]["image"])
+    # Null must also suppress any packaged digest default; the selected tag
+    # already contains the verified digest for repository:tag@digest rendering.
+    selected_image["digest"] = None
+    previous_archive = os.environ.get("OAN_CHART_ARCHIVE")
+    try:
+        os.environ["OAN_CHART_ARCHIVE"] = str(archive)
+        reconcile_dev(values, before)
+    finally:
+        if previous_archive is None:
+            os.environ.pop("OAN_CHART_ARCHIVE", None)
+        else:
+            os.environ["OAN_CHART_ARCHIVE"] = previous_archive
+    # General Registry reconciliation intentionally preserves the installed API
+    # image. Restore this promotion's selected image after that preservation pass.
+    values["dashboardApi"]["image"] = selected_image
+    renderer = state / "approved-dashboard-renderer"
+    renderer.write_text(
+        "#!" + sys.executable + "\nimport sys,yaml\n"
+        "sys.path.insert(0," + repr(str(ROOT / "ci/deploy")) + ")\n"
+        "from oan_chart import verify\nfrom oan_compat import render\n"
+        "try:\n"
+        " verify(" + repr(str(archive)) + ")\n"
+        " with open(" + repr(str(state / "values.yaml")) + ") as stream: values=yaml.safe_load(stream)\n"
+        " documents=[d for d in yaml.safe_load_all(sys.stdin) if d and d.get('kind')!='Job']\n"
+        " yaml.safe_dump_all(render(documents,values),sys.stdout)\n"
+        "except Exception:\n sys.exit('Approved dashboard renderer rejected input')\n")
+    renderer.chmod(0o700)
+    return archive, renderer
+
+
+def dashboard_hook_rehearsal(component, environment, record, chart, registry, run):
+    tools = os.environ.get("COORDINATOR_IMAGE", "")
+    if not re.fullmatch(r"coss-ci/services:[a-f0-9]{12}", tools):
+        raise ServiceError("dashboard-hook-rehearsal-tools-required")
+    values_file = ROOT / "helm/environments" / environment / "services" / (component["name"] + ".yaml")
+    overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
+    settings = overrides.pop("_coordination", {})
+    if environment != "dev" or settings.get("namespace") != "farmer":
+        raise ServiceError("dashboard-hook-rehearsal-environment-mismatch")
+    directory = ROOT / "scripts/operations/dashboard"
+    try:
+        result = json.loads(run([sys.executable, str(directory / "rehearse.py"),
+                                artifact(component, record, registry), tools, str(chart), str(values_file)]))
+    except (ServiceError, ValueError):
+        raise ServiceError("dashboard-hook-rehearsal-failed") from None
+    if not isinstance(result, dict):
+        raise ServiceError("dashboard-hook-rehearsal-failed")
+    result.update(commit=record["commit"], digest=record["digest"], chartHash=record["chartHash"],
+                  environment=environment, valuesHash=hashlib.sha256(json.dumps(overrides, sort_keys=True).encode()).hexdigest(),
+                  harnessHash=chart_hash(directory))
+    reviewed = dict(record, hookRehearsal=result)
+    rehearsal(component, environment, reviewed, overrides)
+    return result
+
+
 def build_image(component, role, spec, commit, source, registry, run, tag=None):
     suffix = "-" + role if component.get("images") else ""
     repository_name = component.get("imageRepository", "openg2p/" + component["name"] + suffix)
@@ -238,6 +327,7 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
 def build(component, environment, source, registry, run=command):
     commit = checkout(component, environment, source, run)
     built = {}
+    hook_review = None
     try:
         _, chart = layout(component, source)
         if component.get("kind") == "registry-dashboard-api":
@@ -251,6 +341,9 @@ def build(component, environment, source, registry, run=command):
             tag += "-" + hashlib.sha256(json.dumps(overlays, sort_keys=True).encode()).hexdigest()[:12]
         for role, spec in image_specs(component).items():
             built[role] = build_image(component, role, spec, commit, source, registry, run, tag)
+        if environment == "dev" and component.get("chartSource") == "registry":
+            selected = dict(next(iter(built.values())), commit=commit, chartHash=chart_hash(chart))
+            hook_review = dashboard_hook_rehearsal(component, environment, selected, chart, registry, run)
     except (SkipService, ServiceError) as error:
         error.provenance = {"commit": commit}
         if built:
@@ -258,6 +351,10 @@ def build(component, environment, source, registry, run=command):
         raise
     primary = next(iter(built.values()))
     result = dict(primary, commit=commit, chartHash=chart_hash(chart))
+    if component.get("kind") == "registry-dashboard-api" and environment == "dev":
+        result["deploymentChart"] = dashboard_chart_provenance()
+    if hook_review:
+        result["hookRehearsal"] = hook_review
     if component.get("images"):
         result["images"] = built
     if overlays:
@@ -458,10 +555,18 @@ def image_artifacts(component, record, registry):
 
 
 def rehearsal(component, environment, record, overrides):
-    path = ROOT / "helm/environments" / environment / "services/rehearsals" / (component["name"] + ".json")
-    if not path.is_file():
-        raise ServiceError("hook-rehearsal-required")
-    review = json.loads(path.read_text(encoding="utf-8"))
+    if component.get("chartSource") == "registry" and environment == "dev" and "hookRehearsal" in record:
+        review = record["hookRehearsal"]
+        expected_jobs = {component["name"] + suffix for suffix in ("-ecr-refresh-init", "-iam-setup", "-chart-smoke")}
+        if (not isinstance(review, dict) or review.get("harnessHash") != chart_hash(ROOT / "scripts/operations/dashboard") or
+                review.get("noExternalNetwork") is not True or set(review.get("hookJobs", [])) != expected_jobs or
+                review.get("fixtureMode") != "loopback-http-sqlite-kubectl-transport-shim"):
+            raise ServiceError("dashboard-hook-rehearsal-provenance-mismatch")
+    else:
+        path = ROOT / "helm/environments" / environment / "services/rehearsals" / (component["name"] + ".json")
+        if not path.is_file():
+            raise ServiceError("hook-rehearsal-required")
+        review = json.loads(path.read_text(encoding="utf-8"))
     expected = {"commit": record["commit"], "digest": record["digest"],
                 "chartHash": record["chartHash"], "environment": environment,
                 "valuesHash": hashlib.sha256(json.dumps(overrides, sort_keys=True).encode()).hexdigest()}
@@ -475,6 +580,9 @@ def rehearsal(component, environment, record, overrides):
 
 def deploy(component, environment, record, source, registry, run=command):
     images = image_artifacts(component, record, registry)
+    approved_dashboard = component.get("kind") == "registry-dashboard-api" and environment == "dev"
+    if approved_dashboard and record.get("deploymentChart") != dashboard_chart_provenance():
+        raise ServiceError("dashboard-api-approved-chart-provenance-mismatch")
     for role, spec in image_specs(component).items():
         if spec.get("overlay") and record.get("overlayHashes", {}).get(role) != chart_hash(relative_file(ROOT, spec["overlay"])):
             raise ServiceError("overlay-changed-since-build")
@@ -526,18 +634,24 @@ def deploy(component, environment, record, source, registry, run=command):
             # OCI tag@digest works with existing repository:tag charts.
             target.update(repository=selected["repository"], tag=selected["tag"] + "@" + selected["digest"])
     with tempfile.TemporaryDirectory(prefix="registry-service-values-") as state:
-        path = Path(state) / "values.yaml"
+        state = Path(state)
+        approved_renderer = None
+        if approved_dashboard:
+            chart, approved_renderer = prepare_dashboard_chart(state, values, before, matches[0].get("chart"))
+        path = state / "values.yaml"
         path.write_text(yaml.safe_dump(values), encoding="utf-8")
         path.chmod(0o600)
-        run(["helm", "repo", "add", "openg2p", "https://openg2p.github.io/openg2p-helm"])
-        run(["helm", "dependency", "build", str(chart)])
+        if not approved_dashboard:
+            run(["helm", "repo", "add", "openg2p", "https://openg2p.github.io/openg2p-helm"])
+            run(["helm", "dependency", "build", str(chart)])
         render_options = []
         if embedded:
             # The parent chart contains regular revision-named setup Jobs as
             # well as hooks. Suppress both for an API image-only deployment.
-            renderer = Path(state) / "without-jobs"
-            renderer.write_text("#!" + sys.executable + "\nimport sys,yaml\n"
-                                "yaml.safe_dump_all([d for d in yaml.safe_load_all(sys.stdin) if d and d.get('kind') != 'Job'],sys.stdout)\n")
+            renderer = approved_renderer or state / "without-jobs"
+            if not approved_renderer:
+                renderer.write_text("#!" + sys.executable + "\nimport sys,yaml\n"
+                                    "yaml.safe_dump_all([d for d in yaml.safe_load_all(sys.stdin) if d and d.get('kind') != 'Job'],sys.stdout)\n")
             renderer.chmod(0o700)
             render_options = ["--no-hooks", "--post-renderer", str(renderer)]
         after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),

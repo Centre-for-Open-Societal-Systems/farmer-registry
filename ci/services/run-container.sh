@@ -13,6 +13,7 @@ work_root="$PWD/.ci-services-work"
 mkdir -p "$work_root"
 args=(--rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp/services-home
       -e "TMPDIR=$work_root"
+      -e "COORDINATOR_IMAGE=coss-ci/services:$tag"
       -e ECR_REGISTRY -e AWS_REGION -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY
       -e AWS_SESSION_TOKEN -e CONNECTOR_BACKUP_DIRECTORY
       -e KUBECONFIG_CREDENTIAL
