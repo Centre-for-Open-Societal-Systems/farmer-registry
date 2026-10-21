@@ -1,0 +1,62 @@
+{{/*
+Hostname routing through the Istio ingress gateway. The host's nginx terminates
+TLS and forwards to the gateway (port 8080, HTTP2), which matches on Host.
+*/}}
+{{- with .Values.ingress.public }}
+{{- if .enabled }}
+{{- $host := .host | default (include "dashboard.host" $) }}
+{{- $gateway := .existingGateway | default (.gatewayName | default (printf "%s-public" (include "dashboard.fullname" $))) }}
+{{- if not .existingGateway }}
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: {{ $gateway }}
+  labels:
+    {{- include "dashboard.labels" $ | nindent 4 }}
+spec:
+  selector:
+    {{- toYaml $.Values.istioIngressSelector | nindent 4 }}
+  servers:
+    - port:
+        name: http2
+        number: 8080
+        protocol: HTTP2
+      hosts:
+        - {{ $host | quote }}
+{{- end }}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ include "dashboard.fullname" $ }}-public
+  labels:
+    {{- include "dashboard.labels" $ | nindent 4 }}
+spec:
+  hosts:
+    - {{ $host | quote }}
+  gateways:
+    - {{ $gateway }}
+  http:
+    {{- include "dashboard.httpRoute" (dict "host" $host "root" $) | nindent 4 }}
+{{- end }}
+{{- end }}
+{{- with .Values.ingress.private }}
+{{- if .enabled }}
+{{- $host := required "ingress.private.host is required when it is enabled" .host }}
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: {{ include "dashboard.fullname" $ }}-private
+  labels:
+    {{- include "dashboard.labels" $ | nindent 4 }}
+spec:
+  hosts:
+    - {{ $host | quote }}
+  gateways:
+    - {{ .gateway }}
+  http:
+    {{- include "dashboard.httpRoute" (dict "host" $host "root" $) | nindent 4 }}
+{{- end }}
+{{- end }}

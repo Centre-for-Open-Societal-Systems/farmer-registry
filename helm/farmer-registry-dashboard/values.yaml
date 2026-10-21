@@ -1,0 +1,167 @@
+# Farmer registry dashboard. See docs/deployment.md.
+#
+# No URL of the environment is configured here. At install time the chart
+# reads the IAM cookie domain from the namespace's IAM Deployment and builds
+# every host from it (<name>[-<environment>].<domain>); at run time the
+# dashboard and its setup job discover the login provider and the Keycloak
+# realm from IAM itself.
+
+image:
+  repository: ""   # e.g. <account>.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry-dashboard
+  tag: ""          # set by CI: the commit sha (12)
+  pullPolicy: IfNotPresent
+
+# Registry this dashboard belongs to; names the staff portal link
+# (staff-portal-<registry>[-<environment>].<domain>).
+registry: farmer
+
+# Environment suffix of public host names, set by CI per branch: develop ->
+# "development" (farmer-registry-dashboard-development.<domain>); empty for
+# hosts without one (farmer-registry-dashboard.<domain>).
+environment: ""
+
+# Base domain of the public hosts. Default: the IAM cookie domain (read from
+# the IAM Deployment), so the hosts always sit under it.
+domain: ""
+
+# The dashboard's public host. Default: <release>[-<environment>].<domain>.
+host: ""
+
+# ECR pull secret, created and refreshed by the release (a pre-install/
+# pre-upgrade hook Job, then a CronJob) from the node's IAM role, so the
+# namespace needs no setup and its default ServiceAccount is left alone.
+ecrPullSecret:
+  enabled: true
+  name: farmer-registry-dashboard-ecr
+  registry: ""           # default: the host part of image.repository
+  schedule: "0 */8 * * *"
+  awsCliImage: amazon/aws-cli:2.36.43
+  kubectlImage: alpine/k8s:1.31.1
+
+# Further pull secrets for the image, as [{name: ...}].
+imagePullSecrets: []
+
+replicas: 1
+
+# The registry's dashboard-api: the only part that reads the registry database.
+dashboardApi:
+  # Its Service in this namespace.
+  service: farmer-registry-dashboard-api
+  # Full base URL instead, when it runs elsewhere: another namespace
+  # (http://<service>.<namespace>) or another cluster or server, over a private
+  # route only (https://...). Never a public one.
+  url: ""
+  # Service-to-service authentication. On: every chart request carries a
+  # client-credentials token of this dashboard's Keycloak client
+  # (access.clientId), and the IAM setup job creates the dashboard-api's client
+  # and role below and grants the role to this dashboard's service account.
+  # Turn on together with the dashboard-api's own authentication
+  # (AUTH_IAM_URL); required once it is reached from outside its cluster. The
+  # development pipeline turns it on.
+  auth:
+    enabled: true
+    # The dashboard-api's AUTH_AUDIENCE and AUTH_ROLE.
+    clientId: farmer-registry-dashboard-api
+    role: charts:read
+    # Keycloak token endpoint. Empty: that of the realm IAM signs staff in
+    # with (discovered), which the dashboard-api trusts through the same IAM.
+    tokenUrl: ""
+
+# Seconds chart rows are served before a background refresh (min 60).
+cacheTtlSeconds: 900
+
+iam:
+  # The registry's IAM Deployment and Service (same name). The public one
+  # (-pub) scopes its session cookies to the public domain; only the dashboard
+  # server calls it, through the Service.
+  service: commons-services-iam-staff-portal-api-pub
+  # Base URL instead of the Service, when IAM runs in another cluster or on
+  # another server. Set cookieDomain too: it cannot be read from there.
+  url: ""
+  # Default: read from that Deployment (IAM_STAFF_AUTH_COOKIE_DOMAIN).
+  cookieDomain: ""
+  # Default: discovered (the provider whose IAM callback lies under the
+  # cookie domain).
+  loginProviderId: ""
+
+# Optional: Keycloak's end-session endpoint and client id, to also end the
+# Keycloak session when IAM cannot (expired session). Empty: the session
+# cookies are cleared and the user lands on the staff portal.
+oidc:
+  logoutUrl: ""
+  clientId: ""
+
+# Who may open the dashboard: users holding this client role on this Keycloak
+# client (= the IAM application mnemonic). The same role enables the tile.
+access:
+  clientId: farmer-registry-dashboard
+  role: Dashboard Viewer
+
+# Seconds a validated session is trusted before IAM is asked again.
+sessionCacheSeconds: 60
+
+# Header links. staffPortalUrl default: derived from `registry`; empty
+# registryPortalUrl hides that link.
+links:
+  staffPortalUrl: ""
+  registryPortalUrl: ""
+
+# Keycloak client + role and IAM registration (templates/iam-setup-job.yaml).
+iamSetup:
+  enabled: true
+  description: Farmer Dashboard
+  # Existing users granted the role on every deploy.
+  grantUsers: []
+  # Keycloak master-realm admin. The namespace's commons-keycloak Secret
+  # holds the password of the Keycloak the registry's IAM signs in with.
+  keycloakAdmin:
+    user: admin
+    secret:
+      name: commons-keycloak
+      key: admin-password
+  # Secret holding access.clientId's client secret. Empty name: the release
+  # generates and keeps one (<release>-client).
+  clientSecret:
+    name: ""
+    key: client_secret
+
+# Extra environment variables, as NAME: value. Values may use templates.
+env: {}
+envFrom: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 768Mi
+
+service:
+  port: 80
+
+# Hostname routing through the Istio ingress gateway. TLS terminates at the
+# host's nginx, which forwards to the gateway on plain HTTP.
+ingress:
+  # The public host (default: the derived host) on this release's own Gateway.
+  public:
+    enabled: true
+    host: ""
+    # Default <release>-public: an own name, so it never collides with a
+    # Gateway another release owns.
+    gatewayName: ""
+    # Use a shared Gateway without creating or adopting it.
+    existingGateway: ""
+  # Optional extra host on an existing gateway in the namespace.
+  private:
+    enabled: false
+    host: ""
+    gateway: internal
+
+# Selector of the Istio ingress gateway pods.
+istioIngressSelector:
+  istio: ingressgateway
+
+# A real chart request must succeed with the same service credentials as the BFF.
+smoke:
+  enabled: true
+  charts: [farmerKpis, farmersByRegion, landTenureSplit]

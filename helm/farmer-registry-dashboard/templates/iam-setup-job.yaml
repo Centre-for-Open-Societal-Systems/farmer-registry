@@ -1,0 +1,81 @@
+{{- /*
+After every install and upgrade, from the dashboard image:
+  1. iam/keycloak-setup.mjs: the Keycloak client access.clientId, its role
+     access.role, and the role for iamSetup.grantUsers (admin REST API);
+     With dashboardApi.auth.enabled, also the dashboard-api's client and role,
+     granted to this client's service account;
+  2. iam/register.mjs: the staff-portal tile, dashboard:view permission and
+     role in the registry's IAM (iam/payload.json).
+Both are idempotent. The Keycloak host and realm are not configured: they are
+discovered from IAM (iam/discover.mjs), so the job follows whatever Keycloak
+the registry's IAM signs staff in with.
+*/ -}}
+{{- if .Values.iamSetup.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "dashboard.fullname" . }}-iam-setup
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Chart.Name }}-iam-setup
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: {{ include "dashboard.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      {{- include "dashboard.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: iam-setup
+          image: {{ include "dashboard.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c", "node iam/keycloak-setup.mjs && node iam/register.mjs"]
+          env:
+            {{- include "dashboard.appEnv" . | nindent 12 }}
+            - name: DASHBOARD_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dashboard.clientSecretName" . }}
+                  key: {{ .Values.iamSetup.clientSecret.key }}
+            - name: KEYCLOAK_ADMIN
+              value: {{ .Values.iamSetup.keycloakAdmin.user | quote }}
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.iamSetup.keycloakAdmin.secret.name }}
+                  key: {{ .Values.iamSetup.keycloakAdmin.secret.key }}
+            - name: GRANT_USERS
+              value: {{ join " " .Values.iamSetup.grantUsers | quote }}
+            - name: APP_DESCRIPTION
+              value: {{ .Values.iamSetup.description | quote }}
+            {{- if .Values.dashboardApi.auth.enabled }}
+            - name: DASHBOARD_API_CLIENT_ID
+              value: {{ .Values.dashboardApi.auth.clientId | quote }}
+            - name: DASHBOARD_API_ROLE
+              value: {{ .Values.dashboardApi.auth.role | quote }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 192Mi
+{{- end }}

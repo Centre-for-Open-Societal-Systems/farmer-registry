@@ -90,6 +90,12 @@ def configuration(path=MANIFEST, environment="dev"):
         seen.add(item["name"])
         if not re.fullmatch(r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git", item["repository"]):
             raise ValueError("Expected a credential-free GitHub repository URL")
+        if item.get("chartSource") is not None and not (
+            item.get("chartSource") == "registry"
+            and item["name"] == "farmer-registry-dashboard"
+            and item["chart"] == "helm/farmer-registry-dashboard"
+        ):
+            raise ValueError("Only the Farmer dashboard UI may use the registry chart source")
         embedded = item.get("kind") == "registry-dashboard-api"
         if embedded and any(item.get(key) != value for key, value in {
             "name": "farmer-registry-dashboard-api", "release": "farmer-registry",
@@ -155,7 +161,7 @@ def checkout(component, environment, destination, run=command, commit=None):
 
 def layout(component, source):
     dockerfile = relative_file(source, component["dockerfile"])
-    chart_root = ROOT if component.get("kind") == "registry-dashboard-api" else source
+    chart_root = ROOT if component.get("kind") == "registry-dashboard-api" or component.get("chartSource") == "registry" else source
     chart = relative_file(chart_root, component["chart"])
     if not dockerfile.is_file() or not (chart / "Chart.yaml").is_file():
         raise SkipService("missing-application-files")
@@ -234,6 +240,10 @@ def build(component, environment, source, registry, run=command):
     built = {}
     try:
         _, chart = layout(component, source)
+        if component.get("kind") == "registry-dashboard-api":
+            run(["bash", str(ROOT / "ci/dashboard/verify-api.sh"), str(source)])
+        if component.get("chartSource") == "registry":
+            run(["bash", str(ROOT / "ci/dashboard/verify-source.sh"), str(source)])
         overlays = {role: chart_hash(relative_file(ROOT, spec["overlay"]))
                     for role, spec in image_specs(component).items() if spec.get("overlay")}
         tag = commit[:12]
@@ -583,7 +593,8 @@ def merge(target, overlay):
 
 def coordinate(components, action, environment, registry, previous, work, build_fn=build, deploy_fn=deploy):
     records = {}
-    for component in components:
+    # The API image/configuration must be deployed before the UI's authenticated smoke hook.
+    for component in sorted(components, key=lambda item: item.get("dependsOn") is not None):
         name = component["name"]
         outcome = {"source": component["repository"], "branch": branch(environment, component),
                    "release": component["release"], "namespace": component["namespace"]}
@@ -605,6 +616,9 @@ def coordinate(components, action, environment, registry, previous, work, build_
                     record = build_fn(component, environment, work / name, registry)
                 outcome.update(record, outcome="built")
             else:
+                dependency = component.get("dependsOn")
+                if dependency and records.get(dependency, {}).get("outcome") != "deployed":
+                    raise SkipService("dashboard-api-not-deployed")
                 record = previous.get(name, {})
                 if record.get("outcome") not in ("built", "deployed"):
                     raise SkipService("no-successful-build")

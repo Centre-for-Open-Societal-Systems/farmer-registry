@@ -97,6 +97,28 @@ def test_branch_policy_and_real_config(component):
     assert all(item["namespace"] == "farmer" for item in configured)
 
 
+def test_dashboard_ui_uses_registry_chart_without_chart_in_application_source(tmp_path):
+    component = next(item for item in coordinator.configuration() if item["name"] == "farmer-registry-dashboard")
+    (tmp_path / "Dockerfile").write_text("FROM scratch\n")
+    _, chart = coordinator.layout(component, tmp_path)
+    assert chart == ROOT / "helm/farmer-registry-dashboard"
+    assert not (tmp_path / "helm").exists()
+
+
+def test_failed_api_rollout_prevents_dependent_dashboard_rollout(tmp_path):
+    components = [item for item in coordinator.configuration() if item["name"] != "registry-connector"]
+    called = []
+
+    def deploy(component, *_args):
+        called.append(component["name"])
+        raise coordinator.ServiceError("api-rollout-failed")
+
+    previous = {item["name"]: {"outcome": "built"} for item in components}
+    result = coordinator.coordinate(components, "deploy", "dev", ECR, previous, tmp_path, deploy_fn=deploy)
+    assert called == ["farmer-registry-dashboard-api"]
+    assert result["farmer-registry-dashboard"]["reason"] == "dashboard-api-not-deployed"
+
+
 def test_configuration_rejects_other_registry_ownership(tmp_path, component):
     config = tmp_path / "components.yaml"
     config.write_text(yaml.safe_dump({"cossAddons": {"components": [dict(component, namespace="livestock")]}}))
