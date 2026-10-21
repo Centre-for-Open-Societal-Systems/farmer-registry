@@ -1,16 +1,21 @@
+# Shared development staff IAM and wildcard Gateway. Secret contents stay outside Git.
 _coordination:
   namespace: farmer
-# Registry-owned development configuration. No secrets are embedded.
-environment: development
+environment: ''
 iam:
-  url: https://staff-iam-development.oanstaging.com
-  cookieDomain: .oanstaging.com
+  url: https://staff-iam.development.oanstaging.com
+  cookieDomain: .development.oanstaging.com
 links:
-  staffPortalUrl: https://farmer-registry-development.oanstaging.com
-  registryPortalUrl: https://farmer-registry-development.oanstaging.com
+  staffPortalUrl: https://staff-portal.development.oanstaging.com
+  registryPortalUrl: https://farmer-registry.development.oanstaging.com
 dashboardApi:
   service: farmer-registry-dashboard-api
   auth:
     enabled: true
 iamSetup:
   grantUsers: []
+  description: Farmer Dashboard
+host: farmer-registry-dashboard.development.oanstaging.com
+ingress:
+  public:
+    existingGateway: istio-system/development

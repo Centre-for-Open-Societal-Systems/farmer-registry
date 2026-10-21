@@ -453,6 +453,8 @@ cossAddons:
       dockerfile: Dockerfile
       chart: helm/farmer-registry-dashboard
       chartSource: registry
+      # First installation is explicit; ownership and hook-rehearsal guards still apply.
+      allowInstall: true
       dependsOn: farmer-registry-dashboard-api
       release: farmer-registry-dashboard
       namespace: farmer

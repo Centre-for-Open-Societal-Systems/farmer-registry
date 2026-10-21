@@ -28,3 +28,24 @@ Before deployment, verify that the selected namespace has the configured IAM,
 Keycloak bootstrap Secret and pull access, and that the configured public host
 is under the IAM cookie domain. Merging these PRs does not change a live cluster.
 Remove the old registry paths from `oan_dashboards` during the coordinated cutover.
+
+## Staff portal tiles
+
+The development UI uses the shared staff IAM at
+`https://staff-iam.development.oanstaging.com`, its
+`.development.oanstaging.com` cookie domain and the existing
+`istio-system/development` Gateway. The UI setup hook registers the tile in
+that IAM after provisioning its client and `Dashboard Viewer` role. No staff
+user receives the role automatically. After an approved assignment, sign in
+again so the staff session contains the new client role. IAM renders a
+registered tile disabled for users without that client's role.
+
+Merging UI/API source does not register a tile. Merge this registry delivery
+change and run the registry CI build/deployment with its existing guards.
+Require the UI's IAM setup and authenticated chart smoke hooks to succeed;
+then confirm its tile in the central staff portal and open it with an
+approved viewer account. The UI's header links back to that central portal.
+
+The dashboard UI permits its first installation explicitly. It still requires
+matching hook rehearsal evidence and the API dependency to deploy successfully;
+no existing release is adopted or replaced by another owner.

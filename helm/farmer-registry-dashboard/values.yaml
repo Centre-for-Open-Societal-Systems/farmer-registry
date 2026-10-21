@@ -149,6 +149,8 @@ ingress:
     # Default <release>-public: an own name, so it never collides with a
     # Gateway another release owns.
     gatewayName: ""
+    # Use a shared Gateway without creating or adopting it.
+    existingGateway: ""
   # Optional extra host on an existing gateway in the namespace.
   private:
     enabled: false
