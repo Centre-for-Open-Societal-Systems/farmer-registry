@@ -5,6 +5,8 @@ The new-dev accounts are `<registry>.intake`, `<registry>.l1`, and
 L1 approves the existing first stage; Farmer L2 approves its second stage.
 Livestock/Crop Sown L2 are read-only because their existing workflows have one
 stage. Each L2 alone receives its own dashboard's `Dashboard Viewer` role.
+Approvals use assigned AWE tasks. Dedicated accounts do not receive the legacy
+`intakeSubmission:approve` grant, which can finalize directly outside AWE stages.
 
 ## Seed contract
 

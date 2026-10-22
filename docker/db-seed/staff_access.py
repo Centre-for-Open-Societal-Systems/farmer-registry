@@ -90,9 +90,9 @@ def iam_sql(registry, client, two_stages):
             'registerTab:view', 'registerHistory:view', 'referenceData:view']
     roles = {
         'intake': base + ['intakeSubmission:edit'],
-        'l1': base + read + ['intakeSubmission:approve', 'verificationIntakeForm:view',
+        'l1': base + read + ['verificationIntakeForm:view',
                              'verificationIntakeForm:create'],
-        'l2': base + read + (['intakeSubmission:approve', 'verificationIntakeForm:view',
+        'l2': base + read + (['verificationIntakeForm:view',
                               'verificationIntakeForm:create'] if two_stages else []),
     }
     statements = ['BEGIN;', 'SELECT pg_advisory_xact_lock(724196309);']
@@ -118,6 +118,14 @@ def iam_sql(registry, client, two_stages):
             SELECT id,{literal(name)},{literal('Dedicated ' + name)},true,NOW(),NOW()
             FROM staff_portal_applications WHERE application_mnemonic={literal(client)}
             AND NOT EXISTS (SELECT 1 FROM staff_roles WHERE role_mnemonic={literal(name)}) ;""")
+        # Stage authority is checked by AWE task assignment. This legacy grant
+        # calls approve_submission directly and can bypass the staged workflow.
+        # Remove it only from the dedicated roles managed by this provisioner.
+        statements.append(f"""DELETE FROM staff_role_permissions rp
+            USING staff_roles r, staff_application_permissions p
+            WHERE rp.role_id=r.id AND rp.permission_id=p.id
+              AND r.role_mnemonic={literal(name)}
+              AND p.permission_mnemonic='intakeSubmission:approve';""")
         for permission in permissions:
             statements.append(f"""INSERT INTO staff_role_permissions
                 (role_id,permission_id,active,created_at,updated_at)
