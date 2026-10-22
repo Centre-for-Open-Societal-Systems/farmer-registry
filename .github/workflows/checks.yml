@@ -67,4 +67,4 @@ jobs:
           helm dependency build helm/openg2p-farmer-registry
           helm lint helm/openg2p-farmer-registry --strict
           helm template farmer-registry helm/openg2p-farmer-registry -n farmer > /tmp/farmer.yaml
-          python -m pytest tests/unit/test_connector_credentials.py -q
+          python -m pytest tests/unit/test_connector_credentials.py tests/unit/test_dashboard_chart.py -q
