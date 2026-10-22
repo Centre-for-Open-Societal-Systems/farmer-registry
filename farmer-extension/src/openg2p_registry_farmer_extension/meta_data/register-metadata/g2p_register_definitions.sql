@@ -31,7 +31,7 @@ ON CONFLICT ("register_id") DO UPDATE SET
     "dedup_is_enabled" = EXCLUDED."dedup_is_enabled",
     "dedup_threshold_score" = EXCLUDED."dedup_threshold_score",
     "completion_score_required" = EXCLUDED."completion_score_required",
-    "outgest_applicable" = EXCLUDED."outgest_applicable",
+    -- Preserve the administrator-managed outgestion switch on reseed.
     "requires_registrant_authentication" = EXCLUDED."requires_registrant_authentication",
     "registrant_authentication_validity_days" = EXCLUDED."registrant_authentication_validity_days",
     "registrant_re_auth_warning_days_before" = EXCLUDED."registrant_re_auth_warning_days_before";
