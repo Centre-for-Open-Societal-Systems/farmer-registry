@@ -1,0 +1,8 @@
+data_model_id: 873c2342-cfde-5db4-9f9f-6e491a5001f7
+data_model_mnemonic: FARMER_REFERENCE_CHANGED_V1
+event_type: farmer_reference.changed.v1
+websub_topic: oan.farmer-reference.changed.v1
+register_id: a1a4d25a-1cd4-4356-abac-985a0b3c6bcd
+topic_id: 6d495cab-b513-5fd0-9bc2-d31024ee8410
+template_id: b011d78e-b003-596b-a8a1-ba5c73601635
+document_id: 4ece1dd5-2478-5679-8848-292754cf0a0f

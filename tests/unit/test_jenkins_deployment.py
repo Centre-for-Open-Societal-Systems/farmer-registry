@@ -111,7 +111,7 @@ def release():
     for doc in after:
         suffix = doc["metadata"]["name"].removeprefix("farmer-registry-")
         env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
-        env.extend({"name": name, "value": value} for name, value in deployment.location_env(suffix).items())
+        env.extend({"name": name, "value": value} for name, value in {**deployment.location_env(suffix), **deployment.outgestion_env(suffix)}.items())
         env.extend(deployment.env_entry(name, value) for name, value in deployment.master_data_env(suffix).items())
     return before, after
 

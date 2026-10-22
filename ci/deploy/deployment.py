@@ -203,6 +203,17 @@ def location_env(suffix, environment="dev"):
     return location_overlay(environment).get("registry", {}).get(component, {}).get("envVars", {})
 
 
+def outgestion_overlay(environment="dev"):
+    if environment != "dev":
+        return {}
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-outgestion.yaml")
+
+
+def outgestion_env(suffix, environment="dev"):
+    component = {"staff-portal-api":"staffApi", "partner-api":"partnerApi", "celery-worker":"celeryWorker"}.get(suffix)
+    return outgestion_overlay(environment).get("registry", {}).get(component, {}).get("envVars", {})
+
+
 def merge(target, overlay):
     for key, value in overlay.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
@@ -288,6 +299,7 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     # Repair stale Master Data endpoints alongside the approved service binding.
     # Qualify the Commons service explicitly across namespace boundaries.
     merge(values, location_overlay(environment))
+    merge(values, outgestion_overlay(environment))
     if environment == "staging":
         # rc.544 stopped emitting legacy MDS DB settings and two UI toggles.
         # Carry their exact installed values/Secret refs through the owning
@@ -347,6 +359,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                         suffix = key[1].removeprefix(RELEASE + "-")
                         approved = dict(identity_env(suffix, environment) if migrate_identity or environment == "staging" else master_data_env(suffix, environment))
                         approved.update(location_env(suffix, environment))
+                        approved.update(outgestion_env(suffix, environment))
                         if name not in approved or new_env.get(container, {}).get(name) != env_entry(name, approved[name]):
                             raise ValueError(f"Existing environment/Secret reference changed: {key[1]}/{container}/{name}")
             if pod(previous).get("imagePullSecrets", []) != pod(current).get("imagePullSecrets", []):
@@ -399,7 +412,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
             environments = list(envs(current, include_init=False).values())
             if len(environments) != 1:
                 raise ValueError("Master Data routing requires one application container per workload")
-            for name, value in location_env(suffix).items():
+            for name, value in {**location_env(suffix), **outgestion_env(suffix)}.items():
                 if environments[0].get(name) != {"name": name, "value": value}:
                     raise ValueError(f"Master Data routing was not rendered: {suffix}/{name}")
             for name, value in master_data_env(suffix).items():
