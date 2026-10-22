@@ -18,12 +18,14 @@ const count = (store, prefix) => stores[store].prepare("SELECT count(*) n FROM d
 const failures = new Map()
 let brokenSmoke = false
 let deniedCharts = 0
+let userMode = "existing"
 const clientId = process.env.FIXTURE_CLIENT_ID
 const apiClientId = process.env.FIXTURE_API_CLIENT_ID
 const port = 9137
 const base = `http://127.0.0.1:${port}`
 const adminToken = "fixture-admin-token"
 const serviceToken = "fixture-service-token"
+put("keycloak", `grant/staff-admin/${clientId}/Registry Approver`, { id: "existing-approver", name: "Registry Approver" })
 
 createServer(async (request, response) => {
   const url = new URL(request.url, base)
@@ -41,10 +43,13 @@ createServer(async (request, response) => {
       clients: count("keycloak", "client/"), roles: count("keycloak", "role/"),
       grants: count("keycloak", "grant/"), applications: count("iam", "application/"),
       secrets: count("kubernetes", "secret/"), deniedCharts,
+      adminViewer: Boolean(get("keycloak", `grant/staff-admin/${clientId}/Dashboard Viewer`)),
+      unrelatedRolePreserved: Boolean(get("keycloak", `grant/staff-admin/${clientId}/Registry Approver`)),
     })
     if (path === "/fixture/control" && request.method === "POST") {
       if (json.fail) failures.set(json.fail, 1)
       if ("brokenSmoke" in json) brokenSmoke = json.brokenSmoke
+      if ("userMode" in json) userMode = json.userMode
       return send(200)
     }
     const key = `${request.method}:${path}`
@@ -83,6 +88,12 @@ createServer(async (request, response) => {
     if (path.startsWith(admin)) {
       if (request.headers.authorization !== `Bearer ${adminToken}`) return send(401)
       const route = path.slice(admin.length)
+      if (route === "/users" && request.method === "GET") {
+        if (url.searchParams.get("username") !== "admin" || userMode === "missing") return send(200, [])
+        const users = [{ id: "staff-admin", username: "admin" }]
+        if (userMode === "ambiguous") users.push({ id: "other-admin", username: "admin" })
+        return send(200, users)
+      }
       if (route === "/clients" && request.method === "GET") {
         const client = get("keycloak", `client/${url.searchParams.get("clientId")}`)
         return send(200, client ? [client] : [])
@@ -102,8 +113,13 @@ createServer(async (request, response) => {
       const service = route.match(/^\/clients\/([^/]+)\/service-account-user$/)
       if (service) return send(200, { id: `service-${service[1]}` })
       const grant = route.match(/^\/users\/([^/]+)\/role-mappings\/clients\/([^/]+)$/)
+      if (grant && request.method === "GET") {
+        const rows = stores.keycloak.prepare("SELECT value FROM documents WHERE key LIKE ?").all(`grant/${grant[1]}/${grant[2]}/%`)
+        return send(200, rows.map(row => JSON.parse(row.value)))
+      }
       if (grant && request.method === "POST") {
-        if (grant[1] !== `service-${clientId}` || grant[2] !== apiClientId) return send(403)
+        if (!((grant[1] === `service-${clientId}` && grant[2] === apiClientId) ||
+              (grant[1] === "staff-admin" && grant[2] === clientId && json.every(r => r.name === "Dashboard Viewer")))) return send(403)
         for (const value of json) put("keycloak", `grant/${grant[1]}/${grant[2]}/${value.name}`, value)
         return send(204)
       }
