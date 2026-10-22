@@ -9,7 +9,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- define "dashboard.labels" -}}
 {{ include "dashboard.selectorLabels" . }}
-app.kubernetes.io/version: {{ .Values.image.tag | default .Chart.AppVersion | quote }}
+{{/* CI pins tag@sha256:digest. The version label uses only the tag; the
+     container image retains the full digest. Labels must fit 63 characters
+     and start/end with an alphanumeric character. */}}
+{{- $tag := first (splitList "@" (toString (.Values.image.tag | default .Chart.AppVersion))) }}
+app.kubernetes.io/version: {{ regexReplaceAll "[^A-Za-z0-9_.-]" $tag "_" | trunc 63 | trimAll "-_." | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{- end -}}

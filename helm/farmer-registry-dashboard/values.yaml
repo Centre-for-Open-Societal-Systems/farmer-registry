@@ -8,7 +8,7 @@
 
 image:
   repository: ""   # e.g. <account>.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry-dashboard
-  tag: ""          # set by CI: the commit sha (12)
+  tag: ""          # set by CI: <commit sha (12)>@sha256:<immutable digest>
   pullPolicy: IfNotPresent
 
 # Registry this dashboard belongs to; names the staff portal link
