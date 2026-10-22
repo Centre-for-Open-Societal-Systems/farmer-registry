@@ -1,0 +1,49 @@
+{{- if .Values.staffAccess.enabled }}
+{{- if not .Values.staffAccess.policyKeys }}
+{{- fail "staffAccess.policyKeys must list the environment's existing intake policies" }}
+{{- end }}
+{{- $registry := index .Values "openg2p-registry" }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-staff-access
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "40"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 300
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- with .Values.staffAccess.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: staff-access
+          image: {{ printf "%s:%s" $registry.dbSeed.image.repository $registry.dbSeed.image.tag | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["python3", "/seed/staff_access.py"]
+          envFrom:
+            - secretRef:
+                name: {{ required "staffAccess.existingSecret is required" .Values.staffAccess.existingSecret | quote }}
+          env:
+            - name: STAFF_SEED_ENABLED
+              value: "true"
+            - name: STAFF_SEED_REGISTRY
+              value: "farmer"
+            - name: STAFF_SEED_CLIENT_ID
+              value: {{ .Values.staffAccess.clientId | default "farmer-registry-staff-portal" | quote }}
+            - name: STAFF_SEED_DASHBOARD_CLIENT_ID
+              value: {{ .Values.staffAccess.dashboardClientId | default "farmer-registry-dashboard" | quote }}
+            - name: STAFF_SEED_TWO_STAGES
+              value: {{ .Values.staffAccess.twoStages | quote }}
+            - name: STAFF_SEED_POLICY_KEYS
+              value: {{ required "staffAccess.policyKeys must list the environment's existing intake policies" .Values.staffAccess.policyKeys | toJson | quote }}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {memory: 256Mi}
+{{- end }}

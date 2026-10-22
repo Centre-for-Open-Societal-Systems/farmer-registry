@@ -66,3 +66,6 @@ RUN chmod +x /seed/generate_fr_bulk_sample.py
 # Keep upstream loaders, but propagate SQL failures and commit metadata per DB.
 COPY docker/db-seed/seed.py /seed/coss_seed.py
 ENTRYPOINT ["python3", "/seed/coss_seed.py"]
+
+# Optional Secret-backed staff provisioning after normal seed stages.
+COPY docker/db-seed/staff_access.py /seed/staff_access.py
