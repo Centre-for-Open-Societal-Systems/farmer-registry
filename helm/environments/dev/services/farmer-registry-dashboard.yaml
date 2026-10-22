@@ -13,7 +13,7 @@ dashboardApi:
   auth:
     enabled: true
 iamSetup:
-  grantUsers: []
+  grantUsers: [admin]
   description: Farmer Dashboard
 host: farmer-registry-dashboard.development.oanstaging.com
 ingress:

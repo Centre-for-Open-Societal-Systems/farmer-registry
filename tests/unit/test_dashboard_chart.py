@@ -32,9 +32,14 @@ def mappings(value):
     ("_release.-", "release"),
     ("a" * 62 + "-tail", "a" * 62),
 ])
-def test_digest_pinned_images_have_valid_labels_on_resources_and_hooks(tag, version):
+def test_digest_pinned_images_have_valid_labels_on_resources_and_hooks(tmp_path, tag, version):
+    chart = tmp_path / "dashboard-chart"
+    shutil.copytree(CHART, chart)
+    metadata = yaml.safe_load((chart / "Chart.yaml").read_text())
+    metadata["version"] = "1.0.0+regression"
+    (chart / "Chart.yaml").write_text(yaml.safe_dump(metadata))
     rendered = subprocess.run([
-        "helm", "template", "farmer-registry-dashboard", str(CHART),
+        "helm", "template", "farmer-registry-dashboard", str(chart),
         "-n", "farmer", "-f", str(VALUES),
         "--set-string", "image.repository=" + REPOSITORY,
         "--set-string", "image.tag=" + tag,

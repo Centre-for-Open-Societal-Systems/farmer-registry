@@ -38,7 +38,7 @@ def rehearse(image,tools,chart,values):
     if setup['command']!=['/bin/sh','-c','node iam/keycloak-setup.mjs && node iam/register.mjs'] or smoke['command']!=['node','iam/smoke.mjs']:
         raise ValueError('Changed hook program requires rehearsal review')
     settings={entry['name']:entry.get('value') for entry in setup['env']}
-    if (settings.get('GRANT_USERS') or settings.get('DASHBOARD_CLIENT_ID')!=release or
+    if (settings.get('GRANT_USERS')!='admin' or settings.get('DASHBOARD_CLIENT_ID')!=release or
             settings.get('DASHBOARD_API_CLIENT_ID')!=release+'-api' or settings.get('DASHBOARD_ROLE')!='Dashboard Viewer' or
             settings.get('DASHBOARD_API_ROLE')!='charts:read'):
         raise ValueError('Changed access policy requires a separate rehearsal')
@@ -49,7 +49,7 @@ def rehearse(image,tools,chart,values):
         'DASHBOARD_CLIENT_ID':release,'DASHBOARD_API_CLIENT_ID':release+'-api','DASHBOARD_ROLE':'Dashboard Viewer',
         'DASHBOARD_API_ROLE':'charts:read','DASHBOARD_CLIENT_SECRET':'fixture-client-secret',
         'KEYCLOAK_ADMIN':'admin','KEYCLOAK_ADMIN_PASSWORD':'fixture-admin-password','APP_DESCRIPTION':settings['APP_DESCRIPTION'],
-        'GRANT_USERS':'','MAX_ATTEMPTS':'1','DASHBOARD_API_URL':BASE,'OIDC_TOKEN_URL':'',
+        'GRANT_USERS':'admin','MAX_ATTEMPTS':'1','DASHBOARD_API_URL':BASE,'OIDC_TOKEN_URL':'',
         'DASHBOARD_SMOKE_CHARTS':smoke_names}
     def rpc(method,path,body=None):
         script='const r=await fetch('+json.dumps(BASE+path)+',{method:'+json.dumps(method)+',headers:{"Content-Type":"application/json"},body:'+('undefined' if body is None else json.dumps(json.dumps(body)))+'});if(!r.ok)process.exit(1);console.log(await r.text())'
@@ -84,12 +84,18 @@ def rehearse(image,tools,chart,values):
             rpc('POST','/fixture/control',{'fail':'POST:/'})
             expect(ecr_hook(),False,'ecr-failure')
             expect(ecr_hook(),True,'ecr-recovery')
+            for mode in ('missing','ambiguous'):
+                rpc('POST','/fixture/control',{'userMode':mode})
+                expect(run_hook(setup['command']),False,'requested-user-'+mode)
+                assert rpc('GET','/fixture/state')['clients']==0
+            rpc('POST','/fixture/control',{'userMode':'existing'})
             rpc('POST','/fixture/control',{'fail':'POST:/user-access/staff_portal_applications'})
             expect(run_hook(setup['command']),False,'registration-failure')
             expect(run_hook(setup['command']),True,'registration-recovery')
             expect(run_hook(smoke['command']),True,'initial-smoke')
             first=rpc('GET','/fixture/state')
-            assert {key:first[key] for key in ('clients','roles','grants','applications','secrets')}=={'clients':2,'roles':2,'grants':1,'applications':1,'secrets':1}
+            assert {key:first[key] for key in ('clients','roles','grants','applications','secrets')}=={'clients':2,'roles':2,'grants':3,'applications':1,'secrets':1}
+            assert first['adminViewer'] and first['unrelatedRolePreserved']
             expect(ecr_hook(),True,'ecr-rerun')
             expect(run_hook(setup['command']),True,'registration-rerun')
             expect(run_hook(smoke['command']),True,'smoke-rerun')
@@ -101,6 +107,7 @@ def rehearse(image,tools,chart,values):
             expect(run_hook(smoke['command']),True,'smoke-recovery')
             assert rpc('GET','/fixture/state')['deniedCharts']>=4
             return {'isolatedDatabases':True,'everyEnabledHook':True,'rerun':True,'failureRecovery':True,
+                'adminGrantVerified':True,'unrelatedRolesPreserved':True,'missingOrAmbiguousUsersRejected':True,
                 'noExternalNetwork':True,'hookJobs':sorted(jobs),'fixtureMode':'loopback-http-sqlite-kubectl-transport-shim'}
         finally:
             assert backend.startswith('dashboard-hook-rehearsal-')

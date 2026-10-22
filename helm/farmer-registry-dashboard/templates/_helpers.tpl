@@ -15,7 +15,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $tag := first (splitList "@" (toString (.Values.image.tag | default .Chart.AppVersion))) }}
 app.kubernetes.io/version: {{ regexReplaceAll "[^A-Za-z0-9_.-]" $tag "_" | trunc 63 | trimAll "-_." | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
+helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimAll "-_." | quote }}
 {{- end -}}
 
 {{/* A VirtualService http route to the dashboards Service for one host. */}}
