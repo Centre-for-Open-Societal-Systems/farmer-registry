@@ -180,6 +180,9 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             source = str(change_request.change_request_source or "").upper()
             if not farmer.import_source and source in self._IMPORT_SOURCES:
                 farmer.import_source = source
+        from .approved_uid import sync_approved_uid
+        if farmer:
+            await sync_approved_uid(session, farmer.internal_record_id)
         await self._sync_linked_household_head(farmer, session)
 
     async def post_ingest(self, register_id, register_row, session):
@@ -194,6 +197,8 @@ class G2PRegisterDomainServiceFarmer(G2PRegisterDomainService):
             # form (STAFF_PORTAL) or a partner.
             register_row.import_source = self._import_source_of(submission)
         self._fill_enumerator(register_row, submission)
+        from .approved_uid import sync_approved_uid
+        await sync_approved_uid(session, register_row.internal_record_id)
         await self._sync_linked_household_head(register_row, session)
 
     @staticmethod

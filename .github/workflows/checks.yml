@@ -28,7 +28,7 @@ jobs:
       - name: openg2p-registry pin lockstep
         run: python -m pytest tests/unit/test_rp_pin_lockstep.py -q
       - name: Effective COSS metadata
-        run: python -m pytest tests/unit/extension/test_metadata_effective_layer.py -q
+        run: python -m pytest tests/unit/extension/test_metadata_effective_layer.py tests/unit/extension/test_approved_uid.py -q
       - name: Commons PM deployment guard
         run: python -m pytest tests/unit/test_pm_manifest.py -q
       - name: Jenkins deployment migration guard
