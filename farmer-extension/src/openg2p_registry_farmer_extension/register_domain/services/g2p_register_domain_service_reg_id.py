@@ -17,6 +17,14 @@ _logger = logging.getLogger("g2p-register-domain-service")
 
 
 class G2PRegisterDomainServiceRegId(G2PRegisterDomainService):
+    async def post_approve(self, change_request, session):
+        from .approved_uid import sync_approved_uid
+        await sync_approved_uid(session, change_request.internal_record_id)
+
+    async def post_ingest(self, register_id, register_row, session):
+        from .approved_uid import sync_approved_uid
+        await sync_approved_uid(session, register_row.link_internal_record_id)
+
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
             self._validate_value_required(record)
