@@ -47,7 +47,7 @@ def choose_projection(current, rows, approved_history=(), today=None):
 async def sync_approved_uid(session, internal_record_id):
     if not internal_record_id:
         return "no-parent"
-    from ..models import G2PRegisterFarmer
+    from openg2p_registry_extensions.register_domain.models import G2PRegisterFarmer
     farmer = (await session.execute(select(G2PRegisterFarmer).where(
         G2PRegisterFarmer.internal_record_id == internal_record_id).with_for_update())).scalar_one_or_none()
     if farmer is None:
@@ -59,7 +59,7 @@ async def sync_approved_uid(session, internal_record_id):
     history = (await session.execute(text("""
         SELECT value FROM g2p_register_history_reg_ids
         WHERE link_internal_record_id=:parent AND id_type='UID'
-          AND last_approved_at IS NOT NULL AND last_approved_by IS NOT NULL
+          AND approved_at IS NOT NULL AND approved_by IS NOT NULL
     """), {"parent":internal_record_id})).scalars().all()
     projected, reason = choose_projection(farmer.foundational_id, rows, history)
     if projected == farmer.foundational_id:
