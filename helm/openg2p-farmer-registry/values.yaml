@@ -469,3 +469,13 @@ cossAddons:
       kind: registry-dashboard-api
       imageRepository: openg2p/farmer-registry/dashboard-api
       imageValues: dashboardApi.image
+
+# Explicit opt-in; requires a db-seed image containing staff_access.py.
+staffAccess:
+  enabled: false
+  existingSecret: ""
+  imagePullSecrets: []
+  clientId: ""
+  dashboardClientId: ""
+  twoStages: true
+  policyKeys: []

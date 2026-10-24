@@ -73,6 +73,7 @@ def main():
                          ('LOAD_TEMPLATES', 'upload_templates.py')]:
         if enabled(flag):
             subprocess.run([sys.executable, str(ROOT / script)], check=True)
+    subprocess.run([sys.executable, str(ROOT / 'staff_access.py')], check=True)
     print('[db-seed] All enabled seed stages completed.', flush=True)
 
 
