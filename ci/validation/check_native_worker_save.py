@@ -60,6 +60,20 @@ def initialize(host):
         installed[name] = {"module": method.__module__, "qualname": method.__qualname__,
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "source": source}
     print(json.dumps({"installed_native_intake_callables": installed}), flush=True)
+    from openg2p_fastapi_common.app import Initializer as NativeCommonInitializer
+    from openg2p_fastapi_common.context import dbengine
+    base_source = inspect.getsource(NativeCommonInitializer.initialize)
+    context_engine = dbengine.get()
+    context_url = getattr(context_engine, "url", None)
+    expect((getattr(context_url, "host", None), getattr(context_url, "database", None)),
+           (host, "native_worker_save"), "native initializer context engine targets owned PostgreSQL")
+    print(json.dumps({"native_initializer_engine_context": {
+        "type": type(context_engine).__module__ + "." + type(context_engine).__qualname__,
+        "same_as_worker_async_engine": context_engine is Engine.get_async_engine(),
+        "host": context_url.host, "database": context_url.database,
+        "base_initialize_source": base_source,
+        "base_initialize_sha256": hashlib.sha256(base_source.encode()).hexdigest(),
+        "rule_cache_entries_before_save": len(services._cache["rules"])}}), flush=True)
     selected_intake = G2PIntakeFormDataService.get_component()
     expect(task.G2PIntakeFormDataService.get_component() is selected_intake, True, "worker uses selected intake component")
     resolved = {}
@@ -203,6 +217,11 @@ async def save_probe(Engine, task):
                 expect([(d.document_id, d.label) for d in docs], [(document_id, "identity_document_1")], "scoped identity attachment and unrelated-document exclusion")
                 doc_section = next(s.section_id for s in sections if s.section_mnemonic == SECTIONS[15])
                 expect(docs[0].section_id, doc_section, "identity attachment section")
+                services = importlib.import_module("openg2p_registry_extensions.register_domain.services")
+                expect(len(services._cache["rules"]) > 0, True, "OAN rule metadata loaded by actual native save")
+                print(json.dumps({"oan_domain_rule_metadata_after_save": {"loaded": True,
+                    "register_rule_groups": len(services._cache["rules"]),
+                    "coded_value_validation_is_separate": True}}), flush=True)
                 submission = await session.get(G2PIntakeFormSubmission, submission_id)
                 expect(submission.draft_status, "DRAFT", "unfinalized submission")
                 print(json.dumps({"after_valid_save_diagnostic": {
