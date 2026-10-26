@@ -46,3 +46,13 @@ jobs:
           for mode in worker beat; do
             docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python registry/celery:ci /repo/ci/validation/check_worker_extensions.py "$mode"
           done
+      - name: Native worker ODK save and rollback in owned PostgreSQL
+        if: matrix.component == 'celery'
+        env:
+          OAN_WORKER_SAVE_TEST_IMAGE: registry/celery:ci
+        run: python3 ci/validation/check_native_worker_save.py
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.component == 'celery'
+        with:
+          name: native-worker-save
+          path: ci-output/native-worker-save/
