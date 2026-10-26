@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Error as PlaywrightError, sync_playwright
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--node-modules', type=Path, required=True)
@@ -25,6 +25,29 @@ checks = []
 def check(name, condition):
     assert condition, name
     checks.append(name)
+def click_continue(popup, page, selected_fin):
+    # Every scenario starts fresh. A request predating this click cannot prove
+    # that this action was dispatched before the popup closed.
+    assert page.evaluate('window.requests.length') == 0, 'Unexpected pre-click identity request'
+    try:
+        popup.get_by_role('button', name='Continue', exact=True).click()
+    except PlaywrightError as error:
+        # Fast failure/no-URL responses can close the popup after the real
+        # submit but before Playwright acknowledges the click. A dead parent,
+        # browser disconnect or missing/wrong request remains a hard failure.
+        if ('Target page, context or browser has been closed' not in str(error)
+                or not popup.is_closed() or page.is_closed()):
+            raise
+        browser = page.context.browser
+        if browser is None or not browser.is_connected():
+            raise
+        requests = page.evaluate('window.requests')
+        payload = (requests[0][3] if isinstance(requests, list) and len(requests) == 1
+                   and isinstance(requests[0], list) and len(requests[0]) > 3 else None)
+        if not isinstance(payload, dict) or payload.get('foundational_id') != selected_fin:
+            raise
+
+
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args): pass
 
@@ -78,7 +101,7 @@ with tempfile.TemporaryDirectory(prefix='popup-flow-browser-') as temporary:
                     popup.locator('form').evaluate("form=>form.dispatchEvent(new Event('submit',{cancelable:true}))")
                     check(mode+': invalid FIN rejected '+repr(bad), page.evaluate('window.requests.length') == 0)
                 field.fill('001234567890')
-                popup.get_by_role('button', name='Continue', exact=True).click()
+                click_continue(popup, page, '001234567890')
                 if mode in ['success', 'failure']:
                     popup.wait_for_url('**/authorization.html')
                     check(mode+': original popup navigated', not popup.is_closed())
@@ -109,7 +132,7 @@ with tempfile.TemporaryDirectory(prefix='popup-flow-browser-') as temporary:
                     page.get_by_role('button', name='Verify again', exact=True).click()
                 popup = event.value
                 popup.get_by_label('Fayda ID (FIN)').fill('001234567890')
-                popup.get_by_role('button', name='Continue', exact=True).click()
+                click_continue(popup, page, '001234567890')
                 page.wait_for_function('!document.querySelector("button").disabled', timeout=10000)
                 check(mode+': existing verified FIN and all proof unchanged', page.evaluate('window.store.getState().widget.values') == saved)
             page.goto(base, wait_until='networkidle')
