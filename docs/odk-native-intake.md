@@ -17,3 +17,6 @@ Multi-choice income, crop/animal water, machinery and finance answers use additi
 ## Verification
 
 The OAN image suite passed 188 tests after the ODK and approval-serialization changes. A child process in the actual local Farmer worker image, loading only the new OAN source in an isolated process, ran native worker validation/create/save on the installed 16-section form. The identity value, Land-to-Crop link and section-scoped identity document were verified and the entire transaction was rolled back. No live form publication, FINAL submission, approval or registry record was created by that check. The running worker code was not replaced.
+
+The unpublished v3 candidate uses explicit repeat-derived parcel selections for
+main crops, livestock and root inputs. See [the contract and validation](odk/ATI-LAND-LINKS-20261026.md).

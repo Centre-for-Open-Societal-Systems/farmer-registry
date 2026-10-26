@@ -51,8 +51,10 @@ and finance value. Added catalogue codes have a separate OAN data PR; its previe
 seed publication and real catalogue acceptance remain outstanding.
 
 The v3 XLSForm is an unpublished candidate, validated separately from live Collect.
+Its [explicit plot-selection follow-up](odk/ATI-LAND-LINKS-20261026.md) now covers
+main crop/livestock/input parent selection through standard ODK controls.
 The [102-question mapper audit](odk/ATI-MAPPER-AUDIT-20261026.md) records remaining
-multi-land parent selection, additional Farmer repeat, household-reference branch,
+additional Farmer repeat, household-reference branch,
 consent event, optional email and geography gaps. A retained raw payload does not
 establish complete domain functionality.
 
@@ -61,3 +63,7 @@ names. Replays preserve reader grants and reject unknown dependencies. Geographi
 labels come from authenticated Master Data HTTP, with the existing per-registry
 client and Secret references. The central chart renders one reporting Job.
 Fresh hook execution and authenticated dashboard acceptance remain outstanding.
+
+Worker and beat load the registered OAN services through native `CELERY_IMPORTS`.
+Offline launcher checks require the same intake, signature and JSON-safe approval
+services while preserving native schedules; hosted verification remains required.

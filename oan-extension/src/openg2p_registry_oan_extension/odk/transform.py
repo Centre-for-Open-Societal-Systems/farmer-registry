@@ -111,8 +111,12 @@ def location(locale, gps):
 
 
 def child_land(child, lands):
-    selected = child.get("land_id") or child.get("oan_land_id")
-    candidates = [land for land in lands if selected and selected in (land.get("land_id"),land.get("oan_land_id"))]
+    selected = {str(child[key]).strip() for key in
+        ('land_id', 'oan_land_id', 'crop_land_id', 'livestock_land_id', 'farm_input_land_id')
+        if child.get(key) not in (None, '')}
+    candidates = [land for land in lands if selected and all(
+        value in (str(land.get('land_id') or '').strip(), str(land.get('oan_land_id') or '').strip())
+        for value in selected)]
     if not selected and len(lands) == 1:
         candidates = lands
     if len(candidates) != 1 or not candidates[0].get("oan_land_id"):
@@ -226,6 +230,8 @@ def intake_sections(d):
     for group, field in (("crop_information", "crop_water_source"), ("livestock_info", "livestock_water_source")):
         if (d.get(group) or {}).get(field) is not None:
             root_inputs[field] = d[group][field]
+    if root_inputs and d.get('farm_input_land_id'):
+        root_inputs['farm_input_land_id'] = d['farm_input_land_id']
     input_rows = [root_inputs] if root_inputs else []
     for land in lands:
         link = {"oan_land_id":land["oan_land_id"]}

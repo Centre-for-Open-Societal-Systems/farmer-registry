@@ -43,4 +43,6 @@ jobs:
       - name: Registered native worker services
         if: matrix.component == 'celery'
         run: |
-          docker run --rm --network none --entrypoint python registry/celery:ci -c 'import openg2p_registry_celery_worker.main; from openg2p_registry_core.services.intake_form_data_service import G2PIntakeFormDataService; from openg2p_registry_oan_extension.register_domain.services.household_intake import OANIntakeFormDataService; assert isinstance(G2PIntakeFormDataService.get_component(), OANIntakeFormDataService)'
+          for mode in worker beat; do
+            docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python registry/celery:ci /repo/ci/validation/check_worker_extensions.py "$mode"
+          done

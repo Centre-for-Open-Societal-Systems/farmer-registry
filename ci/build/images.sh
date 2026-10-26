@@ -23,3 +23,8 @@ done
 
 # Native DDL and reporting are rehearsed in an owned disposable PostgreSQL.
 OAN_METADATA_TEST_IMAGE="coss-ci/staff-api:$tag" python3 ci/validation/check_native_metadata.py
+
+# Load extensions exactly as the unmodified native launcher does.
+for mode in worker beat; do
+  docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python "coss-ci/celery:$tag" /repo/ci/validation/check_worker_extensions.py "$mode"
+done

@@ -187,15 +187,20 @@ BEGIN
   ) THEN
       RAISE EXCEPTION 'The Fayda verification widget is missing from the farmer Identity section';
   END IF;
-    IF EXISTS (
-      SELECT 1 FROM g2p_register_sections,
-        jsonb_path_query(section_ui_schema, 'lax $.** ? (@."widget-id" == "foundational_id")') w
-      WHERE section_id = 'oan_farmer_personal_identification'
-        AND (w->>'widget' <> 'text' OR w->>'widget-readonly' <> 'false'
-          OR NOT jsonb_path_exists(w, 'lax $."widget-data-options".actions[*] ? (@.action == "disable" && @.condition.value == "SUCCESS")'))
-    ) THEN
-      RAISE EXCEPTION 'Unverified FIN/FAN fallback must stay editable until SUCCESS';
-    END IF;
+  IF (
+    SELECT count(*) <> 1 OR bool_or(
+      w->>'widget' IS DISTINCT FROM 'display'
+      OR w->>'widget-type' IS DISTINCT FROM 'display'
+      OR w->>'widget-readonly' IS DISTINCT FROM 'true'
+      OR w->>'widget-required' IS DISTINCT FROM 'false')
+    FROM g2p_register_sections,
+      jsonb_path_query(section_ui_schema, 'strict $.**') w
+    WHERE section_id = 'oan_farmer_personal_identification'
+      AND jsonb_typeof(w) = 'object' AND w ? 'widget'
+      AND w->>'widget-id' = 'foundational_id'
+  ) THEN
+    RAISE EXCEPTION 'Popup-only FIN requires exactly one read-only display on the form';
+  END IF;
   IF NOT EXISTS (
     SELECT 1 FROM "public"."g2p_register_definitions"
     WHERE register_id = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd' AND requires_registrant_authentication

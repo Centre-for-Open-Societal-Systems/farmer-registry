@@ -33,6 +33,11 @@ with tempfile.TemporaryDirectory(prefix='popup-flow-browser-') as temporary:
     environment = dict(os.environ, NODE_PATH=str(modules))
     subprocess.run(['npx.cmd' if os.name == 'nt' else 'npx', '--yes', '--package=esbuild@0.28.2', 'esbuild', str(here/'harness.tsx'),
         '--bundle', '--jsx=automatic', '--platform=browser', '--outfile='+str(output/'harness.js'),
+        # Prefix aliases keep React and all runtime subpaths on one dependency
+        # graph even though this harness lives outside the assembled .app tree.
+        '--alias:react='+str(modules/'react'),
+        '--alias:react-dom='+str(modules/'react-dom'),
+        '--alias:react-redux='+str(modules/'react-redux'),
         '--alias:@openg2p/registry-widgets='+str(here/'registry-context.ts'),
         '--alias:real-registry-widgets='+str(modules/'@openg2p/registry-widgets/dist/index.esm.js')],
         env=environment, check=True)
@@ -50,6 +55,10 @@ with tempfile.TemporaryDirectory(prefix='popup-flow-browser-') as temporary:
             base = 'http://127.0.0.1:'+str(server.server_port)
             for mode in ['success', 'failure', 'throw', 'no-url', 'close']:
                 page.goto(base, wait_until='networkidle')
+                try:
+                    page.get_by_role('button').first.wait_for(timeout=5000)
+                except Exception as error:
+                    raise AssertionError('Widget failed to render: '+json.dumps({'page_errors':errors, 'body':page.locator('body').inner_text()[:2000]})) from error
                 page.evaluate('(mode)=>window.mode=mode', mode)
                 check(mode+': parent has no FIN input', page.locator('input').count() == 0)
                 with page.expect_popup() as event:
@@ -91,6 +100,10 @@ with tempfile.TemporaryDirectory(prefix='popup-flow-browser-') as temporary:
                 page.goto(base, wait_until='networkidle')
                 saved = {'farmer': {'fin':'009876543210','status':'SUCCESS','proof':'saved-proof','date':'2026-01-01','expiry':'2027-01-01','farmer_reference_status':'APPROVED'}}
                 page.evaluate('(value)=>window.seed(value)', saved)
+                try:
+                    page.get_by_role('button').first.wait_for(timeout=5000)
+                except Exception as error:
+                    raise AssertionError('Widget failed to render: '+json.dumps({'page_errors':errors, 'body':page.locator('body').inner_text()[:2000]})) from error
                 page.evaluate('(mode)=>window.mode=mode', mode)
                 with page.expect_popup() as event:
                     page.get_by_role('button', name='Verify again', exact=True).click()
