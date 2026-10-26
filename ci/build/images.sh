@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Build the Farmer Registry images and test the extension inside them.
+#
+# The registry images are upstream's published Farmer images with the OAN
+# extension installed (docker/oan/), the same images the local stack runs. The
+# sanity suite is upstream's (docker/sanity-tests). Images are tagged
+# coss-ci/<component>:<tag>; the publish stage pushes them under these names.
+set -euo pipefail
+tag="${1:?usage: ci/build/images.sh <image tag>}"
+
+for component in staff-api partner-api celery db-seed staff-ui; do
+  docker build -f "docker/oan/$component.Dockerfile" -t "coss-ci/$component:$tag" .
+done
+docker build -f docker/sanity-tests/Dockerfile -t "coss-ci/sanity-tests:$tag" .
+
+# The extension's tests, against the platform it is installed on. They read
+# upstream UI files from the repository, so the whole tree is mounted.
+for component in staff-api; do
+  docker run --rm -v "$PWD:/repo:ro" -w /repo/oan-extension -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/repo/oan-extension/src:/repo/oan-extension/tests \
+    --entrypoint sh "coss-ci/$component:$tag" -c \
+    'pip install --quiet --no-cache-dir pytest==8.4.2 && python -m pytest -q -p no:cacheprovider tests'
+done
+
+# Native DDL and reporting are rehearsed in an owned disposable PostgreSQL.
+OAN_METADATA_TEST_IMAGE="coss-ci/staff-api:$tag" python3 ci/validation/check_native_metadata.py

@@ -1,0 +1,14 @@
+{#- The notice Crop and Livestock receive when a farmer change is approved
+    (WebSub topic oan.farmer-reference.changed.v1). It names the farmer only;
+    receivers fetch the details through the signed DCI search. -#}
+{%- set identifier = (expanded.foundational_id or '') | string | replace(' ', '') -%}
+{
+  "event_id": {{ ((expanded.internal_record_id | string) ~ ':' ~ (expanded.last_approved_at | string)) | tojson }},
+  "event_type": "farmer_reference.changed.v1",
+  "farmer_id": {{ expanded.functional_record_id | tojson }}
+  {%- if identifier | length == 16 %},
+  "fayda_fan_id": {{ identifier | tojson }}
+  {%- elif identifier | length == 12 %},
+  "fayda_fin": {{ identifier | tojson }}
+  {%- endif %}
+}

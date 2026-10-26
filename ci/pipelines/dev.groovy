@@ -14,6 +14,12 @@ pipeline {
         HELM_NAMESPACE = 'farmer'
     }
     parameters {
+        choice(name: 'NEW_DEV_RESET_ACTION', choices: ['check', 'initialize', 'resume'],
+            description: 'New Dev only: check the completed first-install receipt; explicit initialize/resume is blocked until refactor acceptance.')
+        string(name: 'REGISTRY_RESET_MANIFEST', defaultValue: '',
+            description: 'Deployment-node path to immutable reviewed first-install JSON; no credentials.')
+        string(name: 'REGISTRY_RESET_ADMIN_SERVICE', defaultValue: '',
+            description: 'Mounted libpq service alias for explicit first-install reset; empty for ordinary receipt checks.')
         booleanParam(name: 'COORDINATE_SERVICES', defaultValue: true,
             description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
         booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
@@ -47,17 +53,7 @@ pipeline {
             steps {
                 sh '''
                     set -eu
-                    for component in staff-api partner-api celery db-seed sanity-tests staff-ui; do
-                      docker build -f "docker/$component/Dockerfile" -t "coss-ci/$component:$IMAGE_TAG" .
-                    done
-                    docker run --rm --network none --entrypoint python -v "$PWD:/repo:ro" \
-                      "coss-ci/celery:$IMAGE_TAG" /repo/tests/runtime/odk_actor_worker_runtime.py
-                    docker run --rm --network none --entrypoint python -v "$PWD:/repo:ro" \
-                      "coss-ci/partner-api:$IMAGE_TAG" /repo/tests/runtime/odk_signature_runtime.py
-                    docker run --rm -v "$PWD:/repo:ro" -e PYTHONPATH=/repo/farmer-extension/src -w /repo/tests/runtime \
-                      --entrypoint python "coss-ci/staff-api:$IMAGE_TAG" -m unittest \
-                      extension.test_domain_validation_utils extension.test_farmer_geo_sync \
-                      extension.test_intake_record_image_urls extension.test_household_family_size
+                    bash ci/build/images.sh "$IMAGE_TAG"
                 '''
             }
         }
@@ -121,6 +117,7 @@ pipeline {
                             set -eu
                             export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
                             docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                            if [ "${NEW_DEV_RESET_ACTION:-check}" != check ]; then bash ci/deploy/new-dev-reset.sh; fi
                             bash ci/deploy/deploy-dev.sh
                             '''
                             } finally {

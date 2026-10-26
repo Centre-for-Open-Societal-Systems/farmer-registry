@@ -1,5 +1,8 @@
 # Farmer Registry documentation
 
+Start with [the current refactor candidate](refactor-candidate.md). Dated rollout
+reports and legacy staging guides describe their recorded deployments.
+
 ## Development
 
 - [Domain package](development/farmer-extension.md)

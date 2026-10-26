@@ -6,3 +6,5 @@ local/upstream/generated
 .ci-venv
 .ci-services-work
 .ci-odk-transform.log
+
+/ci-output/

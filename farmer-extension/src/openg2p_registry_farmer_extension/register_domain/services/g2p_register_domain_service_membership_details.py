@@ -1,49 +1,50 @@
 import logging
 
+from openg2p_registry_core.models import G2PRegisterChangeRequest
+from openg2p_registry_core.models.enum import ChangeActionEnum
 from openg2p_registry_core.services import G2PRegisterDomainService
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
-from .domain_validation_utils import as_bool, is_blank, validation_error
+
+from .domain_validation_utils import as_bool, fallback_record_name, validate_enum_values
 
 _logger = logging.getLogger("g2p-register-domain-service")
+
+_DEPENDENT_MEMBERSHIP_FIELDS = {
+    "is_primary_cooperative_member": "primary_cooperative_name",
+    "is_cooperative_union_member": "cooperative_union_name",
+    "is_farmer_cluster_member": "farmer_cluster_role",
+}
+
+
+
+def _enum_fields() -> dict:
+    # Imported lazily: ..models imports these services at module level, so a
+    # top-level import here would be circular whenever services load first.
+    from ..models.enums import FarmerClusterRoleEnum
+
+    return {"farmer_cluster_role": FarmerClusterRoleEnum}
 
 
 class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
-            self._validate_cooperative_membership(record)
-            self._validate_union_membership(record)
-            self._validate_cluster_membership(record)
+            # Drop dependent values before the enum check so a leftover cluster
+            # role is removed rather than rejected when membership is not yes.
+            self._clear_dependent_membership_fields(record)
+            validate_enum_values(record, _enum_fields())
 
-    def _validate_cooperative_membership(self, record: dict) -> None:
-        # as_bool() only computes a value for validating below — write it
-        # back, or the raw '' / 'true' string it was given stays in the
-        # record and asyncpg rejects it as an invalid Boolean literal.
-        is_member = as_bool(record.get("is_primary_cooperative_member"))
-        record["is_primary_cooperative_member"] = is_member
-        if is_member is False and not is_blank(record.get("primary_cooperative_name")):
-            validation_error(
-                "Primary Cooperative Name must be empty when the farmer is not a primary cooperative member"
-            )
-
-    def _validate_union_membership(self, record: dict) -> None:
-        is_member = as_bool(record.get("is_cooperative_union_member"))
-        record["is_cooperative_union_member"] = is_member
-        if is_member is False and not is_blank(record.get("cooperative_union_name")):
-            validation_error(
-                "Cooperative Union Name must be empty when the farmer is not a cooperative union member"
-            )
-
-    def _validate_cluster_membership(self, record: dict) -> None:
-        is_member = as_bool(record.get("is_farmer_cluster_member"))
-        record["is_farmer_cluster_member"] = is_member
-        if is_member is False and not is_blank(record.get("farmer_cluster_role")):
-            validation_error(
-                "Farmer Cluster Role must be empty when the farmer is not a farmer cluster member"
-            )
-        if is_member is False and not is_blank(record.get("primary_commodity")):
-            validation_error(
-                "Primary Commodity must be empty when the farmer is not a farmer cluster member"
-            )
+    @staticmethod
+    def _clear_dependent_membership_fields(record: dict) -> bool:
+        cleared = False
+        for flag_field, dependent_field in _DEPENDENT_MEMBERSHIP_FIELDS.items():
+            if flag_field not in record:
+                continue
+            if as_bool(record.get(flag_field)) is not True:
+                record[dependent_field] = None
+                cleared = True
+        return cleared
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
         _logger.info("Constructing search text for membership details")
@@ -52,7 +53,6 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
             "primary_cooperative_name",
             "cooperative_union_name",
             "farmer_cluster_role",
-            "primary_commodity",
         ]
         search_text = []
         if extra:
@@ -80,4 +80,25 @@ class G2PRegisterDomainServiceMembershipDetails(G2PRegisterDomainService):
             if str(payload.get(key) or "").strip()
         )
 
-        return " ".join(record_name).strip()
+        return " ".join(record_name).strip() or fallback_record_name(payload, "Membership")
+
+    async def pre_approve(self, change_request: G2PRegisterChangeRequest, session: AsyncSession):
+        from openg2p_registry_core.models import G2PRegisterChangeRequestPayload
+
+        payload_obj = await session.get(
+            G2PRegisterChangeRequestPayload, change_request.change_request_id
+        )
+        if not payload_obj or not payload_obj.change_payload:
+            return
+
+        cleared = False
+        for record in payload_obj.change_payload:
+            if record.get("edit_action") in {
+                ChangeActionEnum.DELETE.value,
+                ChangeActionEnum.NO_CHANGE.value,
+            }:
+                continue
+            if self._clear_dependent_membership_fields(record):
+                cleared = True
+        if cleared:
+            flag_modified(payload_obj, "change_payload")

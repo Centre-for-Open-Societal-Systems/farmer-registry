@@ -1,30 +1,47 @@
-# Farmer Registry
+# OAN Farmer Registry
 
-COSS Farmer Registry extends OpenG2P Registry with farmer, household, land, crop,
-livestock, membership and intake metadata. Dev uses platform **1.2.2-rc.544**;
-staging retains its separately managed legacy platform.
+The OAN extension adds Farmer, household, land, crop, livestock, membership and
+identity workflows to the published OpenG2P Farmer 1.2 runtime. The candidate
+uses platform **1.2.2-rc.557**. Forms use section schemas, registered widgets,
+themes and language metadata; behavior uses registered extension services.
+OpenG2P framework and worker sources remain unchanged.
 
-Start with the [documentation index](docs/README.md).
+This delivery branch composes the reviewed OAN source with the existing COSS
+delivery tooling. **Promotion remains blocked.** Source checks and disposable
+database rehearsals do not establish live acceptance. Read the
+[candidate scope and remaining checks](docs/refactor-candidate.md) before using
+historical operational instructions.
 
 | Directory | Purpose |
 | --- | --- |
-| farmer-extension/ | Installable farmer domain package and seed metadata |
-| docker/ | Application images and build-time platform patches |
-| helm/ | Owning charts and explicit dev/staging configuration |
-| integrations/registry-connector/ | Upstream connector runtime adapters |
-| ci/ | Environment pipelines, build, validation and deployment helpers |
-| scripts/operations/ | Backup, migration, identity and recovery commands |
-| tests/ | Unit, runtime, integration, end-to-end and performance suites |
-| local/ | Isolated local development stack |
-| odk/ | XLSForm, media, mapping and legacy integration assets |
-| docs/ | Guides, operations and historical evidence |
+| `oan-extension/` | OAN models, registered services, metadata, ODK enrichment and reporting |
+| `farmer-extension/` | Upstream Farmer domain reference, retained for standard extension composition |
+| `ui/staff-ui/overrides/` | Registered OAN widgets and supported source overlays |
+| `docker/oan/` | Images extending the published Farmer runtime |
+| `ci/` | Existing Jenkins delivery plus source, native metadata and preservation checks |
+| `odk/` | Source XLSForms and unpublished candidate form |
+| `tests/` | Delivery, reset, integration and regression checks |
+| `docs/` | Current guides and dated historical evidence |
 
-For local verification:
+Helm ownership is centralized in
+[COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm).
+The [deployment profile](ci/deploy/oan-chart.json) pins an immutable chart and
+SHA-256 checksum. Local legacy chart paths are retained only for compatibility
+with reviewed preservation tooling. Dashboard UI/API and connector releases have
+independent owners; this candidate does not replace their running releases.
 
-```sh
-python -m pip install -r ci/validation/requirements.txt
-python -m pytest
-```
+FIN is entered in the Fayda verification popup. The form displays its backing
+value without a second editable FIN field. A typed value alone does not establish
+verification. Existing approved identity proof survives a failed verification.
+Offline ODK identity evidence remains unverified until normal approval.
 
-See [testing](docs/testing/README.md), [local development](docs/development/local-stack.md),
-and [delivery](docs/operations/README.md) for complete workflows.
+For delivery tests, install `ci/validation/requirements.txt` and run
+`python -m pytest tests/unit`. Native extension and repeatable metadata checks
+run against the published runtime in CI; browser checks exercise the registered
+widget and native data paths. See [the documentation index](docs/README.md),
+[native ODK intake](docs/odk-native-intake.md) and
+[the guarded first New Dev reset](ci/deploy/README-reset-new-dev.md).
+
+Local acceptance runs serially: Commons + Farmer + Crop, then Commons + Farmer +
+Livestock. Existing New Dev and staging deployments are unchanged by publication
+of this candidate.

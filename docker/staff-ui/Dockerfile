@@ -1,11 +1,44 @@
-# Narrow COSS intake compatibility overlay on the approved upstream RC.
-ARG RP_VERSION=1.2.2-rc.544
-FROM openg2p/openg2p-registry-staff-ui:${RP_VERSION}
-COPY --chown=nextjs:nodejs docker/staff-ui/assets/coss-intake.js /app/public/coss-intake.js
-COPY docker/staff-ui/assets/install-overlay.js /tmp/install-overlay.js
-COPY docker/staff-ui/assets/patch-widgets.js /tmp/patch-widgets.js
-COPY docker/staff-ui/assets/patch-intake-uploads.js /tmp/patch-intake-uploads.js
-COPY docker/staff-ui/rehash-patched-assets.sh /tmp/rehash-patched-assets.sh
-RUN cd /app/.next && find static -type f \( -name '*.js' -o -name '*.css' \) -exec md5sum {} + | sort > /tmp/static.before \
-    && node /tmp/install-overlay.js && node /tmp/patch-widgets.js && node /tmp/patch-intake-uploads.js \
-    && sh /tmp/rehash-patched-assets.sh
+# Farmer Registry — Staff Portal UI image.
+#
+# Same steps as a local build. The image has no .app/ yet, so npm install clones
+# staff-ui (deps.json) and applies overrides/. npm run build finds .app/ already
+# present, skips the clone, applies overrides/ again, then builds Next.
+#
+#   docker build -f docker/staff-ui/Dockerfile \
+#     -t openg2p/openg2p-farmer-registry-staff-ui:local .
+
+FROM node:20-alpine AS builder
+
+RUN apk add --no-cache git bash
+
+WORKDIR /open/farmer-registry/ui/staff-ui
+
+COPY ui/staff-ui/package.json ui/staff-ui/.npmrc ui/staff-ui/deps.json ./
+COPY ui/staff-ui/scripts ./scripts
+COPY ui/staff-ui/overrides ./overrides
+
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm install
+RUN npm run build \
+ && mkdir -p /out \
+ && cp -a .app/.next/standalone/. /out/ \
+ && cp -a .app/public /out/public \
+ && mkdir -p /out/.next \
+ && cp -a .app/.next/static /out/.next/static
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs \
+    && adduser --system --uid 1001 nextjs
+
+COPY --from=builder --chown=nextjs:nodejs /out ./
+
+USER nextjs
+EXPOSE 3000
+CMD ["node", "server.js"]

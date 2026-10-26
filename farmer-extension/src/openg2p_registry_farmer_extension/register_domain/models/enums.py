@@ -24,17 +24,16 @@ class LanguageSpokenEnum(StrEnum):
 
 
 class SourceOfIncomeEnum(StrEnum):
-    CROP_PRODUCTION = "CROP_PRODUCTION"
-    LIVESTOCK_PRODUCTION = "LIVESTOCK_PRODUCTION"
-    GOVERNMENT_NGO_SUPPORT = "GOVERNMENT_NGO_SUPPORT"
-    OTHERS = "OTHERS"
+    SOI_CROP_PRODUCTION = "SOI_CROP_PRODUCTION"
+    SOI_LIVESTOCK_PRODUCTION = "SOI_LIVESTOCK_PRODUCTION"
+    SOI_GOVERNMENT_NGO_SUPPORT = "SOI_GOVERNMENT_NGO_SUPPORT"
+    SOI_OTHERS = "SOI_OTHERS"
 
 
 class LandOwnershipTypeEnum(StrEnum):
     OWNER = "OWNER"
     TENANT = "TENANT"
     CROP_SHARE = "CROP_SHARE"
-    FAMILY_GIFT = "FAMILY_GIFT"
 
 
 class LandSizeUnitEnum(StrEnum):
@@ -86,73 +85,27 @@ class FarmerClusterRoleEnum(StrEnum):
 class EducationalLevelEnum(StrEnum):
     ILLITERATE = "ILLITERATE"
     CAN_READ_AND_WRITE = "CAN_READ_AND_WRITE"
+    NON_FORMAL = "NON_FORMAL"
+    NEVER_ATTEND = "NEVER_ATTEND"
     BASIC = "BASIC"
+    PRIMARY = "PRIMARY"
     INTERMEDIARY = "INTERMEDIARY"
+    SECONDARY = "SECONDARY"
+    TERTIARY = "TERTIARY"
     HIGHER_EDUCATION = "HIGHER_EDUCATION"
 
 
-class IdTypeEnum(StrEnum):
-    UID = "UID"
-    RID = "RID"
-    NATIONAL_ID = "NATIONAL_ID"
-    FARMER_ODK_ACK_ID = "FARMER_ODK_ACK_ID"
-    MEMBER_ODK_ACK_ID = "MEMBER_ODK_ACK_ID"
-    OTHER = "OTHER"
+class RelationshipToTheHeadEnum(StrEnum):
+    """Relationship of a household member to the household head.
 
+    Mirrors the master-data code list RELATIONSHIP_TO_HEAD, which is what the
+    members table offers in the intake form; SELF marks the head.
+    """
 
-class IdStatusEnum(StrEnum):
-    VALID = "VALID"
-    INVALID = "INVALID"
-
-
-class ConsentTypeEnum(StrEnum):
-    BASELINE = "BASELINE"
-    SPECIFIC = "SPECIFIC"
-
-
-class ConsentOriginEnum(StrEnum):
-    BENEFICIARY = "BENEFICIARY"
-    AGENT = "AGENT"
-    STAFF = "STAFF"
-    PARTNER = "PARTNER"
-
-
-class ConsentStatusEnum(StrEnum):
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-    REVOKED = "REVOKED"
-    DENIED = "DENIED"
-    EXPIRED = "EXPIRED"
-
-
-class FarmerLandOwnershipEnum(StrEnum):
-    OWNER = "OWNER"
-    TENANT = "TENANT"
-    HYBRID = "HYBRID"
-
-
-class PhoneTypeEnum(StrEnum):
-    # Matches the ATI Odoo source (g2p_ati/models/phone_number.py), which
-    # extends g2p.phone.number with exactly these three types.
-    PRIMARY = "PRIMARY"
-    SECONDARY = "SECONDARY"
-    OTHER = "OTHER"
-
-
-class FarmerStateEnum(StrEnum):
-    DRAFT = "DRAFT"
-    PENDING = "PENDING"
-    APPROVED = "APPROVED"
-    REJECTED = "REJECTED"
-    CANCELLED = "CANCELLED"
-
-
-class FarmerImportSourceEnum(StrEnum):
-    INTAKE_FORM = "INTAKE_FORM"
-    IMPORT_FILE = "IMPORT_FILE"
-    PARTNER = "PARTNER"
-    STAFF_PORTAL = "STAFF_PORTAL"
-    BENEFICIARY_PORTAL = "BENEFICIARY_PORTAL"
-    AGENT_PORTAL = "AGENT_PORTAL"
-    VERIFIABLE_CREDENTIAL = "VERIFIABLE_CREDENTIAL"
+    SELF = "SELF"
+    SPOUSE = "SPOUSE"
+    CHILD = "CHILD"
+    PARENT = "PARENT"
+    SIBLING = "SIBLING"
+    OTHER_RELATIVE = "OTHER_RELATIVE"
+    NON_RELATIVE = "NON_RELATIVE"

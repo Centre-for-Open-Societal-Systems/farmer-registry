@@ -43,6 +43,11 @@ guard() {
     "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
 }
 
+if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
+  GUARD_SCRIPT=ci/deploy/oan_chart.py guard require-deployable dev
+  NEW_DEV_RESET_ACTION=check bash ci/deploy/new-dev-reset.sh
+fi
+
 if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
   kubectl config view --minify -o json > "$STATE/cluster.json"
   GUARD_SCRIPT=ci/deploy/staging.py guard cluster "$STATE/cluster.json"

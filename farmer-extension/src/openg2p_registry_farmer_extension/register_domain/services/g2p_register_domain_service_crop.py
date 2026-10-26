@@ -3,63 +3,46 @@ from datetime import date
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 
-from .domain_validation_utils import (
-    active_records,
-    is_blank,
-    normalized_text,
-    parse_date,
-    reject_duplicates,
-    sync_ethiopic_date_pair,
-    validation_error,
-)
-from .validation_rules import is_interactive
+
+from .land_link_validation import validate_land_link
+
+from .domain_validation_utils import fallback_record_name, parse_date, validate_enum_values, validation_error
 
 _logger = logging.getLogger("g2p-register-domain-service")
+
+
+
+def _enum_fields() -> dict:
+    # Imported lazily: ..models imports these services at module level, so a
+    # top-level import here would be circular whenever services load first.
+    from ..models.enums import CropEndUseEnum
+
+    return {"end_use": CropEndUseEnum}
 
 
 class G2PRegisterDomainServiceCrop(G2PRegisterDomainService):
     async def validate_domain_attributes(self, records: list[dict]):
         for record in records:
-            sync_ethiopic_date_pair(record, "planted_date", "planted_date_ec", "Planted Date")
             self._validate_planted_date(record)
-        for record in active_records(records):
-            self._validate_required(record)
+            validate_enum_values(record, _enum_fields())
         self._validate_no_duplicate_commodity(records)
+        await validate_land_link(records, "Crop")
 
     def _validate_planted_date(self, record: dict) -> None:
         planted_date = parse_date(record.get("planted_date"))
         if planted_date is not None and planted_date > date.today():
-            validation_error("Planted Date cannot be in the future")
-
-    @staticmethod
-    def _validate_required(record: dict) -> None:
-        """A crop row needs at least what it is and when it is grown
-        -- a row of blanks or spaces is not a crop. Bulk import and
-        the partner API carry whatever the legacy record held, so -- as for
-        the farmer's names -- the check is for form paths only."""
-        if not is_interactive(record):
-            return
-        for field, label in (("commodity", "Commodity"), ("season", "Season")):
-            if is_blank(record.get(field)):
-                validation_error(f"{label} is required for every crop")
-            record[field] = str(record[field]).strip()
+            validation_error("planted_date must not be in the future")
 
     def _validate_no_duplicate_commodity(self, records: list[dict]) -> None:
-        # Ethiopia double-crops: the same commodity grown in Meher and again
-        # in Belg is two legitimate rows. What is a duplicate is the same
-        # commodity twice in one season.
-        def key(record: dict):
-            commodity = normalized_text(record.get("commodity"))
-            if commodity is None:
-                return None
-            return commodity, normalized_text(record.get("season"))
-
-        reject_duplicates(
-            records,
-            key,
-            "The same Commodity is listed more than once for the same Season; "
-            "a crop grown in two seasons needs one row per season",
-        )
+        seen: set[str] = set()
+        for record in records:
+            value = record.get("commodity")
+            if value is None or str(value).strip() == "":
+                continue
+            normalized = str(value).strip()
+            if normalized in seen:
+                validation_error("Duplicate commodity entries are not allowed")
+            seen.add(normalized)
 
     def construct_search_text(self, payload: dict, extra: list[str] = None) -> str:
         _logger.info("Constructing search text for crop")
@@ -93,4 +76,4 @@ class G2PRegisterDomainServiceCrop(G2PRegisterDomainService):
             if str(payload.get(key) or "").strip()
         )
 
-        return " ".join(record_name).strip()
+        return " ".join(record_name).strip() or fallback_record_name(payload, "Crop")
