@@ -1,0 +1,1373 @@
+{
+  "info": {
+    "_postman_id": "93da0719-4b61-4a85-8642-f6fc2382b854",
+    "name": "OAN Registries - Fully Parameterized Integration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "One executable New Dev intake workflow for Farmer, Crop Sown and Livestock. Select one of the three environments and supply an authorized staff login only in local values. Each run discovers the live intake form, all related field definitions, code lists and hierarchy; generates coherent synthetic data; saves every supported section; reads every field back; finalizes to ordinary approval; and reads every tab. No manually entered record IDs or JSON are required. One iteration creates one synthetic submission. No approvals or direct database writes are included.\n\nCoverage means writable/API-supported fields, not generated lifecycle/aggregate identifiers. Three Farmer consent datetime fields are excluded because the deployed native route does not convert JSON datetime strings. Synthetic consent rows carry PENDING status and a clearly invalid test signature, not real granted consent. Crop Sown defaults to the Planning intake; later lifecycle forms may require approved prerequisite records. Dummy image references reuse the generated test document configured in the Farmer environment. Credentials, tokens and private verification IDs are absent from shared artifacts.\n\nOptional record_image_document_id fields in Crop Sown and Livestock are omitted in the default environments because their document-upload endpoints returned SYS-ERR-001. Set a valid catalog test_document_id to populate those references after upload is available. The Farmer test-image upload and photo/certificate references passed."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "auth_mode",
+      "value": "existing_user"
+    },
+    {
+      "key": "enable_writes",
+      "value": "true"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 Authentication",
+      "item": [
+        {
+          "name": "01 Start existing-user IAM login",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.variables.get('auth_mode') !== 'existing_user') {",
+                  "    pm.execution.skipRequest();",
+                  "} else {",
+                  "    // Local transient values shadow stale shared or environment runtime values.",
+                  "    ['authorization_url', 'kc_login_action', 'iam_callback_url', 'access_token'].forEach(k => pm.variables.set(k, ''));",
+                  "}",
+                  "if (pm.variables.get('auth_mode') === 'existing_user') {",
+                  "    ['submission_id','correlation_id','submission_message_id','change_request_id','farmer_record_id',",
+                  "     'synthetic_farmer_record_id','generated_first_name','generated_payload','status_poll_count'].forEach(k => pm.variables.set(k, ''));",
+                  "}",
+                  "['submission_id','registry_form','field_schemas','catalogs','geo_nodes','generated_plan','field_cursor','catalog_cursor','geo_cursor','save_cursor','tab_cursor'].forEach(k=>pm.variables.set(k,''));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function () {",
+                  "    const missing = ['kc_username', 'kc_password'].filter(k => !pm.variables.get(k) || String(pm.variables.get(k)).includes('{{'));",
+                  "    pm.test('Local credentials configured: set kc_username and kc_password', () => {",
+                  "        pm.expect(missing, 'Set these variables in local environment/Vault values: ' + missing.join(', ')).to.eql([]);",
+                  "    });",
+                  "    if (missing.length) {",
+                  "        pm.execution.setNextRequest(null);",
+                  "        console.error('Authentication stopped: set kc_username and kc_password in local environment/Vault values. Do not put credentials in shared public values.');",
+                  "        return;",
+                  "    }",
+                  "    pm.test('IAM starts login', () => pm.response.to.have.status(200));",
+                  "    if (pm.response.code !== 200) { pm.execution.setNextRequest(null); return; }",
+                  "    let login;",
+                  "    try { login = pm.response.json(); }",
+                  "    catch (_) {",
+                  "        pm.test('IAM returns a JSON login response', () => pm.expect.fail('IAM did not return JSON'));",
+                  "        pm.execution.setNextRequest(null); return;",
+                  "    }",
+                  "    const expected = pm.variables.get('kc_realm_url') + '/protocol/openid-connect/auth?';",
+                  "    const valid = typeof login.redirectUrl === 'string' && login.redirectUrl.startsWith(expected);",
+                  "    pm.test('Authorization URL uses configured staff realm', () => pm.expect(valid).to.eql(true));",
+                  "    if (!valid) { pm.execution.setNextRequest(null); return; }",
+                  "    pm.variables.set('authorization_url', login.redirectUrl + '&prompt=login');",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "id": "e938eef9-c12a-4013-9acb-89eceda200dc",
+          "protocolProfileBehavior": {
+            "followRedirects": true
+          },
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{iam_base_url}}/auth/start_authentication_transaction?id={{login_provider_id}}&redirect_uri=%2Fen",
+              "host": [
+                "{{iam_base_url}}"
+              ],
+              "path": [
+                "auth",
+                "start_authentication_transaction"
+              ],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "{{login_provider_id}}"
+                },
+                {
+                  "key": "redirect_uri",
+                  "value": "%2Fen"
+                }
+              ]
+            },
+            "description": "Existing-user Keycloak authorization-code login through IAM. No client secret or grant/role changes. Credentials stay in local environment/Vault values; auth codes and tokens remain transient."
+          },
+          "response": []
+        },
+        {
+          "name": "02 Open Keycloak login form",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.variables.get('auth_mode') !== 'existing_user') {",
+                  "    pm.execution.skipRequest();",
+                  "} else {",
+                  "    const value = pm.variables.get(\"authorization_url\");",
+                  "    const expected = pm.variables.get('kc_realm_url') + '/protocol/openid-connect/auth?';",
+                  "    if (!value || value.includes(\"{{\") || !value.startsWith(expected)) {",
+                  "        pm.execution.setNextRequest(null);",
+                  "        console.error(\"Authentication stopped: start the IAM login step first; no valid authorization_url was returned.\");",
+                  "        pm.execution.skipRequest();",
+                  "    }",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function () {",
+                  "    pm.variables.set('kc_login_action', '');",
+                  "    pm.test('Keycloak login page loaded', () => pm.response.to.have.status(200));",
+                  "    if (pm.response.code !== 200) { pm.execution.setNextRequest(null); return; }",
+                  "    const html = pm.response.text();",
+                  "    const form = html.match(/<form\\b[^>]*\\bid=[\"']kc-form-login[\"'][^>]*>/i);",
+                  "    pm.test('Existing-user login form is present', () => pm.expect(form).not.to.eql(null));",
+                  "    if (!form) { pm.execution.setNextRequest(null); return; }",
+                  "    const action = form[0].match(/\\baction=[\"']([^\"']+)[\"']/i);",
+                  "    const url = action?.[1]?.replace(/&amp;/g, '&');",
+                  "    const valid = typeof url === 'string' && url.startsWith(pm.variables.get('kc_realm_url') + '/login-actions/');",
+                  "    pm.test('Credentials go only to configured Keycloak realm', () => pm.expect(valid).to.eql(true));",
+                  "    if (!valid) { pm.execution.setNextRequest(null); return; }",
+                  "    pm.variables.set('kc_login_action', url);",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "id": "cd3aaa11-d777-421a-86fc-71d088d75f3b",
+          "protocolProfileBehavior": {
+            "followRedirects": true
+          },
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{authorization_url}}",
+              "host": [
+                "{{authorization_url}}"
+              ]
+            },
+            "description": "Existing-user Keycloak authorization-code login through IAM. No client secret or grant/role changes. Credentials stay in local environment/Vault values; auth codes and tokens remain transient."
+          },
+          "response": []
+        },
+        {
+          "name": "03 Sign in existing staff user",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.variables.get('auth_mode') !== 'existing_user') {",
+                  "    pm.execution.skipRequest();",
+                  "} else {",
+                  "    const value = pm.variables.get(\"kc_login_action\");",
+                  "    const expected = pm.variables.get('kc_realm_url') + '/login-actions/';",
+                  "    if (!value || value.includes(\"{{\") || !value.startsWith(expected) || !pm.variables.get('kc_username') || !pm.variables.get('kc_password')) {",
+                  "        pm.execution.setNextRequest(null);",
+                  "        console.error(\"Authentication stopped: configure local kc_username/kc_password and run authentication steps 01 and 02 first.\");",
+                  "        pm.execution.skipRequest();",
+                  "    }",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "(function () {",
+                  "    pm.variables.set('iam_callback_url', '');",
+                  "    const accepted = [302, 303].includes(pm.response.code);",
+                  "    pm.test('Keycloak accepts existing user', () => pm.expect(accepted, 'Sign-in did not redirect to IAM. Check local credentials or required account actions.').to.eql(true));",
+                  "    const location = pm.response.headers.get('Location') || '';",
+                  "    const valid = accepted && location.startsWith(pm.variables.get('iam_base_url') + '/auth/callback?');",
+                  "    pm.test('Authorization code returns to configured IAM', () => pm.expect(valid).to.eql(true));",
+                  "    if (!valid) {",
+                  "        pm.execution.setNextRequest(null);",
+                  "        console.error('Authentication stopped: sign-in returned no valid IAM callback. No callback request will be sent.');",
+                  "        return;",
+                  "    }",
+                  "    pm.variables.set('iam_callback_url', location);",
+                  "})();"
+                ]
+              }
+            }
+          ],
+          "id": "b6e1b320-850a-426e-ab81-063cd30f807e",
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "username",
+                  "value": "{{kc_username}}",
+                  "type": "text"
+                },
+                {
+                  "key": "password",
+                  "value": "{{kc_password}}",
+                  "type": "text"
+                },
+                {
+                  "key": "credentialId",
+                  "value": "",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{kc_login_action}}",
+              "host": [
+                "{{kc_login_action}}"
+              ]
+            },
+            "description": "Existing-user Keycloak authorization-code login through IAM. No client secret or grant/role changes. Credentials stay in local environment/Vault values; auth codes and tokens remain transient."
+          },
+          "response": []
+        },
+        {
+          "name": "04 Complete IAM callback and retain transient token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.variables.get('auth_mode') !== 'existing_user') {",
+                  "    pm.execution.skipRequest();",
+                  "} else {",
+                  "    const value = pm.variables.get(\"iam_callback_url\");",
+                  "    const expected = pm.variables.get('iam_base_url') + '/auth/callback?';",
+                  "    if (!value || value.includes(\"{{\") || !value.startsWith(expected)) {",
+                  "        pm.execution.setNextRequest(null);",
+                  "        console.error(\"Authentication stopped: iam_callback_url is missing because sign-in did not complete. Run the full Authentication folder with local credentials.\");",
+                  "        pm.execution.skipRequest();",
+                  "    }",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('IAM callback redirects after exchange', () => pm.expect([302, 303, 307]).to.include(pm.response.code));",
+                  "const cookieHeaders = pm.response.headers.all().filter(h => h.key.toLowerCase() === 'set-cookie');",
+                  "const tokens = cookieHeaders.map(h => h.value.match(/^X-Access-Token=([^;]*)/i)?.[1]?.replace(/^\"|\"$/g, '')).filter(Boolean);",
+                  "const token = tokens[tokens.length - 1];",
+                  "pm.test('IAM issued access token', () => pm.expect(token).to.be.a('string').and.not.empty);",
+                  "if (token) {",
+                  "    pm.variables.set('access_token', token);",
+                  "    const Buffer = require('buffer').Buffer;",
+                  "    const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());",
+                  "    pm.test('Token is from New Dev staff realm', () => pm.expect(claims.iss).to.eql(pm.variables.get('kc_realm_url')));",
+                  "    pm.test('Token includes selected registry client roles', () => pm.expect(claims.resource_access?.[pm.variables.get('registry_client_id')]?.roles).to.be.an('array').and.not.empty);",
+                  "}",
+                  "if (!token) pm.execution.setNextRequest(null);"
+                ]
+              }
+            }
+          ],
+          "id": "079a783a-db0c-4729-9acb-3776a6abe533",
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          },
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{iam_callback_url}}",
+              "host": [
+                "{{iam_callback_url}}"
+              ]
+            },
+            "description": "Existing-user Keycloak authorization-code login through IAM. No client secret or grant/role changes. Credentials stay in local environment/Vault values; auth codes and tokens remain transient."
+          },
+          "response": []
+        }
+      ],
+      "id": "82a7207f-d2aa-4f09-9375-b12d518dcea0"
+    },
+    {
+      "name": "02 Discover schema and references",
+      "item": [
+        {
+          "id": "877ac36e-6ec5-4969-9c11-85c393733b49",
+          "name": "01 Discover target register",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "const matches=(payload || []).filter(r=>r.register_mnemonic===pm.variables.get('register_mnemonic'));",
+                  "pm.test('Unique selected register',()=>pm.expect(matches.length).to.eql(1));",
+                  "if(matches.length!==1){pm.execution.setNextRequest(null);throw new Error('Selected register missing or ambiguous');}",
+                  "pm.variables.set('register_id',matches[0].register_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/register-metadata/get_all_registers",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "id": "3154a1a4-88c5-425a-b690-2046d02bdfb2",
+          "name": "02 Discover configured intake workflow",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({register_id:pm.variables.get('register_id')})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "const selector=String(pm.variables.get('form_name_contains') || '').toLowerCase();",
+                  "const forms=(payload || []).filter(f=>f.register_id===pm.variables.get('register_id') && (!selector || f.form_mnemonic.toLowerCase().includes(selector)));",
+                  "pm.test('Unique configured intake form',()=>pm.expect(forms.length).to.eql(1));",
+                  "if(forms.length!==1){pm.execution.setNextRequest(null);throw new Error('Set form_name_contains to one valid form mnemonic');}",
+                  "pm.variables.set('intake_form_id',forms[0].form_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/intake-form-metadata/get_all_intake_forms",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "id": "338e268d-0763-42b5-935c-7dfbbb8f4c22",
+          "name": "03 Load every intake section and field widget",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({form_id:pm.variables.get('intake_form_id')})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "pm.test('Rendered form has tabs',()=>pm.expect(payload?.tabs?.length).to.be.greaterThan(0));",
+                  "pm.variables.set('registry_form',JSON.stringify(payload));",
+                  "pm.variables.set('field_queue',JSON.stringify([...new Set(payload.tabs.flatMap(t=>t.sections.map(s=>s.section_register_id)))]));",
+                  "pm.variables.set('field_cursor','0');pm.variables.set('field_schemas','{}');",
+                  "const catalogs=new Set(['CROP_SEASON','CROP_COMMODITY','LIVESTOCK_SPECIES','LIVESTOCK_BREED','LIVESTOCK_DISEASE','VACCINE_TYPE']);",
+                  "function walk(v){if(Array.isArray(v)){v.forEach(walk);return;}if(!v || typeof v!=='object')return;",
+                  "const id=v['widget-data-source']?.params?.attribute_id;if(id)catalogs.add(id);Object.values(v).forEach(walk);}",
+                  "walk(payload);pm.variables.set('catalog_queue',JSON.stringify([...catalogs]));",
+                  "pm.variables.set('catalog_cursor','0');pm.variables.set('catalogs','{}');pm.variables.set('geo_cursor','0');pm.variables.set('geo_nodes','[]');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/intake-form-metadata/render_intake_form",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "id": "9070ab31-6d82-42ad-b972-27f2ee9d3e62",
+          "name": "04 Discover all API field definitions (loops by related register)",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "const fieldQueue=JSON.parse(pm.variables.get('field_queue'));",
+                  "const fieldId=fieldQueue[Number(pm.variables.get('field_cursor') || 0)];",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({register_id:fieldId})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "pm.test('Field definitions returned',()=>pm.expect(payload?.fields).to.be.an('array'));",
+                  "const schemas=JSON.parse(pm.variables.get('field_schemas'));schemas[payload.register_id]=payload;",
+                  "pm.variables.set('field_schemas',JSON.stringify(schemas));",
+                  "const next=Number(pm.variables.get('field_cursor'))+1;pm.variables.set('field_cursor',String(next));",
+                  "if(next<JSON.parse(pm.variables.get('field_queue')).length)pm.execution.setNextRequest(pm.info.requestId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/register-metadata/get_register_fields",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "id": "8aee45d1-ef85-4073-9f7a-c39613bbe10a",
+          "name": "05 Resolve live code lists (loops by attribute)",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "const queue=JSON.parse(pm.variables.get('catalog_queue'));const attributeId=queue[Number(pm.variables.get('catalog_cursor') || 0)];",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({attribute_id:attributeId})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "const queue=JSON.parse(pm.variables.get('catalog_queue')),index=Number(pm.variables.get('catalog_cursor'));",
+                  "const all=JSON.parse(pm.variables.get('catalogs'));all[queue[index]]=payload?.attribute_values || [];",
+                  "pm.variables.set('catalogs',JSON.stringify(all));pm.variables.set('catalog_cursor',String(index+1));",
+                  "if(index+1<queue.length)pm.execution.setNextRequest(pm.info.requestId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{master_data_url}}/attributes/get_attribute_values",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "id": "0d107067-5bf9-4783-9651-56c8f29db4f2",
+          "name": "06 Resolve a consistent administrative hierarchy (loops over four levels)",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "const index=Number(pm.variables.get('geo_cursor') || 0);const levels=['region','zone','woreda','kebele'];",
+                  "const nodes=JSON.parse(pm.variables.get('geo_nodes'));const geoPayload={level_id:'level-'+levels[index]};",
+                  "if(nodes.length)geoPayload.parent_level_value_id=nodes[nodes.length-1].level_value_id;",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope(geoPayload)));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "const index=Number(pm.variables.get('geo_cursor'));const desired=['Oromia','Arsi','Merti','Abomsa'];",
+                  "const node=(payload || []).find(n=>String(n.display_name || n.level_value_mnemonic).toLowerCase().includes(desired[index].toLowerCase()));",
+                  "pm.test('Configured hierarchy node exists',()=>pm.expect(node).to.be.an('object'));",
+                  "if(!node){pm.execution.setNextRequest(null);throw new Error('Expected test geography not present; update the configured path');}",
+                  "const nodes=JSON.parse(pm.variables.get('geo_nodes'));nodes.push(node);pm.variables.set('geo_nodes',JSON.stringify(nodes));",
+                  "pm.variables.set('geo_cursor',String(index+1));if(index<3)pm.execution.setNextRequest(pm.info.requestId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{master_data_url}}/geo/get_geo_level_values",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ],
+      "id": "fd41e0f1-eb0e-403d-90a3-c50c88127170"
+    },
+    {
+      "name": "03 Generate complete record and verify",
+      "item": [
+        {
+          "id": "c9f12e96-25c4-4359-b0f7-72622899a649",
+          "name": "01 Generate and save all supported fields (loops over sections)",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "/* Shared Postman/Node generator. All identifiers and people below are synthetic. */",
+                  "function generateRegistryRecord(input) {",
+                  "    const { registry, form, schemas, catalogs, geo, documentId, seed } = input;",
+                  "    if (!['farmer', 'cropsown', 'livestock'].includes(registry)) throw new Error('Unsupported registry');",
+                  "    const hex = seed.replace(/-/g, '');",
+                  "    const suffix = hex.slice(0, 16).split('').map(c => String.fromCharCode(97 + parseInt(c, 16))).join('');",
+                  "    const number = parseInt(hex.slice(0, 7), 16);",
+                  "    const name = 'Api' + suffix;",
+                  "    const digits = ('9000' + hex.split('').map(c => parseInt(c, 16) % 10).join('')).slice(0, 16);",
+                  "    const today = new Date().toISOString().slice(0, 10);",
+                  "    const day = n => new Date(Date.parse(today + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10);",
+                  "    const birth = (1975 + number % 25) + '-02-15';",
+                  "    const age = new Date(today).getUTCFullYear() - Number(birth.slice(0, 4)) - (today.slice(5) < '02-15' ? 1 : 0);",
+                  "    const ec = date => {",
+                  "        const parts = new Intl.DateTimeFormat('en-u-ca-ethiopic', {year:'numeric',month:'2-digit',day:'2-digit',timeZone:'UTC'}).formatToParts(new Date(date + 'T12:00:00Z'));",
+                  "        const pick = k => parts.find(p => p.type === k).value;",
+                  "        return pick('year') + '-' + pick('month') + '-' + pick('day');",
+                  "    };",
+                  "    const sections = form.tabs.flatMap(t => t.sections.map(s => ({...s, tab_id:t.tab_id})));",
+                  "    const sectionIds = [...new Set(sections.map(s => s.section_register_id))];",
+                  "    const ids = Object.fromEntries(sectionIds.map((id,i) => [id, seed.slice(0, 24) + (Number.parseInt(hex.slice(-12),16) + i).toString(16).padStart(12,'0').slice(-12)]));",
+                  "    const byMnemonic = Object.fromEntries(Object.entries(schemas).map(([id,v]) => [v.register_mnemonic,id]));",
+                  "    const fieldWidgets = {};",
+                  "    function walk(v, register) {",
+                  "        if (Array.isArray(v)) {v.forEach(x => walk(x,register));return;}",
+                  "        if (!v || typeof v !== 'object') return;",
+                  "        const key = v['column-key'] || v['widget-data-path'];",
+                  "        if (typeof key === 'string' && v['widget-type'] === 'input' && !v['widget-readonly']) {",
+                  "            fieldWidgets[register + '.' + key.split('.').pop()] = v;",
+                  "        }",
+                  "        Object.values(v).forEach(x => walk(x, register));",
+                  "    }",
+                  "    sections.forEach(s => walk(s.section_ui_schema, s.section_register_id));",
+                  "    const geoFor = level => geo.find(x => x.level_id === 'level-' + level);",
+                  "    const hierarchy = {hierarchy:geo.map(x => ({level_mnemonic:x.level_id.replace('level-',''),level_value_id:x.level_value_id,level_value_mnemonic:x.level_value_mnemonic}))};",
+                  "    const attr = (id, preferred, parent) => {",
+                  "        const list = catalogs[id] || [];",
+                  "        return list.find(v => preferred && (v.value_id === preferred || v.value_code === preferred || String(v.value_display).toLowerCase() === preferred.toLowerCase())) ||",
+                  "            list.find(v => parent && v.parent_value_id === parent) || list[0];",
+                  "    };",
+                  "    const species = attr('LIVESTOCK_SPECIES','LIVESTOCK_SPECIES_CATTLE')?.value_id;",
+                  "    const breed = attr('LIVESTOCK_BREED',null,species)?.value_id;",
+                  "    const commodity = attr('CROP_COMMODITY')?.value_id;",
+                  "    const season = attr('CROP_SEASON')?.value_id;",
+                  "    const earTag = 'ET' + ('0000000000' + String(number)).slice(-10);",
+                  "    const landId = 'TEST-LAND-' + hex.slice(0,12);",
+                  "    const nowYear = new Date(today).getUTCFullYear();",
+                  "    const overrides = {",
+                  "        first_name:name,middle_name:'Automation',last_name:'Synthetic',given_name:name,",
+                  "        first_name_amh:name,middle_name_amh:'Automation',last_name_amh:'Synthetic',first_name_om:name,middle_name_om:'Automation',last_name_om:'Synthetic',",
+                  "        father_first_name:'Testfather',father_middle_name:'Automation',father_last_name:'Synthetic',",
+                  "        farmer_name:name + ' Automation Synthetic',farmer_id:'FR-' + digits.slice(0,12),",
+                  "        fayda_fan_id:registry === 'cropsown' ? digits.match(/.{4}/g).join(' ') : digits,",
+                  "        foundational_id:digits,national_id_masked:'************' + digits.slice(-4),",
+                  "        birth_date:birth,date_of_birth:birth,birth_date_ec:ec(birth),estimated_age:age,",
+                  "        gender:'FEMALE',prefix:'Ms',suffix:'Test',occupation:'FARMER',language_code:'en',country_code:'ETH',",
+                  "        phone_number:'0910000000',mobile_number:'0910000000',phone_e164:'+251910000000',phone_numbers:['+251910000000'],",
+                  "        emails:[name.toLowerCase() + '@example.invalid'],has_personal_phone:true,is_primary:true,phone_type:'PRIMARY',",
+                  "        is_household_head:true,number_of_male_members:1,number_of_female_members:1,number_of_children:0,father_included:true,mother_included:false,other_land_owner:true,",
+                  "        disabled:true,is_disabled:true,disability_type:'VISION',disability_severity:'SOME_DIFFICULTY',",
+                  "        source_of_income:'SOI_OTHERS',source_of_income_other:'Synthetic test farm',education_level:'PRIMARY',marital_status:'SINGLE',is_psnp_user:false,",
+                  "        language_spoken:'AFAAN_OROMO',local_language:'AFAAN_OROMO',income_level:'LOW',",
+                  "        registration_date:today,data_collection_date:today,enumerator_name:'Api Enumerator',enumerator_user_id:'test-' + hex.slice(0,8),",
+                  "        latitude:8.59,longitude:39.12,altitude:1700,enumerator_latitude:8.59,enumerator_longitude:39.12,enumerator_altitude:1700,enumerator_accuracy:5,",
+                  "        geo_lowest_level_value_id:geoFor('kebele')?.level_value_id,geo_code_hierarchy_json:hierarchy,woreda_level_value_id:geoFor('woreda')?.level_value_id,",
+                  "        address_line_1:'Synthetic test address',address_line_2:'API fixture',postal_code:'0000',plus_code:'6GX9H4RC+22',",
+                  "        land_id:landId,land_kebele:geoFor('kebele')?.display_name,land_ownership:'OWNER',land_ownership_type:'OWNER',land_size:2,area_in_hectare:2,unit:'HECTARE',",
+                  "        current_land_use:'AGRICULTURAL',farming_type:'MIXED',year_of_acquisition:nowYear-10,means_of_acquisition:'INHERITANCE',soil_fertility:'MEDIUM',",
+                  "        shape_type:'POLYGON',shape_coordinates_json:{type:'Polygon',coordinates:[[[39.12,8.59],[39.121,8.59],[39.121,8.591],[39.12,8.59]]]},",
+                  "        certificate_storage_id:documentId,certificate_provided:true,record_image_document_id:documentId,",
+                  "        planted_date:day(-20),planted_date_ec:ec(day(-20)),season:registry==='farmer'?'MEHER':season,production_season:season,crop_year:String(nowYear),",
+                  "        end_use:'FOOD_HUMAN_CONSUMPTION',commodity:registry==='farmer'?'MAIZE':commodity,",
+                  "        livestock_type:'CATTLE',livestock_system:'MIXED',breed,head_count:2,body_condition:'GOOD',production_type:'DAIRY',",
+                  "        fertilizer_use:true,amount_fertilizer_utilized:10,pesticide_use:true,amount_pesticide_utilized:1,insecticide_use:true,amount_insecticide_utilized:1,",
+                  "        improved_seed_use:true,amount_improved_seed_utilized:4,access_to_machinery:true,access_to_finance:true,",
+                  "        is_primary_cooperative_member:true,primary_cooperative_name:'Synthetic Primary Cooperative',is_cooperative_union_member:true,cooperative_union_name:'Synthetic Union',",
+                  "        is_farmer_cluster_member:true,farmer_cluster_role:'MEMBER',primary_commodity:commodity,",
+                  "        id_type:'FARMER_ODK_ACK_ID',value:'TEST-' + seed,status:'PENDING',expiry_date:day(365),expiry_date_ec:ec(day(365)),description:'Synthetic test identifier',",
+                  "        consent_type:'SPECIFIC',consent_partner_name:'Synthetic Partner',purpose:'Synthetic API test only',allowed_data_fields:'first_name,last_name',",
+                  "        validity_from:day(0)+'T00:00:00Z',validity_to:day(30)+'T00:00:00Z',originated_from:'STAFF_PORTAL',rejection_reason:'',",
+                  "        related_consent_request_id:ids[byMnemonic.ConsentRequest],attribute_list:'first_name,last_name',signature:'TEST_ONLY_NOT_A_VALID_SIGNATURE',signature_algorithm:'TEST',signed_at:today+'T00:00:00Z',",
+                  "        surveyor_name:'Api Surveyor',surveyor_mobile_number:'0910000000',supervisor_name:'Api Supervisor',supervisor_mobile_number:'0910000000',",
+                  "        da_name:'Api Officer',da_mobile_number:'0910000000',",
+                  "        region_id:geoFor('region')?.level_value_id,zone_id:geoFor('zone')?.level_value_id,woreda_id:geoFor('woreda')?.level_value_id,kebele_id:geoFor('kebele')?.level_value_id,",
+                  "        region:geoFor('region')?.level_value_id,zone:geoFor('zone')?.level_value_id,woreda:geoFor('woreda')?.level_value_id,kebele:geoFor('kebele')?.level_value_id,",
+                  "        ear_tag_id:earTag,secondary_identifier:'TEST-' + hex.slice(0,14),species,quantity:1,weight:220,health_status:'HEALTHY',vaccination_status:'NONE',",
+                  "        animal_name:'Synthetic Animal',colour:'BROWN',event_type:'TREATMENT',disease_type:attr('LIVESTOCK_DISEASE')?.value_id,",
+                  "        date_onset:day(-10),date_resolution:day(-5),is_notifiable:false,treatment:'Synthetic test only',veterinarian_name:'Api Vet',location:'HOME',location_details:'Synthetic holding',",
+                  "        notes:'SYNTHETIC API TEST - no real person or animal',vaccine_type:attr('VACCINE_TYPE',null,species)?.value_id,",
+                  "        vaccination_date:day(-30),next_due_date:day(335),batch_number:'TEST-' + hex.slice(0,8),administered_by:'Api Vet',",
+                  "        event_date:day(-1),cause:'UNKNOWN',offspring_count:1,offspring_gender:'FEMALE',reporting_officer:'Api Officer',",
+                  "        breeding_date:day(-30),sire_or_semen_id:'TEST-SIRE-' + hex.slice(0,8),ai_technician_name:'Api Technician',ai_technique:'TEST',semen_batch_number:'TEST-' + hex.slice(0,8),",
+                  "        expected_calving_date:day(250),pregnancy_confirmed:true,pregnancy_confirmation_date:day(-10),outcome:'PENDING',",
+                  "        is_plot_not_registered:true,land_area:2,gps_coordinate:'8.59,39.12',start_gc:nowYear+'-01-01',end_gc:nowYear+'-12-31',",
+                  "        start_month:1,start_day:1,end_month:12,end_day:31,planned_date:today,planned_date_ec:ec(today),growth_duration_days:120,planned_area:1,expected_yield:20,",
+                  "        planned_seed_qty:5,planned_fertilizer_qty:10,planned_labor:2,seed_class:'CERTIFIED',seed_source:'PURCHASED',",
+                  "        local_name:'Synthetic maize',scientific_name:'Zea mays',cropping_system:'MONOCROPPING',",
+                  "        cluster_name:'Synthetic Cluster ' + suffix,establishing_date:day(-100),establishing_date_ec:ec(day(-100)),sub_kebele:'Synthetic',agro_ecological_zone:'KOLLA',",
+                  "        reference:'TEST-' + hex.slice(0,8),secondary_commodity:commodity,fpc_type:'GREEN',leader:'Synthetic Leader',co_leader:'Synthetic Deputy',",
+                  "        coordinator:'Synthetic Coordinator',secretary:'Synthetic Secretary',cluster_area_timad:8,cluster_plan:1,collected_land:2,collected_quintal:10,collected_by_combiner:1,number_of_smallholders:2",
+                  "    };",
+                  "    const systemFields = /^(created_|last_approved_|search_text$|record_name$|record_image_url$|functional_record_id$|actual_score$|ideal_score$|completion_score_required$|record_status|is_duplicated$|state$|state_date$|sync_|source_system$|import_source$|total_animals$|total_land_|size_of_group$|age$|farmer_uuid$|edit_count$|lifecycle_stage$|offspring_generated$|offspring_ear_tags$|offspring_ear_tag_prefix$|temporary_land_id$|cluster_id$|oan_id$|address_hierarchy$)/;",
+                  "    const omissions=[];",
+                  "    const rows={};",
+                  "    for (const [rid,schema] of Object.entries(schemas)) {",
+                  "        const row={internal_record_id:ids[rid]};",
+                  "        for (const field of schema.fields) {",
+                  "            const key=field.field_name;",
+                  "            if (key==='internal_record_id' || key.startsWith('link_') || systemFields.test(key)) {",
+                  "                omissions.push({register:schema.register_mnemonic,field:key,reason:'server-managed identifier, aggregate, lifecycle or reference'});continue;",
+                  "            }",
+                  "            if (field.data_type==='datetime') {",
+                  "                omissions.push({register:schema.register_mnemonic,field:key,reason:'deployed native save route does not convert JSON datetime strings; rejected by database driver'});continue;",
+                  "            }",
+                  "            const widget=fieldWidgets[rid+'.'+key];",
+                  "            let value;",
+                  "            const source=widget?.['widget-data-source'];",
+                  "            const options=source?.options;",
+                  "            if (Object.prototype.hasOwnProperty.call(overrides,key)) value=overrides[key];",
+                  "            else if (options?.length) value=options[0].value;",
+                  "            else if (source?.params?.attribute_id) value=attr(source.params.attribute_id)?.value_id;",
+                  "            else if (field.data_type==='boolean') value=true;",
+                  "            else if (['number','integer'].includes(field.data_type)) value=1;",
+                  "            else if (field.data_type==='date') value=today;",
+                  "            else if (field.data_type==='datetime') value=today+'T00:00:00Z';",
+                  "            else if (field.data_type==='json') value=[];",
+                  "            else value='Synthetic test';",
+                  "            // Prefer a valid UI enumeration when the general override is outside its code list.",
+                  "            if (options?.length && !options.some(o=>o.value===value)) value=options[0].value;",
+                  "            if (value===undefined || value===null) {omissions.push({register:schema.register_mnemonic,field:key,reason:'no selectable catalog value'});continue;}",
+                  "            if (field.data_type==='string' && typeof value!=='string') value=String(value);",
+                  "            row[key]=value;",
+                  "        }",
+                  "        if (rid!==form.register_id) row.link_internal_record_id=ids[form.register_id];",
+                  "        rows[rid]=row;",
+                  "    }",
+                  "    if (registry==='farmer') {",
+                  "        const farmer=rows[byMnemonic.Farmer],household=rows[byMnemonic.Household];",
+                  "        farmer.link_internal_record_id=ids[byMnemonic.Household];",
+                  "        household.household_head=ids[byMnemonic.Farmer];",
+                  "        if (rows[byMnemonic.HouseholdMember]) rows[byMnemonic.HouseholdMember].link_internal_record_id=ids[byMnemonic.Household];",
+                  "        if (rows[byMnemonic.Livestock]) rows[byMnemonic.Livestock].breed='LOCAL';",
+                  "        for (const mn of ['ConsentRequest','ConsentReceipt']) if (rows[byMnemonic[mn]]) rows[byMnemonic[mn]].status='PENDING';",
+                  "    }",
+                  "    if (registry==='livestock') {",
+                  "        rows[byMnemonic.Animal].date_of_birth=day(-800);",
+                  "        rows[byMnemonic.VitalEvent].event_type='BIRTH';",
+                  "        rows[byMnemonic.Breeding].event_type='AI';",
+                  "        rows[byMnemonic.Farmer].status='ACTIVE';",
+                  "    }",
+                  "    if (registry==='cropsown') {",
+                  "        for (const rid of Object.keys(rows)) {",
+                  "            const row=rows[rid];",
+                  "            for (const field of schemas[rid].fields) {",
+                  "                const w=fieldWidgets[rid+'.'+field.field_name],aid=w?.['widget-data-source']?.params?.attribute_id;",
+                  "                if (aid && catalogs[aid]?.length) row[field.field_name]=attr(aid)?.value_id;",
+                  "            }",
+                  "            if (row.cluster_details) row.cluster_details=[];",
+                  "        }",
+                  "    }",
+                  "    const uniqueSections=[...new Map(sections.map(s=>[s.section_id,s])).values()];",
+                  "    if (registry==='farmer') uniqueSections.sort((a,b)=>(a.section_register_id===byMnemonic.Household?-1:0)-(b.section_register_id===byMnemonic.Household?-1:0));",
+                  "    return {seed,name,rows,sections:uniqueSections.map(s=>({...s,records:[rows[s.section_register_id]]})),omissions,",
+                  "        fieldCount:Object.values(rows).reduce((n,row)=>n+Object.keys(row).length,0)};",
+                  "}",
+                  "",
+                  "if(pm.variables.get('enable_writes')!=='true'){pm.execution.setNextRequest(null);throw new Error('Set enable_writes=true for the requested synthetic write workflow');}",
+                  "if(!pm.variables.get('generated_plan')){",
+                  " const plan=generateRegistryRecord({registry:pm.variables.get('registry_key'),form:JSON.parse(pm.variables.get('registry_form')),",
+                  " schemas:JSON.parse(pm.variables.get('field_schemas')),catalogs:JSON.parse(pm.variables.get('catalogs')),geo:JSON.parse(pm.variables.get('geo_nodes')),",
+                  " documentId:pm.variables.get('test_document_id') || undefined,seed:pm.variables.replaceIn('{{$guid}}')});",
+                  " pm.variables.set('generated_plan',JSON.stringify(plan));pm.variables.set('save_cursor','0');pm.variables.set('submission_id','');",
+                  " console.log('REGISTRY_TEST_NAME ' + plan.name);",
+                  "}",
+                  "const plan=JSON.parse(pm.variables.get('generated_plan'));const index=Number(pm.variables.get('save_cursor') || 0);",
+                  "const section=plan.sections[index];const form=JSON.parse(pm.variables.get('registry_form'));",
+                  "const savePayload={submission_id:pm.variables.get('submission_id') || null,section_id:section.section_id,",
+                  " section_payload:section.records,section_register_id:section.section_register_id,form_id:form.form_id,register_id:form.register_id};",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope(savePayload)));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "pm.test('A single draft submission is chained',()=>pm.expect(payload?.submission_id).to.be.a('string').and.not.empty);",
+                  "const previous=pm.variables.get('submission_id');if(previous)pm.test('Section saved into the same draft',()=>pm.expect(payload.submission_id).to.eql(previous));",
+                  "pm.variables.set('submission_id',payload.submission_id);",
+                  "const plan=JSON.parse(pm.variables.get('generated_plan'));const next=Number(pm.variables.get('save_cursor'))+1;",
+                  "pm.variables.set('save_cursor',String(next));if(next<plan.sections.length)pm.execution.setNextRequest(pm.info.requestId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/intake-form-data/save_intake_form_submission",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Generates a coherent synthetic record from API field definitions, UI enums, catalogs and geography. Shares stable UUIDs across sections to avoid deleting earlier data. Every supported field is populated; lifecycle, aggregates, managed links and unsupported datetime fields are reported separately. Uses one reusable test-image document. No approvals are performed."
+          },
+          "response": []
+        },
+        {
+          "id": "02494cb4-3865-417b-aff0-42d5466a32c7",
+          "name": "02 Read draft and verify complete field coverage",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({submission_id:pm.variables.get('submission_id')})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "const plan=JSON.parse(pm.variables.get('generated_plan'));const actual={};",
+                  "for(const sec of payload?.section_payloads || []) for(const row of sec.records || []){",
+                  " actual[sec.section_register_id] ||= {};Object.assign(actual[sec.section_register_id],row);",
+                  "}",
+                  "let covered=0;const missing=[];",
+                  "for(const [rid,row] of Object.entries(plan.rows))for(const [field,value] of Object.entries(row)){",
+                  " if(field==='internal_record_id' || field.startsWith('link_'))continue;",
+                  " if(actual[rid]?.[field]===undefined || actual[rid]?.[field]===null)missing.push(rid+'.'+field);else covered++;",
+                  "}",
+                  "pm.test('Every generated supported field is persisted',()=>pm.expect(missing,'Missing fields: '+missing.join(', ')).to.eql([]));",
+                  "pm.test('Generated synthetic name is persisted',()=>pm.expect(JSON.stringify(payload)).to.include(plan.name));",
+                  "pm.variables.set('verified_field_count',String(covered));",
+                  "console.log('REGISTRY_FIELD_COUNT ' + covered);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/intake-form-data/get_intake_form_submission",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "id": "7ac9159e-e579-4d73-a22e-6c63b4e256d3",
+          "name": "03 Finalize through the ordinary approval workflow",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({submission_id:pm.variables.get('submission_id')})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "pm.test('Submission is FINAL',()=>pm.expect(payload?.draft_status).to.eql('FINAL'));",
+                  "pm.test('Submission is pending normal approval',()=>pm.expect(payload?.approval_status).to.eql('PENDING'));",
+                  "console.log('REGISTRY_SUBMISSION_ID ' + payload.submission_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/intake-form-data/finalize_intake_form_submission",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "id": "9c7b505d-4c68-44b5-af6f-c17a10213888",
+          "name": "04 Read back final state and field coverage",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({submission_id:pm.variables.get('submission_id')})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "const plan=JSON.parse(pm.variables.get('generated_plan'));const actual={};",
+                  "for(const sec of payload?.section_payloads || []) for(const row of sec.records || []){",
+                  " actual[sec.section_register_id] ||= {};Object.assign(actual[sec.section_register_id],row);",
+                  "}",
+                  "let covered=0;const missing=[];",
+                  "for(const [rid,row] of Object.entries(plan.rows))for(const [field,value] of Object.entries(row)){",
+                  " if(field==='internal_record_id' || field.startsWith('link_'))continue;",
+                  " if(actual[rid]?.[field]===undefined || actual[rid]?.[field]===null)missing.push(rid+'.'+field);else covered++;",
+                  "}",
+                  "pm.test('Every generated supported field is persisted',()=>pm.expect(missing,'Missing fields: '+missing.join(', ')).to.eql([]));",
+                  "pm.test('Generated synthetic name is persisted',()=>pm.expect(JSON.stringify(payload)).to.include(plan.name));",
+                  "pm.variables.set('verified_field_count',String(covered));",
+                  "console.log('REGISTRY_FIELD_COUNT ' + covered);",
+                  "",
+                  "pm.test('Finalized state survives readback',()=>pm.expect(payload?.draft_status).to.eql('FINAL'));",
+                  "pm.test('No approval was bypassed',()=>pm.expect(payload?.approval_status).to.eql('PENDING'));",
+                  "pm.variables.set('tab_cursor','0');",
+                  "console.log('REGISTRY_RESULT ' + pm.variables.get('registry_key') + ' FINAL PENDING');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/intake-form-data/get_intake_form_submission",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "id": "e3390d39-e6ae-4b29-a904-04af60644849",
+          "name": "05 Read every populated intake tab (loops over tabs)",
+          "protocolProfileBehavior": {
+            "disableCookies": true
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.variables.get('access_token')) {pm.execution.setNextRequest(null);pm.execution.skipRequest();}",
+                  "pm.variables.set('csrf_token',pm.variables.replaceIn('{{$guid}}'));",
+                  "",
+                  "function envelope(payload){return {request_header:{sender_app_mnemonic:'OAN_REGISTRY_API_TEST',sender_app_url:'',request_id:pm.variables.replaceIn('{{$guid}}'),request_timestamp:new Date().toISOString()},request_body:{request_payload:payload,pagination_request:{current_page:1,page_size:100,filter_by:{},search_text:''}}};}",
+                  "const form=JSON.parse(pm.variables.get('registry_form'));const tab=form.tabs[Number(pm.variables.get('tab_cursor') || 0)];",
+                  "pm.variables.set(\"request_json\",JSON.stringify(envelope({submission_id:pm.variables.get('submission_id'),tab_id:tab.tab_id})));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200',()=>pm.response.to.have.status(200));",
+                  "const response = pm.response.json();",
+                  "const header = response.response_header || {};",
+                  "pm.test('Registry business SUCCESS',()=>pm.expect(header.response_status,header.response_error_message || '').to.eql('SUCCESS'));",
+                  "if(pm.response.code!==200 || header.response_status!=='SUCCESS') {",
+                  " pm.execution.setNextRequest(null);throw new Error((header.response_error_code || '') + ' ' + (header.response_error_message || 'Request failed'));",
+                  "}",
+                  "const payload = response.response_body?.response_payload;",
+                  "",
+                  "pm.test('Tab section records returned',()=>pm.expect(payload).to.be.an('array'));",
+                  "const next=Number(pm.variables.get('tab_cursor'))+1;pm.variables.set('tab_cursor',String(next));",
+                  "if(next<JSON.parse(pm.variables.get('registry_form')).tabs.length)pm.execution.setNextRequest(pm.info.requestId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{staff_base_url}}/intake-form-data/get_tab_records",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Cookie",
+                "value": "X-CSRF-Token={{csrf_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{{request_json}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ],
+      "id": "ed6adf12-6afb-4c3c-aa69-721c9e6fb63e"
+    }
+  ]
+}
