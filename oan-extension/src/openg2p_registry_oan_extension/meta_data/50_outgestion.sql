@@ -16,7 +16,7 @@ ON CONFLICT ("document_id") DO UPDATE SET "document_store_id" = EXCLUDED."docume
 
 -- The farmer extension seeds OUT-TMPL-1 with its own document; the OAN layer
 -- runs after it and points the Farmer DCI response at OAN's.
-UPDATE "public"."outgoing_templates" SET "template_document_id" = 'b6f1c2a0-0a4e-5c1d-9e7a-0a4f1e2d3c01', "updated_at" = NOW()
+UPDATE "public"."outgoing_templates" SET "template_document_id" = 'b6f1c2a0-0a4e-5c1d-9e7a-0a4f1e2d3c01'
 WHERE "template_id" = 'OUT-TMPL-1' AND "template_document_id" IS DISTINCT FROM 'b6f1c2a0-0a4e-5c1d-9e7a-0a4f1e2d3c01';
 
 INSERT INTO "public"."data_models" ("data_model_id","data_model_mnemonic","pattern_for_data_model","response_template_document_id","is_active") VALUES
@@ -28,10 +28,12 @@ INSERT INTO "public"."outgoing_templates" ("template_id","data_model_id","regist
 ON CONFLICT ("template_id") DO UPDATE SET "data_model_id" = EXCLUDED."data_model_id", "register_id" = EXCLUDED."register_id", "template_document_id" = EXCLUDED."template_document_id";
 
 -- The WebSub registration state belongs to the outgestion worker; a re-seed
--- keeps it.
+-- keeps the complete installed topic configuration and worker state. Existing
+-- activation/topic settings belong to the environment; do not force-enable a
+-- disabled topic or rewrite its registration/checkpoint values during a seed.
 INSERT INTO "public"."outgoing_topics" ("topic_id","topic_type","register_id","data_model_id","partner_id","websub_topic","description","is_active","created_at","websub_register_status","websub_register_number_of_attempts") VALUES
 ('6d495cab-b513-5fd0-9bc2-d31024ee8410','REGISTER','a1a4d25a-1cd4-4356-abac-985a0b3c6bcd','873c2342-cfde-5db4-9f9f-6e491a5001f7',NULL,'oan.farmer-reference.changed.v1','Approved farmer changes, for the registries that keep a Farmer reference',TRUE,'2026-10-25 00:00:00','PENDING',0)
-ON CONFLICT ("topic_id") DO UPDATE SET "websub_topic" = EXCLUDED."websub_topic", "description" = EXCLUDED."description", "is_active" = EXCLUDED."is_active";
+ON CONFLICT ("topic_id") DO NOTHING;
 
 -- Outgestion runs for the Farmer register only.
 UPDATE "public"."g2p_register_definitions" SET "outgest_applicable" = TRUE
