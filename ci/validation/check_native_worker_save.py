@@ -38,10 +38,13 @@ def initialize(host):
     from openg2p_registry_core.services.intake_form_data_service import G2PIntakeFormDataService
     from openg2p_registry_extensions.register_domain.services.household_intake import OANIntakeFormDataService
     assert isinstance(G2PIntakeFormDataService.get_component(), OANIntakeFormDataService)
+    package_names = ("openg2p-registry-core", "openg2p-registry-celery-worker", "openg2p-registry-farmer-extension")
+    packages = {name: importlib.metadata.version(name) for name in package_names}
+    contract = json.loads((ROOT / "ci/validation/native-release-contract.json").read_text(encoding="utf-8"))
+    assert packages == contract["observedInstalledPackages"], "Installed native package contract changed without review"
     print(json.dumps({"initializer": "native worker.main + CELERY_IMPORTS", "native_engine_preserved": True,
         "validate_attribute_values": Settings.get_config().validate_attribute_values,
-        "packages": {name: importlib.metadata.version(name) for name in
-            ("openg2p-registry-core", "openg2p-registry-celery-worker", "openg2p-registry-farmer-extension")}}), flush=True)
+        "packages": packages}), flush=True)
     return Engine, task
 
 

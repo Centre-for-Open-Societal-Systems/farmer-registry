@@ -29,7 +29,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 note() { echo "  $*"; }
 
 usage() {
-  cat <<EOF
+  while IFS= read -r help_line; do printf '%s\n' "$help_line"; done <<'EOF'
 Bump the pinned openg2p-registry version (Dockerfiles' ARG RP_VERSION + the Helm
 chart dependency) atomically, so images and chart never drift.
 
@@ -39,6 +39,9 @@ Usage:
   ./scripts/bump-rp-version.sh -n              Show the latest SAFE version;
   ./scripts/bump-rp-version.sh -n <version>    check a version — write NOTHING.
   ./scripts/bump-rp-version.sh -h              This help.
+
+Native OAN candidates reject every resolving/mutating mode, including -n.
+Use the explicit native release contract and central chart profile review.
 
 Options:
   -n, --check, --dry-run   Resolve/validate and print, but do not modify any file.
@@ -66,6 +69,12 @@ while [ $# -gt 0 ]; do
     *)                      [ -z "$VERSION_ARG" ] || die "unexpected extra argument '$1'"; VERSION_ARG="$1"; shift ;;
   esac
 done
+
+# This legacy mutator cannot represent native Farmer parent ABI + immutable
+# central package provenance. Fence before tools, network or any file writes.
+if [[ -f ci/deploy/oan-chart.json && -f docker/oan/celery.Dockerfile ]]; then
+  die "Native OAN candidate: legacy RP bump (including -n) is disabled. Review ci/validation/native-release-contract.json and the immutable central chart profile; no automatic RC update is supported."
+fi
 
 command -v curl    >/dev/null || die "curl is required"
 command -v python3 >/dev/null || die "python3 is required"

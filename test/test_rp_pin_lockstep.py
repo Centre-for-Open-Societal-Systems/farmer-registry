@@ -6,7 +6,7 @@ A variant extends ONE registry-platform version, used two ways:
 
 If these drift, the sanity image is built FROM one base while the chart deploys
 another, and the overlay lands on a harness it does not match (the failure that
-bit us repeatedly). `scripts/bump-rp-version.sh` moves them together; this test
+bit us repeatedly). The legacy bump mutator is fenced on native OAN candidates; this test
 fails the build if anything ever splits them again.
 
 No dependencies beyond the stdlib + pytest — runs anywhere the other tests do.
@@ -51,5 +51,5 @@ def test_rp_pin_is_in_lockstep():
         pytest.fail(
             "openg2p-registry pin has SPLIT — images and chart must be identical:\n"
             + "\n".join(lines)
-            + "\n\nFix with: ./scripts/bump-rp-version.sh <version>"
+            + "\n\nReview ci/validation/native-release-contract.json and the immutable central chart profile; legacy bump is disabled on native OAN candidates"
         )
