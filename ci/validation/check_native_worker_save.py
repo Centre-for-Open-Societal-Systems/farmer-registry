@@ -48,6 +48,10 @@ def initialize(host):
     return Engine, task
 
 
+def expect(actual, expected, label):
+    assert actual == expected, json.dumps({"check": label, "actual": actual, "expected": expected}, default=str, sort_keys=True)
+
+
 def fixture(document_id):
     lands = [str(uuid.uuid4()), str(uuid.uuid4())]
     return {"basic_info": {"personal_info": {"first_name_english": "Synthetic", "father_name_english": "Worker",
@@ -83,7 +87,7 @@ async def save_probe(Engine, task):
         binding = (await session.execute(text("SELECT register_id,intake_form_id FROM incoming_model_semantic_patterns WHERE data_model_id='FARMER_ODK_MODEL'"))).one()
         classified = SimpleNamespace(register_id=binding[0], intake_form_id=binding[1], partner_id=None)
         sections = await task._get_ordered_form_sections(classified.intake_form_id, session)
-        assert [s.section_mnemonic for s in sections] == list(SECTIONS)
+        expect([s.section_mnemonic for s in sections], list(SECTIONS), "ordered native section binding")
     from openg2p_fastapi_common.models import BaseORMModel
     async def counts():
         async with maker() as session:
@@ -110,7 +114,7 @@ async def save_probe(Engine, task):
                 if not invalid:
                     raise
                 assert "land" in str(getattr(error, "message", error)).lower(), "Failure did not identify the invalid child land"
-                print(json.dumps({"late_invalid_child_rejected": True}), flush=True)
+                print(json.dumps({"late_invalid_child_rejected": True, "parent_link_validation_exercised": True, "coded_attribute_validation_exercised": False}), flush=True)
             else:
                 assert not invalid, "Native parent validation accepted an unknown land"
                 async def rows(model):
@@ -124,27 +128,27 @@ async def save_probe(Engine, task):
                 members = await rows(G2PIntakeFormHouseholdMember)
                 docs = await rows(G2PIntakeFormSectionDocuments)
                 mapping = {land.land_id: str(land.internal_record_id) for land in lands}
-                assert len(lands) == len(crops) == 2
-                assert {crop.commodity: str(crop.link_internal_record_id) for crop in crops} == {"CROP_WHEAT": mapping["P1"], "CROP_MAIZE": mapping["P2"]}
-                assert str(inputs.link_internal_record_id) == str(animal.link_internal_record_id) == mapping["P2"]
-                assert farmer.foundational_id == "009900000123" and farmer.is_household_head is True
-                assert (household.size_of_group, household.number_of_male_members, household.number_of_female_members) == (2, 1, 1)
-                assert len(members) == 2 and sum(bool(m.is_head) for m in members) == 1
-                assert len(farmer.income_sources) == 2
-                assert inputs.machinery_types == ["MACH_TRACTOR", "MACH_COMBINE"] and inputs.finance_access_types == ["LOAN", "INSURANCE"]
-                assert len(inputs.water_sources) == len(inputs.livestock_water_sources) == 2
-                assert inputs.machinery_type is None and inputs.finance_access_type is None and animal.head_count == 2
-                assert len(docs) == 1 and docs[0].document_id == document_id and docs[0].label == "identity_document_1"
+                expect((len(lands), len(crops)), (2, 2), "persisted parent and crop counts")
+                expect({crop.commodity: str(crop.link_internal_record_id) for crop in crops}, {"CROP_BREAD_WHEAT": mapping["P1"], "CROP_MAIZE": mapping["P2"]}, "exact catalogue crop/land links")
+                expect((str(inputs.link_internal_record_id), str(animal.link_internal_record_id)), (mapping["P2"], mapping["P2"]), "input and livestock land links")
+                expect((farmer.foundational_id, farmer.is_household_head), ("009900000123", True), "Farmer FIN and household head")
+                expect((household.size_of_group, household.number_of_male_members, household.number_of_female_members), (2, 1, 1), "household size and gender counts")
+                expect((len(members), sum(bool(m.is_head) for m in members)), (2, 1), "household roster and unique head")
+                expect(farmer.income_sources, ["SOI_CROP_PRODUCTION", "SOI_LIVESTOCK_PRODUCTION"], "income multi-choice preservation")
+                expect((inputs.machinery_types, inputs.finance_access_types), (["MACH_TRACTOR", "MACH_COMBINE"], ["LOAN", "INSURANCE"]), "machinery and finance multi-choice preservation")
+                expect((inputs.water_sources, inputs.livestock_water_sources), (["WS_RAINFED", "WS_IRRIGATION_GROUND"], ["WS_WELL_GROUND", "WS_SURFACE_WATER"]), "crop and livestock water multi-choice preservation")
+                expect((inputs.machinery_type, inputs.finance_access_type, animal.head_count), (None, None, 2), "no invented singular choices and livestock count")
+                expect([(d.document_id, d.label) for d in docs], [(document_id, "identity_document_1")], "scoped identity attachment and unrelated-document exclusion")
                 doc_section = next(s.section_id for s in sections if s.section_mnemonic == SECTIONS[15])
-                assert docs[0].section_id == doc_section
+                expect(docs[0].section_id, doc_section, "identity attachment section")
                 submission = await session.get(G2PIntakeFormSubmission, submission_id)
-                assert submission.draft_status == "DRAFT"
+                expect(submission.draft_status, "DRAFT", "unfinalized submission")
                 await session.rollback()
-        assert await counts() == baseline, "Rollback left draft, intake or document rows"
+        expect(await counts(), baseline, "all ORM table counts after rollback")
     assert task._session_maker is maker
     print(json.dumps({"native_worker_save": "PASS", "sections": 16, "parents": 2, "rollback": True,
         "late_child_failure_rollback": True, "native_engine_preserved": True, "finalized": False,
-        "awe_called": False, "mds_or_filestore_acceptance": "NOT RUN"}), flush=True)
+        "awe_called": False, "coded_attribute_validation_exercised": False, "mds_or_filestore_acceptance": "NOT RUN"}), flush=True)
 
 
 def probe(host, mode):
