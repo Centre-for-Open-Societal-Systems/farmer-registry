@@ -1,0 +1,9 @@
+{
+  "repository": "https://raw.githubusercontent.com/Centre-for-Open-Societal-Systems/oan-helm/c08497721ec93eda0b19c2a504255b1ea8a00d8f/repository/",
+  "name": "farmer-registry-dashboard",
+  "version": "0.1.2",
+  "sha256": "fcc6601971378fb166df86424c4b96b0831e7f64acf84d17af3dd544ae8f6c79",
+  "environment": "dev",
+  "namespace": "farmer",
+  "release": "farmer-registry-dashboard"
+}

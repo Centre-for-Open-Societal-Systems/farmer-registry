@@ -1,0 +1,23 @@
+{
+  "retired": false,
+  "reason": "Staging and operational consumers still use retained chart sources; port and rehearse each before retirement.",
+  "requiredSources": [
+    "helm/openg2p-farmer-registry/Chart.yaml",
+    "helm/openg2p-farmer-registry/Chart.lock",
+    "helm/farmer-registry-dashboard/Chart.yaml"
+  ],
+  "remainingConsumers": [
+    "ci/deploy/deploy-rc.sh",
+    "ci/deploy/staging.py",
+    "scripts/operations/registry/deploy-worker-only.py",
+    "scripts/operations/registry/deploy-partner-only.py",
+    "scripts/bump-rp-version.sh",
+    "ci/deploy/staging-legacy.sh"
+  ],
+  "requiredEvidence": [
+    "explicit-staging-preservation-and-restore",
+    "worker-and-partner-resource-preservation",
+    "external-legacy-caller-inventory",
+    "updated-source-pin-and-cleanup-contracts"
+  ]
+}

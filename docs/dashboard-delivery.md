@@ -1,15 +1,24 @@
 # Registry-owned dashboard delivery
 
 The UI and API remain independent source repositories; this registry's CI builds
-their Dockerfiles and owns their deployment. The API resources remain in
-`helm/openg2p-farmer-registry`; the UI chart is now maintained here at
-`helm/farmer-registry-dashboard`. Existing Helm release and resource names are
-preserved. The UI/API repositories contain no production deployment pipeline.
+their Dockerfiles and retains their independent release ownership. Dev chart
+sources are immutable packages from OAN Helm: the API remains embedded in the
+Farmer release using `ci/deploy/oan-chart.json`; the UI uses the independently
+pinned addon archive in `ci/services/dashboard-chart.json`. Package checksums,
+identity and provenance are verified before rendering. Dev no longer builds or
+resolves dependencies from the retained local dashboard charts.
 
-All environment URLs, cookie domains, auth client/audience/roles, image refs,
-ingress and Secret references are configured in these registry Helm charts and
-their environment overlays. `dashboardApi.auth` owns API trust; old reserved
-auth names in `dashboardApi.env` must be moved there before rendering.
+`ci/services/catalogue.yaml` owns the semantically unchanged optional-service
+catalogue. Environment URLs, cookie domains, auth client/audience/roles, images,
+ingress and Secret references remain in reviewed environment overlays. The
+API's `dashboardApi.auth` owns trust; old reserved auth names in
+`dashboardApi.env` must be moved there before rendering.
+
+Explicit staging continues to use the retained registry-local charts and its
+existing evidence gates. Worker/partner operational tools also still consume
+the local Farmer chart. The [source cleanup gate](../ci/services/chart-cleanup-gate.json)
+keeps these chart sources present until those consumers are ported and rehearsed;
+this dev port does not retire them. See [central service chart checks](central-service-charts.md).
 
 The UI setup hook provisions its Keycloak client/roles and IAM tile; it grants
 no staff user by default. Approved users must be assigned their dashboard client
