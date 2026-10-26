@@ -21,9 +21,9 @@ from openg2p_fastapi_common.context import component_registry
 from openg2p_registry_core.services import G2PIngestService
 from openg2p_registry_core.services.intake_form_data_service import G2PIntakeFormDataService
 from openg2p_registry_core.services.g2p_register_change_request_service import G2PRegisterChangeRequestService
-from openg2p_registry_oan_extension.odk.ingest import OANIngestService
-from openg2p_registry_oan_extension.register_domain.services.household_intake import OANIntakeFormDataService
-from openg2p_registry_oan_extension.register_domain.services.outgest_json import OANOutgestChangeRequestService
+from openg2p_registry_extensions.odk.ingest import OANIngestService
+from openg2p_registry_extensions.register_domain.services.household_intake import OANIntakeFormDataService
+from openg2p_registry_extensions.register_domain.services.outgest_json import OANOutgestChangeRequestService
 
 mapping = {}
 for base, extension in (
