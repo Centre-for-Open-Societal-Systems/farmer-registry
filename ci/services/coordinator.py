@@ -374,6 +374,17 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
 
 def build(component, environment, source, registry, run=command):
     commit = checkout(component, environment, source, run)
+    try:
+        return _build_resolved(component, environment, source, registry, commit, run)
+    except (SkipService, ServiceError) as error:
+        # Chart selection happens before an image exists. Preserve the resolved
+        # source revision on these failures, just as for later build failures.
+        if not getattr(error, "provenance", None):
+            error.provenance = {"commit": commit}
+        raise
+
+
+def _build_resolved(component, environment, source, registry, commit, run):
     with selected_chart(component, environment, source) as (chart, selected_hash, provenance):
         built = {}
         hook_review = None

@@ -75,8 +75,9 @@ def test_corrupt_download_stops_before_any_build_or_hook(tmp_path, monkeypatch):
     component = next(c for c in coordinator.configuration() if c.get("chartSource") == "registry")
     (tmp_path / "Dockerfile").write_text("FROM scratch\n")
     monkeypatch.setattr(coordinator, "checkout", lambda *a, **k: SHA)
-    with pytest.raises(coordinator.ServiceError, match="download-or-checksum"):
+    with pytest.raises(coordinator.ServiceError, match="download-or-checksum") as failure:
         coordinator.build(component, "dev", tmp_path, ECR, lambda *a: pytest.fail("Unexpected build/hook"))
+    assert failure.value.provenance == {"commit": SHA}
 
 
 def test_verified_ui_archive_is_given_to_existing_hook_rehearsal(tmp_path, monkeypatch):
@@ -181,3 +182,11 @@ def test_ui_central_deploy_retains_hook_image_resource_and_revision_guards(tmp_p
         assert coordinator.deploy(component, "dev", record, tmp_path, ECR, run) == 13
         assert state["upgraded"]
     assert not any(call[:2] == ["helm", "dependency"] for call in calls)
+
+
+def test_missing_application_layout_keeps_resolved_source_revision(tmp_path, monkeypatch):
+    component = next(c for c in coordinator.configuration() if c.get("kind") == "registry-dashboard-api")
+    monkeypatch.setattr(coordinator, "checkout", lambda *a, **k: SHA)
+    with pytest.raises(coordinator.SkipService, match="missing-application-files") as failure:
+        coordinator.build(component, "dev", tmp_path, ECR, lambda *a: pytest.fail("Unexpected build"))
+    assert failure.value.provenance == {"commit": SHA}
