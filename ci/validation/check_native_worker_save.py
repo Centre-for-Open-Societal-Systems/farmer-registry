@@ -98,6 +98,7 @@ def fixture(document_id):
 async def save_probe(Engine, task):
     from datetime import datetime
     from sqlalchemy import select, text, func
+    from openg2p_registry_core.errors import G2PRegistryException
     from openg2p_registry_core.models import G2PRegistryDocument, G2PIntakeFormSectionDocuments, G2PIntakeFormSubmission
     from openg2p_registry_extensions.register_domain.models import (
         G2PIntakeFormFarmer, G2PIntakeFormLand, G2PIntakeFormCrop, G2PIntakeFormFarmInputs,
@@ -116,7 +117,7 @@ async def save_probe(Engine, task):
             return {name: await session.scalar(select(func.count()).select_from(table))
                     for name, table in sorted(BaseORMModel.metadata.tables.items())}
     baseline = await counts()
-    for invalid in (False, True):
+    for scenario in ("valid", "invalid_parent", "invalid_finance"):
         async with maker() as session:
             document_id = str(uuid.uuid4())
             for ident in (document_id, str(uuid.uuid4())):
@@ -125,20 +126,31 @@ async def save_probe(Engine, task):
             await session.flush()
             source = fixture(document_id)
             data = intake_sections(source)
-            if invalid:
+            if scenario == "invalid_parent":
                 data[SECTIONS[11]][1]["link_internal_record_id"] = str(uuid.uuid4())
+            elif scenario == "invalid_finance":
+                # JSON has no database enum constraint: rejection must come
+                # through the real registered OAN schema/domain save path.
+                data[SECTIONS[12]][0]["finance_access_types"] = ["LOAN", "OAN_INVALID_FINANCE_CODE"]
             transformed = task._validate_transformed_data_json(classified, SimpleNamespace(transformed_data_json=data), sections)
             submission_id = await task._create_submission_async(classified, session)
             try:
                 await task._save_sections_async(submission_id, classified, sections, transformed, session)
             except Exception as error:
                 await session.rollback()
-                if not invalid:
+                if scenario == "valid":
                     raise
-                assert "land" in str(getattr(error, "message", error)).lower(), "Failure did not identify the invalid child land"
-                print(json.dumps({"late_invalid_child_rejected": True, "parent_link_validation_exercised": True, "coded_attribute_validation_exercised": False}), flush=True)
+                message = str(getattr(error, "message", error)).lower()
+                if scenario == "invalid_parent":
+                    assert "land" in message, "Failure did not identify the invalid child land"
+                    print(json.dumps({"late_invalid_child_rejected": True, "parent_link_validation_exercised": True, "coded_attribute_validation_exercised": False}), flush=True)
+                else:
+                    assert isinstance(error, G2PRegistryException), "Expected a domain validation rejection for invalid finance"
+                    assert "financ" in message, "Failure did not identify the invalid finance choice"
+                    print(json.dumps({"invalid_static_finance_rejected": True, "oan_domain_rule_exercised": True,
+                        "coded_attribute_validation_exercised": False}), flush=True)
             else:
-                assert not invalid, "Native parent validation accepted an unknown land"
+                expect(scenario, "valid", "invalid scenario must be rejected by native save")
                 async def rows(model):
                     return list((await session.execute(select(model).where(model.submission_id == submission_id))).scalars())
                 farmer, = await rows(G2PIntakeFormFarmer)
@@ -166,10 +178,11 @@ async def save_probe(Engine, task):
                 submission = await session.get(G2PIntakeFormSubmission, submission_id)
                 expect(submission.draft_status, "DRAFT", "unfinalized submission")
                 await session.rollback()
-        expect(await counts(), baseline, "all ORM table counts after rollback")
+        expect(await counts(), baseline, "all ORM table counts after rollback: " + scenario)
     assert task._session_maker is maker
     print(json.dumps({"native_worker_save": "PASS", "sections": 16, "parents": 2, "rollback": True,
-        "late_child_failure_rollback": True, "native_engine_preserved": True, "finalized": False,
+        "late_child_failure_rollback": True, "invalid_static_finance_rollback": True,
+        "oan_domain_rule_exercised": True, "native_engine_preserved": True, "finalized": False,
         "awe_called": False, "coded_attribute_validation_exercised": False, "mds_or_filestore_acceptance": "NOT RUN"}), flush=True)
 
 
