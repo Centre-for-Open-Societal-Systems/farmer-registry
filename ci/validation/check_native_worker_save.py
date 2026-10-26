@@ -91,7 +91,7 @@ async def save_probe(Engine, task):
         async with maker() as session:
             document_id = str(uuid.uuid4())
             for ident in (document_id, str(uuid.uuid4())):
-                session.add(G2PRegistryDocument(document_id=ident, document_store_id="synthetic-not-uploaded", bucket="documents",
+                session.add(G2PRegistryDocument(document_id=ident, document_store_id="synthetic-" + ident, bucket="documents",
                     source_filename="synthetic.jpg", created_by="synthetic-probe", created_at=datetime(2026, 10, 26)))
             await session.flush()
             source = fixture(document_id)
