@@ -54,6 +54,9 @@ class Initializer(FarmerInitializer):
                 for cls in classes:
                     await cls.create_migrate()
             await add_oan_columns()
+            from .schema_compat import migrate_existing_schema
+
+            await migrate_existing_schema(dbengine.get())
 
         asyncio.run(migrate())
 
