@@ -230,10 +230,13 @@ def run():
     report = {"verification_complete": False, "live_environment_modified": False, "finalized": False}
     output = ROOT / "ci-output/native-worker-save"
     output.mkdir(parents=True, exist_ok=True)
-    def command(*args, data=None, timeout=180):
+    def command(*args, data=None, timeout=180, log_path=None):
         result = subprocess.run(args, input=data, capture_output=True, check=False, timeout=timeout)
+        combined = (result.stdout + result.stderr).decode(errors="replace")
+        if log_path:
+            log_path.write_text(combined + "\n", encoding="utf-8")
         if result.returncode:
-            raise RuntimeError((result.stderr or result.stdout).decode(errors="replace")[-6000:])
+            raise RuntimeError(combined[-10000:])
         return result.stdout.decode(errors="replace").strip()
     def create(*args):
         ident = command("docker", "create", "--label", f"{owner}={suffix}", *args)
@@ -245,8 +248,7 @@ def run():
             "-e", "REGISTRY_CELERY_WORKERS_DB_PASSWORD=postgres", "-e", "REGISTRY_CELERY_WORKERS_DB_HOSTNAME=" + database,
             "-e", "REGISTRY_CELERY_WORKERS_DB_DBNAME=native_worker_save", image,
             "/repo/ci/validation/check_native_worker_save.py", "--probe", database, mode)
-        log = command("docker", "start", "--attach", ident, timeout=240)
-        (output / (mode + ".txt")).write_text(log + "\n", encoding="utf-8")
+        log = command("docker", "start", "--attach", ident, timeout=240, log_path=output / (mode + ".txt"))
         assert command("docker", "inspect", ident, "--format", "{{.State.ExitCode}}") == "0", log[-6000:]
         print(log, flush=True)
     try:
