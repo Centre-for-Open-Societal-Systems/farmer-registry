@@ -28,7 +28,7 @@ from .widget_rules import Rules, _Say, check_record, collect_rules, normalize_re
 
 # Section metadata is seed data that can change without a restart.
 _RULES_TTL_SECONDS = 300
-_cache: dict = {"at": 0.0, "rules": {}, "registers": {}, "messages": {}}
+_cache: dict = {"at": None, "rules": {}, "registers": {}, "messages": {}}
 _lock = asyncio.Lock()
 
 
@@ -38,10 +38,12 @@ def _json(value):
 
 
 async def _load() -> tuple[Rules, dict[str, str], dict[str, str]]:
-    if time.monotonic() - _cache["at"] < _RULES_TTL_SECONDS:
+    # An empty cache is never fresh, including during the first five minutes
+    # of machine uptime when monotonic() itself can be smaller than the TTL.
+    if _cache["at"] is not None and time.monotonic() - _cache["at"] < _RULES_TTL_SECONDS:
         return _cache["rules"], _cache["registers"], _cache["messages"]
     async with _lock:
-        if time.monotonic() - _cache["at"] >= _RULES_TTL_SECONDS:
+        if _cache["at"] is None or time.monotonic() - _cache["at"] >= _RULES_TTL_SECONDS:
             async with async_sessionmaker(dbengine.get())() as session:
                 sections = (await session.execute(text(
                     "SELECT section_register_id, section_ui_schema FROM g2p_register_sections"))).all()
