@@ -25,6 +25,9 @@ from openg2p_registry_extensions.odk.ingest import OANIngestService
 from openg2p_registry_extensions.register_domain.services.household_intake import OANIntakeFormDataService
 from openg2p_registry_extensions.register_domain.services.outgest_json import OANOutgestChangeRequestService
 
+runtime = importlib.import_module('openg2p_registry_extensions.runtime')
+for _ in range(3):
+    runtime.install()
 mapping = {}
 for base, extension in (
     (G2PIntakeFormDataService, OANIntakeFormDataService),

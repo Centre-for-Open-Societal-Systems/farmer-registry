@@ -64,6 +64,8 @@ labels come from authenticated Master Data HTTP, with the existing per-registry
 client and Secret references. The central chart renders one reporting Job.
 Fresh hook execution and authenticated dashboard acceptance remain outstanding.
 
-Worker and beat load the registered OAN services through native `CELERY_IMPORTS`.
+APIs, worker and beat share the same idempotent OAN component registration.
+Worker and beat load it through native `CELERY_IMPORTS`, retaining their native
+engines; the API initializer is not invoked inside Celery.
 Offline launcher checks require the same intake, signature and JSON-safe approval
 services while preserving native schedules; hosted verification remains required.

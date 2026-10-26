@@ -1,8 +1,8 @@
-"""Load the same registered OAN services through native CELERY_IMPORTS.
+"""Register OAN services using native CELERY_IMPORTS in worker and beat.
 
-The platform launcher imports this after its own initializer. No task, scheduler
-or worker implementation is replaced. Python imports it once per process.
+Native processes keep their own database engine, tasks and schedules. In
+particular beat's synchronous engine must not enter an API async initializer.
 """
-from .app import Initializer
+from .runtime import install
 
-Initializer()
+install()

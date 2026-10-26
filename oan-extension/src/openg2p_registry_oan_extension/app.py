@@ -26,32 +26,9 @@ class Initializer(FarmerInitializer):
 
     def initialize(self, **kwargs):
         super().initialize(**kwargs)
-        # Core's registrant authentication with OAN's intake verification
-        # (register_domain/services/identity_verification.py).
-        from .register_domain.services import (
-            install_farmer_household_check,
-            install_identity_verification,
-        )
+        from .runtime import install
 
-        install_identity_verification()
-        # The farmer's household, checked when a farmer intake form is
-        # finalized (register_domain/services/household_intake.py).
-        install_farmer_household_check()
-        # Core runs its value validator before domain checks on both intake
-        # saves and CRs. Keep those rules, adding only OAN's error wording.
-        from .register_domain.services.attribute_messages import (
-            install_attribute_messages,
-        )
-
-        install_attribute_messages()
-        from .register_domain.services.outgest_json import install_outgest_json
-
-        install_outgest_json()
-        # ODK submissions from the connector: signed, once-only envelopes on the
-        # Partner API, the collector as creator in the worker (odk/).
-        from .odk import install as install_odk
-
-        install_odk()
+        install()
 
     async def fastapi_app_startup(self, app):
         await super().fastapi_app_startup(app)
