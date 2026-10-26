@@ -4,6 +4,8 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import inspect
+import hashlib
 import os
 from pathlib import Path
 import subprocess
@@ -38,6 +40,26 @@ def initialize(host):
     from openg2p_registry_core.services.intake_form_data_service import G2PIntakeFormDataService
     from openg2p_registry_extensions.register_domain.services.household_intake import OANIntakeFormDataService
     assert isinstance(G2PIntakeFormDataService.get_component(), OANIntakeFormDataService)
+    from openg2p_registry_core.interfaces import G2PRegisterDomainFactory
+    services = importlib.import_module("openg2p_registry_extensions.register_domain.services")
+    factory = G2PRegisterDomainFactory.get_component()
+    identities = {}
+    for mnemonic in ("Farmer", "Crop", "Land"):
+        service = factory.get_domain_service(mnemonic)
+        expected = getattr(services, "G2PRegisterDomainService" + mnemonic)
+        actual = type(service)
+        identities[mnemonic] = {"actual": actual.__module__ + "." + actual.__qualname__,
+            "expected": expected.__module__ + "." + expected.__qualname__,
+            "domain_validator_owner": service.validate_domain_attributes.__func__.__module__ + "." + service.validate_domain_attributes.__func__.__qualname__}
+        expect(actual is expected, True, "native domain factory " + mnemonic)
+    print(json.dumps({"native_domain_factory": identities}), flush=True)
+    installed = {}
+    for name in ("save_intake_form_submission_with_session", "_upsert_intake_rows"):
+        method = getattr(G2PIntakeFormDataService, name)
+        source = inspect.getsource(method)
+        installed[name] = {"module": method.__module__, "qualname": method.__qualname__,
+            "sha256": hashlib.sha256(source.encode()).hexdigest(), "source": source}
+    print(json.dumps({"installed_native_intake_callables": installed}), flush=True)
     package_names = ("openg2p-registry-core", "openg2p-registry-celery-worker", "openg2p-registry-farmer-extension")
     packages = {name: importlib.metadata.version(name) for name in package_names}
     contract = json.loads((ROOT / "ci/validation/native-release-contract.json").read_text(encoding="utf-8"))
