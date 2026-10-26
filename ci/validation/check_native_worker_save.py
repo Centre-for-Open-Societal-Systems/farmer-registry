@@ -96,6 +96,7 @@ def fixture(document_id):
 
 
 async def save_probe(Engine, task):
+    import importlib
     from datetime import datetime
     from sqlalchemy import select, text, func
     from openg2p_registry_core.errors import G2PRegistryException
@@ -104,6 +105,9 @@ async def save_probe(Engine, task):
         G2PIntakeFormFarmer, G2PIntakeFormLand, G2PIntakeFormCrop, G2PIntakeFormFarmInputs,
         G2PIntakeFormLivestock, G2PIntakeFormHousehold, G2PIntakeFormHouseholdMember)
     from openg2p_registry_extensions.odk.transform import SECTIONS, intake_sections
+    from openg2p_registry_core.interfaces import G2PRegisterDomainFactory
+    from openg2p_registry_extensions.register_domain.services.widget_rules import collect_rules
+    services = importlib.import_module("openg2p_registry_extensions.register_domain.services")
     maker = Engine.get_async_session_maker()
     assert task._session_maker is maker
     async with maker() as session:
@@ -111,6 +115,17 @@ async def save_probe(Engine, task):
         classified = SimpleNamespace(register_id=binding[0], intake_form_id=binding[1], partner_id=None)
         sections = await task._get_ordered_form_sections(classified.intake_form_id, session)
         expect([s.section_mnemonic for s in sections], list(SECTIONS), "ordered native section binding")
+        finance_section = next(section for section in sections if section.section_mnemonic == SECTIONS[12])
+        seeded_rules = collect_rules((section.section_register_id, section.section_ui_schema) for section in sections)
+        finance_rule = seeded_rules.get(finance_section.section_register_id, {}).get("finance_access_types")
+        farm_inputs_service = G2PRegisterDomainFactory.get_component().get_domain_service("FarmInputs")
+        expect(type(farm_inputs_service), services.G2PRegisterDomainServiceFarmInputs, "native FarmInputs domain factory")
+        print(json.dumps({"seeded_finance_diagnostic": {
+            "section_id": finance_section.section_id, "section_register_id": finance_section.section_register_id,
+            "rule": finance_rule, "domain_mnemonic": farm_inputs_service.register_mnemonic(),
+            "domain_validator": farm_inputs_service.validate_domain_attributes.__func__.__qualname__,
+            "cache_loaded_before_save": bool(services._cache["at"]),
+        }}), flush=True)
     from openg2p_fastapi_common.models import BaseORMModel
     async def counts():
         async with maker() as session:
@@ -177,6 +192,11 @@ async def save_probe(Engine, task):
                 expect(docs[0].section_id, doc_section, "identity attachment section")
                 submission = await session.get(G2PIntakeFormSubmission, submission_id)
                 expect(submission.draft_status, "DRAFT", "unfinalized submission")
+                print(json.dumps({"after_valid_save_diagnostic": {
+                    "cache_loaded": bool(services._cache["at"]),
+                    "cached_farm_inputs_register": services._cache["registers"].get("FarmInputs"),
+                    "cached_finance_rule": services._cache["rules"].get(finance_section.section_register_id, {}).get("finance_access_types"),
+                }}), flush=True)
                 await session.rollback()
         expect(await counts(), baseline, "all ORM table counts after rollback: " + scenario)
     assert task._session_maker is maker
