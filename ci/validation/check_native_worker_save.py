@@ -60,6 +60,18 @@ def initialize(host):
         installed[name] = {"module": method.__module__, "qualname": method.__qualname__,
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "source": source}
     print(json.dumps({"installed_native_intake_callables": installed}), flush=True)
+    selected_intake = G2PIntakeFormDataService.get_component()
+    expect(task.G2PIntakeFormDataService.get_component() is selected_intake, True, "worker uses selected intake component")
+    resolved = {}
+    for name, method in {
+        "worker_save_sections": task._save_sections_async,
+        "selected_intake_save": selected_intake.save_intake_form_submission_with_session,
+        "selected_parent_save": super(OANIntakeFormDataService, selected_intake).save_intake_form_submission_with_session,
+    }.items():
+        source = inspect.getsource(method)
+        resolved[name] = {"module": method.__module__, "qualname": method.__qualname__,
+            "sha256": hashlib.sha256(source.encode()).hexdigest(), "source": source}
+    print(json.dumps({"resolved_worker_save_callables": resolved}), flush=True)
     package_names = ("openg2p-registry-core", "openg2p-registry-celery-worker", "openg2p-registry-farmer-extension")
     packages = {name: importlib.metadata.version(name) for name in package_names}
     contract = json.loads((ROOT / "ci/validation/native-release-contract.json").read_text(encoding="utf-8"))
@@ -125,6 +137,7 @@ async def save_probe(Engine, task):
             "rule": finance_rule, "domain_mnemonic": farm_inputs_service.register_mnemonic(),
             "domain_validator": farm_inputs_service.validate_domain_attributes.__func__.__qualname__,
             "cache_loaded_before_save": bool(services._cache["at"]),
+            "validator_uses_selected_loader": farm_inputs_service.validate_domain_attributes.__func__.__globals__["_load"] is services._load,
         }}), flush=True)
     from openg2p_fastapi_common.models import BaseORMModel
     async def counts():
