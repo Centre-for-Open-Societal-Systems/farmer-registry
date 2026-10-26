@@ -24,6 +24,9 @@ def initialize(host):
     assert extra == ["openg2p_registry_extensions.worker"]
     app.conf.update(include=list(app.conf.include or []) + extra)
     app.loader.import_default_modules()
+    # Native workers load domain models lazily; DDL setup must explicitly
+    # register the selected extension ORM, without constructing an API app.
+    importlib.import_module("openg2p_registry_extensions.register_domain.models")
     from openg2p_registry_celery_worker.engine import Engine
     from openg2p_registry_celery_worker.config import Settings
     import openg2p_registry_extensions
