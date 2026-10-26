@@ -15,8 +15,9 @@ API's `dashboardApi.auth` owns trust; old reserved auth names in
 `dashboardApi.env` must be moved there before rendering.
 
 Explicit staging continues to use the retained registry-local charts and its
-existing evidence gates. Worker/partner operational tools also still consume
-the local Farmer chart. The [source cleanup gate](../ci/services/chart-cleanup-gate.json)
+existing evidence gates. Worker/partner image-only tools now verify the central Farmer archive and
+require that exact chart to be already adopted. Version maintenance and
+unverified external legacy callers still require reconciliation. The [source cleanup gate](../ci/services/chart-cleanup-gate.json)
 keeps these chart sources present until those consumers are ported and rehearsed;
 this dev port does not retire them. See [central service chart checks](central-service-charts.md).
 

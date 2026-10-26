@@ -44,3 +44,32 @@ existing-Secret reference, with all three hook Jobs present. Offline default
 renders generate different random secrets, so they cannot establish credential
 preservation. Real server-side lookup, IAM/smoke execution and live deployment
 acceptance remain separate gates. No local Docker or live services were used.
+
+## Worker and partner image-only operations
+
+The existing worker-only and partner-only tools now share
+[approved_chart.py](../scripts/operations/registry/approved_chart.py). They read
+the same central Farmer profile, require the installed chart name/version to
+match it, download at most 20 MiB from the immutable central source, and verify
+the package checksum/platform dependency. They never build local dependencies
+or perform chart adoption. The existing installed-values reconciliation runs
+before applying the selected image and, for the worker only, the permitted
+staff token URL. The post-renderer re-verifies the archive, uses the existing
+bounded omission adapter and filters every Job. Independent non-Job/persistent
+resource equality, Secret references, namespace/hostname, pinned image and
+revision-race guards remain unchanged.
+
+`--apply` additionally requires the central profile's promotion-readiness gate.
+The current candidate profile blocks it before any cluster call. This source
+port authorizes no operational rollout. Dry-run validation still requires the
+correct already-adopted release and server-side Secret lookups; it is not an
+offline acceptance substitute. Results include safe chart/adapter provenance.
+Existing historical rollout evidence is unchanged and cannot attest a new run.
+
+Unit transports cover both tools in validation and simulated apply modes,
+revision races, corrupt downloads, wrong installed charts, renderer fail-closed
+behavior and the blocked promotion profile. A read-only actual-package probe
+verifies the pinned archive and adapter filtering. No live rollout, staging,
+credential or local Docker operation was performed. The cleanup reader list
+removes these two ports, while staging, version-maintenance and external-caller
+retirement work remains explicit.
