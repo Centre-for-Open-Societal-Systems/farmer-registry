@@ -115,6 +115,14 @@ def probe(host, mode):
                 assert fin[0].get('widget-required') is False
                 assert sum(w.get('widget') == 'oan-identity-verification' for w in actual) == 1, section_id
             assert fin_sections, 'No bound Farmer FIN display was checked'
+            section_map = dict(sections)
+            for section_id, fields in {
+                'oan_farmer_household_lookup': {'is_household_head'},
+                'oan_household_information': {'number_of_male_members', 'number_of_female_members'},
+            }.items():
+                assert section_id in bound, (section_id, 'household section is not bound')
+                found = {w.get('widget-id') or w.get('column-key') for w in widgets(section_map[section_id])}
+                assert fields <= found, (section_id, fields-found)
             for section_id, schema in sections:
                 if section_id == 'oan_farmer_socio_economic_and_health':
                     raw = json.dumps(schema)
