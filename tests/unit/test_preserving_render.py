@@ -215,7 +215,17 @@ def test_failed_owned_helm_attempt_is_archived_before_one_forward_repair(tmp_pat
     with pytest.raises(ValueError,match="already started"):
         render.prepare_helm_attempt(ops,config)
     ops.status=lambda:{"version":64,"info":{"status":"failed"}}
-    with pytest.raises(ValueError,match="exact failed release"):
+    with pytest.raises(ValueError,match="Unowned forward repair"):
+        render.prepare_helm_attempt(ops,config)
+    (tmp_path/"helm-upgrade-started").write_text(json.dumps({
+        "targetRevision":64,"candidateSha256":render.manifest_hash(retained)}))
+    assert render.prepare_helm_attempt(ops,config)==64
+    assert render.installed_revision(ops,config)==65
+    assert (tmp_path/"failed-helm-attempt-64"/"helm-upgrade-started").is_file()
+    (tmp_path/"helm-upgrade-started").write_text(json.dumps({
+        "targetRevision":65,"candidateSha256":render.manifest_hash(retained)}))
+    ops.status=lambda:{"version":65,"info":{"status":"failed"}}
+    with pytest.raises(ValueError,match="repair limit"):
         render.prepare_helm_attempt(ops,config)
 
 
@@ -247,6 +257,7 @@ def test_acceptance_restarts_only_original_controlled_workloads(monkeypatch):
     # identity from this test's explicitly loaded renderer.
     import preserve_render
     monkeypatch.setattr(preserve_render,"acceptance",lambda ops,config:None)
+    monkeypatch.setattr(preserve_render,"converge_empty_booleans",lambda ops:None)
     Operations.accept(ops,{})
     scales=[args for args in calls if args[0]=="scale"]
     assert len(scales)==3 and all("celery" not in str(args) for args in scales)
@@ -254,3 +265,52 @@ def test_acceptance_restarts_only_original_controlled_workloads(monkeypatch):
     ops.get=lambda args:{"metadata":{"uid":"replacement"}}
     with pytest.raises(ValueError,match="Controlled workload replaced"):
         Operations.accept(ops,{})
+
+
+def test_staff_specific_validation_alias_uses_native_default_in_main_and_init():
+    name="REGISTRY_STAFF_PORTAL_API_VALIDATE_ATTRIBUTE_VALUES"
+    doc=deployment("farmer-registry-staff-portal-api")
+    pod=doc["spec"]["template"]["spec"]
+    pod["containers"][0]["env"].append({"name":name,"valueFrom":None})
+    pod["initContainers"]=[{"name":"db-checker","env":[{"name":name,"valueFrom":None}]}]
+    values={"registry":{"staffApi":{"envVars":{name:None},"envVarsFrom":{name:None}}}}
+    snapshot={"deployment/"+doc["metadata"]["name"]:{"uid":"original","replicas":1}}
+    after=render.controlled_render([doc],values,snapshot)
+    assert all(not any(e["name"]==name for e in c.get("env",[]))
+               for group in ("containers","initContainers") for c in after[0]["spec"]["template"]["spec"].get(group,[]))
+    render.validate_repair_delta([doc],after)
+
+
+@pytest.mark.parametrize("configured",[False,True])
+def test_native_convergence_only_removes_stale_empty_entries_and_is_idempotent(tmp_path,configured):
+    import yaml
+    from types import SimpleNamespace
+    desired=[];current={};snapshot={};saved=[];calls=[]
+    for suffix in ("celery-worker","celery-beat-producer","partner-api","staff-portal-api"):
+        name="farmer-registry-"+suffix
+        d=deployment(name)
+        desired.append(copy.deepcopy(d))
+        d["metadata"].update(uid=name,resourceVersion="123",annotations={
+            "meta.helm.sh/release-name":"farmer-registry","meta.helm.sh/release-namespace":"farmer"})
+        flag={"name":"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES"}
+        if configured:flag["value"]="true"
+        d["spec"]["template"]["spec"]["containers"][0]["env"].append(flag)
+        current[name]=d;snapshot["deployment/"+name]={"uid":name}
+    (tmp_path/"installed.yaml").write_text(yaml.safe_dump_all(desired))
+    def patch(args):
+        patches=json.loads(args[-1]);calls.append(patches)
+        assert patches[0]["op"]==patches[1]["op"]=="test"
+        assert patches[2]["value"]=={"name":"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES"}
+        current[args[2]]["spec"]["template"]["spec"]["containers"][0]["env"].pop()
+    ops=SimpleNamespace(directory=tmp_path,load=lambda name:snapshot,
+        get=lambda args:copy.deepcopy(current[args[2]]),kubectl=patch,
+        save=lambda name,value:saved.append(value))
+    if configured:
+        with pytest.raises(ValueError,match="Configured boolean"):
+            render.converge_empty_booleans(ops)
+        assert not calls
+    else:
+        render.converge_empty_booleans(ops)
+        assert len(calls)==4 and len(saved)==4
+        render.converge_empty_booleans(ops)
+        assert len(calls)==4

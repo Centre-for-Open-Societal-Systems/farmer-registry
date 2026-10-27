@@ -22,69 +22,87 @@ def manifest_hash(docs):
     return hashlib.sha256(json.dumps(docs, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def installed_revision(ops, config):
-    checkpoint=ops.directory/"helm-forward-repair.json"
-    if not checkpoint.exists():
-        return config["expectedRevision"]+1
-    proof=ops.load(checkpoint.name)
+REPAIR_CHECKPOINTS=("helm-forward-repair.json","helm-forward-repair-staff.json")
+EMPTY_BOOLEANS={"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES",
+                "REGISTRY_STAFF_PORTAL_API_VALIDATE_ATTRIBUTE_VALUES"}
+
+
+def repair_proofs(ops, config):
     from preserve import fingerprint
-    require(proof["configFingerprint"]==fingerprint(config)
-            and proof["failedRevision"]==config["expectedRevision"]+1
-            and proof["targetRevision"]==config["expectedRevision"]+2,
-            "Forward repair identity mismatch")
-    return proof["targetRevision"]
+    proofs=[]
+    for offset,name in enumerate(REPAIR_CHECKPOINTS):
+        if not (ops.directory/name).exists():
+            continue
+        require(len(proofs)==offset,"Missing preceding repair evidence")
+        proof=ops.load(name)
+        require(proof["configFingerprint"]==fingerprint(config)
+                and proof["failedRevision"]==config["expectedRevision"]+offset+1
+                and proof["targetRevision"]==config["expectedRevision"]+offset+2,
+                "Forward repair identity mismatch")
+        proofs.append(proof)
+    return proofs
+
+
+def installed_revision(ops, config):
+    return config["expectedRevision"]+1+len(repair_proofs(ops,config))
 
 
 def prepare_helm_attempt(ops, config):
-    """One reviewed forward repair of our exact failed first upgrade.
+    """Bounded, reviewed repairs of the two observed empty native booleans.
 
     Never clear a pending release or retry an ambiguous/running Helm command.
     Original attempted manifests and logs remain in the protected directory.
     """
     from preserve import fingerprint
     intent=ops.directory/"helm-upgrade-started"
-    checkpoint=ops.directory/"helm-forward-repair.json"
     status=ops.status()
+    proofs=repair_proofs(ops,config)
     if intent.exists() and status["info"]["status"]=="deployed":
         ops.verify_installed(config)
         return None
-    if intent.exists() and not checkpoint.exists():
-        require(not intent.read_bytes() and status["info"]["status"]=="failed"
-                and status["version"]==config["expectedRevision"]+1,
-                "Ambiguous Helm attempt requires separate review")
+    target=config["expectedRevision"]+1+len(proofs)
+    if intent.exists() and status["info"]["status"]=="failed" and status["version"]==target:
+        require(len(proofs)<len(REPAIR_CHECKPOINTS),"Reviewed repair limit reached")
+        if not proofs:
+            require(not intent.read_bytes(),"Ambiguous Helm attempt requires separate review")
         attempted=documents(ops.directory/"candidate-final.yaml")
-        actual=list(yaml.safe_load_all(command(HELM+["get","manifest","farmer-registry","-n","farmer"])))
-        actual=[d for d in actual if isinstance(d,dict)]
+        if proofs:
+            attempt=json.loads(intent.read_text())
+            require(attempt.get("targetRevision")==target
+                    and attempt.get("candidateSha256")==manifest_hash(attempted),
+                    "Unowned forward repair attempt")
+        actual=[d for d in yaml.safe_load_all(command(HELM+["get","manifest","farmer-registry","-n","farmer"])) if isinstance(d,dict)]
         require(manifest_hash(actual)==manifest_hash(attempted),"Failed release is not the owned attempted manifest")
         before=documents(ops.directory/"manifest.yaml")+documents(ops.directory/"hooks.yaml")
         validate(before,validation_inventory(actual,documents(ops.directory/"candidate-analysis.yaml")),
                  config["registry"],config["sourceCommit"][:12],images=config["imageProvenance"])
-        archive=ops.directory/"failed-helm-attempt-63"
+        archive=ops.directory/("failed-helm-attempt-"+str(target))
         archive.mkdir(mode=0o700,exist_ok=True)
         for name in ("helm-upgrade-started","candidate-final.yaml","helm-upgrade.log"):
             source=ops.directory/name
             require(source.is_file() and not source.is_symlink(),"Missing owned attempt evidence")
-            target=archive/name
-            if target.exists():
-                require(target.read_bytes()==source.read_bytes(),"Failed attempt archive changed")
+            saved=archive/name
+            if saved.exists():
+                require(saved.read_bytes()==source.read_bytes(),"Failed attempt archive changed")
             else:
-                shutil.copyfile(source,target)
-        ops.save(checkpoint.name,{"configFingerprint":fingerprint(config),
+                shutil.copyfile(source,saved)
+        ops.save(REPAIR_CHECKPOINTS[len(proofs)],{"configFingerprint":fingerprint(config),
                  "failedRevision":status["version"],"targetRevision":status["version"]+1,
                  "failedManifestSha256":manifest_hash(actual)})
-    if checkpoint.exists():
-        installed_revision(ops,config)
-        proof=ops.load(checkpoint.name)
+        proofs=repair_proofs(ops,config)
+    if proofs:
+        proof=proofs[-1]
         require(status["version"]==proof["failedRevision"] and status["info"]["status"]=="failed",
                 "Forward repair requires the exact failed release")
         actual=[d for d in yaml.safe_load_all(command(HELM+["get","manifest","farmer-registry","-n","farmer"])) if isinstance(d,dict)]
         require(manifest_hash(actual)==proof["failedManifestSha256"],"Failed release changed before repair")
         if intent.exists():
-            require(not intent.read_bytes(),"A forward repair has already started; inspect its result")
+            saved=ops.directory/("failed-helm-attempt-"+str(proof["failedRevision"]))/intent.name
+            require(intent.read_bytes()==saved.read_bytes(),"A forward repair has already started; inspect its result")
             intent.unlink()
         return proof["failedRevision"]
     require(not intent.exists() and status["version"]==config["expectedRevision"]
-            and status["info"]["status"]=="deployed","Unexpected original Helm state")
+            and status["info"]["status"]=="deployed","Ambiguous Helm attempt requires separate review")
     return config["expectedRevision"]
 
 
@@ -100,7 +118,7 @@ def validate_repair_delta(previous, candidate):
             for container in pod.get("containers",[])+pod.get("initContainers",[]):
                 env=container.get("env",[])
                 def empty_validation(entry):
-                    return (entry["name"]=="REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES"
+                    return (entry["name"] in EMPTY_BOOLEANS
                             and entry.get("value") in (None,"") and entry.get("valueFrom") is None)
                 removed+=sum(empty_validation(entry) for entry in env)
                 container["env"]=[e for e in env if not empty_validation(e)]
@@ -198,7 +216,7 @@ def upgrade(ops, config, receipt):
     before=documents(ops.directory/"manifest.yaml")+documents(ops.directory/"hooks.yaml")
     after=documents(ops.directory/"candidate-final.yaml")
     if (ops.directory/"helm-forward-repair.json").exists():
-        validate_repair_delta(documents(ops.directory/"failed-helm-attempt-63"/"candidate-final.yaml"),after)
+        validate_repair_delta(documents(ops.directory/("failed-helm-attempt-"+str(previous_revision))/"candidate-final.yaml"),after)
     validate(before,validation_inventory(after,documents(ops.directory/"candidate-analysis.yaml")),
              config["registry"],config["sourceCommit"][:12],images=config["imageProvenance"])
     require(not any(d["kind"]=="Job" for d in after), "Jobs must use tracked native invocations")
@@ -208,7 +226,7 @@ def upgrade(ops, config, receipt):
     with intent.open("x") as stream:
         json.dump({"fromRevision":previous_revision,"targetRevision":previous_revision+1,
                    "candidateSha256":manifest_hash(after)},stream)
-    command(HELM+["upgrade",*args,"--wait","--timeout","10m"],timeout=650,log=ops.directory/"helm-upgrade.log")
+    command(HELM+["upgrade",*args,"--wait=false","--timeout","10m"],timeout=650,log=ops.directory/"helm-upgrade.log")
     ops.verify_installed(config)
 
 
@@ -235,6 +253,52 @@ print(json.dumps(result))
     result=ops.kubectl(["exec","-n","farmer","deploy/farmer-registry-staff-portal-api","-c","staff-portal-api",
                         "--","python3","-c",code],timeout=80)
     ops.save("http-readiness.json",json.loads(result))
+
+
+def converge_empty_booleans(ops):
+    """Prune only stale empty entries absent from the approved Helm manifest.
+
+    Helm's strategic merge can retain a name-only env entry when its previous
+    manifest contained valueFrom:null. UID/RV tests make this a bounded native
+    reconciliation, not a configuration override or whole-workload replacement.
+    """
+    desired=index(documents(ops.directory/"installed.yaml"))
+    snapshot=ops.load("pause-snapshot.json")
+    for suffix in ("celery-worker","celery-beat-producer","partner-api","staff-portal-api"):
+        name="farmer-registry-"+suffix
+        target=desired[("Deployment",name)]
+        current=ops.get(["get","deployment",name,"-n","farmer","-o","json"])
+        require(current["metadata"]["uid"]==snapshot["deployment/"+name]["uid"],"Convergence workload replaced")
+        annotations=current["metadata"].get("annotations",{})
+        require(annotations.get("meta.helm.sh/release-name")=="farmer-registry"
+                and annotations.get("meta.helm.sh/release-namespace")=="farmer","Convergence ownership mismatch")
+        patches=[{"op":"test","path":"/metadata/uid","value":current["metadata"]["uid"]},
+                 {"op":"test","path":"/metadata/resourceVersion","value":current["metadata"]["resourceVersion"]}]
+        for group in ("containers","initContainers"):
+            wanted={c["name"]:c for c in target["spec"]["template"]["spec"].get(group,[])}
+            for i,container in enumerate(current["spec"]["template"]["spec"].get(group,[])):
+                require(container["name"] in wanted,"Unreviewed convergence container")
+                wanted_names={e["name"] for e in wanted[container["name"]].get("env",[])}
+                for j in reversed(range(len(container.get("env",[])))):
+                    entry=container["env"][j]
+                    if entry["name"] in EMPTY_BOOLEANS and entry["name"] not in wanted_names:
+                        require(entry=={"name":entry["name"]},"Configured boolean must not be removed")
+                        path="/spec/template/spec/"+group+"/"+str(i)+"/env/"+str(j)
+                        patches.extend([{"op":"test","path":path,"value":entry},{"op":"remove","path":path}])
+        if len(patches)>2:
+            # Read-back after every patch; a crash retries only entries remaining.
+            ops.kubectl(["patch","deployment",name,"-n","farmer","--type=json","-p",json.dumps(patches)])
+            after=ops.get(["get","deployment",name,"-n","farmer","-o","json"])
+            require(after["metadata"]["uid"]==current["metadata"]["uid"],"Convergence workload replaced")
+            for group in ("containers","initContainers"):
+                wanted={c["name"]:{e["name"] for e in c.get("env",[])}
+                        for c in target["spec"]["template"]["spec"].get(group,[])}
+                for container in after["spec"]["template"]["spec"].get(group,[]):
+                    require(not any(e["name"] in EMPTY_BOOLEANS
+                            and e["name"] not in wanted[container["name"]] for e in container.get("env",[])),
+                            "Empty boolean convergence did not apply")
+            ops.save("empty-boolean-convergence-"+suffix+".json",
+                     {"uid":current["metadata"]["uid"],"removed":(len(patches)-2)//2})
 
 
 if __name__ == "__main__":

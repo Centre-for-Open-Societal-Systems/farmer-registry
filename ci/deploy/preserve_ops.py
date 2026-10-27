@@ -344,7 +344,8 @@ class Operations:
     def accept(self, config):
         # Failure recovery pauses all writers. Restart only the original API/UI
         # workloads before smoke; producers remain paused until acceptance.
-        from preserve_render import CONTROLLED
+        from preserve_render import CONTROLLED, converge_empty_booleans
+        converge_empty_booleans(self)
         for original in self.load("workload-baseline.json"):
             name=original["metadata"]["name"]
             if name in CONTROLLED:
