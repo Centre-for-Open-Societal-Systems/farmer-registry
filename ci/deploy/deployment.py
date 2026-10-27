@@ -441,7 +441,11 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                 if current.get(name) != env_entry(name, value):
                     raise ValueError(f"Staging staff identity was not rendered: {suffix}/{name}")
     for key, d in new.items():
-        if environment == 'dev' and key not in old and key[0] != 'Job':
+        # Hook resources (a Job and the ServiceAccount, Role, ConfigMap it
+        # runs with) are recreated on every install/upgrade; only a new
+        # resource that would persist needs a reviewed baseline.
+        is_hook = key[0] == 'Job' or bool(d.get('metadata', {}).get('annotations', {}).get('helm.sh/hook'))
+        if environment == 'dev' and key not in old and not is_hook:
             raise ValueError(f'Unexpected persistent resource: {key}')
         if key[1].startswith(("commons-", "farmer-connector")):
             raise ValueError(f"Registry must not own shared/connector resource: {key}")

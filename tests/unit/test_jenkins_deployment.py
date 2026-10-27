@@ -120,14 +120,17 @@ def test_safe_existing_release_upgrade(release):
     deployment.validate(*release, ECR, TAG)
 
 
-def test_existing_hook_configmap_identity_must_be_in_the_preflight_baseline(release):
+def test_new_hook_resources_are_accepted_but_new_persistent_ones_need_a_baseline(release):
     before, after = release
-    hook = {'kind': 'ConfigMap', 'metadata': {'name': 'farmer-registry-registry-iam-register-payload',
-            'annotations': {'helm.sh/hook': 'post-install,post-upgrade'}}, 'data': {'payload': 'render-only'}}
-    after.append(copy.deepcopy(hook))
+    for kind in ('ConfigMap', 'ServiceAccount', 'Role', 'RoleBinding'):
+        after.append({'kind': kind, 'metadata': {'name': 'farmer-registry-registrant-auth',
+                      'annotations': {'helm.sh/hook': 'post-install,post-upgrade'}}})
+    deployment.validate(before, after, ECR, TAG)
+    persistent = {'kind': 'ConfigMap', 'metadata': {'name': 'farmer-registry-new-settings'}, 'data': {'a': '1'}}
+    after.append(copy.deepcopy(persistent))
     with pytest.raises(ValueError, match='Unexpected persistent resource'):
         deployment.validate(before, after, ECR, TAG)
-    before.append(hook)
+    before.append(persistent)
     deployment.validate(before, after, ECR, TAG)
 
 
