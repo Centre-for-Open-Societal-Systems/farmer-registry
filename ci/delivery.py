@@ -8,7 +8,7 @@ import sys
 def action(environment):
     selected = environment.get("NEW_DEV_DELIVERY_ACTION") or "publish-only"
     reset = environment.get("NEW_DEV_RESET_ACTION") or "check"
-    if selected not in ("publish-only", "deploy"):
+    if selected not in ("publish-only", "deploy", "preserve-preflight", "preserve-upgrade"):
         raise ValueError("Unknown New Dev delivery action")
     if reset not in ("check", "initialize", "resume"):
         raise ValueError("Unknown New Dev reset action")

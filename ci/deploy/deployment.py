@@ -102,13 +102,13 @@ def envs(d, include_init=True):
     return result
 
 
-def reconcile_dev(values, before):
+def reconcile_dev(values, before, chart_pin=None):
     """Carry installed literals and references through the chart's public values."""
     old = index(before)
     packaged = {}
     if os.environ.get('OAN_CHART_ARCHIVE'):
         from oan_chart import defaults
-        packaged = defaults(os.environ['OAN_CHART_ARCHIVE'])
+        packaged = defaults(os.environ['OAN_CHART_ARCHIVE'], chart_pin)
     for component, (kind, suffix, _) in COMPONENTS.items():
         if kind != 'Deployment':
             continue
@@ -222,7 +222,7 @@ def merge(target, overlay):
             target[key] = copy.deepcopy(value)
 
 
-def prepare(values, before, registry, tag, migrate_identity=False, environment="dev", images=None):
+def prepare(values, before, registry, tag, migrate_identity=False, environment="dev", images=None, chart_pin=None):
     root = image_root(registry, tag)
     old = index(before, environment)
     if ("Deployment", RELEASE + "-staff-portal-api") not in old:
@@ -236,7 +236,10 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
                          else "Registry hostname does not match staging")
     config = values.setdefault("registry", {})
     if environment == 'dev':
-        reconcile_dev(values, before)
+        if chart_pin is None:
+            reconcile_dev(values, before)
+        else:
+            reconcile_dev(values, before, chart_pin)
     # Some installed dev gateways are in the release manifest but absent from
     # saved values. Carry them into rc.544's owning values instead of falling
     # back to "internal"; validate still requires the whole route unchanged.

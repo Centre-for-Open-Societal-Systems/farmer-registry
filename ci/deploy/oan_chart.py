@@ -12,8 +12,8 @@ def profile():
     return json.loads(Path(__file__).with_name('oan-chart.json').read_text(encoding='utf-8'))
 
 
-def verify(path):
-    pin = profile()
+def verify(path, pin=None):
+    pin = profile() if pin is None else pin
     if hashlib.sha256(Path(path).read_bytes()).hexdigest() != pin['sha256']:
         raise ValueError('OAN chart checksum mismatch')
     with tarfile.open(path, 'r:gz') as archive:
@@ -38,10 +38,11 @@ def require_deployable(environment):
         raise ValueError('Deployment blocked: refactor acceptance and fresh-install preservation evidence are required')
 
 
-def defaults(path):
-    verify(path)
+def defaults(path, pin=None):
+    pin = profile() if pin is None else pin
+    verify(path, pin)
     with tarfile.open(path, 'r:gz') as archive:
-        prefix = profile()['name'] + '/'
+        prefix = pin['name'] + '/'
         child = yaml.safe_load(archive.extractfile(prefix + 'charts/openg2p-registry/values.yaml'))
         parent = yaml.safe_load(archive.extractfile(prefix + 'values.yaml'))
     from deployment import merge
