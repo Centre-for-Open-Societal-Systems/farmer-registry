@@ -159,7 +159,10 @@ async def save_probe(Engine, task):
             return {name: await session.scalar(select(func.count()).select_from(table))
                     for name, table in sorted(BaseORMModel.metadata.tables.items())}
     baseline = await counts()
-    for scenario in ("valid", "invalid_parent", "invalid_finance"):
+    # A coded value (finance access, water source, ...) is checked against its
+    # Master Data list by core's attribute validator, which this owned
+    # PostgreSQL has no Master Data for; no choice list is static any more.
+    for scenario in ("valid", "invalid_parent"):
         async with maker() as session:
             document_id = str(uuid.uuid4())
             for ident in (document_id, str(uuid.uuid4())):
@@ -170,10 +173,6 @@ async def save_probe(Engine, task):
             data = intake_sections(source)
             if scenario == "invalid_parent":
                 data[SECTIONS[11]][1]["link_internal_record_id"] = str(uuid.uuid4())
-            elif scenario == "invalid_finance":
-                # JSON has no database enum constraint: rejection must come
-                # through the real registered OAN schema/domain save path.
-                data[SECTIONS[12]][0]["finance_access_types"] = ["LOAN", "OAN_INVALID_FINANCE_CODE"]
             transformed = task._validate_transformed_data_json(classified, SimpleNamespace(transformed_data_json=data), sections)
             submission_id = await task._create_submission_async(classified, session)
             try:
@@ -183,14 +182,8 @@ async def save_probe(Engine, task):
                 if scenario == "valid":
                     raise
                 message = str(getattr(error, "message", error)).lower()
-                if scenario == "invalid_parent":
-                    assert "land" in message, "Failure did not identify the invalid child land"
-                    print(json.dumps({"late_invalid_child_rejected": True, "parent_link_validation_exercised": True, "coded_attribute_validation_exercised": False}), flush=True)
-                else:
-                    assert isinstance(error, G2PRegistryException), "Expected a domain validation rejection for invalid finance"
-                    assert "financ" in message, "Failure did not identify the invalid finance choice"
-                    print(json.dumps({"invalid_static_finance_rejected": True, "oan_domain_rule_exercised": True,
-                        "coded_attribute_validation_exercised": False}), flush=True)
+                assert "land" in message, "Failure did not identify the invalid child land"
+                print(json.dumps({"late_invalid_child_rejected": True, "parent_link_validation_exercised": True, "coded_attribute_validation_exercised": False}), flush=True)
             else:
                 expect(scenario, "valid", "invalid scenario must be rejected by native save")
                 async def rows(model):
