@@ -11,6 +11,10 @@ tag="${1:?usage: ci/build/images.sh <image tag>}"
 for component in staff-api partner-api celery db-seed staff-ui; do
   docker build -f "docker/oan/$component.Dockerfile" -t "coss-ci/$component:$tag" .
 done
+
+# Exercise real native SAVE (including parent/finance rejection and complete
+# rollback) in the exact Celery image that Jenkins will publish.
+OAN_WORKER_SAVE_TEST_IMAGE="coss-ci/celery:$tag" python3 ci/validation/check_native_worker_save.py
 docker build -f docker/sanity-tests/Dockerfile -t "coss-ci/sanity-tests:$tag" .
 
 # The extension's tests, against the platform it is installed on. They read
