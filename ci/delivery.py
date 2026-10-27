@@ -1,19 +1,21 @@
-"""Separate immutable image publication from guarded New Dev deployment."""
+"""Separate immutable image publication from New Dev deployment.
+
+publish-only builds and pushes the images. deploy upgrades the existing New Dev
+release with them. fresh-install rebuilds New Dev from an empty database with
+the same images and chart (ci/deploy/fresh-install-dev.sh).
+"""
 import json
 import os
 from pathlib import Path
 import sys
 
+ACTIONS = ("publish-only", "deploy", "fresh-install")
+
 
 def action(environment):
     selected = environment.get("NEW_DEV_DELIVERY_ACTION") or "publish-only"
-    reset = environment.get("NEW_DEV_RESET_ACTION") or "check"
-    if selected not in ("publish-only", "deploy", "preserve-preflight", "preserve-upgrade"):
+    if selected not in ACTIONS:
         raise ValueError("Unknown New Dev delivery action")
-    if reset not in ("check", "initialize", "resume"):
-        raise ValueError("Unknown New Dev reset action")
-    if selected != "deploy" and reset != "check":
-        raise ValueError("Publication cannot request a database reset")
     return selected
 
 

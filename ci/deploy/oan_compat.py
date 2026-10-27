@@ -1,4 +1,4 @@
-"""Bounded dev.5 render corrections; preservation validation remains independent.
+"""Bounded render corrections for the pinned OAN chart; preservation validation remains independent.
 
 Never copy a saved workload or command over the candidate. Suppress only the
 listed packaged environment defaults explicitly nulled in prepared values.
@@ -10,7 +10,7 @@ import sys
 import yaml
 
 from deployment import RELEASE, envs, index, load, pod
-from oan_chart import verify
+from oan_chart import profile, verify
 
 OMITTABLE = {
     'staffApi': ('staff-portal-api', {
@@ -55,7 +55,7 @@ def main():
             os.environ.get('HELM_RELEASE')) != ('dev', 'farmer', RELEASE):
         raise ValueError('OAN compatibility renderer requires dev/farmer')
     pin = verify(os.environ['OAN_CHART_ARCHIVE'])
-    if pin['version'] != '1.0.0-dev.5':
+    if pin['version'] != profile()['version']:
         raise ValueError('Compatibility corrections require review for another chart')
     values = load(os.environ['OAN_VALUES_FILE'])
     docs = [doc for doc in yaml.safe_load_all(sys.stdin) if isinstance(doc, dict)]

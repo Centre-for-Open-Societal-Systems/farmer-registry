@@ -45,7 +45,6 @@ guard() {
 
 if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
   GUARD_SCRIPT=ci/deploy/oan_chart.py guard require-deployable dev
-  NEW_DEV_RESET_ACTION=check bash ci/deploy/new-dev-reset.sh
 fi
 
 if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
@@ -65,11 +64,6 @@ if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
 fi
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json"
 guard status "$STATE/status.json"
-if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
-  helm list -n "$HELM_NAMESPACE" --filter '^farmer-registry$' -o json > "$STATE/chart.json"
-  # Application updates start only after the separate chart-only cutover.
-  GUARD_SCRIPT=ci/deploy/cutover.py guard adopted "$STATE/chart.json"
-fi
 MODE=$(guard upgrade-mode "$STATE/status.json")
 UPGRADE_FLAGS=(--wait --wait-for-jobs --timeout 20m)
 if [[ "$MODE" == normal && "$DELIVERY_ENVIRONMENT" == dev ]]; then
@@ -154,10 +148,6 @@ if ! helm upgrade "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
 fi
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/final-status.json"
 guard complete "$STATE/final-status.json"
-if [[ "$DELIVERY_ENVIRONMENT" == dev ]]; then
-  helm list -n "$HELM_NAMESPACE" --filter '^farmer-registry$' -o json > "$STATE/chart.json"
-  GUARD_SCRIPT=ci/deploy/cutover.py guard installed "$STATE/chart.json"
-fi
 for component in staff-portal-api partner-api staff-portal-ui celery-worker celery-beat-producer; do
   kubectl rollout status "deployment/$HELM_RELEASE-$component" -n "$HELM_NAMESPACE" --timeout=180s
 done

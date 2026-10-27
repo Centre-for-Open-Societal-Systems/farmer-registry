@@ -14,16 +14,8 @@ pipeline {
         HELM_NAMESPACE = 'farmer'
     }
     parameters {
-        choice(name: 'NEW_DEV_DELIVERY_ACTION', choices: ['publish-only', 'preserve-preflight', 'preserve-upgrade', 'deploy'],
-            description: 'Publish immutable images first. Deploy additionally requires the existing preservation, chart and database gates; it does not authorize a reset.')
-        choice(name: 'NEW_DEV_RESET_ACTION', choices: ['check', 'initialize', 'resume'],
-            description: 'New Dev only: check the completed first-install receipt; explicit initialize/resume is blocked until refactor acceptance.')
-        string(name: 'REGISTRY_RESET_MANIFEST', defaultValue: '',
-            description: 'Deployment-node path to immutable reviewed first-install JSON; no credentials.')
-        string(name: 'REGISTRY_RESET_ADMIN_SERVICE', defaultValue: '',
-            description: 'Mounted libpq service alias for explicit first-install reset; empty for ordinary receipt checks.')
-        string(name: 'FARMER_ADOPTION_RECOVERY_DIRECTORY', defaultValue: '',
-            description: 'Exact protected directory from a failed preserving adoption; empty initializes one reviewed operation. Never a reset.')
+        choice(name: 'NEW_DEV_DELIVERY_ACTION', choices: ['publish-only', 'deploy', 'fresh-install'],
+            description: 'publish-only builds and pushes the images. deploy upgrades the existing New Dev release with them. fresh-install backs up the New Dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all New Dev farmer data is lost; Commons is untouched).')
         booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
             description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
         booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
@@ -98,7 +90,7 @@ pipeline {
                           printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
                         done
                         docker run --rm --network none --user "$(id -u):$(id -g)" \
-                          -e NEW_DEV_DELIVERY_ACTION -e NEW_DEV_RESET_ACTION -e OAN_DELIVERY_ACTION \
+                          -e NEW_DEV_DELIVERY_ACTION -e OAN_DELIVERY_ACTION \
                           -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT \
                           -v "$PWD:/repo" "coss-ci/validation:$IMAGE_TAG" \
                           python ci/delivery.py publication service-outcomes/publication.json
@@ -112,33 +104,10 @@ pipeline {
                 stash name: 'dev-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,tests/runtime/**,service-outcomes/**,oan-extension/**,farmer-extension/**,ui/staff-ui/overrides/**,docker/oan/**,docker/sanity-tests/**,test/sanity/**', excludes: 'helm/**/charts/**,**/__pycache__/**,**/.pytest_cache/**', useDefaultExcludes: false
             }
         }
-        stage('Preserving Farmer adoption') {
-            when {
-                beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION in ['preserve-preflight', 'preserve-upgrade'] } }
-            }
-            agent { label 'vpn-agent2' }
-            steps {
-                dir('preserving-farmer-deployment') {
-                    deleteDir()
-                    unstash 'dev-deployment'
-                    withCredentials([sshUserPrivateKey(credentialsId: 'farmer-new-dev-backup-ssh', keyFileVariable: 'BACKUP_SSH_KEY')]) {
-                        sh 'bash ci/deploy/preserve-new-dev.sh'
-                    }
-                }
-            }
-            post {
-                always {
-                    dir('preserving-farmer-deployment') {
-                        archiveArtifacts artifacts: 'service-outcomes/farmer-preservation.json', allowEmptyArchive: true
-                    }
-                }
-            }
-        }
         stage('Deploy new dev') {
             when {
                 beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION == 'deploy' } }
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION in ['deploy', 'fresh-install'] } }
             }
             agent { label 'vpn-agent2' }
             steps {
@@ -149,13 +118,24 @@ pipeline {
                         script {
                           def deployRegistry = {
                             try {
-                              sh '''
+                              if (env.OAN_DELIVERY_ACTION == 'fresh-install') {
+                                // The database backups go to the New Dev box over the existing backup key.
+                                withCredentials([sshUserPrivateKey(credentialsId: 'farmer-new-dev-backup-ssh', keyFileVariable: 'BACKUP_SSH_KEY')]) {
+                                  sh '''
                             set -eu
                             export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
                             docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
-                            if [ "${NEW_DEV_RESET_ACTION:-check}" != check ]; then bash ci/deploy/new-dev-reset.sh; fi
+                            bash ci/deploy/fresh-install-dev.sh
+                            '''
+                                }
+                              } else {
+                                sh '''
+                            set -eu
+                            export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
+                            docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
                             bash ci/deploy/deploy-dev.sh
                             '''
+                              }
                             } finally {
                               // Retain sanitized failure provenance on the VPN agent too.
                               archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true

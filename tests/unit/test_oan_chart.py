@@ -1,19 +1,16 @@
-"""Fail-closed package, image and metadata-only cutover gates."""
+"""Fail-closed package and image gates for the pinned OAN chart."""
 import copy
 import hashlib
 import io
-import json
 from pathlib import Path
 import sys
 import tarfile
-from datetime import datetime, timedelta, timezone
 
 import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'ci/deploy'))
 import oan_chart
-import cutover
 import deployment
 
 
@@ -56,74 +53,6 @@ def workload():
                 {'name': 'PASSWORD', 'valueFrom': {'secretKeyRef': {'name': 'installed', 'key': 'password'}}}]}]}}}}
 
 
-def test_cutover_allows_only_chart_label_and_environment_order():
-    before = [workload()]
-    after = copy.deepcopy(before)
-    after[0]['metadata']['labels']['helm.sh/chart'] = 'openg2p-farmer-registry-1.0.0-dev.5'
-    cutover.validate(before, after)
-    deployment.pod(after[0])['initContainers'][0]['env'][0]['valueFrom']['secretKeyRef']['name'] = 'changed'
-    with pytest.raises(ValueError, match='configuration'):
-        cutover.validate(before, after)
-
-
-@pytest.mark.parametrize('environment,namespace', [('staging', 'far'), ('dev', 'far'), ('prod', 'farmer')])
-def test_cutover_rejects_wrong_environment_and_namespace(monkeypatch, environment, namespace):
-    monkeypatch.setenv('DELIVERY_ENVIRONMENT', environment)
-    monkeypatch.setenv('HELM_NAMESPACE', namespace)
-    monkeypatch.setenv('HELM_RELEASE', 'farmer-registry')
-    monkeypatch.setattr(sys, 'argv', ['cutover.py', 'filter'])
-    with pytest.raises(ValueError, match='dev/farmer'):
-        cutover.main()
-
-
-def test_postrenderer_suppresses_jobs_but_keeps_configuration(monkeypatch, capsys):
-    for name, value in [('DELIVERY_ENVIRONMENT', 'dev'), ('HELM_NAMESPACE', 'farmer'), ('HELM_RELEASE', 'farmer-registry')]:
-        monkeypatch.setenv(name, value)
-    monkeypatch.setattr(sys, 'argv', ['cutover.py', 'filter'])
-    docs = [workload(), {'kind': 'Job', 'metadata': {'name': 'init'}},
-            {'kind': 'ConfigMap', 'metadata': {'name': 'iam-payload'}}]
-    monkeypatch.setattr(sys, 'stdin', io.StringIO(yaml.safe_dump_all(docs)))
-    cutover.main()
-    result = list(yaml.safe_load_all(capsys.readouterr().out))
-    assert [d['kind'] for d in result] == ['Deployment', 'ConfigMap']
-
-
-@pytest.mark.parametrize('action,status,accepted', [('adopted', 'failed', True), ('installed', 'failed', False),
-                                                  ('installed', 'deployed', True)])
-def test_adopted_chart_keeps_recovery_but_requires_deployed_completion(tmp_path, monkeypatch, action, status, accepted):
-    for name, value in [('DELIVERY_ENVIRONMENT', 'dev'), ('HELM_NAMESPACE', 'farmer'), ('HELM_RELEASE', 'farmer-registry')]:
-        monkeypatch.setenv(name, value)
-    path = tmp_path / 'list.json'
-    pin = oan_chart.profile()
-    path.write_text(json.dumps([{'name': 'farmer-registry', 'namespace': 'farmer',
-                                 'chart': pin['name'] + '-' + pin['version'], 'status': status}]))
-    monkeypatch.setattr(sys, 'argv', ['cutover.py', action, str(path)])
-    if accepted:
-        cutover.main()
-    else:
-        with pytest.raises(ValueError):
-            cutover.main()
-
-
-@pytest.mark.parametrize('change', ['new-resource', 'new-env', 'image', 'job', 'cron-command'])
-def test_cutover_rejects_nonmetadata_changes(change):
-    before = [workload()]
-    after = copy.deepcopy(before)
-    if change == 'new-resource':
-        after.append({'kind': 'PersistentVolumeClaim', 'metadata': {'name': 'unexpected'}})
-    elif change == 'new-env':
-        deployment.pod(after[0])['containers'][0]['env'].append({'name': 'ADDED', 'value': 'true'})
-    elif change == 'image':
-        deployment.pod(after[0])['containers'][0]['image'] = 'example/api:new'
-    elif change == 'job':
-        after.append({'kind': 'Job', 'metadata': {'name': 'initialization'}})
-    else:
-        before.append({'kind': 'CronJob', 'metadata': {'name': 'refresh'}, 'spec': {'command': '# correct encoding'}})
-        after.append({'kind': 'CronJob', 'metadata': {'name': 'refresh'}, 'spec': {'command': '# changed encoding'}})
-    with pytest.raises(ValueError):
-        cutover.validate(before, after)
-
-
 def test_dev_digest_set_pins_both_celery_seed_and_sanity():
     ecr = '123456789012.dkr.ecr.ap-south-1.amazonaws.com'
     tag = 'a' * 12
@@ -144,52 +73,18 @@ def test_normal_guard_checks_init_environment_and_new_pvc():
         deployment.validate([before], [after], '123456789012.dkr.ecr.ap-south-1.amazonaws.com', 'a' * 12)
 
 
-@pytest.mark.parametrize('violation', ['none', 'active-job', 'unfinished-job', 'stale', 'revision', 'checksum', 'wrong-commit'])
-def test_cutover_backup_freshness_revision_restore_and_active_job_gates(tmp_path, violation):
-    commit = 'a' * 40
-    manifest = []
-    for kind, suffix, component in deployment.COMPONENTS.values():
-        if kind == 'Deployment':
-            doc = workload()
-            doc['metadata']['name'] = 'farmer-registry-' + suffix
-            deployment.pod(doc)['containers'][0]['image'] = 'example/' + component + ':' + commit[:12]
-            manifest.append(doc)
-    status = {'name': 'farmer-registry', 'namespace': 'farmer', 'version': 39, 'info': {'status': 'deployed'}}
-    values = {'private': 'not-published'}
-    payloads = {'release.json': json.dumps(status).encode(), 'values.json': json.dumps(values).encode(),
-                'manifest.yaml': yaml.safe_dump_all(manifest).encode(), 'hooks.yaml': b'',
-                'registry.dump': b'synthetic registry backup', 'connector.dump': b'synthetic connector backup'}
-    for name, payload in payloads.items():
-        (tmp_path / name).write_bytes(payload)
-    evidence = {'verifiedAt': datetime.now(timezone.utc).isoformat(), 'helmRevision': 39,
-                'release': 'farmer-registry', 'namespace': 'farmer', 'applicationCommit': commit,
-                'restoreVerified': True, 'reviewedJobRemovals': [],
-                'sha256': {name: hashlib.sha256(payload).hexdigest() for name, payload in payloads.items()}}
-    jobs = {'items': []}
-    if violation in ('active-job', 'unfinished-job'):
-        jobs['items'].append({'metadata': {'name': 'farmer-registry-postgres-init'},
-                              'status': {'active': 1} if violation == 'active-job' else {}})
-    elif violation == 'stale':
-        evidence['verifiedAt'] = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
-    elif violation == 'revision':
-        evidence['helmRevision'] = 38
-    elif violation == 'checksum':
-        (tmp_path / 'registry.dump').write_bytes(b'changed')
-    elif violation == 'wrong-commit':
-        evidence['applicationCommit'] = 'b' * 40
-    (tmp_path / 'cutover-evidence.json').write_text(json.dumps(evidence), encoding='utf-8')
-    if violation == 'none':
-        cutover.backup_gate(tmp_path, status, values, manifest, jobs)
-    else:
-        with pytest.raises(ValueError):
-            cutover.backup_gate(tmp_path, status, values, manifest, jobs)
+def test_pin_is_the_deployed_dev_chart_without_promotion_flags():
+    pin = oan_chart.profile()
+    assert (pin['environment'], pin['namespace'], pin['release']) == ('dev', 'farmer', 'farmer-registry')
+    assert pin['version'] == '1.0.0-dev.17' and pin['platformVersion'] == '1.2.2-rc.557'
+    assert 'promotionReady' not in pin and 'freshDatabaseEpoch' not in pin
 
 
-def test_deployment_requires_explicit_acceptance_for_the_exact_environment(monkeypatch):
+def test_deployment_requires_the_dev_pin_for_dev(monkeypatch):
     original = oan_chart.profile()
-    for pin, environment in ((original,'dev'),({**original,'promotionReady':True},'staging')):
-        monkeypatch.setattr(oan_chart,'profile',lambda pin=pin:pin)
-        with pytest.raises(ValueError,match='Deployment blocked'):
-            oan_chart.require_deployable(environment)
-    monkeypatch.setattr(oan_chart,'profile',lambda:{**original,'promotionReady':True})
     oan_chart.require_deployable('dev')
+    with pytest.raises(ValueError, match='Deployment blocked'):
+        oan_chart.require_deployable('staging')
+    monkeypatch.setattr(oan_chart, 'profile', lambda: {**original, 'environment': 'staging'})
+    with pytest.raises(ValueError, match='Deployment blocked'):
+        oan_chart.require_deployable('dev')

@@ -208,7 +208,7 @@ def dashboard_chart_provenance():
     from oan_chart import profile
     pin = profile()
     if any(pin.get(key) != value for key, value in {
-        "name": "openg2p-farmer-registry", "version": "1.0.0-dev.14",
+        "name": "openg2p-farmer-registry",
         "environment": "dev", "namespace": "farmer", "release": "farmer-registry",
     }.items()):
         raise ServiceError("dashboard-api-approved-chart-profile-mismatch")

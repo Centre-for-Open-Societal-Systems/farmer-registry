@@ -1,7 +1,56 @@
--- Fail loudly when the OAN layer did not apply. The seed runs psql with
+-- Fail loudly when the OAN layer did not apply. The farmer seed runs psql with
 -- ON_ERROR_STOP=0, so a derivation that matched nothing (an upstream section
 -- renamed or reshaped) would otherwise pass silently. This raises an ERROR in
--- the seed log naming what is missing.
+-- the seed log naming what is missing; the OAN entrypoint then runs this file
+-- once more with ON_ERROR_STOP=1, so a failed check fails the seed job.
+
+-- No section may appear twice on a tab, on the record or on a form, and the
+-- intake forms are the farmer's and the household's only. These are generic:
+-- they catch any leftover row, not a fixed list of ids.
+DO $$
+DECLARE
+  found text;
+BEGIN
+  SELECT string_agg(tab_id || ':' || section_id || ' x' || n, ', ') INTO found
+  FROM (SELECT tab_id, section_id, count(*) AS n
+        FROM "public"."g2p_intake_form_ui_tab_sections" GROUP BY tab_id, section_id HAVING count(*) > 1) d;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Sections attached more than once to an intake tab: %', found;
+  END IF;
+
+  SELECT string_agg(tab_id || ':' || section_id || ' x' || n, ', ') INTO found
+  FROM (SELECT tab_id, section_id, count(*) AS n
+        FROM "public"."g2p_register_ui_tab_sections" GROUP BY tab_id, section_id HAVING count(*) > 1) d;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Sections attached more than once to a register tab: %', found;
+  END IF;
+
+  SELECT string_agg(form_id, ', ') INTO found
+  FROM "public"."g2p_intake_form_definitions"
+  WHERE form_id NOT IN ('a1a4d25a-1cd4-4356-abac-8782382649', '9055ab43-c85d-4833-bd00-ca657bb72650');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Unexpected intake forms: %', found;
+  END IF;
+
+  SELECT string_agg(tab_id, ', ') INTO found
+  FROM "public"."g2p_intake_form_ui_tabs"
+  WHERE tab_id NOT IN ('a1a4d25a-1cd4-4356-abac-72482721', '9055ab43-c85d-4833-bd00-ca657bb72651');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Unexpected intake tabs: %', found;
+  END IF;
+
+  -- The farmer intake form asks each thing once: the OAN sections, and the
+  -- upstream ones OAN does not replace. An upstream row next to its OAN copy
+  -- means 20_layout.sql's detach did not run.
+  SELECT string_agg(tab_section_id || '->' || section_id, ', ') INTO found
+  FROM "public"."g2p_intake_form_ui_tab_sections"
+  WHERE tab_id = 'a1a4d25a-1cd4-4356-abac-72482721'
+    AND section_id NOT LIKE 'oan\_%'
+    AND section_id NOT IN ('farmer_household_lookup_section_01', 'household_household_household_member_section_02');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Rows on the farmer intake tab that no current seed writes: %', found;
+  END IF;
+END $$;
 
 DO $$
 DECLARE
