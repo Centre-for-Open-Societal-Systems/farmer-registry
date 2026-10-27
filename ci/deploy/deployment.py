@@ -221,6 +221,13 @@ def registrant_auth_overlay(environment="dev"):
     return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-registrant-auth.yaml")
 
 
+def dci_signing_overlay(environment="dev"):
+    """The partner API's DCI response-signing key (chart dciSigning hook); New Dev only."""
+    if environment != "dev":
+        return {}
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-dci-signing.yaml")
+
+
 def merge(target, overlay):
     for key, value in overlay.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
@@ -311,6 +318,7 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     merge(values, location_overlay(environment))
     merge(values, outgestion_overlay(environment))
     merge(values, registrant_auth_overlay(environment))
+    merge(values, dci_signing_overlay(environment))
     if environment == "staging":
         # rc.544 stopped emitting legacy MDS DB settings and two UI toggles.
         # Carry their exact installed values/Secret refs through the owning
