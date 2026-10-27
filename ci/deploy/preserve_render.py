@@ -34,6 +34,20 @@ def native_authentication_settings(values, before):
     return values
 
 
+def preparatory_seed_template(template):
+    """DDL already ran; the manual seed must not wait for paused applications."""
+    result=copy.deepcopy(template)
+    initializers=result.get("initContainers",[])
+    names=[container["name"] for container in initializers]
+    require(len(names)==len(set(names)) and set(names)=={"wait-for-db","wait-for-apps"},
+            "Review changed native seed initialization before adoption")
+    # This is the separately tracked preparatory Kubernetes Job. The published
+    # chart and native seed entrypoint remain unmodified. LOAD_SAMPLE_DATA=false
+    # guarantees the seed does not submit/approve intakes through the APIs.
+    result["initContainers"]=[container for container in initializers if container["name"]=="wait-for-db"]
+    return result
+
+
 def controlled_render(docs, values, snapshot):
     """Retain every persistent object. Native Jobs are executed separately.
 

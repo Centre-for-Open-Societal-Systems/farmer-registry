@@ -90,3 +90,21 @@ def test_existing_native_redis_is_never_redirected_and_missing_staff_reference_b
     api["spec"]["template"]["spec"]["containers"][0]["env"]=[]
     with pytest.raises(ValueError,match="Existing staff auth Redis reference"):
         render.native_authentication_settings(values,[api])
+
+
+def test_preparatory_seed_keeps_db_wait_and_native_container_but_not_paused_api_wait():
+    database={"name":"wait-for-db","image":"native/postgres-checker","command":["pg_isready"]}
+    application={"name":"wait-for-apps","image":"busybox:1.36","command":["sh","-c"],"args":["wait for native apps"]}
+    template={"initContainers":[database,application],"containers":[{"name":"db-seed","image":"reviewed/native-seed",
+              "env":[{"name":"LOAD_SAMPLE_DATA","value":"false"}]}],"volumes":[{"name":"retained","emptyDir":{}}]}
+    before=copy.deepcopy(template)
+    result=render.preparatory_seed_template(template)
+    assert template==before
+    expected=copy.deepcopy(before);expected["initContainers"]=[database]
+    assert result==expected
+
+
+@pytest.mark.parametrize("names",[[],["wait-for-db"],["wait-for-db","wait-for-apps","unreviewed"],["wait-for-db","wait-for-db","wait-for-apps"]])
+def test_changed_initializer_contract_requires_review(names):
+    with pytest.raises(ValueError,match="Review changed native seed initialization"):
+        render.preparatory_seed_template({"initContainers":[{"name":name} for name in names]})
