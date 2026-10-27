@@ -310,6 +310,8 @@ class Operations:
         environment={e["name"]:e for e in template["containers"][0].get("env",[])}
         for name,value in {"LOAD_GEO_DATA":"false","SYNC_GEO_WIDGETS":"false","LOAD_SAMPLE_DATA":"false","LOAD_IMAGES":"false","LOAD_TEMPLATES":"true"}.items():
             require(environment[name].get("value")==value,"Seed flags differ from reviewed mode")
+        from preserve_render import preparatory_seed_template
+        template=preparatory_seed_template(template)
         self.native_job("db-seed",template)
         reporting=[d for d in docs if d["kind"]=="Job" and d["metadata"]["name"]=="farmer-registry-fr-reporting-views"]
         require(len(reporting)==1,"One reviewed reporting hook required")
