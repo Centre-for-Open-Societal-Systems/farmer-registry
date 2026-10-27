@@ -23,8 +23,7 @@ WITH sections (section_id, section_register_id, mnemonic, description, is_list, 
           "widget-data-columns": [
             {"widget": "select", "column-key": "phone_type", "widget-type": "input", "widget-label": "phone_type",
              "widget-readonly": false, "widget-data-path": "phone_type",
-             "widget-data-source": {"type": "static", "options": [
-               {"label": "PRIMARY", "value": "PRIMARY"}, {"label": "SECONDARY", "value": "SECONDARY"}, {"label": "OTHER", "value": "OTHER"}]}},
+             "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "PHONE_NUMBER_TYPE"}, "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"}},
             {"widget": "phone", "column-key": "phone_number", "widget-type": "input", "widget-label": "phone_number",
              "widget-readonly": false, "widget-data-path": "phone_number",
              "widget-data-placeholder": "0912345678", "widget-data-validation": {"maxLength": 20}},
