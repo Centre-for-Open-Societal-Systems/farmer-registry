@@ -126,6 +126,8 @@ class Operations:
         os.environ["OAN_CHART_ARCHIVE"] = str(self.chart)
         before=documents(self.directory/"manifest.yaml")+documents(self.directory/"hooks.yaml")
         values=prepare(self.load("values.json"),before,config["registry"],config["sourceCommit"][:12],images=config["imageProvenance"],chart_pin=self.pin)
+        from preserve_render import native_authentication_settings
+        values=native_authentication_settings(values,before)
         self.save("prepared-values.json",values)
         path=self.directory/"analysis-only"
         path.mkdir()

@@ -16,6 +16,24 @@ CONTROLLED = {"farmer-registry-staff-portal-api", "farmer-registry-partner-api",
               "farmer-registry-staff-portal-ui", "farmer-registry-staff-ui-public"}
 
 
+def native_authentication_settings(values, before):
+    """Core has a separate Redis setting; reuse the installed staff auth store."""
+    from deployment import envs
+    api=index(before)[("Deployment","farmer-registry-staff-portal-api")]
+    variables=list(envs(api,include_init=False).values())
+    require(len(variables)==1,"One installed staff API container required")
+    native="REGISTRY_CORE_REGISTRANT_AUTH_REDIS_URL"
+    if native in variables[0]:
+        return values
+    existing=variables[0].get("REGISTRY_STAFF_PORTAL_API_AUTH_REDIS_URL")
+    require(existing and (existing.get("value") or existing.get("valueFrom")),"Existing staff auth Redis reference required")
+    settings=values["registry"]["staffApi"]
+    field,other=("envVarsFrom","envVars") if "valueFrom" in existing else ("envVars","envVarsFrom")
+    settings.setdefault(field,{})[native]=copy.deepcopy(existing.get("valueFrom",existing.get("value")))
+    settings.setdefault(other,{})[native]=None
+    return values
+
+
 def controlled_render(docs, values, snapshot):
     """Retain every persistent object. Native Jobs are executed separately.
 
