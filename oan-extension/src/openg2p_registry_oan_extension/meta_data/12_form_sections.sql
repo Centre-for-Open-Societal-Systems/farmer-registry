@@ -131,37 +131,24 @@ form_layout (oan_section_id, upstream_section_id, col, ord, w) AS (
   ('oan_farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 2, 1, '{"widget-id": "marital_status"}'),
   ('oan_farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 2, 2, '{"widget-id": "education_level"}'),
   -- Identity, in the order it is filled in: whether the farmer has a national
-  -- ID, then (when yes) the Fayda ID and its verification right below it, then
-  -- the Fayda registration ID; the other systems' IDs in the next column. A
-  -- successful verification fills in the names, gender and birth date and
-  -- locks the names and gender here; the server refuses a change to any
-  -- verified value, birth date included (its widget already has upstream's
-  -- disable rule, and the last rule wins).
+  -- ID, then (when yes) the Fayda ID, typed by staff (FIN, 12 digits, or FAN,
+  -- 16 digits), then the Fayda registration ID; the other systems' IDs in the
+  -- next column. Approval is the control: a typed ID with the uploaded ID
+  -- document is accepted; verification (18_identity_verification.sql, on the
+  -- farmer's record) is evidence, and a verified ID is locked afterwards.
   ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 1, 1,
    '{"widget": "boolean", "widget-id": "has_national_id", "widget-type": "input", "widget-label": "has_national_id",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.has_national_id",
      "widget-data-format": {"allowUnset": false, "booleanControlType": "radio", "booleanRepresentation": "yes-no"}}'),
    ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 1, 2,
-     '{"widget": "display", "widget-id": "foundational_id", "widget-type": "display", "widget-label": "fayda_fin",
-      "widget-readonly": true, "widget-required": false,
+     '{"widget": "text", "widget-id": "foundational_id", "widget-type": "input", "widget-label": "fayda_fin",
+      "widget-readonly": false, "widget-required": false,
       "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.foundational_id",
+     "widget-data-placeholder": "12 or 16 digits",
      "widget-data-validation": {"pattern": "^([0-9]{12}|[0-9]{16})$", "patternMessage": "fayda_fin_format"},
      "widget-data-options": {"actions": [{"action": "show", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.has_national_id", "operator": "equals", "value": true}}, {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}]}}'),
   ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 1, 3,
-   '{"widget": "oan-identity-verification", "widget-id": "identity_verification", "widget-type": "input",
-     "widget-label": "identity_verification", "widget-readonly": false, "widget-required": false,
-     "widget-data-path": {"foundationalId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.foundational_id",
-                          "verificationId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.identity_verification_id",
-                          "status": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status",
-                          "verifiedOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authenticated_on",
-                          "expiresOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.authentication_expiry_date"},
-     "widget-data-options": {"registerId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd", "fieldPrefix": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd",
-                             "foundationalIdPath": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.foundational_id",
-                             "internalRecordIdPath": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.internal_record_id",
-                             "languagePath": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.language_spoken",
-                             "action": "show", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.has_national_id", "operator": "equals", "value": true}}}'),
-  ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 1, 4,
    '{"widget": "text", "widget-id": "rid", "widget-type": "input", "widget-label": "fayda_rid",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.rid",

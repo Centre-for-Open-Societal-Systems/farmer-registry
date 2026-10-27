@@ -6,7 +6,7 @@ location codes are invented when a submission omits them.
 """
 import json
 
-SECTIONS = ("fr_farmer_household_lookup", "oan_fr_farmer_identity", "oan_fr_farmer_name",
+SECTIONS = ("oan_fr_farmer_household_lookup", "oan_fr_farmer_identity", "oan_fr_farmer_name",
     "oan_fr_farmer_personal_details", "oan_fr_farmer_photo", "oan_fr_farmer_phones",
     "oan_fr_farmer_socio_and_health", "oan_hh_information", "hh_members",
     "oan_fr_farmer_location", "oan_fr_farmer_land", "oan_intake_fr_farmer_crops",
