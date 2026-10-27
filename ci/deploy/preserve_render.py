@@ -48,6 +48,20 @@ def preparatory_seed_template(template):
     return result
 
 
+def validation_inventory(persistent, native_plans):
+    """Validate both retained Helm objects and separately executed native Jobs.
+
+    This is a configuration inventory only. These planned Job documents are
+    never passed to Helm/apply; real completion uses UID-checked Job receipts.
+    """
+    require(not any(d.get("kind")=="Job" for d in persistent),"Helm must not execute duplicate native Jobs")
+    names={"farmer-registry-db-seed","farmer-registry-sanity"}
+    selected=[d for d in native_plans if d.get("kind")=="Job" and d.get("metadata",{}).get("name") in names]
+    require(len(selected)==2 and {d["metadata"]["name"] for d in selected}==names,
+            "Exact native seed and smoke image plans required")
+    return copy.deepcopy(persistent)+copy.deepcopy(selected)
+
+
 def controlled_render(docs, values, snapshot):
     """Retain every persistent object. Native Jobs are executed separately.
 
@@ -93,7 +107,8 @@ def upgrade(ops, config, receipt):
     (ops.directory/"candidate-final.yaml").write_bytes(raw)
     before=documents(ops.directory/"manifest.yaml")+documents(ops.directory/"hooks.yaml")
     after=documents(ops.directory/"candidate-final.yaml")
-    validate(before,after,config["registry"],config["sourceCommit"][:12],images=config["imageProvenance"])
+    validate(before,validation_inventory(after,documents(ops.directory/"candidate-analysis.yaml")),
+             config["registry"],config["sourceCommit"][:12],images=config["imageProvenance"])
     require(not any(d["kind"]=="Job" for d in after), "Jobs must use tracked native invocations")
     require(ops.status()["version"]==config["expectedRevision"],"Helm release changed during final dry run")
     # No --atomic: old application images must never roll back across migration.

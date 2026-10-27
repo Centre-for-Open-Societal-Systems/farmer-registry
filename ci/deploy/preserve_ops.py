@@ -329,6 +329,7 @@ class Operations:
         upgrade(self,config,receipt)
 
     def verify_installed(self, config):
+        from preserve_render import validation_inventory
         status=self.status()
         release_status(status,require_deployed=True)
         require(status["version"]==config["expectedRevision"]+1,"Unexpected Farmer revision")
@@ -336,7 +337,8 @@ class Operations:
         require(len(listed)==1 and listed[0]["chart"]=="openg2p-farmer-registry-"+config["chartVersion"],"Unexpected installed chart")
         (self.directory/"installed.yaml").write_bytes(command(HELM+["get","manifest","farmer-registry","-n","farmer"]))
         validate_manifest(documents(self.directory/"manifest.yaml")+documents(self.directory/"hooks.yaml"),
-                          documents(self.directory/"installed.yaml"),config["registry"],config["sourceCommit"][:12],
+                          validation_inventory(documents(self.directory/"installed.yaml"),documents(self.directory/"candidate-analysis.yaml")),
+                          config["registry"],config["sourceCommit"][:12],
                           images=config["imageProvenance"])
 
     def accept(self, config):
