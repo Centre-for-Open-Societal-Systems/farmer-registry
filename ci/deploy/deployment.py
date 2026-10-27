@@ -214,6 +214,13 @@ def outgestion_env(suffix, environment="dev"):
     return outgestion_overlay(environment).get("registry", {}).get(component, {}).get("envVars", {})
 
 
+def registrant_auth_overlay(environment="dev"):
+    """Fayda (eSignet) verification for the farmer register; New Dev only."""
+    if environment != "dev":
+        return {}
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-registrant-auth.yaml")
+
+
 def merge(target, overlay):
     for key, value in overlay.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
@@ -303,6 +310,7 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     # Qualify the Commons service explicitly across namespace boundaries.
     merge(values, location_overlay(environment))
     merge(values, outgestion_overlay(environment))
+    merge(values, registrant_auth_overlay(environment))
     if environment == "staging":
         # rc.544 stopped emitting legacy MDS DB settings and two UI toggles.
         # Carry their exact installed values/Secret refs through the owning
