@@ -178,9 +178,12 @@ Each file runs after the whole farmer seed, in name order:
 | `40_deduplication.sql` | the farmer duplicate check, with the father's name (middle name) added |
 | `90_checks.sql` | raises an error in the seed log if anything above did not apply |
 
-Upstream section rows are never changed. Code lists (body condition,
-production type, commodities, languages) come from the country pack in Master Data;
-short fixed lists (phone type) are static options in the section.
+Upstream section rows are never changed. Every choice list (body condition,
+production type, commodities, languages, the kinds of document, phone number
+type, finance access) comes from the country pack in Master Data
+(`widget-data-source` of type `api`, service `attributes`); the only static
+options are yes/no. `90_checks.sql` and `ci/validation/check_native_metadata.py`
+fail if a list is written in the registry.
 
 ## Migration from the previous registries
 

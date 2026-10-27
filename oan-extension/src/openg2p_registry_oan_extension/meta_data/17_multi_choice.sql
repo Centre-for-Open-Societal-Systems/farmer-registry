@@ -90,9 +90,8 @@ UPDATE g2p_register_sections s SET section_ui_schema=jsonb_set(s.section_ui_sche
     (s.section_ui_schema::jsonb #> '{panels,0,panels,0,widgets,0,widget-data-columns}') ||
     '[{"widget":"multi-select","column-key":"finance_access_types","widget-type":"input",
        "widget-label":"finance_access_type","widget-readonly":false,"widget-data-path":"finance_access_types",
-       "widget-data-source":{"type":"static","options":[
-         {"value":"LOAN","label":"Loan"},{"value":"INSURANCE","label":"Insurance"},
-         {"value":"SAVING","label":"Saving"},{"value":"DIGITAL_BANKING","label":"Digital banking"}]}}]'::jsonb)
+       "widget-data-source":{"type":"api","method":"POST","params":{"attribute_id":"FINANCE_ACCESS_TYPE"},
+         "service":"attributes","endpoint":"values","labelKey":"value_display","valueKey":"value_code"}}]'::jsonb)
 WHERE s.section_id IN ('oan_farmer_farm_inputs','oan_farmer_farm_inputs_intake') AND NOT EXISTS (
   SELECT 1 FROM jsonb_array_elements(s.section_ui_schema::jsonb #> '{panels,0,panels,0,widgets,0,widget-data-columns}') w
   WHERE w->>'column-key'='finance_access_types');

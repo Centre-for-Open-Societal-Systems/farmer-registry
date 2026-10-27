@@ -253,6 +253,18 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'The id-authentication section is not on the farmer record tab';
   END IF;
+  -- Every dropdown's options come from Master Data (widget-data-source type
+  -- "api", service "attributes"); a yes/no is a boolean, not a list.
+  IF EXISTS (
+    SELECT 1 FROM "public"."g2p_register_sections", jsonb_path_query(section_ui_schema, 'strict $.**') w
+    WHERE section_id LIKE 'oan\_%' ESCAPE '\'
+      AND jsonb_typeof(w) = 'object' AND w->>'widget' IN ('select', 'multi-select')
+      AND w->'widget-data-source'->>'type' = 'static'
+      AND EXISTS (SELECT 1 FROM jsonb_array_elements(w->'widget-data-source'->'options') o
+                  WHERE jsonb_typeof(o->'value') <> 'boolean')
+  ) THEN
+    RAISE EXCEPTION 'A choice list is written in the registry metadata; every dropdown comes from Master Data';
+  END IF;
   IF EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections"
              WHERE section_id = 'oan_farmer_identity_verification') THEN
     RAISE EXCEPTION 'Record verification must not be on the intake form; core authenticates register records';

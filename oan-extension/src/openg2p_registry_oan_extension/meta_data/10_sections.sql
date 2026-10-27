@@ -63,7 +63,7 @@ shared_columns (oan_section_id, items) AS (
   SELECT oan_section_id, cols FROM (VALUES ('oan_farmer_livestock'), ('oan_farmer_livestock_intake')) s(oan_section_id),
   LATERAL (SELECT '[{"widget": "select", "column-key": "gender", "widget-type": "input", "widget-label": "gender",
       "widget-readonly": false, "widget-data-path": "gender",
-      "widget-data-source": {"type": "static", "options": [{"label": "MALE", "value": "MALE"}, {"label": "FEMALE", "value": "FEMALE"}]}},
+      "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "GENDER"}, "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"}},
      {"widget": "select", "column-key": "body_condition", "widget-type": "input", "widget-label": "body_condition",
       "widget-readonly": false, "widget-data-path": "body_condition",
       "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "LIVESTOCK_BODY_CONDITION"},

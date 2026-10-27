@@ -26,34 +26,31 @@
 -- adds a new one to the first free slot, and the others render nothing
 -- ("oan-document-slot"). Upload, storage and reload stay upstream's. The slot
 -- labels are keys, not translated, so they read back to the same field.
-WITH doc_categories (category, col, ord, type_field, required, options) AS (
+-- The kind of document in each category is a Master Data list of the country
+-- pack (ETH-OAN: IDENTITY_DOCUMENT_TYPE, BANK_DOCUMENT_TYPE, LAND_DOCUMENT_TYPE,
+-- REPRESENTATIVE_DOCUMENT_TYPE, FARMER_DOCUMENT_TYPE, DOCUMENT_PURPOSE), like
+-- every other dropdown: nothing is listed in the registry.
+WITH doc_categories (category, col, ord, type_field, required, attribute_id) AS (
   VALUES
-  ('identity_document', 1, 1, 'identity_document_type', true,
-   '["FAYDA", "KEBELE_WOREDA_ID", "PASSPORT", "DRIVING_LICENCE", "KEBELE_CONFIRMATION_LETTER", "OTHER_GOVERNMENT_ID"]'::jsonb),
-  ('bank_document', 1, 2, 'bank_document_type', false,
-   '["BANK_PASSBOOK", "BANK_ACCOUNT_CONFIRMATION"]'),
-  ('land_document', 2, 1, 'land_document_type', false,
-   '["FIRST_LEVEL_CERTIFICATE", "SECOND_LEVEL_CERTIFICATE", "RENTAL_AGREEMENT", "SHARECROPPING_AGREEMENT",
-     "LEASE_ALLOCATION_DOCUMENT", "INHERITANCE_TRANSFER_DOCUMENT", "LAND_OFFICE_CONFIRMATION"]'),
-  ('representative_document', 2, 2, 'representative_document_type', false,
-   '["POWER_OF_ATTORNEY", "GUARDIANSHIP_DOCUMENT", "REPRESENTATIVE_ID"]'),
-  ('farmer_document', 3, 1, 'farmer_document_type', false,
-   '["COOPERATIVE_MEMBERSHIP", "FARMER_GROUP_CONFIRMATION", "FARMER_CARD", "EXTENSION_OFFICE_CONFIRMATION"]'),
-  ('other_document', 3, 2, 'other_document_purpose', false,
-   '["IDENTITY_VERIFICATION", "ELIGIBILITY", "RECORD_CORRECTION", "OTHER_PURPOSE"]')
+  ('identity_document', 1, 1, 'identity_document_type', true, 'IDENTITY_DOCUMENT_TYPE'),
+  ('bank_document', 1, 2, 'bank_document_type', false, 'BANK_DOCUMENT_TYPE'),
+  ('land_document', 2, 1, 'land_document_type', false, 'LAND_DOCUMENT_TYPE'),
+  ('representative_document', 2, 2, 'representative_document_type', false, 'REPRESENTATIVE_DOCUMENT_TYPE'),
+  ('farmer_document', 3, 1, 'farmer_document_type', false, 'FARMER_DOCUMENT_TYPE'),
+  ('other_document', 3, 2, 'other_document_purpose', false, 'DOCUMENT_PURPOSE')
 ),
 doc_settings (slots, accept, max_size) AS (
   VALUES (5, '.pdf,.jpg,.jpeg,.png', 5242880)
 ),
 doc_widgets (col, ord, w) AS (
-  -- The kind of document: a static list; the labels are translated keys.
+  -- The kind of document: the category's Master Data list.
   SELECT c.col, c.ord * 100, jsonb_build_object(
     'widget', 'select', 'widget-id', c.type_field, 'widget-type', 'input', 'widget-label', c.type_field,
     'widget-readonly', false, 'widget-required', c.required,
     'widget-data-path', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.' || c.type_field,
-    'widget-data-source', jsonb_build_object('type', 'static', 'options',
-      (SELECT jsonb_agg(jsonb_build_object('label', 'doc_' || lower(o), 'value', o) ORDER BY i)
-       FROM jsonb_array_elements_text(c.options) WITH ORDINALITY x(o, i))))
+    'widget-data-source', jsonb_build_object('type', 'api', 'method', 'POST', 'service', 'attributes',
+      'endpoint', 'values', 'labelKey', 'value_display', 'valueKey', 'value_code',
+      'params', jsonb_build_object('attribute_id', c.attribute_id)))
   FROM doc_categories c
   UNION ALL
   -- "Other" also names the document.

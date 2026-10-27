@@ -104,32 +104,6 @@ WITH oan (language_code, labels) AS (
     "representative_document_type": "Representative Document Type",
     "other_document_purpose": "Purpose",
     "other_document_name": "Document Name",
-    "doc_fayda": "Fayda credential",
-    "doc_kebele_woreda_id": "Kebele/Woreda resident ID",
-    "doc_passport": "Ethiopian passport",
-    "doc_driving_licence": "Driving licence",
-    "doc_kebele_confirmation_letter": "Kebele confirmation letter with photo",
-    "doc_other_government_id": "Other government photo ID",
-    "doc_first_level_certificate": "First-level landholding certificate/booklet",
-    "doc_second_level_certificate": "Second-level landholding certificate",
-    "doc_rental_agreement": "Rental agreement",
-    "doc_sharecropping_agreement": "Sharecropping agreement",
-    "doc_lease_allocation_document": "Agricultural lease/allocation document",
-    "doc_inheritance_transfer_document": "Inheritance/transfer document",
-    "doc_land_office_confirmation": "Land-office confirmation",
-    "doc_cooperative_membership": "Cooperative membership card/book",
-    "doc_farmer_group_confirmation": "Farmer-group or cluster confirmation",
-    "doc_farmer_card": "Locally issued farmer card",
-    "doc_extension_office_confirmation": "Agriculture/extension-office confirmation",
-    "doc_bank_passbook": "Bank passbook identification page",
-    "doc_bank_account_confirmation": "Bank-issued account confirmation",
-    "doc_power_of_attorney": "Power of attorney",
-    "doc_guardianship_document": "Guardianship document",
-    "doc_representative_id": "Representative''s identity document",
-    "doc_identity_verification": "Identity verification",
-    "doc_eligibility": "Programme eligibility",
-    "doc_record_correction": "Record correction",
-    "doc_other_purpose": "Other purpose",
     "oan_docs_add": "Add file",
     "oan_docs_none": "No files",
     "oan_docs_full": "Up to {count} files can be attached here. Remove one to add another.",
@@ -156,10 +130,18 @@ WITH oan (language_code, labels) AS (
   }'::jsonb)
 )
 UPDATE "public"."registry_languages" l
--- The oan_idv_* keys belonged to the retired OAN verification popup widget.
+-- The oan_idv_* keys belonged to the retired OAN verification popup widget;
+-- the doc_* keys labelled the document lists before they came from Master Data.
 SET "domain_translation" = ((COALESCE(l."domain_translation"::jsonb, '{}'::jsonb)
     - ARRAY['oan_idv_no_fin', 'oan_idv_verify', 'oan_idv_verify_again', 'oan_idv_waiting', 'oan_idv_not_verified',
             'oan_idv_verified', 'oan_idv_failed', 'oan_idv_filled', 'oan_idv_enter_fin', 'oan_idv_popup_blocked',
-            'oan_idv_closed', 'oan_idv_fin_changed']) || oan.labels)::json
+            'oan_idv_closed', 'oan_idv_fin_changed',
+            'doc_fayda', 'doc_kebele_woreda_id', 'doc_passport', 'doc_driving_licence',
+            'doc_kebele_confirmation_letter', 'doc_other_government_id', 'doc_first_level_certificate', 'doc_second_level_certificate',
+            'doc_rental_agreement', 'doc_sharecropping_agreement', 'doc_lease_allocation_document', 'doc_inheritance_transfer_document',
+            'doc_land_office_confirmation', 'doc_cooperative_membership', 'doc_farmer_group_confirmation', 'doc_farmer_card',
+            'doc_extension_office_confirmation', 'doc_bank_passbook', 'doc_bank_account_confirmation', 'doc_power_of_attorney',
+            'doc_guardianship_document', 'doc_representative_id', 'doc_identity_verification', 'doc_eligibility',
+            'doc_record_correction', 'doc_other_purpose']) || oan.labels)::json
 FROM oan
 WHERE l."language_code" = oan.language_code;
