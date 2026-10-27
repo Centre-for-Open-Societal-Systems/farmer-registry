@@ -89,7 +89,7 @@ def test_receipt_rejects_incomplete_or_mismatched_build_provenance(published, de
 
 def test_every_cluster_or_optional_stage_requires_explicit_deploy():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
-    for stage in ("Prepare dev deployment", "Deploy new dev", "Build optional services", "Deploy optional services"):
+    for stage in ("Deploy new dev", "Build optional services", "Deploy optional services"):
         definition = pipeline.split("stage('" + stage + "')", 1)[1].split("steps {", 1)[0]
         assert "env.OAN_DELIVERY_ACTION == 'deploy'" in definition
         assert "branch 'develop'" in definition
@@ -100,6 +100,17 @@ def test_every_cluster_or_optional_stage_requires_explicit_deploy():
     assert "COORDINATE_SERVICES', defaultValue: false" in pipeline
     assert "ci-output/native-worker-save/**" in pipeline
     assert "check_native_worker_save.py" in (ROOT / "ci/build/images.sh").read_text()
+    preserving = pipeline.split("stage('Preserving Farmer adoption')",1)[1].split("steps {",1)[0]
+    assert "env.OAN_DELIVERY_ACTION in ['preserve-preflight', 'preserve-upgrade']" in preserving
+    assert "branch 'develop'" in preserving and "not { changeRequest() }" in preserving
+
+
+@pytest.mark.parametrize('action',['preserve-preflight','preserve-upgrade'])
+def test_preserving_modes_cannot_request_a_reset(action):
+    assert delivery.action({'NEW_DEV_DELIVERY_ACTION':action})==action
+    for reset in ('initialize','resume'):
+        with pytest.raises(ValueError):
+            delivery.action({'NEW_DEV_DELIVERY_ACTION':action,'NEW_DEV_RESET_ACTION':reset})
 
 
 JENKINS = {"JENKINS_URL": "https://jenkins.oanstaging.com/", "JOB_NAME": "Gen2-Package/farmer-registry/develop",

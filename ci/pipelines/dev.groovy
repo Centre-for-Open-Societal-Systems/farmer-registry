@@ -14,7 +14,7 @@ pipeline {
         HELM_NAMESPACE = 'farmer'
     }
     parameters {
-        choice(name: 'NEW_DEV_DELIVERY_ACTION', choices: ['publish-only', 'deploy'],
+        choice(name: 'NEW_DEV_DELIVERY_ACTION', choices: ['publish-only', 'preserve-preflight', 'preserve-upgrade', 'deploy'],
             description: 'Publish immutable images first. Deploy additionally requires the existing preservation, chart and database gates; it does not authorize a reset.')
         choice(name: 'NEW_DEV_RESET_ACTION', choices: ['check', 'initialize', 'resume'],
             description: 'New Dev only: check the completed first-install receipt; explicit initialize/resume is blocked until refactor acceptance.')
@@ -22,6 +22,8 @@ pipeline {
             description: 'Deployment-node path to immutable reviewed first-install JSON; no credentials.')
         string(name: 'REGISTRY_RESET_ADMIN_SERVICE', defaultValue: '',
             description: 'Mounted libpq service alias for explicit first-install reset; empty for ordinary receipt checks.')
+        string(name: 'FARMER_ADOPTION_RECOVERY_DIRECTORY', defaultValue: '',
+            description: 'Exact protected directory from a failed preserving adoption; empty initializes one reviewed operation. Never a reset.')
         booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
             description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
         booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
@@ -105,9 +107,32 @@ pipeline {
             }
         }
         stage('Prepare dev deployment') {
-            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION == 'deploy' } } }
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION != 'publish-only' } } }
             steps {
-                stash name: 'dev-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,tests/runtime/**,service-outcomes/**', excludes: 'helm/**/charts/**', useDefaultExcludes: false
+                stash name: 'dev-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,tests/runtime/**,service-outcomes/**,oan-extension/**,farmer-extension/**,ui/staff-ui/overrides/**,docker/oan/**,docker/sanity-tests/**,test/sanity/**', excludes: 'helm/**/charts/**,**/__pycache__/**,**/.pytest_cache/**', useDefaultExcludes: false
+            }
+        }
+        stage('Preserving Farmer adoption') {
+            when {
+                beforeAgent true
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION in ['preserve-preflight', 'preserve-upgrade'] } }
+            }
+            agent { label 'vpn-agent2' }
+            steps {
+                dir('preserving-farmer-deployment') {
+                    deleteDir()
+                    unstash 'dev-deployment'
+                    withCredentials([sshUserPrivateKey(credentialsId: 'farmer-new-dev-backup-ssh', keyFileVariable: 'BACKUP_SSH_KEY')]) {
+                        sh 'bash ci/deploy/preserve-new-dev.sh'
+                    }
+                }
+            }
+            post {
+                always {
+                    dir('preserving-farmer-deployment') {
+                        archiveArtifacts artifacts: 'service-outcomes/farmer-preservation.json', allowEmptyArchive: true
+                    }
+                }
             }
         }
         stage('Deploy new dev') {

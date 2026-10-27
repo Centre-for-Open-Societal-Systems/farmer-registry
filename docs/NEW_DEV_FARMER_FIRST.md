@@ -37,6 +37,31 @@ or drop/recreate the existing New Dev database to satisfy the first-install gate
 Preserve history, documents, pending approvals, identity assignments, connector
 checkpoints and environment settings.
 
+The preserving follow-up uses a separate immutable `adoption-chart.json` so
+legacy/optional delivery pins remain unchanged. The consolidated central Helm
+review is PR16 (dev.16). `adoption-candidate.json` freezes the already published
+and rehearsed Jenkins31 application images at afdbf75, independently of the
+later delivery-controller commit. A runtime-source hash refuses changes to the
+extension/image/UI inputs after that rehearsal.
+
+Use `preserve-preflight` first, then `preserve-upgrade`, through the same Jenkins
+develop job and existing `farmer-new-dev-backup-ssh` credential. Both modes reject
+any reset selection. Preflight only reads the live release and verifies a private
+diagnostic render. Upgrade saves exact workload UIDs/replicas and schedules,
+pauses Farmer writers, takes native restored backups and a protected filestore
+copy, runs the native migration/seed/reporting Jobs, verifies original business
+values, then creates the expiring native-ready receipt for the real chart.
+
+The actual Helm upgrade retains persistent resources and suppresses fresh
+database/realm initialization. Native Jobs execute explicitly under the same
+receipt. APIs/UI start before producers. Read-only native smoke and HTTP
+readiness must pass before restoring the original worker/connector replicas and
+schedules. An interrupted operation retains its private directory and requires
+explicit recovery; it never drops a live database or rolls old images back
+across schema changes. Shared Commons services remain online for other
+registries, so their archive snapshots are not advertised as a globally frozen
+cross-service cutover.
+
 Source and restored-copy approval metadata now use the standard OpenG2P
 two-stage defaults; geographic/custom reviewers are deferred. Existing AWE
 tasks keep their policy and assignees. Live default reviewer resolution and
