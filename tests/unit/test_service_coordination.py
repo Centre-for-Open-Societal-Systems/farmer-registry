@@ -303,7 +303,7 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
     state = {"upgraded": False, "calls": []}
     monkeypatch.setattr(coordinator, "checkout", lambda *a, **kw: SHA)
     def prepare(directory, values, previous, installed_chart):
-        assert installed_chart == "openg2p-farmer-registry-1.0.0-dev.17"
+        assert installed_chart == "openg2p-farmer-registry-1.0.0-dev.18"
         assert previous == before
         archive = directory / "approved.tgz"
         archive.write_bytes(b"verified fixture")
@@ -315,7 +315,7 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
     def run(args):
         state["calls"].append(args)
         if args[:2] == ["helm", "list"]:
-            return '[{"name":"farmer-registry","chart":"openg2p-farmer-registry-1.0.0-dev.17"}]'
+            return '[{"name":"farmer-registry","chart":"openg2p-farmer-registry-1.0.0-dev.18"}]'
         if args[:2] == ["helm", "status"]:
             return json.dumps({"name": "farmer-registry", "namespace": "farmer", "version": 13 if state["upgraded"] else 12,
                                "info": {"status": "deployed"}})
@@ -365,7 +365,7 @@ def test_embedded_api_rejects_corrupt_approved_archive(tmp_path, monkeypatch):
     import io
     monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: io.BytesIO(b"invalid chart bytes"))
     with pytest.raises(coordinator.ServiceError, match="download-or-checksum-failed"):
-        coordinator.prepare_dashboard_chart(tmp_path, {}, [], "openg2p-farmer-registry-1.0.0-dev.17")
+        coordinator.prepare_dashboard_chart(tmp_path, {}, [], "openg2p-farmer-registry-1.0.0-dev.18")
 
 
 def test_embedded_api_restores_selected_digest_after_registry_reconciliation(tmp_path, monkeypatch):
@@ -380,7 +380,7 @@ def test_embedded_api_restores_selected_digest_after_registry_reconciliation(tmp
         candidate["dashboardApi"]["image"] = {"repository": "old", "digest": "old-digest"}
     monkeypatch.setattr(deployment, "reconcile_dev", reconcile)
     monkeypatch.setenv("OAN_CHART_ARCHIVE", "previous-archive")
-    archive, renderer = coordinator.prepare_dashboard_chart(tmp_path, values, [], "openg2p-farmer-registry-1.0.0-dev.17")
+    archive, renderer = coordinator.prepare_dashboard_chart(tmp_path, values, [], "openg2p-farmer-registry-1.0.0-dev.18")
     assert values["dashboardApi"]["image"] == dict(selected, digest=None)
     assert coordinator.os.environ["OAN_CHART_ARCHIVE"] == "previous-archive"
     assert archive.is_file() and renderer.is_file()

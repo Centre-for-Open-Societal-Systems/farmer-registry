@@ -1,11 +1,24 @@
-"""JSON-safe hierarchy at the native change-request outgestion boundary.
+"""JSON-safe hierarchy at both native outgestion boundaries.
 
 rc.557 dumps RecordData in Python mode, leaving Decimal and temporal values in
-extras. Its payload model then calls json.dumps and rolls back the approval.
+extras. Its payload model then calls json.dumps and rolls back the approval
+(change requests) or fails the register ingest of an approved intake form.
 Use native traversal and fanout, supplying the supported hierarchy argument;
 native fanout constructs its default hierarchy directly rather than resolving
 the component registry. All approval and webhook handling remain inherited.
+
+The intake path lives in the celery worker's ingest task, which binds the
+native fanout by name and builds its own hierarchy service. The worker module
+is given a fanout that supplies the JSON-safe hierarchy instead; the task and
+its arguments are untouched.
 """
+import importlib
+import logging
+
+_logger = logging.getLogger(__name__)
+INGEST_WORKER_MODULE = (
+    "openg2p_registry_celery_worker.tasks.intake_form_register_ingest_worker"
+)
 
 from openg2p_fastapi_common.context import component_registry
 from openg2p_registry_core.services.g2p_outgest_fanout_service import (
@@ -56,9 +69,35 @@ class OANOutgestChangeRequestService(G2PRegisterChangeRequestService):
         )
 
 
+async def fanout_outgest_rows_json(*args, **kwargs):
+    """Native fanout with the JSON-safe hierarchy, whatever the caller built."""
+    kwargs["hierarchical_service"] = OANJsonHierarchy.get_component()
+    return await fanout_outgest_rows(*args, **kwargs)
+
+
+def install_intake_outgest_json(module_name=INGEST_WORKER_MODULE):
+    """Bind the JSON-safe fanout into the worker's intake ingest task.
+
+    Only worker and beat carry the celery worker package; the API processes
+    have no ingest task to adjust.
+    """
+    try:
+        worker = importlib.import_module(module_name)
+    except ImportError:
+        return None
+    if getattr(worker, "fanout_outgest_rows", None) is fanout_outgest_rows_json:
+        return worker
+    if not callable(getattr(worker, "fanout_outgest_rows", None)):
+        _logger.warning("%s has no fanout_outgest_rows to replace", module_name)
+        return None
+    worker.fanout_outgest_rows = fanout_outgest_rows_json
+    return worker
+
+
 def install_outgest_json():
     if OANJsonHierarchy.get_component() is None:
         OANJsonHierarchy()
+    install_intake_outgest_json()
     current = G2PRegisterChangeRequestService.get_component()
     if isinstance(current, OANOutgestChangeRequestService):
         return current

@@ -88,3 +88,37 @@ def test_installer_and_native_fanout_injection(monkeypatch):
     fanout.reset_mock()
     asyncio.run(service._fanout_outgest_for_change_request(cr, "session"))
     fanout.assert_not_called()
+
+
+def test_intake_ingest_fanout_uses_json_hierarchy(monkeypatch):
+    """The worker's ingest task gets a fanout that swaps in the JSON-safe hierarchy."""
+    import sys
+    from types import ModuleType
+
+    name = "oan_fake_ingest_worker"
+    fake = ModuleType(name)
+    fake.fanout_outgest_rows = module.fanout_outgest_rows
+    monkeypatch.setitem(sys.modules, name, fake)
+    module.install_outgest_json()
+    assert module.install_intake_outgest_json(name) is fake
+    assert fake.fanout_outgest_rows is module.fanout_outgest_rows_json
+    assert module.install_intake_outgest_json(name) is fake
+
+    native = AsyncMock()
+    monkeypatch.setattr(module, "fanout_outgest_rows", native)
+    asyncio.run(
+        fake.fanout_outgest_rows(
+            "definition",
+            "row",
+            "session",
+            intake_form_submission_id="submission",
+            changed_by="system",
+            changed_at="now",
+            hierarchical_service=module.G2PRegisterHierarchicalService(),
+        )
+    )
+    assert isinstance(
+        native.call_args.kwargs["hierarchical_service"], module.OANJsonHierarchy
+    )
+    assert native.call_args.kwargs["intake_form_submission_id"] == "submission"
+    assert module.install_intake_outgest_json("oan_missing_worker_module") is None

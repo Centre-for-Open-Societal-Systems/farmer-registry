@@ -1,8 +1,8 @@
 {
-  "repository": "https://raw.githubusercontent.com/Centre-for-Open-Societal-Systems/oan-helm/5c1c7ba0154e2e5ab74ed2a7b4d7bf72b4d45ca7/repository/",
+  "repository": "https://raw.githubusercontent.com/Centre-for-Open-Societal-Systems/oan-helm/5a6adb6b419b10c9cd8a2a357216705d1944283a/repository/",
   "name": "openg2p-farmer-registry",
-  "version": "1.0.0-dev.17",
-  "sha256": "4de41863f318ae1eb89fea5391076ebe0f77cec0194db16afe624d2774d5ce7d",
+  "version": "1.0.0-dev.18",
+  "sha256": "f4364a2f58a33905715f900210a977eee185f11a63f0ca43a71bb28b9f114544",
   "platformVersion": "1.2.2-rc.557",
   "environment": "dev",
   "namespace": "farmer",
