@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 
 import pytest
+from tests.unit.test_jenkins_deployment import release, deployment as delivery_guard, ECR, TAG
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/"ci/deploy"))
@@ -108,3 +109,27 @@ def test_preparatory_seed_keeps_db_wait_and_native_container_but_not_paused_api_
 def test_changed_initializer_contract_requires_review(names):
     with pytest.raises(ValueError,match="Review changed native seed initialization"):
         render.preparatory_seed_template({"initContainers":[{"name":name} for name in names]})
+
+
+def test_strict_guard_still_checks_native_job_images_without_reapplying_them(release):
+    before,after=release
+    retained=[d for d in after if d["kind"]!="Job"]
+    with pytest.raises(ValueError,match="Missing required image workload"):
+        delivery_guard.validate(before,retained,ECR,TAG)
+    inventory=render.validation_inventory(retained,after)
+    delivery_guard.validate(before,inventory,ECR,TAG)
+    assert not any(d["kind"]=="Job" for d in retained)
+    modified=copy.deepcopy(after)
+    next(d for d in modified if d["kind"]=="Job" and d["metadata"]["name"]=="farmer-registry-db-seed")["spec"]["template"]["spec"]["containers"][0]["image"]="foreign/seed:unreviewed"
+    with pytest.raises(ValueError,match="Wrong commit image"):
+        delivery_guard.validate(before,render.validation_inventory(retained,modified),ECR,TAG)
+
+
+def test_native_job_plans_cannot_be_missing_duplicated_or_applied_twice():
+    seed={"kind":"Job","metadata":{"name":"farmer-registry-db-seed"}}
+    smoke={"kind":"Job","metadata":{"name":"farmer-registry-sanity"}}
+    for plans in ([],[seed],[seed,seed,smoke]):
+        with pytest.raises(ValueError,match="Exact native seed and smoke"):
+            render.validation_inventory([],plans)
+    with pytest.raises(ValueError,match="duplicate native Jobs"):
+        render.validation_inventory([seed],[seed,smoke])
