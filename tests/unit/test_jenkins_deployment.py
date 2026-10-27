@@ -293,3 +293,15 @@ def test_dashboard_image_is_not_silently_upgraded(release):
     deployment.pod(after[2])["containers"][0]["image"] = "dashboard:new"
     with pytest.raises(ValueError, match="Dashboard image"):
         deployment.validate(before, after, ECR, TAG)
+
+
+def test_dev_values_enable_registrant_authentication_with_the_new_dev_hosts(release):
+    before, _ = release
+    values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}}
+    result = deployment.prepare(values, before, ECR, TAG)
+    assert result["registrantAuth"]["enabled"] is True
+    assert result["registrantAuth"]["esignetBaseUrl"] == "https://esignet.development.oanstaging.com"
+    assert result["registrantAuth"]["callbackUrl"].endswith("/registrant-auth/callback")
+    assert "registrantAuth" not in deployment.prepare(
+        {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}, before, ECR, TAG,
+        environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})

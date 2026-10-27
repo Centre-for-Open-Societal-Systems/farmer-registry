@@ -27,3 +27,4 @@ COPY test/sanity/sanity/fixtures.py                /app/sanity/fixtures.py
 COPY test/sanity/sanity/data_seed.py               /app/sanity/data_seed.py
 COPY test/sanity/tests/test_e2e_dci.py             /app/tests/test_e2e_dci.py
 COPY test/sanity/tests/test_e2e_change_request.py  /app/tests/test_e2e_change_request.py
+COPY test/sanity/tests/test_smoke.py                 /app/tests/test_smoke.py
