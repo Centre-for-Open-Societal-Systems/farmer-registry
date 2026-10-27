@@ -27,19 +27,18 @@ def test_first_build_or_explicit_publication_never_selects_deployment(environmen
     assert delivery.action(environment) == "publish-only"
 
 
-@pytest.mark.parametrize("reset", ["check", "initialize", "resume"])
-def test_explicit_deploy_preserves_existing_reset_gate_selection(reset):
-    assert delivery.action({"NEW_DEV_DELIVERY_ACTION": "deploy", "NEW_DEV_RESET_ACTION": reset}) == "deploy"
+@pytest.mark.parametrize("selected", ["deploy", "fresh-install"])
+def test_cluster_actions_are_explicit_choices(selected):
+    assert delivery.action({"NEW_DEV_DELIVERY_ACTION": selected}) == selected
 
 
 @pytest.mark.parametrize("environment", [
     {"NEW_DEV_DELIVERY_ACTION": "automatic"},
     {"NEW_DEV_DELIVERY_ACTION": "Deploy"},
-    {"NEW_DEV_RESET_ACTION": "initialize"},
-    {"NEW_DEV_DELIVERY_ACTION": "publish-only", "NEW_DEV_RESET_ACTION": "resume"},
-    {"NEW_DEV_DELIVERY_ACTION": "deploy", "NEW_DEV_RESET_ACTION": "automatic"},
+    {"NEW_DEV_DELIVERY_ACTION": "preserve-upgrade"},
+    {"NEW_DEV_DELIVERY_ACTION": "reset"},
 ])
-def test_ambiguous_actions_and_resets_during_publication_are_rejected(environment):
+def test_unknown_actions_are_rejected(environment):
     with pytest.raises(ValueError):
         delivery.action(environment)
 
@@ -89,9 +88,11 @@ def test_receipt_rejects_incomplete_or_mismatched_build_provenance(published, de
 
 def test_every_cluster_or_optional_stage_requires_explicit_deploy():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
-    for stage in ("Deploy new dev", "Build optional services", "Deploy optional services"):
+    for stage, actions in (("Deploy new dev", "env.OAN_DELIVERY_ACTION in ['deploy', 'fresh-install']"),
+                           ("Build optional services", "env.OAN_DELIVERY_ACTION == 'deploy'"),
+                           ("Deploy optional services", "env.OAN_DELIVERY_ACTION == 'deploy'")):
         definition = pipeline.split("stage('" + stage + "')", 1)[1].split("steps {", 1)[0]
-        assert "env.OAN_DELIVERY_ACTION == 'deploy'" in definition
+        assert actions in definition
         assert "branch 'develop'" in definition
         assert "not { changeRequest() }" in definition
     publication = pipeline.split("stage('Publish dev images')", 1)[1].split("steps {", 1)[0]
@@ -100,17 +101,17 @@ def test_every_cluster_or_optional_stage_requires_explicit_deploy():
     assert "COORDINATE_SERVICES', defaultValue: false" in pipeline
     assert "ci-output/native-worker-save/**" in pipeline
     assert "check_native_worker_save.py" in (ROOT / "ci/build/images.sh").read_text()
-    preserving = pipeline.split("stage('Preserving Farmer adoption')",1)[1].split("steps {",1)[0]
-    assert "env.OAN_DELIVERY_ACTION in ['preserve-preflight', 'preserve-upgrade']" in preserving
-    assert "branch 'develop'" in preserving and "not { changeRequest() }" in preserving
+    assert "choices: ['publish-only', 'deploy', 'fresh-install']" in pipeline
+    assert "NEW_DEV_RESET_ACTION" not in pipeline
 
 
-@pytest.mark.parametrize('action',['preserve-preflight','preserve-upgrade'])
-def test_preserving_modes_cannot_request_a_reset(action):
-    assert delivery.action({'NEW_DEV_DELIVERY_ACTION':action})==action
-    for reset in ('initialize','resume'):
-        with pytest.raises(ValueError):
-            delivery.action({'NEW_DEV_DELIVERY_ACTION':action,'NEW_DEV_RESET_ACTION':reset})
+def test_fresh_install_runs_only_its_own_script_with_the_backup_key():
+    pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
+    deploy = pipeline.split("stage('Deploy new dev')", 1)[1].split("stage('Build optional services')", 1)[0]
+    fresh = deploy.split("if (env.OAN_DELIVERY_ACTION == 'fresh-install')", 1)[1].split("} else {", 1)[0]
+    assert "farmer-new-dev-backup-ssh" in fresh and "ci/deploy/fresh-install-dev.sh" in fresh
+    assert "deploy-dev.sh" not in fresh
+    assert "ci/deploy/fresh-install-dev.sh" not in deploy.split("} else {", 1)[1]
 
 
 JENKINS = {"JENKINS_URL": "https://jenkins.oanstaging.com/", "JOB_NAME": "Gen2-Package/farmer-registry/develop",

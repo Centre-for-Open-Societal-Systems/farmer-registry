@@ -65,11 +65,13 @@ def test_renderer_rejects_unverified_archive_without_emitting_manifest(tmp_path)
 
 
 @pytest.mark.parametrize("tool,role", [(worker, "worker"), (partner, "partner")])
-def test_apply_is_blocked_by_promotion_profile_before_any_cluster_call(tmp_path, monkeypatch, tool, role):
+def test_apply_is_blocked_by_a_foreign_chart_pin_before_any_cluster_call(tmp_path, monkeypatch, tool, role):
+    import oan_chart
     image_role = "celery" if role == "worker" else "partner-api"
     image = f"123456789012.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/{image_role}:{SHA[:12]}@sha256:{DIGEST}"
     monkeypatch.setattr(sys, "argv", ["rollout", "--image", image, "--commit", SHA, "--output", str(tmp_path / "out.json"), "--apply"])
     monkeypatch.setattr(tool, "command", lambda *a: pytest.fail("Unexpected cluster call"))
+    monkeypatch.setattr(oan_chart, "profile", lambda: {**approved.profile(), "environment": "staging"})
     with pytest.raises(ValueError, match="Deployment blocked"):
         tool.main()
 

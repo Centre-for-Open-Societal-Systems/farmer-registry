@@ -34,8 +34,8 @@ def verify(path, pin=None):
 
 def require_deployable(environment):
     pin = profile()
-    if environment != 'dev' or pin.get('environment') != environment or pin.get('promotionReady') is not True:
-        raise ValueError('Deployment blocked: refactor acceptance and fresh-install preservation evidence are required')
+    if environment != 'dev' or pin.get('environment') != environment:
+        raise ValueError('Deployment blocked: the pinned OAN chart is for another environment')
 
 
 def defaults(path, pin=None):

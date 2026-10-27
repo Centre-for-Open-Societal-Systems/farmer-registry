@@ -1,68 +1,64 @@
-# Farmer first: source publication and preserving adoption
+# New Dev delivery
 
-The first rollout includes only the core Farmer registry. Crop, Livestock,
-Commons, existing connectors and independent dashboards retain their releases.
-Staging is outside this rollout.
+The `Gen2-Package/farmer-registry/develop` Jenkins job delivers the Farmer
+registry to New Dev (namespace `farmer`, release `farmer-registry`). Crop,
+Livestock, Commons, the connector and the dashboard releases are separate.
+Staging is outside this document.
 
-The source dependencies are central `oan-helm` PR #14 into `main`, then Farmer
-PR #124 into `develop`. Both were merged on 27 October 2026. Farmer Jenkins
-build #30 published all six images for merge commit
-`431cbdaf63a06fbf60cb436784f4815794d153a8`, then failed at the promotion guard
-before upgrading Farmer. This publishes reviewed chart/source; it is not
-application acceptance. Do not merge receiving registry or standalone dashboard
-PRs for this step.
+Every build validates the source, builds the six images and, on `develop`,
+publishes them to ECR under the checked-out commit tag. What happens next is the
+`NEW_DEV_DELIVERY_ACTION` parameter:
 
-With this follow-up, the existing `Gen2-Package/farmer-registry/develop` job defaults to
-`NEW_DEV_DELIVERY_ACTION=publish-only`, including the first automatic build
-before Jenkins has installed the new parameter definitions. It builds/tests the
-six images and publishes their actual checked-out commit tag and ECR digests.
-The native Celery SAVE/parent/finance/rollback probe runs against that exact
-image in an owned disposable PostgreSQL. Jenkins retains its artifacts.
-`service-outcomes/publication.json` records publication separately from deployment.
-All cluster deployment and optional-service stages require explicit `deploy`.
-`COORDINATE_SERVICES` defaults to `false`.
+| Action | Effect |
+| --- | --- |
+| `publish-only` (default) | Images published; the live release is untouched. |
+| `deploy` | `ci/deploy/deploy-dev.sh` upgrades the existing release with this build's images and the chart pinned in `ci/deploy/oan-chart.json`. Values come from the live release; private values stay out of artifacts. |
+| `fresh-install` | `ci/deploy/fresh-install-dev.sh` rebuilds New Dev from an empty database. |
 
-Publication never supplies a reset receipt, changes the chart promotion gate,
-or upgrades a live release. The pinned chart still blocks workload rendering;
-`promotionReady=false` and the existing database/adoption guards remain active.
-Selecting `deploy` cannot bypass them.
+The chart is published by [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm);
+`oan-chart.json` pins its version and SHA-256, and `deploy-rc.sh` refuses any
+other archive. Changing the pin is a reviewed commit.
 
-After publication, bind the actual merged source and all six image digests to
-the preserving-adoption rehearsal. A live upgrade requires a fresh coordinated
-database/filestore/configuration backup, restored-copy native migration and seed
-verification, reviewed rendering against the current release, and the preserving
-upgrade path. Prior snapshots taken while writers were active are rehearsal
-inputs, not a current coherent cutover backup. Do not use `initialize`/`resume`
-or drop/recreate the existing New Dev database to satisfy the first-install gate.
-Preserve history, documents, pending approvals, identity assignments, connector
-checkpoints and environment settings.
+## Fresh install
 
-The preserving follow-up uses a separate immutable `adoption-chart.json` so
-legacy/optional delivery pins remain unchanged. The consolidated central Helm
-review is PR16 (dev.16). `adoption-candidate.json` freezes the already published
-and rehearsed Jenkins31 application images at afdbf75, independently of the
-later delivery-controller commit. A runtime-source hash refuses changes to the
-extension/image/UI inputs after that rehearsal.
+New Dev is a development environment: its registry database may be rebuilt
+whenever the metadata, schema or seed changes in a way an upgrade cannot carry.
+`fresh-install` is the standard OpenG2P first install of the pinned chart, done
+again, through Jenkins, and in this order:
 
-Use `preserve-preflight` first, then `preserve-upgrade`, through the same Jenkins
-develop job and existing `farmer-new-dev-backup-ssh` credential. Both modes reject
-any reset selection. Preflight only reads the live release and verifies a private
-diagnostic render. Upgrade saves exact workload UIDs/replicas and schedules,
-pauses Farmer writers, takes native restored backups and a protected filestore
-copy, runs the native migration/seed/reporting Jobs, verifies original business
-values, then creates the expiring native-ready receipt for the real chart.
+1. Read the live release (values, manifest) and prepare the install values with
+   this build's images, exactly as `deploy` would.
+2. Archive `farmer_registry` and `farmer_registry_idgen` from a Job in the
+   `farmer` namespace (the Jenkins account cannot reach Commons pods; the
+   namespace holds a copy of the Commons PostgreSQL Secret). Each archive is
+   listed with `pg_restore`, copied out, and streamed to the New Dev box into
+   `/var/backups/oan/farmer/<stamp>-<database>.dump` over the
+   `farmer-new-dev-backup-ssh` key. The remote checksum must match before
+   anything is removed.
+3. `helm uninstall` the release. Secrets the chart marks `resource-policy: keep`
+   (database passwords, Keycloak client secrets, the AWE callback HMAC) remain.
+4. `DROP DATABASE ... WITH (FORCE)` for both databases.
+5. `helm install` the pinned chart with the prepared values. postgres-init
+   recreates the databases and re-syncs the roles to the kept Secrets, the
+   applications migrate the empty schema on start, the post-install hooks run
+   the OAN seed (which now fails the job if the forms are wrong; see
+   `oan-extension/src/openg2p_registry_oan_extension/meta_data/90_checks.sql`)
+   and the sanity smoke tests.
 
-The actual Helm upgrade retains persistent resources and suppresses fresh
-database/realm initialization. Native Jobs execute explicitly under the same
-receipt. APIs/UI start before producers. Read-only native smoke and HTTP
-readiness must pass before restoring the original worker/connector replicas and
-schedules. An interrupted operation retains its private directory and requires
-explicit recovery; it never drops a live database or rolls old images back
-across schema changes. Shared Commons services remain online for other
-registries, so their archive snapshots are not advertised as a globally frozen
-cross-service cutover.
+Everything registered on New Dev (farmers, households, documents, approvals,
+issued IDs) is gone after step 4; the archive from step 2 is the only copy.
+Commons services, the connector queue and the dashboard releases are untouched;
+the reporting views are recreated by the chart.
 
-Source and restored-copy approval metadata now use the standard OpenG2P
-two-stage defaults; geographic/custom reviewers are deferred. Existing AWE
-tasks keep their policy and assignees. Live default reviewer resolution and
-final approval decisions remain application acceptance checks after adoption.
+To restore an archive instead, use the deployment credentials:
+`pg_restore -d farmer_registry <stamp>-farmer_registry.dump` into an empty
+database created by postgres-init, then `deploy` once so the hooks re-run.
+
+## Why the seed is also a gate
+
+The farmer seed upserts metadata and never deletes. A database that lived
+through earlier seeds keeps rows no current seed writes, and on 27 October 2026
+New Dev showed the intake sections twice for that reason. The OAN layer now
+attaches its sections by the upstream row's id (not by section), removes the
+known leftovers by explicit id (`22_retired_rows.sql`), and `90_checks.sql`
+fails the seed job on any section attached twice or any unexpected form or tab.

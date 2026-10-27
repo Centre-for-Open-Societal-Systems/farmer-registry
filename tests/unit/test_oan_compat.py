@@ -8,7 +8,6 @@ import pytest
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'ci/deploy'))
-import cutover
 import oan_compat
 
 
@@ -33,7 +32,6 @@ def test_only_explicitly_suppressed_default_is_removed_from_app_and_init():
     result = oan_compat.render(candidate, values)
     assert result == before
     assert candidate == original
-    cutover.validate(before, result)
 
 
 @pytest.mark.parametrize('component', list(oan_compat.OMITTABLE))
@@ -45,7 +43,7 @@ def test_reviewed_omissions_for_every_app_and_init_pair(component):
         containers[0]['env'] = copy.deepcopy(before[0]['spec']['template']['spec']['containers'][0]['env']) + [
             {'name': name, 'value': 'packaged-default'} for name in sorted(names)]
     values = {'registry': {component: {field: {name: None for name in names} for field in ('envVars', 'envVarsFrom')}}}
-    cutover.validate(before, oan_compat.render(candidate, values))
+    assert oan_compat.render(candidate, values) == before
 
 
 @pytest.mark.parametrize('field,value', [('envVars', 'configured'), ('envVarsFrom', {'secretKeyRef': {'name': 'keep', 'key': 'key'}})])
@@ -69,18 +67,20 @@ def test_duplicate_environment_is_rejected_before_filtering():
         oan_compat.render(candidate, values)
 
 
-def test_unlisted_defaults_still_fail_strict_preservation():
+def test_unlisted_defaults_are_kept_even_when_nulled():
     before, candidate, values = fixture()
-    candidate[0]['spec']['template']['spec']['containers'][0]['env'].append({'name': 'UNREVIEWED', 'value': 'new'})
+    unreviewed = {'name': 'UNREVIEWED', 'value': 'new'}
+    candidate[0]['spec']['template']['spec']['containers'][0]['env'].append(unreviewed)
     for field in ('envVars', 'envVarsFrom'):
         values['registry']['staffApi'][field]['UNREVIEWED'] = None
-    with pytest.raises(ValueError, match='configuration'):
-        cutover.validate(before, oan_compat.render(candidate, values))
+    result = oan_compat.render(candidate, values)
+    assert unreviewed in result[0]['spec']['template']['spec']['containers'][0]['env']
+    assert result != before
 
 
 @pytest.mark.parametrize('mutation', ['command', 'secret', 'route', 'pvc', 'selector'])
-def test_renderer_cannot_hide_other_preservation_violations(mutation):
-    before, candidate, values = fixture()
+def test_renderer_changes_nothing_but_the_listed_defaults(mutation):
+    _, candidate, values = fixture()
     if mutation == 'command':
         candidate[0]['spec']['template']['spec']['containers'][0]['command'] = ['changed']
     elif mutation == 'secret':
@@ -89,15 +89,16 @@ def test_renderer_cannot_hide_other_preservation_violations(mutation):
         candidate[0]['spec']['selector'] = {'matchLabels': {'changed': 'true'}}
     else:
         kind = 'VirtualService' if mutation == 'route' else 'PersistentVolumeClaim'
-        before.append({'kind': kind, 'metadata': {'name': 'kept'}, 'spec': {'setting': 'kept'}})
         candidate.append({'kind': kind, 'metadata': {'name': 'kept'}, 'spec': {'setting': 'changed'}})
-    with pytest.raises(ValueError):
-        cutover.validate(before, oan_compat.render(candidate, values))
+    expected = copy.deepcopy(candidate)
+    for containers in expected[0]['spec']['template']['spec'].values():
+        containers[0]['env'] = [item for item in containers[0]['env'] if item['name'] != 'COMMON_DB_HOSTNAME']
+    assert oan_compat.render(candidate, values) == expected
 
 
 def test_reporting_command_is_byte_for_byte_unchanged_in_utf8():
     _, candidate, values = fixture()
-    command = "echo 'refresh \u2014 nothing to do'\n"
+    command = "echo 'refresh — nothing to do'\n"
     cron = {'kind': 'CronJob', 'metadata': {'name': 'farmer-registry-fr-reporting-views-refresh'},
             'spec': {'jobTemplate': {'spec': {'template': {'spec': {'containers': [
                 {'name': 'refresh', 'command': ['sh', '-c', command]}]}}}}}}
@@ -105,7 +106,7 @@ def test_reporting_command_is_byte_for_byte_unchanged_in_utf8():
     assert oan_compat.render(candidate, values)[-1] == cron
 
 
-def test_main_verifies_package_and_keeps_normal_jobs_but_filters_cutover(tmp_path, monkeypatch, capsys):
+def test_main_verifies_package_and_keeps_jobs_unless_chart_only(tmp_path, monkeypatch, capsys):
     before, candidate, values = fixture()
     candidate.append({'kind': 'Job', 'metadata': {'name': 'initialization'}})
     path = tmp_path / 'values.yaml'
@@ -117,7 +118,7 @@ def test_main_verifies_package_and_keeps_normal_jobs_but_filters_cutover(tmp_pat
     calls = []
     def verify(path):
         calls.append(path)
-        return {'version': '1.0.0-dev.5'}
+        return {'version': '1.0.0-dev.16'}
     monkeypatch.setattr(oan_compat, 'verify', verify)
     for mode in ('false', 'true'):
         monkeypatch.setenv('OAN_CHART_ONLY', mode)

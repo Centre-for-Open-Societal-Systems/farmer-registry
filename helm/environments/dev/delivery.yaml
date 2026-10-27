@@ -7,6 +7,7 @@ registryHostname: farmer-registry-development.oanstaging.com
 staffIssuer: https://keycloak-development.oanstaging.com/realms/staff
 connectorRelease: farmer-registry-connector
 registryDatabase: farmer_registry
+idGeneratorDatabase: farmer_registry_idgen
 connectorDatabase: farmer_connector_v2
 connectorQueue: farmer-registry-connector-v2
 connectorHostname: connector-farmer-registry-development.oanstaging.com

@@ -18,17 +18,16 @@ historical operational instructions.
 | `farmer-extension/` | Upstream Farmer domain reference, retained for standard extension composition |
 | `ui/staff-ui/overrides/` | Registered OAN widgets and supported source overlays |
 | `docker/oan/` | Images extending the published Farmer runtime |
-| `ci/` | Existing Jenkins delivery plus source, native metadata and preservation checks |
+| `ci/` | Existing Jenkins delivery plus source and native metadata checks |
 | `odk/` | Source XLSForms and unpublished candidate form |
-| `tests/` | Delivery, reset, integration and regression checks |
+| `tests/` | Delivery, integration and regression checks |
 | `docs/` | Current guides and dated historical evidence |
 
 Helm ownership is centralized in
 [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm).
 The [deployment profile](ci/deploy/oan-chart.json) pins an immutable chart and
-SHA-256 checksum. Local legacy chart paths are retained only for compatibility
-with reviewed preservation tooling. Dashboard UI/API and connector releases have
-independent owners; this candidate does not replace their running releases.
+SHA-256 checksum. Dashboard UI/API and connector releases have independent
+owners; this candidate does not replace their running releases.
 
 FIN is entered in the Fayda verification popup. The form displays its backing
 value without a second editable FIN field. A typed value alone does not establish
@@ -40,7 +39,7 @@ For delivery tests, install `ci/validation/requirements.txt` and run
 run against the published runtime in CI; browser checks exercise the registered
 widget and native data paths. See [the documentation index](docs/README.md),
 [native ODK intake](docs/odk-native-intake.md) and
-[the guarded first New Dev reset](ci/deploy/README-reset-new-dev.md).
+[New Dev delivery](docs/NEW_DEV_FARMER_FIRST.md).
 
 Local acceptance runs serially: Commons + Farmer + Crop, then Commons + Farmer +
 Livestock. Existing New Dev and staging deployments are unchanged by publication
