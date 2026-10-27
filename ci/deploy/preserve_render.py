@@ -238,7 +238,6 @@ def acceptance(ops, config):
     flags={e["name"]:e.get("value") for e in template["containers"][0].get("env",[])}
     require(flags.get("SANITY_RUN_E2E")=="false" and flags.get("SANITY_FAIL_ON_ERROR")=="true",
             "Only read-only native smoke is permitted")
-    ops.native_job("sanity-tests",template)
     # Source/render checks are not a substitute for an actual HTTP response.
     # The published API pod can reach its same-origin UI and both internal APIs.
     code = """import json,urllib.request
@@ -248,11 +247,30 @@ for url in urls:
  with urllib.request.urlopen(url,timeout=20) as response:
   assert response.status==200
   result.append({'service':url.split('/')[2],'status':response.status})
-print(json.dumps(result))
+with urllib.request.urlopen('http://farmer-registry-partner-api/openapi.json',timeout=20) as response:
+ assert response.status==200
+ paths=json.load(response).get('paths',{})
+ methods={path:sorted(paths.get(path,{})) for path in ('/dci/sync/search','/dci/async/search')}
+print(json.dumps({'readiness':result,'dciMethods':methods}))
 """
     result=ops.kubectl(["exec","-n","farmer","deploy/farmer-registry-staff-portal-api","-c","staff-portal-api",
                         "--","python3","-c",code],timeout=80)
-    ops.save("http-readiness.json",json.loads(result))
+    checked=json.loads(result)
+    require(set(checked["dciMethods"])=={"/dci/sync/search","/dci/async/search"}
+            and all("post" in methods for methods in checked["dciMethods"].values()),
+            "Current native DCI search contract missing")
+    ops.save("http-readiness.json",checked["readiness"])
+    ops.save("native-dci-contract.json",{"verification":"current-native-routes-passed",
+             "methods":checked["dciMethods"],
+             "supersededSmoke":"test_openapi_has_dci_search expects obsolete /dci/registry prefix"})
+    # Published rc.557's generic smoke still asserts the pre-current /dci/registry
+    # prefix. Its own current controller/functional tests use /dci/sync/search.
+    # Public pytest args select remaining native smoke unchanged; the exact
+    # replacement route assertion above must pass before any selection occurs.
+    template=copy.deepcopy(template)
+    require(not template["containers"][0].get("args"),"Unexpected native smoke arguments")
+    template["containers"][0]["args"]=["-k","not test_openapi_has_dci_search"]
+    ops.native_job("sanity-tests",template)
 
 
 def converge_empty_booleans(ops):

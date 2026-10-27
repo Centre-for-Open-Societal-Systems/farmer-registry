@@ -314,3 +314,33 @@ def test_native_convergence_only_removes_stale_empty_entries_and_is_idempotent(t
         assert len(calls)==4 and len(saved)==4
         render.converge_empty_booleans(ops)
         assert len(calls)==4
+
+
+@pytest.mark.parametrize("missing_current_route",[False,True])
+def test_current_dci_contract_must_pass_before_selecting_native_smoke(tmp_path,missing_current_route):
+    import yaml
+    from types import SimpleNamespace
+    template={"containers":[{"name":"sanity","image":"frozen/native-image",
+        "env":[{"name":"SANITY_RUN_E2E","value":"false"},
+               {"name":"SANITY_FAIL_ON_ERROR","value":"true"}]}]}
+    job={"kind":"Job","metadata":{"name":"farmer-registry-sanity"},"spec":{"template":{"spec":template}}}
+    (tmp_path/"candidate-analysis.yaml").write_text(yaml.safe_dump_all([job]))
+    methods={"/dci/sync/search":["post"],"/dci/async/search":["post"]}
+    if missing_current_route:methods["/dci/sync/search"]=[]
+    calls=[];saved={}
+    ops=SimpleNamespace(directory=tmp_path,
+        kubectl=lambda *args,**kw:json.dumps({"readiness":[{"status":200}],"dciMethods":methods}).encode(),
+        save=lambda name,value:saved.update({name:value}),
+        native_job=lambda role,value:calls.append((role,value)))
+    if missing_current_route:
+        with pytest.raises(ValueError,match="Current native DCI search contract missing"):
+            render.acceptance(ops,{})
+        assert not calls
+    else:
+        render.acceptance(ops,{})
+        assert calls[0][0]=="sanity-tests"
+        container=calls[0][1]["containers"][0]
+        assert container["args"]==["-k","not test_openapi_has_dci_search"]
+        assert "command" not in container and container["image"]=="frozen/native-image"
+        assert container["env"]==template["containers"][0]["env"]
+        assert saved["native-dci-contract.json"]["verification"]=="current-native-routes-passed"
