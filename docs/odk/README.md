@@ -30,6 +30,36 @@ Cleanup exports and removes only verified synthetic rollout projects/forms and
 accounts through supported Central operations. Keep the real Farmer project,
 form, submissions, media, service account and permanent partner. Staging cleanup must preserve the real project and submissions.
 
+## Every choice list from Master Data
+
+`odk/tools/build_mds_form.py` builds the form whose dropdowns are Master Data's:
+
+```sh
+python odk/tools/build_mds_form.py --pack <openg2p-data>/packs/ETH-OAN
+```
+
+It takes the v3 form and replaces the rows of every choice list that is a
+Master Data list (gender, language, farming type, marital status, education,
+income sources, crops, cluster role, land ownership, crop season, water
+sources, livestock type, machinery, finance access, identity document type,
+relationship to the head) with the pack's codes and displays, keeping the
+Amharic and Afaan Oromoo wording of the choices the old form had. The
+region, zone, woreda and kebele lists become the pack's hierarchy as external
+CSVs (`odk/media/mds/*.csv`: `name` and `code` are the P-code Master Data
+uses as `level_value_id`, `parent` the parent's), so a submission carries the
+location codes the registry stores and `odk/transform.py` passes every code
+through unchanged. Yes/no answers, consent, and the cooperative and union
+names (not Master Data lists) stay as they are. Output:
+`odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.28`;
+`tests/unit/test_odk_mds_form.py` checks the build against a small pack and
+`oan-extension/tests/test_odk_mds_codes.py` the transform's pass-through.
+
+Publish it as a new version of the same `farmer_profile` form (project 1 on
+new dev) together with the four CSVs as form attachments; the connector and
+the registry need no change. Choices the old form offered that Master Data
+does not have (three crops, six machinery names) are not carried: the
+registry's Master Data validation would refuse them anyway.
+
 The [16 October staging location update](../history/odk-staging-location-20261016.md)
 published form 1.0.5 with canonical cascading dropdowns, compact CSV media and
 manual map placement. This form update is independent of the blocked Registry
