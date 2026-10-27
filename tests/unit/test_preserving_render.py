@@ -133,3 +133,124 @@ def test_native_job_plans_cannot_be_missing_duplicated_or_applied_twice():
             render.validation_inventory([],plans)
     with pytest.raises(ValueError,match="duplicate native Jobs"):
         render.validation_inventory([seed],[seed,smoke])
+
+
+@pytest.mark.parametrize("component,suffix",[
+    ("staffApi","staff-portal-api"),("partnerApi","partner-api"),
+    ("celeryWorker","celery-worker"),("celeryBeat","celery-beat-producer")])
+def test_explicitly_absent_native_boolean_is_not_emitted_as_empty_string(component,suffix):
+    name="REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES"
+    doc=deployment("farmer-registry-"+suffix)
+    env=doc["spec"]["template"]["spec"]["containers"][0]["env"]
+    env.extend([{"name":name},{"name":"UNRELATED_EMPTY","value":""}])
+    values={"registry":{component:{"envVars":{name:None},"envVarsFrom":{name:None}}}}
+    snapshot={"deployment/"+doc["metadata"]["name"]:{"uid":"original","replicas":1}}
+    result=render.controlled_render([doc],values,snapshot)[0]
+    actual=result["spec"]["template"]["spec"]["containers"][0]["env"]
+    assert not any(e["name"]==name for e in actual)
+    assert {"name":"UNRELATED_EMPTY","value":""} in actual
+    assert any(e["name"]==name for e in env)  # Input is preserved.
+
+
+@pytest.mark.parametrize("entry",[
+    {"name":"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES","value":"true"},
+    {"name":"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES","value":"false"},
+    {"name":"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES","valueFrom":{"secretKeyRef":{"name":"existing","key":"validation"}}},
+])
+def test_existing_native_boolean_configuration_is_preserved(entry):
+    doc=deployment("farmer-registry-staff-portal-api")
+    doc["spec"]["template"]["spec"]["containers"][0]["env"].append(entry)
+    field="envVarsFrom" if "valueFrom" in entry else "envVars"
+    values={"registry":{"staffApi":{field:{entry["name"]:entry.get("valueFrom",entry.get("value"))}}}}
+    snapshot={"deployment/"+doc["metadata"]["name"]:{"uid":"original","replicas":1}}
+    assert render.controlled_render([doc],values,snapshot)==[doc]
+
+
+@pytest.mark.parametrize("empty",[
+    {"name":"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES"},
+    {"name":"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES","valueFrom":None},
+    {"name":"REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES","value":None},
+])
+def test_forward_repair_permits_only_empty_validation_omission(empty):
+    before=[deployment("farmer-registry-staff-portal-api")]
+    before[0]["spec"]["template"]["spec"]["containers"][0]["env"].append(empty)
+    before[0]["spec"]["template"]["spec"]["initContainers"]=[{"name":"database-checker","env":[empty]}]
+    after=copy.deepcopy(before)
+    after[0]["spec"]["template"]["spec"]["containers"][0]["env"].pop()
+    after[0]["spec"]["template"]["spec"]["initContainers"][0]["env"]=[]
+    render.validate_repair_delta(before,after)
+    changed=copy.deepcopy(after)
+    changed[0]["spec"]["template"]["spec"]["containers"][0]["image"]="other/image:latest"
+    with pytest.raises(ValueError,match="Unreviewed forward repair"):
+        render.validate_repair_delta(before,changed)
+    configured=copy.deepcopy(before)
+    configured[0]["spec"]["template"]["spec"]["containers"][0]["env"][-1]["value"]="true"
+    with pytest.raises(ValueError,match="Unreviewed forward repair"):
+        render.validate_repair_delta(configured,after)
+    with pytest.raises(ValueError,match="Unreviewed forward repair"):
+        render.validate_repair_delta(after,after)
+
+
+def test_failed_owned_helm_attempt_is_archived_before_one_forward_repair(tmp_path,monkeypatch,release):
+    import yaml
+    from types import SimpleNamespace
+    from tests.unit.test_preserving_adoption import configuration
+    config={**configuration(),"registry":ECR,"sourceCommit":TAG+"a"*(40-len(TAG)),"imageProvenance":None}
+    before,after=release
+    retained=[d for d in after if d["kind"]!="Job"]
+    for name,docs in [("manifest.yaml",before),("hooks.yaml",[]),("candidate-final.yaml",retained),("candidate-analysis.yaml",after)]:
+        (tmp_path/name).write_text(yaml.safe_dump_all(docs))
+    (tmp_path/"helm-upgrade-started").touch()
+    (tmp_path/"helm-upgrade.log").write_text("retained private readiness failure")
+    ops=SimpleNamespace(directory=tmp_path,status=lambda:{"version":63,"info":{"status":"failed"}},
+        load=lambda name:json.loads((tmp_path/name).read_text()),
+        save=lambda name,value:(tmp_path/name).write_text(json.dumps(value)))
+    monkeypatch.setattr(render,"command",lambda args:yaml.safe_dump_all(retained).encode())
+    assert render.prepare_helm_attempt(ops,config)==63
+    assert not (tmp_path/"helm-upgrade-started").exists()
+    assert (tmp_path/"failed-helm-attempt-63"/"candidate-final.yaml").is_file()
+    assert render.installed_revision(ops,config)==64
+    assert render.prepare_helm_attempt(ops,config)==63  # Interrupted before retry is safe.
+    (tmp_path/"helm-upgrade-started").write_text('{"targetRevision":64}')
+    with pytest.raises(ValueError,match="already started"):
+        render.prepare_helm_attempt(ops,config)
+    ops.status=lambda:{"version":64,"info":{"status":"failed"}}
+    with pytest.raises(ValueError,match="exact failed release"):
+        render.prepare_helm_attempt(ops,config)
+
+
+@pytest.mark.parametrize("state,revision,intent",[
+    ("pending-upgrade",63,""),("failed",64,""),("failed",63,'{"targetRevision":63}')])
+def test_pending_unowned_or_new_attempts_are_not_blindly_retried(tmp_path,state,revision,intent):
+    from types import SimpleNamespace
+    (tmp_path/"helm-upgrade-started").write_text(intent)
+    ops=SimpleNamespace(directory=tmp_path,status=lambda:{"version":revision,"info":{"status":state}})
+    with pytest.raises(ValueError,match="Ambiguous Helm attempt"):
+        render.prepare_helm_attempt(ops,{"expectedRevision":62})
+
+
+def test_acceptance_restarts_only_original_controlled_workloads(monkeypatch):
+    from types import SimpleNamespace
+    from preserve_ops import Operations
+    originals=[]
+    for name in ["staff-portal-api","staff-portal-ui","partner-api","celery-worker"]:
+        row=deployment("farmer-registry-"+name)
+        row["metadata"]["uid"]="retained-"+name
+        originals.append(row)
+    calls=[]
+    ops=SimpleNamespace(load=lambda name:originals,
+        get=lambda args:next(row for row in originals if row["metadata"]["name"]==args[2]),
+        kubectl=lambda args,**kwargs:calls.append(args),
+        verify_preservation=lambda config:calls.append(["preservation"]))
+    monkeypatch.setattr(render,"acceptance",lambda ops,config:None)
+    # Operations imports the canonical module, which can have a separate import
+    # identity from this test's explicitly loaded renderer.
+    import preserve_render
+    monkeypatch.setattr(preserve_render,"acceptance",lambda ops,config:None)
+    Operations.accept(ops,{})
+    scales=[args for args in calls if args[0]=="scale"]
+    assert len(scales)==3 and all("celery" not in str(args) for args in scales)
+    assert ["preservation"] in calls
+    ops.get=lambda args:{"metadata":{"uid":"replacement"}}
+    with pytest.raises(ValueError,match="Controlled workload replaced"):
+        Operations.accept(ops,{})

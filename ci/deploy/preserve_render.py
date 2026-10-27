@@ -1,9 +1,11 @@
 """Preservation-checked native Helm upgrade with controlled API-only startup."""
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
 import sys
+import shutil
 
 import yaml
 
@@ -14,6 +16,95 @@ from preserve_ops import HELM, command
 
 CONTROLLED = {"farmer-registry-staff-portal-api", "farmer-registry-partner-api",
               "farmer-registry-staff-portal-ui", "farmer-registry-staff-ui-public"}
+
+
+def manifest_hash(docs):
+    return hashlib.sha256(json.dumps(docs, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def installed_revision(ops, config):
+    checkpoint=ops.directory/"helm-forward-repair.json"
+    if not checkpoint.exists():
+        return config["expectedRevision"]+1
+    proof=ops.load(checkpoint.name)
+    from preserve import fingerprint
+    require(proof["configFingerprint"]==fingerprint(config)
+            and proof["failedRevision"]==config["expectedRevision"]+1
+            and proof["targetRevision"]==config["expectedRevision"]+2,
+            "Forward repair identity mismatch")
+    return proof["targetRevision"]
+
+
+def prepare_helm_attempt(ops, config):
+    """One reviewed forward repair of our exact failed first upgrade.
+
+    Never clear a pending release or retry an ambiguous/running Helm command.
+    Original attempted manifests and logs remain in the protected directory.
+    """
+    from preserve import fingerprint
+    intent=ops.directory/"helm-upgrade-started"
+    checkpoint=ops.directory/"helm-forward-repair.json"
+    status=ops.status()
+    if intent.exists() and status["info"]["status"]=="deployed":
+        ops.verify_installed(config)
+        return None
+    if intent.exists() and not checkpoint.exists():
+        require(not intent.read_bytes() and status["info"]["status"]=="failed"
+                and status["version"]==config["expectedRevision"]+1,
+                "Ambiguous Helm attempt requires separate review")
+        attempted=documents(ops.directory/"candidate-final.yaml")
+        actual=list(yaml.safe_load_all(command(HELM+["get","manifest","farmer-registry","-n","farmer"])))
+        actual=[d for d in actual if isinstance(d,dict)]
+        require(manifest_hash(actual)==manifest_hash(attempted),"Failed release is not the owned attempted manifest")
+        before=documents(ops.directory/"manifest.yaml")+documents(ops.directory/"hooks.yaml")
+        validate(before,validation_inventory(actual,documents(ops.directory/"candidate-analysis.yaml")),
+                 config["registry"],config["sourceCommit"][:12],images=config["imageProvenance"])
+        archive=ops.directory/"failed-helm-attempt-63"
+        archive.mkdir(mode=0o700,exist_ok=True)
+        for name in ("helm-upgrade-started","candidate-final.yaml","helm-upgrade.log"):
+            source=ops.directory/name
+            require(source.is_file() and not source.is_symlink(),"Missing owned attempt evidence")
+            target=archive/name
+            if target.exists():
+                require(target.read_bytes()==source.read_bytes(),"Failed attempt archive changed")
+            else:
+                shutil.copyfile(source,target)
+        ops.save(checkpoint.name,{"configFingerprint":fingerprint(config),
+                 "failedRevision":status["version"],"targetRevision":status["version"]+1,
+                 "failedManifestSha256":manifest_hash(actual)})
+    if checkpoint.exists():
+        installed_revision(ops,config)
+        proof=ops.load(checkpoint.name)
+        require(status["version"]==proof["failedRevision"] and status["info"]["status"]=="failed",
+                "Forward repair requires the exact failed release")
+        actual=[d for d in yaml.safe_load_all(command(HELM+["get","manifest","farmer-registry","-n","farmer"])) if isinstance(d,dict)]
+        require(manifest_hash(actual)==proof["failedManifestSha256"],"Failed release changed before repair")
+        if intent.exists():
+            require(not intent.read_bytes(),"A forward repair has already started; inspect its result")
+            intent.unlink()
+        return proof["failedRevision"]
+    require(not intent.exists() and status["version"]==config["expectedRevision"]
+            and status["info"]["status"]=="deployed","Unexpected original Helm state")
+    return config["expectedRevision"]
+
+
+def validate_repair_delta(previous, candidate):
+    """This recovery may only remove the erroneously emitted empty boolean."""
+    corrected=copy.deepcopy(previous)
+    removed=0
+    names={"farmer-registry-"+suffix for suffix in
+           ("staff-portal-api","partner-api","celery-worker","celery-beat-producer")}
+    for doc in corrected:
+        if doc.get("kind")=="Deployment" and doc["metadata"]["name"] in names:
+            pod=doc["spec"]["template"]["spec"]
+            for container in pod.get("containers",[])+pod.get("initContainers",[]):
+                env=container.get("env",[])
+                def empty_validation(entry):
+                    return (entry["name"]=="REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES"
+                            and entry.get("value") in (None,"") and entry.get("valueFrom") is None)
+                removed+=sum(empty_validation(entry) for entry in env)
+                container["env"]=[e for e in env if not empty_validation(e)]
+    require(removed>0 and index(corrected)==index(candidate),"Unreviewed forward repair manifest change")
 
 
 def native_authentication_settings(values, before):
@@ -86,10 +177,9 @@ def upgrade(ops, config, receipt):
     from oan_chart import verify
     verify(ops.chart, ops.pin)
     intent=ops.directory/"helm-upgrade-started"
-    if intent.exists():
-        ops.verify_installed(config)
+    previous_revision=prepare_helm_attempt(ops,config)
+    if previous_revision is None:
         return
-    require(ops.status()["version"]==config["expectedRevision"], "Helm revision changed before upgrade")
     values=copy.deepcopy(ops.load("prepared-values.json"))
     values["farmerAdoption"]={"mode":"preserving-upgrade","sourceCommit":config["sourceCommit"],
                               "chartSha256":config["chartSha256"]}
@@ -107,13 +197,17 @@ def upgrade(ops, config, receipt):
     (ops.directory/"candidate-final.yaml").write_bytes(raw)
     before=documents(ops.directory/"manifest.yaml")+documents(ops.directory/"hooks.yaml")
     after=documents(ops.directory/"candidate-final.yaml")
+    if (ops.directory/"helm-forward-repair.json").exists():
+        validate_repair_delta(documents(ops.directory/"failed-helm-attempt-63"/"candidate-final.yaml"),after)
     validate(before,validation_inventory(after,documents(ops.directory/"candidate-analysis.yaml")),
              config["registry"],config["sourceCommit"][:12],images=config["imageProvenance"])
     require(not any(d["kind"]=="Job" for d in after), "Jobs must use tracked native invocations")
-    require(ops.status()["version"]==config["expectedRevision"],"Helm release changed during final dry run")
+    require(ops.status()["version"]==previous_revision,"Helm release changed during final dry run")
     # No --atomic: old application images must never roll back across migration.
     # Record intent before invoking Helm; interrupted results require read-back.
-    intent.touch(exist_ok=False)
+    with intent.open("x") as stream:
+        json.dump({"fromRevision":previous_revision,"targetRevision":previous_revision+1,
+                   "candidateSha256":manifest_hash(after)},stream)
     command(HELM+["upgrade",*args,"--wait","--timeout","10m"],timeout=650,log=ops.directory/"helm-upgrade.log")
     ops.verify_installed(config)
 
