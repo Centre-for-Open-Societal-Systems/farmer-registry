@@ -156,6 +156,14 @@ printf '\n---\n' >> "$STATE/deployed.yaml"
 helm get hooks "$HELM_RELEASE" -n "$HELM_NAMESPACE" >> "$STATE/deployed.yaml"
 guard validate "$STATE/before.yaml" "$STATE/deployed.yaml"
 check_schema
+
+# The partner API's DCI response-signing public key (chart dciSigning hook), for
+# the consuming registries' chart values; the private key never leaves the Secret.
+if kubectl get configmap "$HELM_RELEASE-dci-signing-public" -n "$HELM_NAMESPACE" > /dev/null 2>&1; then
+  echo "DCI response-signing public key (kid $(kubectl get configmap "$HELM_RELEASE-dci-signing-public" -n "$HELM_NAMESPACE" -o go-template='{{index .data "kid"}}')):"
+  kubectl get configmap "$HELM_RELEASE-dci-signing-public" -n "$HELM_NAMESPACE" -o go-template='{{index .data "public-key.pem"}}'
+  echo
+fi
 if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
   guard outcome "$STATE/final-status.json" "$STATE/outcome.json"
   mkdir -p "$(dirname "$REGISTRY_OUTCOME_FILE")"
