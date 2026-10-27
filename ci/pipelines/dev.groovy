@@ -14,13 +14,15 @@ pipeline {
         HELM_NAMESPACE = 'farmer'
     }
     parameters {
+        choice(name: 'NEW_DEV_DELIVERY_ACTION', choices: ['publish-only', 'deploy'],
+            description: 'Publish immutable images first. Deploy additionally requires the existing preservation, chart and database gates; it does not authorize a reset.')
         choice(name: 'NEW_DEV_RESET_ACTION', choices: ['check', 'initialize', 'resume'],
             description: 'New Dev only: check the completed first-install receipt; explicit initialize/resume is blocked until refactor acceptance.')
         string(name: 'REGISTRY_RESET_MANIFEST', defaultValue: '',
             description: 'Deployment-node path to immutable reviewed first-install JSON; no credentials.')
         string(name: 'REGISTRY_RESET_ADMIN_SERVICE', defaultValue: '',
             description: 'Mounted libpq service alias for explicit first-install reset; empty for ordinary receipt checks.')
-        booleanParam(name: 'COORDINATE_SERVICES', defaultValue: true,
+        booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
             description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
         booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
             description: 'Apply reviewed Commons staff identity values; requires fresh farmer-dev-identity-evidence credential.')
@@ -39,6 +41,10 @@ pipeline {
                     }
                     env.IMAGE_TAG = commit.take(12)
                     env.SOURCE_COMMIT = commit
+                    // Branch-index builds may not yet have the new parameters.
+                    // Resolve that case to publication, never cluster mutation.
+                    env.OAN_DELIVERY_ACTION = sh(returnStdout: true,
+                        script: 'python3 ci/delivery.py action').trim()
                 }
                 sh '''
                     set -eu
@@ -89,12 +95,17 @@ pipeline {
                             --query 'imageDetails[0].imageDigest' --output text)
                           printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
                         done
+                        docker run --rm --network none --user "$(id -u):$(id -g)" \
+                          -e NEW_DEV_DELIVERY_ACTION -e NEW_DEV_RESET_ACTION -e OAN_DELIVERY_ACTION \
+                          -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT \
+                          -v "$PWD:/repo" "coss-ci/validation:$IMAGE_TAG" \
+                          python ci/delivery.py publication service-outcomes/publication.json
                     '''
                 }
             }
         }
         stage('Prepare dev deployment') {
-            when { allOf { branch 'develop'; not { changeRequest() } } }
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION == 'deploy' } } }
             steps {
                 stash name: 'dev-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,tests/runtime/**,service-outcomes/**', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
@@ -102,7 +113,7 @@ pipeline {
         stage('Deploy new dev') {
             when {
                 beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() } }
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION == 'deploy' } }
             }
             agent { label 'vpn-agent2' }
             steps {
@@ -141,7 +152,7 @@ pipeline {
             }
         }
         stage('Build optional services') {
-            when { allOf { branch 'develop'; not { changeRequest() }; expression { params.COORDINATE_SERVICES } } }
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } } }
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
@@ -159,7 +170,7 @@ pipeline {
         stage('Deploy optional services') {
             when {
                 beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() }; expression { params.COORDINATE_SERVICES } }
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
             }
             agent { label 'vpn-agent2' }
             steps {
@@ -193,6 +204,7 @@ pipeline {
     post {
         always {
             archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'ci-output/native-worker-save/**', allowEmptyArchive: true
         }
     }
 }
