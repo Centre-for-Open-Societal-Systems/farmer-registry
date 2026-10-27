@@ -6,7 +6,6 @@ import { ETHIOPIAN_DATE_CELL, ETHIOPIAN_DATE_VARIANT, EthiopianDateInputWidget }
 import { FileCellWidget } from './FileCellWidget';
 import { FARMER_PHOTO_VARIANT, FarmerPhotoWidget } from './FarmerPhotoWidget';
 import { GeoPointWidget } from './GeoPointWidget';
-import { IdentityVerificationWidget } from './IdentityVerificationWidget';
 import { LocalNameWidget } from './LocalNameWidget';
 
 // The widget package uploads a section's photo, and sets the field named by
@@ -57,5 +56,4 @@ widgetRegistry.register({ widget: ETHIOPIAN_DATE_CELL, component: EthiopianDateI
 widgetRegistry.register({ widget: 'oan-file-cell', component: FileCellWidget as never });
 widgetRegistry.register({ widget: 'oan-geo-point', component: GeoPointWidget as never });
 widgetRegistry.register({ widget: 'oan-enumerator-position', component: EnumeratorPositionWidget as never });
-widgetRegistry.register({ widget: 'oan-identity-verification', component: IdentityVerificationWidget as never });
 widgetRegistry.register({ widget: 'oan-local-name', component: LocalNameWidget as never });

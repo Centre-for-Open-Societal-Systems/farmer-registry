@@ -18,10 +18,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from .derivations import DERIVATIONS, Derivations
 from .domain_bounds import check_domain_bounds
 from .household_intake import install_farmer_household_check  # noqa: F401
-from .identity_verification import (  # noqa: F401
-    OANRegistrantAuthenticationService,
-    install_identity_verification,
-)
+from .registrant_auth_compat import install_registrant_auth_compat  # noqa: F401
 from .registers import FarmerPhoneService
 from .upstream_messages import reword
 from .widget_rules import Rules, _Say, check_record, collect_rules, normalize_record
@@ -82,7 +79,7 @@ class WidgetRuleValidation:
     by its label and say what to enter (upstream_messages)."""
 
     _derive_first = False
-    _verifies_identity = False
+    _checks_fayda_id = False
 
     async def validate_domain_attributes(self, records: list[dict]):
         rules, registers, messages = await _load()
@@ -102,23 +99,17 @@ class WidgetRuleValidation:
             problems = [p for record in records for p in check_record(record, field_rules, messages)]
         say = _Say(messages)
         problems += check_domain_bounds(records, self.register_mnemonic(), field_rules, say)
-        if not problems and type(self)._verifies_identity:
-            # The Fayda verification, once the values themselves are right.
-            say = _Say(messages)
-            labels = {f: say.label(field_rules.get(f, {}).get("label"), f) for r in records for f in r}
-            labels.setdefault("foundational_id", say.label(None, "foundational_id"))
-            service = OANRegistrantAuthenticationService.get_component()
-            if service:
-                problems = await service.verify_records(records, labels, self.register_mnemonic())
-            if not problems:
-                # The same Fayda ID on another farmer (form_integrity.py).
-                from .form_integrity import check_fayda_id_unique
+        if not problems and type(self)._checks_fayda_id:
+            # The same Fayda ID on another farmer (form_integrity.py), said
+            # by the field's label instead of the table's unique constraint.
+            from .form_integrity import check_fayda_id_unique
 
-                async with async_sessionmaker(dbengine.get())() as session:
-                    for record in records:
-                        held = await check_fayda_id_unique(record, labels["foundational_id"], session, messages)
-                        if held:
-                            problems.append(held)
+            label = say.label(field_rules.get("foundational_id", {}).get("label"), "foundational_id")
+            async with async_sessionmaker(dbengine.get())() as session:
+                for record in records:
+                    held = await check_fayda_id_unique(record, label, session, messages)
+                    if held:
+                        problems.append(held)
         if problems:
             validation_error("; ".join(dict.fromkeys(problems)))
 
@@ -137,7 +128,7 @@ def _with_widget_rules(name: str, base: type) -> type:
     derivations = DERIVATIONS.get(name[len(_PREFIX):], Derivations)
     return type(name, (WidgetRuleValidation, derivations, base),
                 {"__module__": __name__, "_upstream_validates": upstream, "_derive_first": True,
-                 "_verifies_identity": name == _PREFIX + "Farmer"})
+                 "_checks_fayda_id": name == _PREFIX + "Farmer"})
 
 
 # One subclass per farmer domain service, under the same name, so every

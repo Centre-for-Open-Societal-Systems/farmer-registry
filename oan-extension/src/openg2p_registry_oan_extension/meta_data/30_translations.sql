@@ -151,22 +151,15 @@ WITH oan (language_code, labels) AS (
     "oan_map_longitude": "Longitude",
     "oan_map_altitude": "Altitude (m)",
     "identity_verification": "Fayda verification",
-    "oan_idv_verify": "Verify with Fayda",
-    "oan_idv_verify_again": "Verify again",
-    "oan_idv_waiting": "Waiting for the Fayda sign-in...",
-    "oan_idv_not_verified": "Not verified",
-    "oan_idv_verified": "Verified on {date}",
-    "oan_idv_failed": "Not verified",
-    "oan_idv_filled": "Filled in from Fayda: {fields}. These cannot be changed.",
-    "oan_idv_enter_fin": "Enter the farmer''s Fayda ID (FIN) in this window to continue.",
-    "oan_idv_popup_blocked": "The browser blocked the Fayda window. Allow pop-ups for this site and verify again.",
-    "oan_idv_closed": "The Fayda window was closed before the sign-in finished. Verify again.",
-    "oan_idv_fin_changed": "The FIN was changed after verification. Verify again with the new FIN.",
     "oan_household_both": "Household: an existing household is picked in the household lookup and a new household is entered as well. Keep one: clear the household lookup to register the new household, or clear the household information and members to join the picked one.",
     "oan_household_none": "Household: none is given. Pick the farmer''s household in the household lookup, or enter a new household in the household information and members."
   }'::jsonb)
 )
 UPDATE "public"."registry_languages" l
-SET "domain_translation" = ((COALESCE(l."domain_translation"::jsonb, '{}'::jsonb) - 'oan_idv_no_fin') || oan.labels)::json
+-- The oan_idv_* keys belonged to the retired OAN verification popup widget.
+SET "domain_translation" = ((COALESCE(l."domain_translation"::jsonb, '{}'::jsonb)
+    - ARRAY['oan_idv_no_fin', 'oan_idv_verify', 'oan_idv_verify_again', 'oan_idv_waiting', 'oan_idv_not_verified',
+            'oan_idv_verified', 'oan_idv_failed', 'oan_idv_filled', 'oan_idv_enter_fin', 'oan_idv_popup_blocked',
+            'oan_idv_closed', 'oan_idv_fin_changed']) || oan.labels)::json
 FROM oan
 WHERE l."language_code" = oan.language_code;

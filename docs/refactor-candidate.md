@@ -18,10 +18,10 @@ Helm is owned by COSS oan-helm. The candidate profile pins dev.14 at
 The three archives were fetched from that immutable URL and their hashes verified
 on 26 October 2026. All registry promotion flags remain false.
 
-The Fayda popup collects FIN before navigation. A backing value is not verification:
-failed/cancelled flows preserve approved proof, and optional unverified drafts do
-not become trusted references. Main forms display FIN read-only. The independent
-16-digit FAN field and signed Farmer-reference lookup contract remain separate.
+Since the identity change of 28 October 2026 the Fayda ID is typed on the intake
+form and the record is verified with the platform's `id-authentication` widget;
+the OAN popup widget and its server code are gone. A backing value is not
+verification. The signed Farmer-reference lookup contract remains separate.
 
 Existing Jenkins agents, credentials, ECR paths and preservation tooling remain.
 PR and feature-branch validation do not deploy. First New Dev reset requires the

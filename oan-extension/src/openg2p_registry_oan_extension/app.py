@@ -30,18 +30,6 @@ class Initializer(FarmerInitializer):
 
         install()
 
-    async def fastapi_app_startup(self, app):
-        await super().fastapi_app_startup(app)
-        # The staff API builds its FastAPI app after this initializer, so the
-        # route is added at startup, to that app. Only the staff API has core's
-        # registrant authentication controller.
-        from importlib.util import find_spec
-
-        if find_spec("openg2p_registry_staff_api"):
-            from .controllers import OANIdentityVerificationController
-
-            OANIdentityVerificationController().post_init()
-
     def migrate_database(self, args):
         super().migrate_database(args)
         # The farmer migration ran in its own event loop, which is closed now, and
@@ -62,12 +50,13 @@ class Initializer(FarmerInitializer):
 
 
 async def add_oan_columns() -> None:
-    """Add the OAN fields (register_domain/fields.py) that an existing farmer table lacks.
+    """Add the columns OAN maps on the farmer tables that an existing table lacks.
 
     create_all creates missing tables only, so a field added after a registry
-    was first migrated would otherwise be mapped but absent, and every query
-    of that register would fail. Columns are only added, never changed or
-    dropped.
+    was first migrated (register_domain/fields.py, or core's registrant
+    authentication mixin on the Farmer register) would otherwise be mapped but
+    absent, and every query of that register would fail. Columns are only
+    added, never changed or dropped.
     """
     from openg2p_registry_farmer_extension.register_domain import (
         models as farmer_models,
@@ -78,7 +67,7 @@ async def add_oan_columns() -> None:
 
     engine = dbengine.get()
     async with engine.begin() as conn:
-        for mnemonic, fields in OAN_FIELDS.items():
+        for mnemonic in OAN_FIELDS:
             for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm"):
                 table = getattr(farmer_models, f"{prefix}{mnemonic}").__table__
                 present = await conn.run_sync(
@@ -86,8 +75,20 @@ async def add_oan_columns() -> None:
                     if sa_inspect(sconn).has_table(name) else None)
                 if present is None:
                     continue
-                for name in fields:
-                    if name not in present:
-                        column_type = table.c[name].type.compile(dialect=engine.dialect)
-                        _logger.info("Adding column %s.%s", table.name, name)
-                        await conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{name}" {column_type}'))
+                for column in table.c:
+                    if column.name not in present:
+                        _logger.info("Adding column %s.%s", table.name, column.name)
+                        await conn.execute(text(
+                            f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {column_ddl(column, engine.dialect)}'))
+
+
+def column_ddl(column, dialect) -> str:
+    """The type, and the NOT NULL DEFAULT a non-nullable column with a scalar
+    default needs so the rows already in the table get a value."""
+    ddl = column.type.compile(dialect=dialect)
+    default = column.default
+    if not column.nullable and default is not None and getattr(default, "is_scalar", False):
+        value = default.arg
+        literal = "true" if value is True else "false" if value is False else repr(value)
+        ddl += f" NOT NULL DEFAULT {literal}"
+    return ddl

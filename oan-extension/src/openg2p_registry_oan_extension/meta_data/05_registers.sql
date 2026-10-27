@@ -43,12 +43,12 @@ SET "search_result_schema" = (s."search_result_schema"::jsonb || (
   WHERE NOT EXISTS (SELECT 1 FROM json_array_elements(s."search_result_schema") e WHERE e->>'field_name' = v.f)))::json
 WHERE s."register_id" = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
 
--- A farmer is verified with Fayda (eSignet) while being registered: core's
--- registrant authentication, started from the intake form
--- (register_domain/services/identity_verification.py). The provider itself
--- (client id, keys, callback URL) is deployment data, in
--- g2p_registrant_authentication_providers; see the README.
--- This flag enables Verify; it is not a finalize verification gate.
+-- A farmer's record is verified with Fayda (eSignet): core's registrant
+-- authentication, started by the platform's id-authentication widget on the
+-- record (18_identity_verification.sql). The provider itself (client id, key,
+-- callback URL) is deployment data in g2p_registrant_authentication_providers,
+-- provisioned by the chart; see the README.
+-- This flag enables the widget; it is not a finalize verification gate.
 UPDATE "public"."g2p_register_definitions"
 SET "requires_registrant_authentication" = true
 WHERE "register_id" = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
