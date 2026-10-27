@@ -5,31 +5,32 @@
 -- sections.
 --
 -- Each OAN attachment copies the tab and order of the upstream one it replaces.
--- The upstream rows are removed by explicit id, never by NOT IN, so a section
--- upstream adds later is left alone. The farmer seed re-inserts them on every
--- run, and this file removes them again right after.
+-- Both the copy and the removal name the upstream row by its tab_section_id,
+-- never by section: a long-lived database carries rows from earlier seeds that
+-- point at the same sections, and matching by section once cloned one of them
+-- (oan_tab_section_19) next to the real one, so Membership showed twice. A row
+-- upstream adds later is left alone; 22_retired_rows.sql drops the known
+-- leftovers. The farmer seed re-inserts the upstream rows on every run, and
+-- this file removes them again right after.
 
-WITH replaced (upstream_section_id, oan_section_id) AS (
-  VALUES ('farmer_farmer_personal_identification_section_01', 'oan_farmer_personal_identification'),
-         ('farmer_farmer_socio_economic_and_health_section_04', 'oan_farmer_socio_economic_and_health'),
-         ('farmer_membership_membership_details_01', 'oan_farmer_membership_details'),
-         ('farmer_farm_farm_details_section_01', 'oan_farmer_lands'),
-         ('farmer_livestock_livestock_details_section_01', 'oan_farmer_livestock'),
-         ('farmer_livestock_livestock_details_intake_section_01', 'oan_farmer_livestock_intake'),
-         ('farmer_farm_input_farm_input_details_section_01', 'oan_farmer_farm_inputs'),
-         ('farmer_farm_input_farm_input_details_intake_section_01', 'oan_farmer_farm_inputs_intake'),
-         ('farmer_household_lookup_section_01', 'oan_farmer_household_lookup'),
-         ('farmer_crop_crop_details_section_01', 'oan_farmer_crops'),
-         ('farmer_farmer_location_section_03', 'oan_farmer_location'),
-         ('household_household_household_information_section_01', 'oan_household_information'),
-         ('bc882922-9008-4902-8f4f-98db0fa8f9ad', 'oan_farmer_documents')
+WITH replaced (upstream_tab_section_id, upstream_section_id, oan_section_id) AS (
+  VALUES ('a6ab60bd-07be-4237-aefd-7f6e3c1ced4f', 'farmer_farmer_personal_identification_section_01', 'oan_farmer_personal_identification'),
+         ('9a1573a0-6507-47b6-a717-a007435d2c76', 'farmer_farmer_socio_economic_and_health_section_04', 'oan_farmer_socio_economic_and_health'),
+         ('14691011-f41c-4010-be96-af39207b5fc3', 'farmer_membership_membership_details_01', 'oan_farmer_membership_details'),
+         ('41a866b7-d301-46e3-8375-17ebb9f0059d', 'farmer_farm_farm_details_section_01', 'oan_farmer_lands'),
+         ('b46853a4-ba5b-4378-ae62-9a274448ac65', 'farmer_livestock_livestock_details_section_01', 'oan_farmer_livestock'),
+         ('7c46c33d-9519-4027-b071-3a7e8822ae87', 'farmer_farm_input_farm_input_details_section_01', 'oan_farmer_farm_inputs'),
+         ('f1a2b3c4-d5e6-4789-a012-3456789abcde', 'farmer_household_lookup_section_01', 'oan_farmer_household_lookup'),
+         ('a163b218-32d6-49a7-99b6-05d4aeb31f0d', 'farmer_crop_crop_details_section_01', 'oan_farmer_crops'),
+         ('d8753df5-d511-4c63-b045-ff9720a31808', 'farmer_farmer_location_section_03', 'oan_farmer_location'),
+         ('6a759aa9-b1cb-47c6-a1ed-db0b3d022f1d', 'household_household_household_information_section_01', 'oan_household_information'),
+         ('858fead4-9d8b-4f76-9915-7d591b1f4559', 'bc882922-9008-4902-8f4f-98db0fa8f9ad', 'oan_farmer_documents')
 )
 INSERT INTO "public"."g2p_register_ui_tab_sections" ("tab_section_id", "register_id", "tab_id", "section_id", "section_order")
 SELECT 'oan_' || t.tab_section_id, t.register_id, t.tab_id, r.oan_section_id, t.section_order
 FROM "public"."g2p_register_ui_tab_sections" t
-JOIN replaced r ON r.upstream_section_id = t.section_id
+JOIN replaced r ON r.upstream_tab_section_id = t.tab_section_id AND r.upstream_section_id = t.section_id
 JOIN "public"."g2p_register_sections" s ON s.section_id = r.oan_section_id
-WHERE t.register_id IN ('a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', '9055ab43-c85d-4833-bd00-ca657bb72644')
 ON CONFLICT ("tab_section_id") DO UPDATE SET
   "register_id" = EXCLUDED."register_id", "tab_id" = EXCLUDED."tab_id",
   "section_id" = EXCLUDED."section_id", "section_order" = EXCLUDED."section_order";
@@ -51,24 +52,23 @@ ON CONFLICT ("tab_section_id") DO UPDATE SET
   "register_id" = EXCLUDED."register_id", "tab_id" = EXCLUDED."tab_id",
   "section_id" = EXCLUDED."section_id", "section_order" = EXCLUDED."section_order";
 
-WITH replaced (upstream_section_id, oan_section_id) AS (
-  VALUES ('farmer_farmer_personal_identification_section_01', 'oan_farmer_personal_identification'),
-         ('farmer_farmer_socio_economic_and_health_section_04', 'oan_farmer_socio_economic_and_health'),
-         ('farmer_membership_membership_details_01', 'oan_farmer_membership_details'),
-         ('farmer_farm_farm_details_section_01', 'oan_farmer_lands'),
-         ('farmer_livestock_livestock_details_intake_section_01', 'oan_farmer_livestock_intake'),
-         ('farmer_farm_input_farm_input_details_intake_section_01', 'oan_farmer_farm_inputs_intake'),
-         ('farmer_crop_crop_details_intake_section_01', 'oan_farmer_crops_intake'),
-         ('farmer_farmer_location_section_03', 'oan_farmer_location'),
-         ('household_household_household_information_section_01', 'oan_household_information'),
-         ('bc882922-9008-4902-8f4f-98db0fa8f9ad', 'oan_farmer_documents')
+WITH replaced (upstream_tab_section_id, upstream_section_id, oan_section_id) AS (
+  VALUES ('tab_section_3', 'farmer_farmer_personal_identification_section_01', 'oan_farmer_personal_identification'),
+         ('tab_section_4', 'farmer_farmer_socio_economic_and_health_section_04', 'oan_farmer_socio_economic_and_health'),
+         ('tab_section_9', 'farmer_membership_membership_details_01', 'oan_farmer_membership_details'),
+         ('tab_section_6', 'farmer_farm_farm_details_section_01', 'oan_farmer_lands'),
+         ('46392474-53a0-4737-ab8e-c942efc73153', 'farmer_livestock_livestock_details_intake_section_01', 'oan_farmer_livestock_intake'),
+         ('bb3542b4-2f6b-443e-b9b5-65ce0b0a6eb8', 'farmer_farm_input_farm_input_details_intake_section_01', 'oan_farmer_farm_inputs_intake'),
+         ('e0506ad7-657c-4f5d-807e-3ad430dcb639', 'farmer_crop_crop_details_intake_section_01', 'oan_farmer_crops_intake'),
+         ('tab_section_5', 'farmer_farmer_location_section_03', 'oan_farmer_location'),
+         ('hh_tab_section_1', 'household_household_household_information_section_01', 'oan_household_information'),
+         ('d6873c11-1f86-45f5-9fef-9ad6c8c22303', 'bc882922-9008-4902-8f4f-98db0fa8f9ad', 'oan_farmer_documents')
 )
 INSERT INTO "public"."g2p_intake_form_ui_tab_sections" ("tab_section_id", "tab_id", "section_id", "section_order")
 SELECT 'oan_' || t.tab_section_id, t.tab_id, r.oan_section_id, t.section_order
 FROM "public"."g2p_intake_form_ui_tab_sections" t
-JOIN replaced r ON r.upstream_section_id = t.section_id
+JOIN replaced r ON r.upstream_tab_section_id = t.tab_section_id AND r.upstream_section_id = t.section_id
 JOIN "public"."g2p_register_sections" s ON s.section_id = r.oan_section_id
-WHERE t.tab_id IN ('a1a4d25a-1cd4-4356-abac-72482721', '9055ab43-c85d-4833-bd00-ca657bb72651')
 ON CONFLICT ("tab_section_id") DO UPDATE SET
   "tab_id" = EXCLUDED."tab_id", "section_id" = EXCLUDED."section_id", "section_order" = EXCLUDED."section_order";
 
