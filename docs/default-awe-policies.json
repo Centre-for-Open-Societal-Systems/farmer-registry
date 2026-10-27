@@ -1,0 +1,166 @@
+[
+  {
+    "policy_key": "registry.change_request.farmer.default",
+    "name": "change_request.farmer - OpenG2P defaults",
+    "artifact_type": "registry.change_request",
+    "forbid_self_approval": false,
+    "forbid_repeat_approvers": false,
+    "stages": [
+      {
+        "name": "Stage 1 Officers",
+        "stage_order": 1,
+        "mode": "all",
+        "on_empty": "block",
+        "rules": [
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "alex.carter"
+            },
+            "kind": "approver",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "Stage 2 Officers",
+        "stage_order": 2,
+        "mode": "all",
+        "on_empty": "block",
+        "rules": [
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "nina.patel"
+            },
+            "kind": "approver",
+            "required": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "policy_key": "registry.change_request.household.default",
+    "name": "change_request.household - OpenG2P defaults",
+    "artifact_type": "registry.change_request",
+    "forbid_self_approval": false,
+    "forbid_repeat_approvers": false,
+    "stages": [
+      {
+        "name": "Stage 1 Officers",
+        "stage_order": 1,
+        "mode": "all",
+        "on_empty": "block",
+        "rules": [
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "alex.carter"
+            },
+            "kind": "approver",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "Stage 2 Officers",
+        "stage_order": 2,
+        "mode": "all",
+        "on_empty": "block",
+        "rules": [
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "nina.patel"
+            },
+            "kind": "approver",
+            "required": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "policy_key": "registry.intake_form.farmer.default",
+    "name": "intake_form.farmer - OpenG2P defaults",
+    "artifact_type": "registry.intake_form",
+    "forbid_self_approval": false,
+    "forbid_repeat_approvers": false,
+    "stages": [
+      {
+        "name": "Stage 1 Officers",
+        "stage_order": 1,
+        "mode": "all",
+        "on_empty": "block",
+        "rules": [
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "alex.carter"
+            },
+            "kind": "approver",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "Stage 2 Officers",
+        "stage_order": 2,
+        "mode": "all",
+        "on_empty": "block",
+        "rules": [
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "nina.patel"
+            },
+            "kind": "approver",
+            "required": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "policy_key": "registry.intake_form.household.default",
+    "name": "intake_form.household - OpenG2P defaults",
+    "artifact_type": "registry.intake_form",
+    "forbid_self_approval": false,
+    "forbid_repeat_approvers": false,
+    "stages": [
+      {
+        "name": "Stage 1 Officers",
+        "stage_order": 1,
+        "mode": "all",
+        "on_empty": "block",
+        "rules": [
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "alex.carter"
+            },
+            "kind": "approver",
+            "required": false
+          }
+        ]
+      },
+      {
+        "name": "Stage 2 Officers",
+        "stage_order": 2,
+        "mode": "all",
+        "on_empty": "block",
+        "rules": [
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "nina.patel"
+            },
+            "kind": "approver",
+            "required": false
+          }
+        ]
+      }
+    ]
+  }
+]

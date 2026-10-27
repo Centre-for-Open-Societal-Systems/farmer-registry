@@ -1,6 +1,7 @@
 """Farmer retains the unmodified OpenG2P example approval configuration."""
 from pathlib import Path
 import re
+import json
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -17,4 +18,25 @@ def test_native_farmer_policy_has_two_all_block_stages_and_default_reviewers():
     assert "'block'" in stage
     runtime = (ROOT / "oan-extension/src/openg2p_registry_oan_extension/runtime.py").read_text()
     assert "geo_approval" not in runtime
-    assert not (ROOT / "oan-extension/src/openg2p_registry_oan_extension/awe_meta_data").exists()
+
+
+def test_existing_policy_customizations_cannot_leak_into_the_reset_defaults():
+    policies = json.loads((ROOT / "docs/default-awe-policies.json").read_text())
+    assert len(policies) == 4
+    for policy in policies:
+        assert policy["policy_key"].endswith(".default")
+        assert policy["forbid_self_approval"] is False
+        assert policy["forbid_repeat_approvers"] is False
+        assert [s["stage_order"] for s in policy["stages"]] == [1, 2]
+        for stage, user in zip(policy["stages"], ("alex.carter", "nina.patel")):
+            assert stage["mode"] == "all" and stage["on_empty"] == "block"
+            assert stage["rules"] == [{"rule_type":"user", "rule_value":{"user_id":user},
+                                       "kind":"approver", "required":False}]
+    package = ROOT / "oan-extension/src/openg2p_registry_oan_extension"
+    sql = "\n".join(p.read_text() for p in (package / "awe_meta_data").glob("*.sql"))
+    assert "DELETE FROM" not in sql and "UPDATE public." not in sql
+    bindings = (package / "meta_data/55_default_approvals.sql").read_text()
+    assert "context_field_names=NULL" in bindings
+    dockerfile = (ROOT / "docker/oan/db-seed.Dockerfile").read_text()
+    assert "rm -f /seed/awe_meta_data/10_approval_policy.sql" in dockerfile
+    assert "rm -rf /seed/awe_meta_data" not in dockerfile
