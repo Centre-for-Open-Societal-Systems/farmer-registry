@@ -28,7 +28,7 @@ OAN_FIELDS: dict[str, dict[str, tuple]] = {
         # name, which upstream's first, middle and last name hold in English.
         # The same three names in the farmer's own language (upstream's
         # language_spoken), in its script. Fayda fills them in when that
-        # language is Amharic, and local_name_from_fayda then locks them.
+        # language is Amharic, and local_name_from_fayda then marks them.
         "first_name_local": (String, str),
         "middle_name_local": (String, str),
         "last_name_local": (String, str),
@@ -91,13 +91,8 @@ OAN_FIELDS: dict[str, dict[str, tuple]] = {
         "representative_document_type": (String, str),
         "other_document_purpose": (String, str),
         "other_document_name": (String, str),
-        # Fayda (eSignet) verification during intake: the verification (core's
-        # g2p_registrant_authentications row) and its outcome, which the server
-        # sets from that row on save (services/identity_verification.py).
-        "identity_verification_id": (String, str),
-        "last_authentication_status": (String, str),  # core's SUCCESS / FAILURE
-        "last_authenticated_on": (Date, date),
-        "authentication_expiry_date": (Date, date),
+        # The outcome of the Fayda (eSignet) verification is core's: the
+        # G2PRegisterAuthentication mixin on the Farmer model (models/).
     },
     "HouseholdMember": {
         "odk_member_id": (String, str),  # the ODK Member ID, as an attribute

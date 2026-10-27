@@ -2,7 +2,8 @@
 -- id-authentication widget: it starts core's registrant authentication for
 -- the record (register-data/authenticate_registrant with the esignet provider
 -- that the chart provisions), opens eSignet in a popup, and shows the status,
--- date and expiry that core writes back. Core authenticates a register record,
+-- date and expiry that core writes back (the register's authentication mixin,
+-- register_domain/models). Core authenticates a register record,
 -- so the section is on the farmer's record (20_layout.sql), not on the intake
 -- form: the intake takes the typed ID, approval creates the record, and the
 -- record is verified. A verified ID is then locked on the Identity section.
@@ -17,9 +18,9 @@ WITH sections (section_id, mnemonic, description, ui) AS (
         "widget-data-path": {
           "internalRecordId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.internal_record_id",
           "foundationalId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.foundational_id",
-          "lastAuthenticatedOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authenticated_on",
+          "lastAuthenticatedOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authenticated_at",
           "lastAuthenticationStatus": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status",
-          "expiryDate": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.authentication_expiry_date"},
+          "expiryDate": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.authentication_expiry_at"},
         "widget-auth-config": {"service": "registry", "providerId": "esignet", "providerName": "eSignet",
           "registerId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd",
           "authenticateEndpoint": "authenticate_registrant", "authenticateMethod": "POST",

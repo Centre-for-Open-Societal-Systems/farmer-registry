@@ -42,10 +42,11 @@ Following OpenG2P's review of the previous registry:
 
 - Identifiers are attributes of the farmer, not a table or a section: the Fayda
   FIN is upstream's `foundational_id`, beside `rid`, `odk_farmer_id` and
-  `pula_id` in personal identification. FIN is collected only by the verification
-  popup; its main-form value is read-only. Offline ODK identity evidence follows
-  the separate unverified intake approval path. A household member's ODK
-  Member ID is `odk_member_id`.
+  `pula_id` in personal identification; it is typed on the intake form and
+  verified on the record with the platform's `id-authentication` widget (see
+  [Fayda verification](#fayda-verification-of-the-record)). Offline ODK identity
+  evidence follows the separate unverified intake approval path. A household
+  member's ODK Member ID is `odk_member_id`.
 - Location stays on the farmer tab.
 - The farmer's `search_text` holds only what a user types to find a farmer: its
   ids and its names in each language (`derived.FARMER_SEARCH_FIELDS`).
@@ -95,7 +96,6 @@ Besides the farmer photo, `ui/staff-ui/overrides/src/oan/widgets/` registers:
 | `oan-geo-point` | an OpenStreetMap map to pin a place, as ODK's map question does; saves latitude, longitude and altitude (device altitude, or the ground elevation at the pin from `elevationUrl`), and fills the location hierarchy from the pin |
 | `oan-enumerator-position` | renders nothing; records the device's position once, if allowed |
 | `file` with `"widget-variant": "oan-documents"` | a documents category with several files: the first of the category's file widgets lists them all; the others (`oan-document-slot`) render nothing |
-| `oan-identity-verification` | verifies the farmer with Fayda (eSignet) during intake and fills in what Fayda verified; see [Fayda verification](#fayda-verification-during-intake) |
 
 The map needs its tile and elevation hosts in the staff UI's CSP (`CSP_SRC_IMG`,
 `CSP_SRC_CONNECT`). The elevation lookup sends the pin's coordinates to that
@@ -127,85 +127,41 @@ file per file widget label, so a category is five upstream file widgets
 (`<category>_1` .. `_5`) shown as one list. A new file goes to the first free
 slot; a saved document keeps its slot, since it is stored under that label.
 
-### Fayda verification during intake
+### Fayda verification of the record
 
-Current FIN-once behavior and native completion bridge: [fin-once.md](docs/fin-once.md).
-
-The FIN is entered only on eSignet; **Verify with Fayda** opens the
-Fayda (eSignet) sign-in in a pop-up. When the farmer has signed in, the names,
-gender and birth date Fayda holds are filled in on the form and can no longer be
-changed. Test identities are picked in the pop-up (eSignet with the mock
-identity system), never on the form.
-
-It is core's registrant authentication, unchanged: the provider row, the
-`/registrant-auth/callback` that completes the sign-in, the check that the
-person who signed in has the FIN on the form (the eSignet `individual_id`), and
-the `g2p_registrant_authentications` row with the encrypted claims. OAN adds
-(`register_domain/services/identity_verification.py`):
-
-* starting it before the farmer has a record, with the FIN from the form
-  (`POST /oan/identity-verification/start`, staff from the session, permission
-  `register:authenticate`), and reading the outcome with the verified values
-  (`/oan/identity-verification/result`, only by the staff member who started it);
-* on every save of the farmer: the verification must have succeeded and not
-  expired, belong to this record (the first save ties it to the record) and to
-  the FIN on the form; a verified value cannot be changed; and the outcome
-  (`last_authentication_status`, `last_authenticated_on`,
-  `authentication_expiry_date`) is set from the verification, never from the form.
-
-Every refusal says what to do, for example *"The person who signed in with
-Fayda is not the FIN on this form. Check the FIN, or ask the farmer to sign in
-with their own Fayda ID, then verify again"*.
+The farmer's Fayda ID (FIN, 12 digits, or FAN, 16 digits) is typed on the
+intake form (`foundational_id`, shown when the farmer has a national ID);
+approval is the control, as for every other value. The record is then verified
+with the platform's own `id-authentication` widget, in the *Fayda verification*
+section of the farmer tab (`18_identity_verification.sql`): it starts core's
+registrant authentication for the record (`authenticate_registrant`, provider
+`esignet`), opens the eSignet sign-in, and core completes it on
+`/registrant-auth/callback`: it checks that the person who signed in has the
+record's FIN (the eSignet `individual_id`), keeps the `g2p_registrant_authentications`
+row, and writes the outcome on the record. Core writes that outcome only for a
+register whose model carries its `G2PRegisterAuthentication` mixin, so OAN's
+Farmer model does (`register_domain/models`): `last_authentication_status`,
+`last_authenticated_at`, `authentication_expiry_at`, which the widget shows and
+the name, gender, birth date and FIN widgets lock on `SUCCESS`
+(`12_form_sections.sql`). Nothing of this is OAN code: the widget, the
+endpoints and the checks are the platform's.
 
 **Deployment.** The Farmer register has `requires_registrant_authentication`
-(`05_registers.sql`). Each environment adds its eSignet client as a row in
-`g2p_registrant_authentication_providers` for the Farmer register (adapter
-`esignet`, `oauth_callback_url` = the staff API's `/registrant-auth/callback`,
-client id and private key, and `provider_config` with `scope`, `issuer`,
-`audiences`); these are environment secrets, not seed data. With
-`private_key_jwt` the key in `client_private_key` must be the PEM text
-(`-----BEGIN PRIVATE KEY-----`, stored as its bytes), not DER: core decodes it as
-text, and a DER key fails every sign-in after Fayda returns. The eSignet client
-must have that callback among its redirect URIs. `provider_config` must ask for
-the claims, or eSignet returns only its pairwise `sub` and every verification
-fails as "not the FIN on this form":
-
-```json
-{"extra_authorize_params": {"claims_locales": "en am", "claims": {"id_token": {},
-  "userinfo": {"individual_id": {"essential": true}, "name": {"essential": true},
-               "gender": {"essential": false}, "birthdate": {"essential": false}}}}}
-```
-
-
-For a local HTTP gateway in front of an HTTPS canonical eSignet issuer, set
-`provider_config.jwt_assertion_aud` to the exact canonical token endpoint from
-discovery. The OAN registered service maps this native IAM audience setting
-separately from the provider's transport `token_endpoint`. Do not change keys,
-disable signature verification, or alter ID-token audiences to fix this mismatch.
-Six regressions cover the override, native default and invalid configuration.
-
-The adapter must be `esignet`, not `default_oidc`: only the eSignet adapter
-reads userinfo and compares `individual_id` with the FIN. Core keeps the
-sign-in transactions in Redis by default and its URL defaults to
-`redis://localhost`, so the staff API needs
-`REGISTRY_CORE_REGISTRANT_AUTH_REDIS_URL` (any Redis the workers share).
-
-`provider_config.claim_mapping` says which claim fills which field; without it
-the default in `register_domain/identity_claims.py` applies (full name in
-English and Amharic split into the three names, gender, birth date):
-
-```json
-{"first_name": {"claim": ["name#en", "name"], "part": 0},
- "gender": {"claim": "gender", "values": {"male": "MALE", "female": "FEMALE"}},
- "birth_date": {"claim": "birthdate", "format": "date"}}
-```
+(`05_registers.sql`). The eSignet provider row (adapter `esignet`,
+`oauth_callback_url` = the staff API's `/registrant-auth/callback`, client id,
+PEM private key, `provider_config` with issuer, audiences and the claims) and
+the matching eSignet client are deployment data, provisioned by the chart's
+`registrantAuth` hook (oan-helm, `docs/registry-esignet-onboarding.md`), never
+seed data. With `private_key_jwt` the key must be the PEM text, not DER. The
+adapter must be `esignet`, not `default_oidc`: only the eSignet adapter reads
+userinfo and compares `individual_id` with the FIN. Core keeps the sign-in
+transactions in Redis, so the staff API needs
+`REGISTRY_CORE_REGISTRANT_AUTH_REDIS_URL`.
 
 The pinned platform (`1.2.2-rc.557`) calls `get_async_session_maker` in the
-registrant authentication service without importing it; the OAN service gives
-the module that name until a platform image does (a no-op then). Upstream's
-`IdAuthenticationWidget` opens its pop-up with `noopener`, so `window.open`
-returns `null` and it reports a blocked pop-up while the sign-in is open; OAN's
-widget opens the window without it and cuts the opener by hand.
+registrant authentication service without importing it;
+`register_domain/services/registrant_auth_compat.py` gives the module that name
+until a platform image does (a no-op then).
 
 ## Metadata layer
 

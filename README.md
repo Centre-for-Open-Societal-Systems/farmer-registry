@@ -29,15 +29,15 @@ The [deployment profile](ci/deploy/oan-chart.json) pins an immutable chart and
 SHA-256 checksum. Dashboard UI/API and connector releases have independent
 owners; this candidate does not replace their running releases.
 
-FIN is entered in the Fayda verification popup. The form displays its backing
-value without a second editable FIN field. A typed value alone does not establish
-verification. Existing approved identity proof survives a failed verification.
-Offline ODK identity evidence remains unverified until normal approval.
+The Fayda ID is typed on the intake form and approved like every other value;
+the record is then verified with the platform's `id-authentication` widget and
+core's registrant authentication (no OAN verification code). A typed value alone
+does not establish verification. Offline ODK identity evidence remains
+unverified until normal approval.
 
 For delivery tests, install `ci/validation/requirements.txt` and run
 `python -m pytest tests/unit`. Native extension and repeatable metadata checks
-run against the published runtime in CI; browser checks exercise the registered
-widget and native data paths. See [the documentation index](docs/README.md),
+run against the published runtime in CI. See [the documentation index](docs/README.md),
 [native ODK intake](docs/odk-native-intake.md) and
 [New Dev delivery](docs/NEW_DEV_FARMER_FIRST.md).
 

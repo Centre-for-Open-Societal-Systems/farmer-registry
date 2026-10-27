@@ -1,5 +1,6 @@
 # Everything the farmer extension provides, then OAN's additions below. Core
 # resolves classes by name on this module, so a name defined here wins.
+from openg2p_registry_core.models import G2PRegisterAuthentication
 from openg2p_registry_farmer_extension.register_domain import models as _farmer
 from openg2p_registry_farmer_extension.register_domain.models import *
 from sqlalchemy.orm import mapped_column
@@ -26,8 +27,15 @@ def _add_oan_columns() -> None:
 _add_oan_columns()
 
 
-class G2PRegisterFarmer(_farmer.G2PRegisterFarmer):
-    """Registered OAN model subclass on the native Farmer table."""
+class G2PRegisterFarmer(_farmer.G2PRegisterFarmer, G2PRegisterAuthentication):
+    """Registered OAN model subclass on the native Farmer table.
+
+    Core's registrant authentication mixin puts the outcome of a Fayda
+    (eSignet) verification on the record (last_authentication_status,
+    last_authenticated_at, authentication_expiry_at): core writes them when the
+    sign-in completes, only for a register whose model carries the mixin, and
+    the id-authentication widget shows them (18_identity_verification.sql).
+    """
 
     def get_search_text_fields(self) -> str:
         return farmer_search_text(self.to_dict())
