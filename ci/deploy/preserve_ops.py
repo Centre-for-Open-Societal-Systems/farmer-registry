@@ -329,10 +329,10 @@ class Operations:
         upgrade(self,config,receipt)
 
     def verify_installed(self, config):
-        from preserve_render import validation_inventory
+        from preserve_render import validation_inventory, installed_revision
         status=self.status()
         release_status(status,require_deployed=True)
-        require(status["version"]==config["expectedRevision"]+1,"Unexpected Farmer revision")
+        require(status["version"]==installed_revision(self,config),"Unexpected Farmer revision")
         listed=json.loads(command(HELM+["list","-n","farmer","--filter","^farmer-registry$","-o","json"]))
         require(len(listed)==1 and listed[0]["chart"]=="openg2p-farmer-registry-"+config["chartVersion"],"Unexpected installed chart")
         (self.directory/"installed.yaml").write_bytes(command(HELM+["get","manifest","farmer-registry","-n","farmer"]))
@@ -342,6 +342,16 @@ class Operations:
                           images=config["imageProvenance"])
 
     def accept(self, config):
+        # Failure recovery pauses all writers. Restart only the original API/UI
+        # workloads before smoke; producers remain paused until acceptance.
+        from preserve_render import CONTROLLED
+        for original in self.load("workload-baseline.json"):
+            name=original["metadata"]["name"]
+            if name in CONTROLLED:
+                current=self.get(["get","deployment",name,"-n","farmer","-o","json"])
+                require(current["metadata"]["uid"]==original["metadata"]["uid"],"Controlled workload replaced")
+                self.kubectl(["scale","deployment/"+name,"-n","farmer",
+                              "--replicas="+str(original["spec"].get("replicas",1))])
         for component in ("staff-portal-api","staff-portal-ui","partner-api"):
             self.kubectl(["rollout","status","deployment/farmer-registry-"+component,"-n","farmer","--timeout=180s"],timeout=195)
         self.verify_preservation(config)
