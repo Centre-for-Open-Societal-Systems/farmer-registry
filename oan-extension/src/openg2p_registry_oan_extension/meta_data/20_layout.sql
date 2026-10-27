@@ -35,15 +35,18 @@ ON CONFLICT ("tab_section_id") DO UPDATE SET
   "register_id" = EXCLUDED."register_id", "tab_id" = EXCLUDED."tab_id",
   "section_id" = EXCLUDED."section_id", "section_order" = EXCLUDED."section_order";
 
--- Split Personal Information into three adjacent sections. The UI section-id
--- is rewritten in 12_form_sections.sql because MultiSectionAccordionForms
--- matches saves by UI section-id; copied upstream ids would collide.
+-- Split Personal Information into three adjacent sections, with the Fayda
+-- verification of the record (18_identity_verification.sql) right after the
+-- identity. The UI section-id is rewritten in 12_form_sections.sql because
+-- MultiSectionAccordionForms matches saves by UI section-id; copied upstream
+-- ids would collide.
 INSERT INTO "public"."g2p_register_ui_tab_sections" ("tab_section_id", "register_id", "tab_id", "section_id", "section_order")
 SELECT v.tab_section_id, t.register_id, t.tab_id, v.section_id, t.section_order + v.order_offset
 FROM "public"."g2p_register_ui_tab_sections" t
 JOIN (VALUES
-  ('oan_farmer_name_register', 'oan_farmer_name', 1),
-  ('oan_farmer_personal_details_register', 'oan_farmer_personal_details', 2)
+  ('oan_farmer_identity_verification_register', 'oan_farmer_identity_verification', 1),
+  ('oan_farmer_name_register', 'oan_farmer_name', 2),
+  ('oan_farmer_personal_details_register', 'oan_farmer_personal_details', 3)
 ) v(tab_section_id, section_id, order_offset) ON true
 JOIN "public"."g2p_register_sections" s ON s.section_id = v.section_id
 WHERE t.tab_id = 'farmer_farmer_tab'
@@ -53,7 +56,8 @@ ON CONFLICT ("tab_section_id") DO UPDATE SET
   "section_id" = EXCLUDED."section_id", "section_order" = EXCLUDED."section_order";
 
 WITH replaced (upstream_tab_section_id, upstream_section_id, oan_section_id) AS (
-  VALUES ('tab_section_3', 'farmer_farmer_personal_identification_section_01', 'oan_farmer_personal_identification'),
+  VALUES ('tab_section_1', 'farmer_household_lookup_section_01', 'oan_farmer_household_lookup'),
+         ('tab_section_3', 'farmer_farmer_personal_identification_section_01', 'oan_farmer_personal_identification'),
          ('tab_section_4', 'farmer_farmer_socio_economic_and_health_section_04', 'oan_farmer_socio_economic_and_health'),
          ('tab_section_9', 'farmer_membership_membership_details_01', 'oan_farmer_membership_details'),
          ('tab_section_6', 'farmer_farm_farm_details_section_01', 'oan_farmer_lands'),
@@ -97,7 +101,7 @@ ON CONFLICT ("tab_id") DO UPDATE SET
 INSERT INTO "public"."g2p_register_ui_tab_sections" ("tab_section_id", "register_id", "tab_id", "section_id", "section_order")
 SELECT v.tab_section_id, 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', v.tab_id, v.section_id, v.section_order
 FROM (VALUES
-  ('oan_farmer_phones_tab_section', 'farmer_farmer_tab', 'oan_farmer_phones', 13),
+  ('oan_farmer_phones_tab_section', 'farmer_farmer_tab', 'oan_farmer_phones', 14),
   ('oan_farmer_land_summary_tab_section', 'farmer_land_tab', 'oan_farmer_land_summary', 5),
   ('oan_farmer_enumerator_tab_section', 'oan_farmer_enumerator_tab', 'oan_farmer_enumerator', 10)
 ) v(tab_section_id, tab_id, section_id, section_order)
@@ -138,6 +142,7 @@ AND EXISTS (SELECT 1 FROM "public"."g2p_register_ui_tab_sections" o
 
 DELETE FROM "public"."g2p_intake_form_ui_tab_sections"
 WHERE "tab_section_id" IN (
+  'tab_section_1',                         -- household lookup (with the household-head question)
   'tab_section_3',                         -- personal identification
   'tab_section_4',                         -- socio-economic and health
   'tab_section_6',                         -- lands

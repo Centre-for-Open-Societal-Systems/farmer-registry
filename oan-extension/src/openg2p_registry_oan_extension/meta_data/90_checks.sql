@@ -46,7 +46,7 @@ BEGIN
   FROM "public"."g2p_intake_form_ui_tab_sections"
   WHERE tab_id = 'a1a4d25a-1cd4-4356-abac-72482721'
     AND section_id NOT LIKE 'oan\_%'
-    AND section_id NOT IN ('farmer_household_lookup_section_01', 'household_household_household_member_section_02');
+    AND section_id <> 'household_household_household_member_section_02';
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'Rows on the farmer intake tab that no current seed writes: %', found;
   END IF;
@@ -168,8 +168,7 @@ BEGIN
   -- A section replaced by an OAN one must not show twice.
   SELECT string_agg(section_id, ', ') INTO missing
   FROM (SELECT section_id FROM "public"."g2p_register_ui_tab_sections"
-        UNION ALL SELECT section_id FROM "public"."g2p_intake_form_ui_tab_sections"
-                  WHERE section_id <> 'farmer_household_lookup_section_01') t
+        UNION ALL SELECT section_id FROM "public"."g2p_intake_form_ui_tab_sections") t
   WHERE section_id IN ('farmer_household_lookup_section_01', 'farmer_farmer_location_section_03',
                        'farmer_crop_crop_details_section_01', 'farmer_crop_crop_details_intake_section_01',
                        'household_household_household_information_section_01',
@@ -232,26 +231,35 @@ BEGIN
     RAISE EXCEPTION 'Personal Information section mnemonics are not unique: %', missing;
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1 FROM "public"."g2p_register_sections"
-    WHERE section_id = 'oan_farmer_personal_identification'
-      AND section_ui_schema::text LIKE '%"widget": "oan-identity-verification"%'
-  ) THEN
-      RAISE EXCEPTION 'The Fayda verification widget is missing from the farmer Identity section';
-  END IF;
+  -- The Fayda ID is typed by staff (approval is the control); verification is
+  -- the platform's id-authentication widget on the farmer's record only.
   IF (
-    SELECT count(*) <> 1 OR bool_or(
-      w->>'widget' IS DISTINCT FROM 'display'
-      OR w->>'widget-type' IS DISTINCT FROM 'display'
-      OR w->>'widget-readonly' IS DISTINCT FROM 'true'
-      OR w->>'widget-required' IS DISTINCT FROM 'false')
-    FROM g2p_register_sections,
-      jsonb_path_query(section_ui_schema, 'strict $.**') w
+    SELECT count(*) <> 1 OR bool_or(w->>'widget' IS DISTINCT FROM 'text' OR (w->>'widget-readonly')::boolean IS TRUE)
+    FROM g2p_register_sections, jsonb_path_query(section_ui_schema, 'strict $.**') w
     WHERE section_id = 'oan_farmer_personal_identification'
-      AND jsonb_typeof(w) = 'object' AND w ? 'widget'
-      AND w->>'widget-id' = 'foundational_id'
+      AND jsonb_typeof(w) = 'object' AND w ? 'widget' AND w->>'widget-id' = 'foundational_id'
   ) THEN
-    RAISE EXCEPTION 'Popup-only FIN requires exactly one read-only display on the form';
+    RAISE EXCEPTION 'The Fayda ID on the Identity section must be one editable text widget';
+  END IF;
+  IF EXISTS (SELECT 1 FROM g2p_register_sections
+             WHERE jsonb_path_exists(section_ui_schema, 'lax $.** ? (@.widget == "oan-identity-verification")')) THEN
+    RAISE EXCEPTION 'The retired OAN verification popup widget is still configured';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM "public"."g2p_register_ui_tab_sections" t
+    JOIN "public"."g2p_register_sections" s ON s.section_id = t.section_id
+    WHERE t.tab_id = 'farmer_farmer_tab' AND t.section_id = 'oan_farmer_identity_verification'
+      AND jsonb_path_exists(s.section_ui_schema, 'lax $.** ? (@.widget == "id-authentication")')
+  ) THEN
+    RAISE EXCEPTION 'The id-authentication section is not on the farmer record tab';
+  END IF;
+  IF EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections"
+             WHERE section_id = 'oan_farmer_identity_verification') THEN
+    RAISE EXCEPTION 'Record verification must not be on the intake form; core authenticates register records';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections"
+                 WHERE tab_id = 'a1a4d25a-1cd4-4356-abac-72482721' AND section_id = 'oan_farmer_household_lookup') THEN
+    RAISE EXCEPTION 'The household lookup with the household-head question is not on the farmer intake form';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM "public"."g2p_register_definitions"

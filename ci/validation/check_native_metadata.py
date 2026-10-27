@@ -126,10 +126,14 @@ def probe(host, mode):
                     continue
                 fin_sections += 1
                 assert len(fin) == 1, (section_id, 'duplicate FIN inputs', fin)
-                assert fin[0].get('widget') == 'display' and fin[0].get('widget-readonly') is True
+                # Staff type the Fayda ID; approval is the control. Verification
+                # is the platform's id-authentication widget on the record.
+                assert fin[0].get('widget') == 'text' and fin[0].get('widget-readonly') is False
                 assert fin[0].get('widget-required') is False
-                assert sum(w.get('widget') == 'oan-identity-verification' for w in actual) == 1, section_id
-            assert fin_sections, 'No bound Farmer FIN display was checked'
+                assert not any(w.get('widget') == 'oan-identity-verification' for w in actual), section_id
+            assert fin_sections, 'No bound Farmer FIN input was checked'
+            assert any(w.get('widget') == 'id-authentication' for _, schema in sections
+                       if _ == 'oan_farmer_identity_verification' for w in widgets(schema)), 'id-authentication section missing'
             section_map = dict(sections)
             for section_id, fields in {
                 'oan_farmer_household_lookup': {'is_household_head'},
