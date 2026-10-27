@@ -76,7 +76,7 @@ def test_normal_guard_checks_init_environment_and_new_pvc():
 def test_pin_is_the_deployed_dev_chart_without_promotion_flags():
     pin = oan_chart.profile()
     assert (pin['environment'], pin['namespace'], pin['release']) == ('dev', 'farmer', 'farmer-registry')
-    assert pin['version'] == '1.0.0-dev.16' and pin['platformVersion'] == '1.2.2-rc.557'
+    assert pin['version'] == '1.0.0-dev.17' and pin['platformVersion'] == '1.2.2-rc.557'
     assert 'promotionReady' not in pin and 'freshDatabaseEpoch' not in pin
 
 
