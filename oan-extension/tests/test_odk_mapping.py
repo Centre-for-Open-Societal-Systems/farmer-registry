@@ -70,7 +70,7 @@ def test_legacy_numeric_geography_is_not_invented_and_existing_household_is_not_
     result=intake_sections(data)
     assert result['oan_fr_farmer_location']==[{}]
     assert result['oan_hh_information']==[] and result['hh_members']==[]
-    assert result['fr_farmer_household_lookup'][0]['link_internal_record_id']=='approved-household'
+    assert result['oan_fr_farmer_household_lookup'][0]['link_internal_record_id']=='approved-household'
 
 
 def test_enricher_replaces_every_embedded_file_and_leaves_commit_to_worker():
@@ -91,7 +91,7 @@ def test_registered_head_lookup_is_unique_and_does_not_create_new_household():
     data=example();data['household_questions'].update(household_head='no',head_registered='yes',member_reference_id='ODK-HEAD')
     session=MagicMock();session.execute.return_value.scalars.return_value.all.return_value=[SimpleNamespace(link_internal_record_id='household-1')]
     result=enricher.OANOdkFarmerEnricherService().enrich(data,session)
-    assert result['oan_intake_sections']['fr_farmer_household_lookup'][0]['link_internal_record_id']=='household-1'
+    assert result['oan_intake_sections']['oan_fr_farmer_household_lookup'][0]['link_internal_record_id']=='household-1'
     assert result['oan_intake_sections']['oan_hh_information']==[]
     session.execute.return_value.scalars.return_value.all.return_value=[]
     with pytest.raises(ValueError,match='one approved registered head'):
