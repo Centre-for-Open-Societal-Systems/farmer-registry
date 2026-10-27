@@ -17,8 +17,9 @@ import cutover
 import deployment
 
 
-def archive(path, version='1.2.2-rc.544'):
+def archive(path, version=None):
     pin = oan_chart.profile()
+    version = version or pin['platformVersion']
     chart = {'name': pin['name'], 'version': pin['version'], 'appVersion': pin['platformVersion'],
              'dependencies': [{'alias': 'registry', 'name': 'openg2p-registry',
                                'version': pin['platformVersion'], 'repository': 'https://openg2p.github.io/openg2p-helm'}]}
@@ -182,3 +183,13 @@ def test_cutover_backup_freshness_revision_restore_and_active_job_gates(tmp_path
     else:
         with pytest.raises(ValueError):
             cutover.backup_gate(tmp_path, status, values, manifest, jobs)
+
+
+def test_deployment_requires_explicit_acceptance_for_the_exact_environment(monkeypatch):
+    original = oan_chart.profile()
+    for pin, environment in ((original,'dev'),({**original,'promotionReady':True},'staging')):
+        monkeypatch.setattr(oan_chart,'profile',lambda pin=pin:pin)
+        with pytest.raises(ValueError,match='Deployment blocked'):
+            oan_chart.require_deployable(environment)
+    monkeypatch.setattr(oan_chart,'profile',lambda:{**original,'promotionReady':True})
+    oan_chart.require_deployable('dev')

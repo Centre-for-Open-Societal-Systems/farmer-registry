@@ -13,10 +13,8 @@ for component in staff-api staff-ui partner-api celery db-seed sanity-tests; do
     image="$ECR_REGISTRY/$ECR_PATH/$component:$IMAGE_TAG"
     if [[ "$component" == sanity-tests ]]; then
         docker build --build-arg "RP_VERSION=$RP_VERSION" -f docker/sanity-tests/Dockerfile -t "$image" .
-    elif [[ "$component" == staff-ui ]]; then
-        docker build --target "$component" --build-arg DASHBOARD_URL= -t "$image" .
     else
-        docker build --target "$component" --build-arg "RP_VERSION=$RP_VERSION" -t "$image" .
+        docker build -f "docker/oan/$component.Dockerfile" -t "$image" .
     fi
     docker push "$image"
     digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$ECR_PATH/$component" --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)

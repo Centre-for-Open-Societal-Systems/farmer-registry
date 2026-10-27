@@ -1,5 +1,10 @@
 # Farmer Registry documentation
 
+Start with [the current refactor candidate](refactor-candidate.md). Dated rollout
+reports and legacy staging guides describe their recorded deployments.
+
+- [Household-head and male/female fields](household-fields.md)
+
 ## Development
 
 - [Domain package](development/farmer-extension.md)

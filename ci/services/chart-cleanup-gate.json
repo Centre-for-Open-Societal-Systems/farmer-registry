@@ -1,0 +1,21 @@
+{
+  "retired": false,
+  "reason": "Staging, version maintenance and unverified external legacy callers still require retained chart sources.",
+  "requiredSources": [
+    "helm/openg2p-farmer-registry/Chart.yaml",
+    "helm/openg2p-farmer-registry/Chart.lock",
+    "helm/farmer-registry-dashboard/Chart.yaml"
+  ],
+  "remainingConsumers": [
+    "ci/deploy/deploy-rc.sh",
+    "ci/deploy/staging.py",
+    "scripts/bump-rp-version.sh",
+    "ci/deploy/staging-legacy.sh"
+  ],
+  "requiredEvidence": [
+    "explicit-staging-preservation-and-restore",
+    "worker-and-partner-resource-preservation",
+    "external-legacy-caller-inventory",
+    "updated-source-pin-and-cleanup-contracts"
+  ]
+}

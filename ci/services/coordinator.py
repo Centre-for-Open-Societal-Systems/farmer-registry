@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+from contextlib import contextmanager
 import hashlib
 import importlib.util
 import json
@@ -17,16 +18,18 @@ import re
 import subprocess
 import sys
 import tempfile
+import tarfile
 import urllib.request
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "ci/services"))
 sys.path.insert(0, str(ROOT / "ci"))
 from environments import connector_settings, validate_cluster
 sys.path.insert(0, str(ROOT / "ci/deploy"))
 sys.path.insert(0, str(ROOT / "scripts/operations/connector"))
-MANIFEST = ROOT / "helm/openg2p-farmer-registry/values.yaml"
+MANIFEST = ROOT / "ci/services/catalogue.yaml"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
@@ -123,8 +126,8 @@ def configuration(path=MANIFEST, environment="dev"):
 
 
 def configuration_hash():
-    # Chart values are the sole service catalogue; unrelated chart settings do
-    # not invalidate an otherwise identical service promotion record.
+    # Delivery metadata owns the catalogue independently of chart source.
+    # Hash semantics remain the exact existing cossAddons JSON contract.
     addons = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["cossAddons"]
     return hashlib.sha256(json.dumps(addons, sort_keys=True).encode()).hexdigest()
 
@@ -166,17 +169,19 @@ def checkout(component, environment, destination, run=command, commit=None):
     return commit
 
 
-def layout(component, source):
+def layout(component, source, *, chart_required=True):
     dockerfile = relative_file(source, component["dockerfile"])
     chart_root = ROOT if component.get("kind") == "registry-dashboard-api" or component.get("chartSource") == "registry" else source
     chart = relative_file(chart_root, component["chart"])
-    if not dockerfile.is_file() or not (chart / "Chart.yaml").is_file():
+    if not dockerfile.is_file() or (chart_required and not (chart / "Chart.yaml").is_file()):
         raise SkipService("missing-application-files")
     if not component.get("imageValues"):
         raise SkipService("unverified-upstream-image-values")
     for spec in image_specs(component).values():
         if not relative_file(source, spec["dockerfile"]).is_file() or not relative_file(source, spec["context"]).is_dir():
             raise SkipService("missing-application-files")
+    if not chart_required:
+        return dockerfile, None
     chart_metadata = yaml.safe_load((chart / "Chart.yaml").read_text(encoding="utf-8"))
     if chart_metadata.get("dependencies") and not (chart / "Chart.lock").is_file():
         raise ServiceError("chart-dependencies-not-locked")
@@ -203,12 +208,50 @@ def dashboard_chart_provenance():
     from oan_chart import profile
     pin = profile()
     if any(pin.get(key) != value for key, value in {
-        "name": "openg2p-farmer-registry", "version": "1.0.0-dev.5",
+        "name": "openg2p-farmer-registry", "version": "1.0.0-dev.14",
         "environment": "dev", "namespace": "farmer", "release": "farmer-registry",
     }.items()):
         raise ServiceError("dashboard-api-approved-chart-profile-mismatch")
     return {"name": pin["name"], "version": pin["version"], "sha256": pin["sha256"],
             "rendererHash": chart_hash(ROOT / "ci/deploy")}
+
+
+
+def central_provenance(component, environment):
+    if environment != "dev":
+        return None
+    if component.get("kind") == "registry-dashboard-api":
+        return dashboard_chart_provenance()
+    if component.get("chartSource") == "registry":
+        from central_chart import profile
+        return profile()
+    return None
+
+
+def provenance_hash(provenance):
+    return hashlib.sha256(json.dumps(provenance, sort_keys=True).encode()).hexdigest()
+
+
+@contextmanager
+def selected_chart(component, environment, source):
+    provenance = central_provenance(component, environment)
+    if provenance is None:
+        _, chart = layout(component, source)
+        yield chart, chart_hash(chart), None
+        return
+    layout(component, source, chart_required=False)
+    if component.get("kind") == "registry-dashboard-api":
+        # prepare_dashboard_chart verifies the real archive before rendering;
+        # build provenance binds that immutable package and OAN renderer now.
+        yield None, provenance_hash(provenance), provenance
+    else:
+        from central_chart import download
+        with tempfile.TemporaryDirectory(prefix="farmer-dashboard-chart-") as state:
+            try:
+                chart = download(state)
+            except (OSError, ValueError, tarfile.TarError) as exc:
+                raise ServiceError("dashboard-ui-approved-chart-download-or-checksum-failed") from exc
+            yield chart, provenance_hash(provenance), provenance
 
 
 def prepare_dashboard_chart(state, values, before, installed_chart):
@@ -331,40 +374,51 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
 
 def build(component, environment, source, registry, run=command):
     commit = checkout(component, environment, source, run)
-    built = {}
-    hook_review = None
     try:
-        _, chart = layout(component, source)
-        if component.get("kind") == "registry-dashboard-api":
-            run(["bash", str(ROOT / "ci/dashboard/verify-api.sh"), str(source)])
-        if component.get("chartSource") == "registry":
-            run(["bash", str(ROOT / "ci/dashboard/verify-source.sh"), str(source)])
-        overlays = {role: chart_hash(relative_file(ROOT, spec["overlay"]))
-                    for role, spec in image_specs(component).items() if spec.get("overlay")}
-        tag = commit[:12]
-        if overlays:
-            tag += "-" + hashlib.sha256(json.dumps(overlays, sort_keys=True).encode()).hexdigest()[:12]
-        for role, spec in image_specs(component).items():
-            built[role] = build_image(component, role, spec, commit, source, registry, run, tag)
-        if environment == "dev" and component.get("chartSource") == "registry":
-            selected = dict(next(iter(built.values())), commit=commit, chartHash=chart_hash(chart))
-            hook_review = dashboard_hook_rehearsal(component, environment, selected, chart, registry, run)
+        return _build_resolved(component, environment, source, registry, commit, run)
     except (SkipService, ServiceError) as error:
-        error.provenance = {"commit": commit}
-        if built:
-            error.provenance["images"] = built
+        # Chart selection happens before an image exists. Preserve the resolved
+        # source revision on these failures, just as for later build failures.
+        if not getattr(error, "provenance", None):
+            error.provenance = {"commit": commit}
         raise
-    primary = next(iter(built.values()))
-    result = dict(primary, commit=commit, chartHash=chart_hash(chart))
-    if component.get("kind") == "registry-dashboard-api" and environment == "dev":
-        result["deploymentChart"] = dashboard_chart_provenance()
-    if hook_review:
-        result["hookRehearsal"] = hook_review
-    if component.get("images"):
-        result["images"] = built
-    if overlays:
-        result["overlayHashes"] = overlays
-    return result
+
+
+def _build_resolved(component, environment, source, registry, commit, run):
+    with selected_chart(component, environment, source) as (chart, selected_hash, provenance):
+        built = {}
+        hook_review = None
+        try:
+            if component.get("kind") == "registry-dashboard-api":
+                run(["bash", str(ROOT / "ci/dashboard/verify-api.sh"), str(source)])
+            if component.get("chartSource") == "registry":
+                run(["bash", str(ROOT / "ci/dashboard/verify-source.sh"), str(source)])
+            overlays = {role: chart_hash(relative_file(ROOT, spec["overlay"]))
+                        for role, spec in image_specs(component).items() if spec.get("overlay")}
+            tag = commit[:12]
+            if overlays:
+                tag += "-" + hashlib.sha256(json.dumps(overlays, sort_keys=True).encode()).hexdigest()[:12]
+            for role, spec in image_specs(component).items():
+                built[role] = build_image(component, role, spec, commit, source, registry, run, tag)
+            if environment == "dev" and component.get("chartSource") == "registry":
+                selected = dict(next(iter(built.values())), commit=commit, chartHash=selected_hash)
+                hook_review = dashboard_hook_rehearsal(component, environment, selected, chart, registry, run)
+        except (SkipService, ServiceError) as error:
+            error.provenance = {"commit": commit}
+            if built:
+                error.provenance["images"] = built
+            raise
+        primary = next(iter(built.values()))
+        result = dict(primary, commit=commit, chartHash=selected_hash)
+        if provenance is not None:
+            result["deploymentChart"] = provenance
+        if hook_review:
+            result["hookRehearsal"] = hook_review
+        if component.get("images"):
+            result["images"] = built
+        if overlays:
+            result["overlayHashes"] = overlays
+        return result
 
 
 def docs(text):
@@ -605,121 +659,122 @@ def rehearsal(component, environment, record, overrides):
 def deploy(component, environment, record, source, registry, run=command):
     images = image_artifacts(component, record, registry)
     approved_dashboard = component.get("kind") == "registry-dashboard-api" and environment == "dev"
-    if approved_dashboard and record.get("deploymentChart") != dashboard_chart_provenance():
-        raise ServiceError("dashboard-api-approved-chart-provenance-mismatch")
+    provenance = central_provenance(component, environment)
+    if provenance is not None and record.get("deploymentChart") != provenance:
+        raise ServiceError("dashboard-api-approved-chart-provenance-mismatch" if approved_dashboard else "dashboard-ui-approved-chart-provenance-mismatch")
     for role, spec in image_specs(component).items():
         if spec.get("overlay") and record.get("overlayHashes", {}).get(role) != chart_hash(relative_file(ROOT, spec["overlay"])):
             raise ServiceError("overlay-changed-since-build")
     checkout(component, environment, source, run, commit=record["commit"])
-    _, chart = layout(component, source)
-    if chart_hash(chart) != record["chartHash"]:
-        raise ServiceError("promotion-chart-mismatch")
-    # Every environment must have reviewed configuration. Missing config leaves
-    # existing deployments untouched; defaults must never select a namespace/IdP.
-    values_file = ROOT / "helm/environments" / environment / "services" / (component["name"] + ".yaml")
-    if not values_file.is_file():
-        raise SkipService("missing-environment-values")
-    overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
-    settings = overrides.pop("_coordination", {})
-    if component.get("kind") == "connector":
-        connector_settings(environment, settings)
-        if environment == "staging":
-            if not re.fullmatch(r"[0-9a-f]{64}", record.get("stagingBackupHash", "")):
-                raise ServiceError("reviewed-staging-snapshot-required")
-            settings["backupHash"] = record["stagingBackupHash"]
-    release, namespace = component["release"], component["namespace"]
-    embedded = component.get("kind") == "registry-dashboard-api"
-    if settings.get("namespace") != namespace:
-        raise ServiceError("environment-namespace-not-verified")
-    args = ["-n", namespace]
-    # A successful list returning no match is different from an auth/network
-    # error. Never fall back to installation after helm status fails.
-    matches = json.loads(run(["helm", "list", *args, "--all", "--filter", "^" + release + "$", "-o", "json"]))
-    status = None
-    if matches:
-        status = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
-        if status.get("name") != release or status.get("namespace") != namespace or status.get("info", {}).get("status") != "deployed":
-            raise ServiceError("existing-deployed-release-required")
-        before = docs(run(["helm", "get", "manifest", release, *args]))
-        values = yaml.safe_load(run(["helm", "get", "values", release, *args, "-o", "yaml"])) or {}
-    else:
-        if component.get("allowInstall") is not True:
-            raise SkipService("no-existing-release")
-        before, values = [], {}
-    if component.get("kind") == "connector" and values.get("cossCutover", {}).get("phase") == "active":
-        raise SkipService("active-connector-requires-accepted-image-rollout")
-    auth = dashboard_auth(overrides) if approved_dashboard else None
-    merge(values, overrides)
-    for role, spec in image_specs(component).items():
-        selected = record["images"][role] if component.get("images") else record
-        for value_path in spec["imageValues"]:
-            target = values
-            for part in value_path.split("."):
-                target = target.setdefault(part, {})
-            # OCI tag@digest works with existing repository:tag charts.
-            target.update(repository=selected["repository"], tag=selected["tag"] + "@" + selected["digest"])
-    with tempfile.TemporaryDirectory(prefix="registry-service-values-") as state:
-        state = Path(state)
-        approved_renderer = None
-        if approved_dashboard:
-            chart, approved_renderer = prepare_dashboard_chart(state, values, before, matches[0].get("chart"))
-        path = state / "values.yaml"
-        path.write_text(yaml.safe_dump(values), encoding="utf-8")
-        path.chmod(0o600)
-        if not approved_dashboard:
-            run(["helm", "repo", "add", "openg2p", "https://openg2p.github.io/openg2p-helm"])
-            run(["helm", "dependency", "build", str(chart)])
-        render_options = []
-        if embedded:
-            # The parent chart contains regular revision-named setup Jobs as
-            # well as hooks. Suppress both for an API image-only deployment.
-            renderer = approved_renderer or state / "without-jobs"
-            if not approved_renderer:
-                renderer.write_text("#!" + sys.executable + "\nimport sys,yaml\n"
-                                    "yaml.safe_dump_all([d for d in yaml.safe_load_all(sys.stdin) if d and d.get('kind') != 'Job'],sys.stdout)\n")
-            renderer.chmod(0o700)
-            render_options = ["--no-hooks", "--post-renderer", str(renderer)]
-        after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
-                          "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
-        guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" else before
-        if embedded:
-            guard_dashboard_api(before, after, images["main"], namespace, auth=auth)
-        else:
-            guard(guard_before, after, namespace, images.values(), release)
+    with selected_chart(component, environment, source) as (chart, selected_hash, _):
+        if selected_hash != record["chartHash"]:
+            raise ServiceError("promotion-chart-mismatch")
+        # Every environment must have reviewed configuration. Missing config leaves
+        # existing deployments untouched; defaults must never select a namespace/IdP.
+        values_file = ROOT / "helm/environments" / environment / "services" / (component["name"] + ".yaml")
+        if not values_file.is_file():
+            raise SkipService("missing-environment-values")
+        overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
+        settings = overrides.pop("_coordination", {})
         if component.get("kind") == "connector":
-            from connector_cutover import verify_backup
-            backup_dir = os.environ.get("CONNECTOR_BACKUP_DIRECTORY")
-            if not backup_dir or not (Path(backup_dir) / "backup.json").is_file():
-                raise ServiceError("connector-backup-required")
-            if verify_backup(Path(backup_dir), environment) != settings.get("backupHash"):
-                raise ServiceError("connector-backup-integrity-failed")
-            old = docs(run(["helm", "get", "manifest", "farmer-connector", *args]))
-            isolated_connector(old, after, settings)
-            paused_connector(after)
-        # New or changed hooks require an isolated rehearsal rather than running
-        # unreviewed migrations/setup jobs during an optional image deployment.
-        old_hooks = docs(run(["helm", "get", "hooks", release, *args])) if status and not embedded else []
-        hooks = [d for d in after if d.get("metadata", {}).get("annotations", {}).get("helm.sh/hook")]
-        if hooks or old_hooks:
-            rehearsal(component, environment, record, overrides)
-        if status:
-            current = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
-            if (current.get("version"), current.get("info", {}).get("status")) != (status.get("version"), "deployed"):
-                raise ServiceError("release-changed-during-preflight")
-        elif json.loads(run(["helm", "list", *args, "--all", "--filter", "^" + release + "$", "-o", "json"])):
-            raise ServiceError("release-appeared-during-preflight")
-        run(["helm", "upgrade", release, str(chart), *args, "-f", str(path),
-             *render_options, *(["--install"] if status is None else []), "--atomic", "--wait", "--wait-for-jobs", "--timeout", "10m"])
-    final = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
-    if final.get("info", {}).get("status") != "deployed":
-        raise ServiceError("release-not-deployed")
-    final_manifest = docs(run(["helm", "get", "manifest", release, *args]))
-    if embedded:
-        guard_dashboard_api(before, final_manifest, images["main"], namespace, auth=auth)
-    else:
-        guard(signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" else before,
-              final_manifest, namespace, images.values(), release)
-    return final["version"]
+            connector_settings(environment, settings)
+            if environment == "staging":
+                if not re.fullmatch(r"[0-9a-f]{64}", record.get("stagingBackupHash", "")):
+                    raise ServiceError("reviewed-staging-snapshot-required")
+                settings["backupHash"] = record["stagingBackupHash"]
+        release, namespace = component["release"], component["namespace"]
+        embedded = component.get("kind") == "registry-dashboard-api"
+        if settings.get("namespace") != namespace:
+            raise ServiceError("environment-namespace-not-verified")
+        args = ["-n", namespace]
+        # A successful list returning no match is different from an auth/network
+        # error. Never fall back to installation after helm status fails.
+        matches = json.loads(run(["helm", "list", *args, "--all", "--filter", "^" + release + "$", "-o", "json"]))
+        status = None
+        if matches:
+            status = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
+            if status.get("name") != release or status.get("namespace") != namespace or status.get("info", {}).get("status") != "deployed":
+                raise ServiceError("existing-deployed-release-required")
+            before = docs(run(["helm", "get", "manifest", release, *args]))
+            values = yaml.safe_load(run(["helm", "get", "values", release, *args, "-o", "yaml"])) or {}
+        else:
+            if component.get("allowInstall") is not True:
+                raise SkipService("no-existing-release")
+            before, values = [], {}
+        if component.get("kind") == "connector" and values.get("cossCutover", {}).get("phase") == "active":
+            raise SkipService("active-connector-requires-accepted-image-rollout")
+        auth = dashboard_auth(overrides) if approved_dashboard else None
+        merge(values, overrides)
+        for role, spec in image_specs(component).items():
+            selected = record["images"][role] if component.get("images") else record
+            for value_path in spec["imageValues"]:
+                target = values
+                for part in value_path.split("."):
+                    target = target.setdefault(part, {})
+                # OCI tag@digest works with existing repository:tag charts.
+                target.update(repository=selected["repository"], tag=selected["tag"] + "@" + selected["digest"])
+        with tempfile.TemporaryDirectory(prefix="registry-service-values-") as state:
+            state = Path(state)
+            approved_renderer = None
+            if approved_dashboard:
+                chart, approved_renderer = prepare_dashboard_chart(state, values, before, matches[0].get("chart"))
+            path = state / "values.yaml"
+            path.write_text(yaml.safe_dump(values), encoding="utf-8")
+            path.chmod(0o600)
+            if provenance is None:
+                run(["helm", "repo", "add", "openg2p", "https://openg2p.github.io/openg2p-helm"])
+                run(["helm", "dependency", "build", str(chart)])
+            render_options = []
+            if embedded:
+                # The parent chart contains regular revision-named setup Jobs as
+                # well as hooks. Suppress both for an API image-only deployment.
+                renderer = approved_renderer or state / "without-jobs"
+                if not approved_renderer:
+                    renderer.write_text("#!" + sys.executable + "\nimport sys,yaml\n"
+                                        "yaml.safe_dump_all([d for d in yaml.safe_load_all(sys.stdin) if d and d.get('kind') != 'Job'],sys.stdout)\n")
+                renderer.chmod(0o700)
+                render_options = ["--no-hooks", "--post-renderer", str(renderer)]
+            after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
+                              "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
+            guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" else before
+            if embedded:
+                guard_dashboard_api(before, after, images["main"], namespace, auth=auth)
+            else:
+                guard(guard_before, after, namespace, images.values(), release)
+            if component.get("kind") == "connector":
+                from connector_cutover import verify_backup
+                backup_dir = os.environ.get("CONNECTOR_BACKUP_DIRECTORY")
+                if not backup_dir or not (Path(backup_dir) / "backup.json").is_file():
+                    raise ServiceError("connector-backup-required")
+                if verify_backup(Path(backup_dir), environment) != settings.get("backupHash"):
+                    raise ServiceError("connector-backup-integrity-failed")
+                old = docs(run(["helm", "get", "manifest", "farmer-connector", *args]))
+                isolated_connector(old, after, settings)
+                paused_connector(after)
+            # New or changed hooks require an isolated rehearsal rather than running
+            # unreviewed migrations/setup jobs during an optional image deployment.
+            old_hooks = docs(run(["helm", "get", "hooks", release, *args])) if status and not embedded else []
+            hooks = [d for d in after if d.get("metadata", {}).get("annotations", {}).get("helm.sh/hook")]
+            if hooks or old_hooks:
+                rehearsal(component, environment, record, overrides)
+            if status:
+                current = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
+                if (current.get("version"), current.get("info", {}).get("status")) != (status.get("version"), "deployed"):
+                    raise ServiceError("release-changed-during-preflight")
+            elif json.loads(run(["helm", "list", *args, "--all", "--filter", "^" + release + "$", "-o", "json"])):
+                raise ServiceError("release-appeared-during-preflight")
+            run(["helm", "upgrade", release, str(chart), *args, "-f", str(path),
+                 *render_options, *(["--install"] if status is None else []), "--atomic", "--wait", "--wait-for-jobs", "--timeout", "10m"])
+        final = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
+        if final.get("info", {}).get("status") != "deployed":
+            raise ServiceError("release-not-deployed")
+        final_manifest = docs(run(["helm", "get", "manifest", release, *args]))
+        if embedded:
+            guard_dashboard_api(before, final_manifest, images["main"], namespace, auth=auth)
+        else:
+            guard(signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" else before,
+                  final_manifest, namespace, images.values(), release)
+        return final["version"]
 
 
 def merge(target, overlay):

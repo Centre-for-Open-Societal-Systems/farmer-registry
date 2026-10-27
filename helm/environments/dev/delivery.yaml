@@ -12,4 +12,4 @@ connectorQueue: farmer-registry-connector-v2
 connectorHostname: connector-farmer-registry-development.oanstaging.com
 apiServers:
   - https://13.201.58.55:6443
-platform: 1.2.2-rc.544
+platform: 1.2.2-rc.557

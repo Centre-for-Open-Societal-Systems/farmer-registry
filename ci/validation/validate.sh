@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 python -m pytest -q -p no:cacheprovider tests/unit
-python tests/unit/test_odk_transform.py > /tmp/odk-transform.log
 bash -n ci/deploy/deploy-dev.sh
 bash -n ci/deploy/deploy-rc.sh
 bash -n ci/deploy/cutover-dev.sh ci/deploy/cutover-renderer.sh ci/deploy/oan-renderer.sh

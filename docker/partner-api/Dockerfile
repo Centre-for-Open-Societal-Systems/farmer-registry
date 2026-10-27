@@ -5,7 +5,7 @@
 # farmer domain model; ENV defaults and the migrate+gunicorn CMD are inherited.
 #
 # Build context = repo root (so farmer-extension/ is reachable).
-ARG RP_VERSION=1.2.2-rc.544
+ARG RP_VERSION=1.2.2-rc.557
 FROM openg2p/openg2p-registry-partner-api:${RP_VERSION}
 
 # Option C: select farmer's domain model (coexists with the base image's
@@ -14,7 +14,3 @@ ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
-COPY docker/common/patch_master_data_csrf.py /tmp/patch_master_data_csrf.py
-RUN python /tmp/patch_master_data_csrf.py && rm /tmp/patch_master_data_csrf.py
-COPY docker/partner-api/patch_odk_signature.py /tmp/patch_odk_signature.py
-RUN python /tmp/patch_odk_signature.py && rm /tmp/patch_odk_signature.py

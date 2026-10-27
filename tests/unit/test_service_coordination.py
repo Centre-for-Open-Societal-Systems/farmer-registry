@@ -99,7 +99,7 @@ def test_branch_policy_and_real_config(component):
     assert all(item["namespace"] == "farmer" for item in configured)
 
 
-def test_dashboard_ui_uses_registry_chart_without_chart_in_application_source(tmp_path):
+def test_staging_dashboard_ui_keeps_registry_chart_without_chart_in_application_source(tmp_path):
     component = next(item for item in coordinator.configuration() if item["name"] == "farmer-registry-dashboard")
     (tmp_path / "Dockerfile").write_text("FROM scratch\n")
     _, chart = coordinator.layout(component, tmp_path)
@@ -148,15 +148,15 @@ def test_embedded_api_cannot_adopt_other_owners_or_image_values(tmp_path, field,
         coordinator.configuration(config)
 
 
-def test_service_catalogue_is_owned_by_helm_and_hash_covers_repositories(tmp_path, monkeypatch):
-    assert coordinator.MANIFEST == ROOT / "helm/openg2p-farmer-registry/values.yaml"
+def test_service_catalogue_is_delivery_owned_and_hash_covers_repositories(tmp_path, monkeypatch):
+    assert coordinator.MANIFEST == ROOT / "ci/services/catalogue.yaml"
     assert not (ROOT / "ci/services/components.yaml").exists()
     values = yaml.safe_load(coordinator.MANIFEST.read_text())
     path = tmp_path / "values.yaml"
     path.write_text(yaml.safe_dump(values))
     monkeypatch.setattr(coordinator, "MANIFEST", path)
     original = coordinator.configuration_hash()
-    values["dashboardApi"]["replicas"] = 4
+    values["unrelated"] = {"replicas": 4}
     path.write_text(yaml.safe_dump(values))
     assert coordinator.configuration_hash() == original
     values["cossAddons"]["components"][0]["repository"] = "https://github.com/example/changed.git"
@@ -287,14 +287,12 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
     source = tmp_path / "api-source"
     source.mkdir()
     (source / "Dockerfile").write_text("FROM example:pin\n")
-    chart = tmp_path / component["chart"]
-    chart.mkdir(parents=True)
-    (chart / "Chart.yaml").write_text("apiVersion: v2\nname: farmer\nversion: 1.0.0\n")
+    assert not (tmp_path / component["chart"]).exists()
     values = tmp_path / "helm/environments/dev/services/farmer-registry-dashboard-api.yaml"
     values.parent.mkdir(parents=True)
     values.write_text(yaml.safe_dump(DEV_API_OVERLAY))
     built = record(component)
-    built["chartHash"] = coordinator.chart_hash(chart)
+    built["chartHash"] = coordinator.provenance_hash(provenance)
     built["deploymentChart"] = provenance
     image = coordinator.artifact(component, built, ECR)
     before = [deployment("farmer-registry-dashboard-api"), deployment("farmer-registry-celery-worker")]
@@ -305,7 +303,7 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
     state = {"upgraded": False, "calls": []}
     monkeypatch.setattr(coordinator, "checkout", lambda *a, **kw: SHA)
     def prepare(directory, values, previous, installed_chart):
-        assert installed_chart == "openg2p-farmer-registry-1.0.0-dev.5"
+        assert installed_chart == "openg2p-farmer-registry-1.0.0-dev.14"
         assert previous == before
         archive = directory / "approved.tgz"
         archive.write_bytes(b"verified fixture")
@@ -317,7 +315,7 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
     def run(args):
         state["calls"].append(args)
         if args[:2] == ["helm", "list"]:
-            return '[{"name":"farmer-registry","chart":"openg2p-farmer-registry-1.0.0-dev.5"}]'
+            return '[{"name":"farmer-registry","chart":"openg2p-farmer-registry-1.0.0-dev.14"}]'
         if args[:2] == ["helm", "status"]:
             return json.dumps({"name": "farmer-registry", "namespace": "farmer", "version": 13 if state["upgraded"] else 12,
                                "info": {"status": "deployed"}})
@@ -367,7 +365,7 @@ def test_embedded_api_rejects_corrupt_approved_archive(tmp_path, monkeypatch):
     import io
     monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: io.BytesIO(b"invalid chart bytes"))
     with pytest.raises(coordinator.ServiceError, match="download-or-checksum-failed"):
-        coordinator.prepare_dashboard_chart(tmp_path, {}, [], "openg2p-farmer-registry-1.0.0-dev.5")
+        coordinator.prepare_dashboard_chart(tmp_path, {}, [], "openg2p-farmer-registry-1.0.0-dev.14")
 
 
 def test_embedded_api_restores_selected_digest_after_registry_reconciliation(tmp_path, monkeypatch):
@@ -382,7 +380,7 @@ def test_embedded_api_restores_selected_digest_after_registry_reconciliation(tmp
         candidate["dashboardApi"]["image"] = {"repository": "old", "digest": "old-digest"}
     monkeypatch.setattr(deployment, "reconcile_dev", reconcile)
     monkeypatch.setenv("OAN_CHART_ARCHIVE", "previous-archive")
-    archive, renderer = coordinator.prepare_dashboard_chart(tmp_path, values, [], "openg2p-farmer-registry-1.0.0-dev.5")
+    archive, renderer = coordinator.prepare_dashboard_chart(tmp_path, values, [], "openg2p-farmer-registry-1.0.0-dev.14")
     assert values["dashboardApi"]["image"] == dict(selected, digest=None)
     assert coordinator.os.environ["OAN_CHART_ARCHIVE"] == "previous-archive"
     assert archive.is_file() and renderer.is_file()

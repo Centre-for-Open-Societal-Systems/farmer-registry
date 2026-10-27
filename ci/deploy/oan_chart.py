@@ -32,6 +32,12 @@ def verify(path):
     return pin
 
 
+def require_deployable(environment):
+    pin = profile()
+    if environment != 'dev' or pin.get('environment') != environment or pin.get('promotionReady') is not True:
+        raise ValueError('Deployment blocked: refactor acceptance and fresh-install preservation evidence are required')
+
+
 def defaults(path):
     verify(path)
     with tarfile.open(path, 'r:gz') as archive:
@@ -49,6 +55,9 @@ if __name__ == '__main__':
         if sys.argv[1] == 'url':
             pin = profile()
             print(pin['repository'] + pin['name'] + '-' + pin['version'] + '.tgz')
+        elif sys.argv[1] == 'require-deployable':
+            require_deployable(sys.argv[2])
+            print('PASS: registry promotion evidence accepted')
         elif sys.argv[1] == 'verify':
             verify(sys.argv[2])
             print('PASS: approved OAN chart archive and packaged platform')

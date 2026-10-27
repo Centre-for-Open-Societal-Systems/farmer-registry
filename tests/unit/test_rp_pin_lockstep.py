@@ -6,7 +6,7 @@ A variant extends ONE registry-platform version, used two ways:
 
 If these drift, the sanity image is built FROM one base while the chart deploys
 another, and the overlay lands on a harness it does not match (the failure that
-bit us repeatedly). `scripts/bump-rp-version.sh` moves them together; this test
+bit us repeatedly). The legacy bump mutator is fenced on native OAN candidates; this test
 fails the build if anything ever splits them again.
 
 No dependencies beyond the stdlib + pytest — runs anywhere the other tests do.
@@ -53,7 +53,7 @@ def test_rp_pin_is_in_lockstep():
         pytest.fail(
             "openg2p-registry pin has SPLIT — images and chart must be identical:\n"
             + "\n".join(lines)
-            + "\n\nFix with: ./scripts/bump-rp-version.sh <version>"
+            + "\n\nReview ci/validation/native-release-contract.json and the immutable central chart profile; legacy bump is disabled on native OAN candidates"
         )
 
 
@@ -62,3 +62,13 @@ def test_chart_dependency_lock_matches_the_pinned_platform():
     assert lock.is_file(), "Pinned Farmer chart must commit its dependency lock"
     assert re.search(r"version:\s*" + re.escape(_chart_pin()) + r"\s", lock.read_text())
     assert "https://openg2p.github.io/openg2p-helm" in lock.read_text()
+
+
+def test_native_farmer_parent_and_central_platform_source_contract():
+    import importlib.util
+    path = REPO / "ci/validation/check_release_pins.py"
+    spec = importlib.util.spec_from_file_location("release_pins", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    result = module.check(REPO)
+    assert result["numeric_version_equality_required"] is False

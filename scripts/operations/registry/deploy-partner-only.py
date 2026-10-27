@@ -14,6 +14,8 @@ RELEASE = "farmer-registry"
 NAMESPACE = "farmer"
 PARTNER = ("Deployment", "farmer-registry-partner-api")
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import approved_chart
 
 
 def command(args):
@@ -60,6 +62,8 @@ def main():
         + re.escape(args.commit[:12]) + r"@sha256:[0-9a-f]{64}", args.image
     ):
         raise ValueError("Expected a commit-pinned Farmer partner digest")
+    if args.apply:
+        approved_chart.require_deployable("dev")
     helm = ["-n", NAMESPACE]
     status = json.loads(command(["helm", "status", RELEASE, *helm, "-o", "json"]))
     if status.get("info", {}).get("status") != "deployed":
@@ -68,24 +72,20 @@ def main():
     if values.get("global", {}).get("registryHostname") != "farmer-registry-development.oanstaging.com":
         raise ValueError("This rollout targets only the verified new-dev Farmer release")
     before = list(yaml.safe_load_all(command(["helm", "get", "manifest", RELEASE, *helm])))
+    listed = json.loads(command(["helm", "list", *helm, "--filter", "^farmer-registry$", "-o", "json"]))
+    if len(listed) != 1 or listed[0].get("name") != RELEASE:
+        raise ValueError("Expected exactly the existing Farmer release")
+    installed_chart = listed[0].get("chart")
     reference, digest = args.image.split("@", 1)
     repository, tag = reference.rsplit(":", 1)
-    partner = values.setdefault("registry", {}).setdefault("partnerApi", {})
-    partner.setdefault("image", {}).update(repository=repository, tag=tag + "@" + digest)
-    chart = ROOT / "helm/openg2p-farmer-registry"
-    command(["helm", "repo", "add", "openg2p", "https://openg2p.github.io/openg2p-helm"])
-    command(["helm", "dependency", "build", str(chart)])
     with tempfile.TemporaryDirectory(prefix="farmer-partner-rollout-") as work:
         work = Path(work)
+        chart, chart_provenance = approved_chart.prepare(work, values, before, installed_chart)
+        partner = values.setdefault("registry", {}).setdefault("partnerApi", {})
+        partner.setdefault("image", {}).update(repository=repository, tag=tag + "@" + digest)
         private_values = work / "values.yaml"
         private_values.write_text(yaml.safe_dump(values)); private_values.chmod(0o600)
-        # Keycloak setup is a normal revision-named Job in the pinned chart.
-        # --no-hooks alone cannot suppress it. Keep its Secret/ConfigMap while
-        # filtering every Job from this narrow image/configuration rollout.
-        renderer = work / "without-jobs"
-        renderer.write_text("#!" + sys.executable + "\nimport sys,yaml\n"
-                            "yaml.safe_dump_all([d for d in yaml.safe_load_all(sys.stdin) if d and d.get('kind') != 'Job'],sys.stdout)\n")
-        renderer.chmod(0o700)
+        renderer = approved_chart.renderer(work, chart, private_values)
         render_args = ["-f", str(private_values), "--no-hooks", "--post-renderer", str(renderer)]
         after = list(yaml.safe_load_all(command(["helm", "template", RELEASE, str(chart), *helm,
                                                *render_args, "--is-upgrade", "--dry-run=server"])))
@@ -104,7 +104,7 @@ def main():
             final = status
     result = {"environment": "dev", "component": "registry-partner-api", "commit": args.commit,
               "image": args.image, "helmRevision": final["version"], "previousHelmRevision": status["version"],
-              "outcome": "deployed" if args.apply else "validated", "setupJobsExecuted": False}
+              "outcome": "deployed" if args.apply else "validated", "setupJobsExecuted": False, "chartProvenance": chart_provenance}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result))
