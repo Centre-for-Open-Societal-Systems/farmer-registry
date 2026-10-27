@@ -3,7 +3,7 @@
 from openg2p_registry_core.models import G2PRegisterAuthentication
 from openg2p_registry_farmer_extension.register_domain import models as _farmer
 from openg2p_registry_farmer_extension.register_domain.models import *
-from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import column_property, mapped_column
 
 from ..derived import farmer_search_text
 from ..fields import OAN_FIELDS
@@ -39,6 +39,25 @@ class G2PRegisterFarmer(_farmer.G2PRegisterFarmer, G2PRegisterAuthentication):
 
     def get_search_text_fields(self) -> str:
         return farmer_search_text(self.to_dict())
+
+
+def _map_authentication_columns_on_native_class() -> None:
+    """Let the native farmer class read the mixin's columns too.
+
+    The subclass puts the mixin's columns on the shared Farmer table, but the
+    farmer extension's own code (household roster, post-ingest) loads rows
+    through its native class, whose to_dict walks every table column. Map the
+    same columns on that class so a native instance carries them as well.
+    """
+    native = _farmer.G2PRegisterFarmer
+    mapper = native.__mapper__
+    for name in G2PRegisterFarmer.__mapper__.c.keys():
+        if name in mapper.c or name not in native.__table__.c:
+            continue
+        mapper.add_property(name, column_property(native.__table__.c[name]))
+
+
+_map_authentication_columns_on_native_class()
 
 
 class G2PIntakeFormFarmer(_farmer.G2PIntakeFormFarmer):
