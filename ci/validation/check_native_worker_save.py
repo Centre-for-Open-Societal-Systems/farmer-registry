@@ -137,7 +137,7 @@ async def save_probe(Engine, task):
     maker = Engine.get_async_session_maker()
     assert task._session_maker is maker
     async with maker() as session:
-        binding = (await session.execute(text("SELECT register_id,intake_form_id FROM incoming_model_semantic_patterns WHERE data_model_id='FARMER_ODK_MODEL'"))).one()
+        binding = (await session.execute(text("SELECT register_id,intake_form_id FROM incoming_model_semantic_patterns WHERE data_model_id='odk_to_farmer_intake'"))).one()
         classified = SimpleNamespace(register_id=binding[0], intake_form_id=binding[1], partner_id=None)
         sections = await task._get_ordered_form_sections(classified.intake_form_id, session)
         expect([s.section_mnemonic for s in sections], list(SECTIONS), "ordered native section binding")

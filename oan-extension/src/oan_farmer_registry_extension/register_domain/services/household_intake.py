@@ -31,12 +31,12 @@ from sqlalchemy import select
 FARMER_REGISTER_MNEMONIC = "Farmer"
 
 MESSAGES = {
-    "oan_household_both": (
+    "household_both": (
         "Household: an existing household is picked in the household lookup and a new household is "
         "entered as well. Keep one: clear the household lookup to register the new household, or clear "
         "the household information and members to join the picked one."
     ),
-    "oan_household_none": (
+    "household_none": (
         "Household: none is given. Pick the farmer's household in the household lookup, or enter a new "
         "household in the household information and members."
     ),
@@ -138,14 +138,14 @@ def check_farmer_household(farmers: list, household, members: list, messages: di
     ]
     if household is None:
         if not picked and not members:
-            validation_error(_say(messages, "oan_household_none"))
+            validation_error(_say(messages, "household_none"))
         if not picked:
             # Members without the household information: upstream's roster
             # check says the information is missing.
             validate_household_roster(None, members)
         return
     if picked:
-        validation_error(_say(messages, "oan_household_both"))
+        validation_error(_say(messages, "household_both"))
     validate_household_roster(household, members)
 
 

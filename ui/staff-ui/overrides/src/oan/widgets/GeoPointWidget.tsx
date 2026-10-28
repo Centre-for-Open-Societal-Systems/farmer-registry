@@ -41,16 +41,16 @@ const DEFAULTS = {
 };
 
 const LABELS: Record<string, string> = {
-    oan_map_use_my_location: 'Use my location',
-    oan_map_clear: 'Clear pin',
-    oan_map_hint: 'Click the map where the farmer lives to fill the location; drag to move, scroll or use + and - to zoom.',
-    oan_map_locating: 'Finding your location...',
-    oan_map_no_location: 'Your location is not available.',
-    oan_map_latitude: 'Latitude',
-    oan_map_longitude: 'Longitude',
-    oan_map_altitude: 'Altitude (m)',
-    oan_map_outside: 'The pin is outside the country. Place it where the farmer lives.',
-    oan_map_no_boundaries: 'The location could not be filled from the map. Choose it in the location fields.',
+    geo_point_use_my_location: 'Use my location',
+    geo_point_clear: 'Clear pin',
+    geo_point_hint: 'Click the map where the farmer lives to fill the location; drag to move, scroll or use + and - to zoom.',
+    geo_point_locating: 'Finding your location...',
+    geo_point_no_location: 'Your location is not available.',
+    geo_point_latitude: 'Latitude',
+    geo_point_longitude: 'Longitude',
+    geo_point_altitude: 'Altitude (m)',
+    geo_point_outside: 'The pin is outside the country. Place it where the farmer lives.',
+    geo_point_no_boundaries: 'The location could not be filled from the map. Choose it in the location fields.',
 };
 
 // Web Mercator, in pixels of a world 256 * 2^zoom wide.
@@ -283,7 +283,7 @@ export function GeoPointWidget({ config }: { config: Config }) {
                 const unit = unitAt(await loadBoundaries(boundaries.url), point.lat, point.lon);
                 // A unit without a polygon (a woreda created since the boundaries were cut).
                 if (!unit) {
-                    setStatus(label('oan_map_no_boundaries'));
+                    setStatus(label('geo_point_no_boundaries'));
                     return;
                 }
                 const pcode = String(unit.properties[boundaries.pcodeProperty ?? 'pcode'] ?? '');
@@ -292,7 +292,7 @@ export function GeoPointWidget({ config }: { config: Config }) {
                     : [];
                 const last = chain[chain.length - 1];
                 if (!last) {
-                    setStatus(label('oan_map_no_boundaries'));
+                    setStatus(label('geo_point_no_boundaries'));
                     return;
                 }
                 setStatus(chain.slice(1).map((entry) => entry.level_value_mnemonic).join(' / '));
@@ -309,7 +309,7 @@ export function GeoPointWidget({ config }: { config: Config }) {
                 if (paths.location) patch = setValueByPath(patch, paths.location, null);
                 dispatch(setValues(patch as never));
             } catch {
-                setStatus(label('oan_map_no_boundaries'));
+                setStatus(label('geo_point_no_boundaries'));
             }
         },
         [boundaries, dataSourceRequestHandler, dispatch, label, paths.hierarchy, paths.location, schemaData, values],
@@ -318,7 +318,7 @@ export function GeoPointWidget({ config }: { config: Config }) {
     const pin = useCallback(
         async (point: { lat: number; lon: number }, altitude: number | null = null) => {
             if (!within(point)) {
-                setStatus(label('oan_map_outside'));
+                setStatus(label('geo_point_outside'));
                 return;
             }
             setStatus(null);
@@ -408,16 +408,16 @@ export function GeoPointWidget({ config }: { config: Config }) {
 
     const locateDevice = () => {
         if (!navigator.geolocation) {
-            setStatus(label('oan_map_no_location'));
+            setStatus(label('geo_point_no_location'));
             return;
         }
-        setStatus(label('oan_map_locating'));
+        setStatus(label('geo_point_locating'));
         navigator.geolocation.getCurrentPosition(
             ({ coords }) => {
                 setView({ center: { lat: coords.latitude, lon: coords.longitude }, zoom: Number(format.pinZoom) });
                 void pin({ lat: coords.latitude, lon: coords.longitude }, coords.altitude ?? null);
             },
-            () => setStatus(label('oan_map_no_location')),
+            () => setStatus(label('geo_point_no_location')),
             { enableHighAccuracy: true, timeout: 15000 },
         );
     };
@@ -479,19 +479,19 @@ export function GeoPointWidget({ config }: { config: Config }) {
             </div>
             {!readonly && (
                 <div className="oan-geo-actions">
-                    <button type="button" onClick={locateDevice}>{label('oan_map_use_my_location')}</button>
+                    <button type="button" onClick={locateDevice}>{label('geo_point_use_my_location')}</button>
                     {pinned && (
                         <button type="button" onClick={() => write({ latitude: null, longitude: null, altitude: null })}>
-                            {label('oan_map_clear')}
+                            {label('geo_point_clear')}
                         </button>
                     )}
-                    <span className="oan-geo-hint">{status ?? label('oan_map_hint')}</span>
+                    <span className="oan-geo-hint">{status ?? label('geo_point_hint')}</span>
                 </div>
             )}
             <div className="oan-geo-fields">
                 {(['latitude', 'longitude', 'altitude'] as const).map((key) => (
                     <label key={key}>
-                        {label(`oan_map_${key}`)}
+                        {label(`geo_point_${key}`)}
                         <input type="number" step="any" disabled={readonly}
                                value={(key === 'latitude' ? lat : key === 'longitude' ? lon : alt) ?? ''}
                                onChange={(e) => typed(key, e.target.value)} />

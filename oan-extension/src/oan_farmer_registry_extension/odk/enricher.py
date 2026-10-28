@@ -56,7 +56,7 @@ class OdkToFarmerIntakeEnricher(G2PPayloadEnricherInterface):
         from ..register_domain.models import G2PRegisterFarmer
 
         raw = deepcopy(data.get("payload", data))
-        raw.pop("oan_household_id", None)
+        raw.pop("matched_household_id", None)
         raw.pop("oan_intake_sections", None)
         actor = (raw.get("survey_metadata") or {}).get("enumerator_name") or \
             (raw.get("__system") or {}).get("submitterName") or "system"
@@ -74,6 +74,6 @@ class OdkToFarmerIntakeEnricher(G2PPayloadEnricherInterface):
                 G2PRegisterFarmer.is_household_head.is_(True))).scalars().all()
             if len(matches) != 1 or not matches[0].link_internal_record_id:
                 raise ValueError("Household head: enter the ODK Farmer ID of one approved registered head with a household")
-            raw["oan_household_id"] = matches[0].link_internal_record_id
+            raw["matched_household_id"] = matches[0].link_internal_record_id
         raw["oan_intake_sections"] = intake_sections(raw)
         return raw

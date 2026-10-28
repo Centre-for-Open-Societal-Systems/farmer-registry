@@ -19,13 +19,13 @@ export const DOCUMENTS_VARIANT = 'oan-documents';
 export const DOCUMENT_SLOT_VARIANT = 'oan-document-slot';
 
 const LABELS: Record<string, string> = {
-    oan_docs_add: 'Add file',
-    oan_docs_none: 'No files',
-    oan_docs_full: 'Up to {count} files can be attached here. Remove one to add another.',
-    oan_docs_view: 'View',
-    oan_file_remove: 'Remove',
-    oan_file_too_large: 'The file is larger than {size} MB. Choose a smaller file, or scan it again at a lower resolution.',
-    oan_file_bad_type: '{name} cannot be attached here. Choose a {types} file.',
+    documents_add: 'Add file',
+    documents_none: 'No files',
+    documents_full: 'Up to {count} files can be attached here. Remove one to add another.',
+    documents_view: 'View',
+    documents_remove: 'Remove',
+    documents_too_large: 'The file is larger than {size} MB. Choose a smaller file, or scan it again at a lower resolution.',
+    documents_bad_type: '{name} cannot be attached here. Choose a {types} file.',
 };
 
 /**
@@ -98,10 +98,10 @@ export function DocumentsWidget({ config }: { config: Config }) {
         const wrong = picked.find((file) => !accepts(file, options.accept));
         const typed = picked.filter((file) => accepts(file, options.accept));
         const fits = typed.filter((file) => !maxSize || file.size <= maxSize);
-        if (wrong) setMessage(label('oan_file_bad_type', { name: wrong.name, types: acceptedTypes(options.accept) }));
-        else if (fits.length < typed.length) setMessage(label('oan_file_too_large', { size: Math.round(maxSize / 1048576) }));
+        if (wrong) setMessage(label('documents_bad_type', { name: wrong.name, types: acceptedTypes(options.accept) }));
+        else if (fits.length < typed.length) setMessage(label('documents_too_large', { size: Math.round(maxSize / 1048576) }));
         const room = slots.length - files.length;
-        if (fits.length > room) setMessage(label('oan_docs_full', { count: slots.length }));
+        if (fits.length > room) setMessage(label('documents_full', { count: slots.length }));
         const added = await Promise.all(fits.slice(0, room).map(serializeFile));
         if (added.length) write([...current, ...added]);
     };
@@ -151,13 +151,13 @@ export function DocumentsWidget({ config }: { config: Config }) {
                 </div>
             )}
             <div className="oan-docs-list">
-                {files.length === 0 && readonly && <span className="oan-docs-note">{label('oan_docs_none')}</span>}
+                {files.length === 0 && readonly && <span className="oan-docs-note">{label('documents_none')}</span>}
                 {files.map(({ path, value, index }) => (
                     <div key={path} className="oan-docs-file" title={nameOf(value)}>
                         <span>{nameOf(value)}</span>
-                        <button type="button" onClick={() => view(value)}>{label('oan_docs_view')}</button>
+                        <button type="button" onClick={() => view(value)}>{label('documents_view')}</button>
                         {enabled && (
-                            <button type="button" onClick={() => remove(index)}>{label('oan_file_remove')}</button>
+                            <button type="button" onClick={() => remove(index)}>{label('documents_remove')}</button>
                         )}
                     </div>
                 ))}
@@ -166,9 +166,9 @@ export function DocumentsWidget({ config }: { config: Config }) {
                 <>
                     <button type="button" className="oan-docs-add" disabled={files.length >= slots.length}
                             onClick={() => input.current?.click()}>
-                        + {label('oan_docs_add')}
+                        + {label('documents_add')}
                     </button>
-                    <div className="oan-docs-note">{label('oan_docs_full', { count: slots.length })}</div>
+                    <div className="oan-docs-note">{label('documents_full', { count: slots.length })}</div>
                     <input
                         ref={input}
                         type="file"

@@ -55,7 +55,7 @@ def test_members_without_the_household_information_are_refused():
 
 
 def test_a_translation_replaces_the_message():
-    assert _refused([{}], None, [], {"oan_household_none": "Abwarwa: ..."}) == "Abwarwa: ..."
+    assert _refused([{}], None, [], {"household_none": "Abwarwa: ..."}) == "Abwarwa: ..."
 
 
 ALMAZ = {"first_name": "Almaz", "middle_name": "Desta", "last_name": "Bekele", "is_household_head": True}

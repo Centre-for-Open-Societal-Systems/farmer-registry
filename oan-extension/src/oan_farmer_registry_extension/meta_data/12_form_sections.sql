@@ -74,7 +74,7 @@ doc_widgets (col, ord, w) AS (
          ELSE '{}'::jsonb END)
   FROM doc_categories c CROSS JOIN doc_settings d CROSS JOIN generate_series(1, d.slots) n
 ),
-form_layout (oan_section_id, upstream_section_id, col, ord, w) AS (
+form_layout (section_id, upstream_section_id, col, ord, w) AS (
   VALUES
   -- Name: the farmer's name in English and in their own language, each as
   -- the first, father's and grandfather's name (upstream's first, middle and
@@ -83,89 +83,89 @@ form_layout (oan_section_id, upstream_section_id, col, ord, w) AS (
   -- name when the language is Amharic or not chosen yet; both are then
   -- locked (the server refuses a change). Names in a Ge'ez-script language
   -- must be in Ge'ez (derived.local_name_problems).
-  ('oan_farmer_name', 'farmer_farmer_personal_identification_section_01', 1, 1,
+  ('farmer_name', 'farmer_farmer_personal_identification_section_01', 1, 1,
    '{"widget-id": "first_name", "widget-label": "first_name_eng",
      "widget-data-options": {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}}'::jsonb),
-  ('oan_farmer_name', 'farmer_farmer_personal_identification_section_01', 1, 2,
+  ('farmer_name', 'farmer_farmer_personal_identification_section_01', 1, 2,
    '{"widget-id": "middle_name", "widget-label": "fathers_name_eng",
      "widget-data-options": {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}}'),
-  ('oan_farmer_name', 'farmer_farmer_personal_identification_section_01', 1, 3,
+  ('farmer_name', 'farmer_farmer_personal_identification_section_01', 1, 3,
    '{"widget-id": "last_name", "widget-label": "grandfathers_name_eng",
      "widget-data-options": {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}}'),
-  ('oan_farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 5,
+  ('farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 5,
    '{"widget": "oan-local-name", "widget-id": "local_name", "widget-type": "input", "widget-label": "local_name",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": {"marker": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.local_name_from_fayda"},
      "widget-data-options": {"languagePath": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.language_spoken", "language": "AMHARIC",
                             "fields": ["a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.first_name_local", "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name_local", "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_name_local"]}}'),
-  ('oan_farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 1, 1, '{"widget-id": "gender", "widget-data-options": {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}}'),
-  ('oan_farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 1, 2,
+  ('farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 1, 1, '{"widget-id": "gender", "widget-data-options": {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}}'),
+  ('farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 1, 2,
    -- Upstream disables the birth date once an age is typed; one rule decides
    -- (the last wins), so here it is locked once Fayda verified it instead,
    -- and the server checks the age against the birth date.
    '{"widget-id": "birth_date", "widget-variant": "ethiopian",
      "widget-data-options": {"maxDate": "today", "minDate": "1900-01-01",
        "action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}}'),
-  ('oan_farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 1, 4, '{"widget-id": "estimated_age", "widget-data-format": {"allowSigned": false, "numericType": "integer"}}'),
-  ('oan_farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 1,
+  ('farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 1, 4, '{"widget-id": "estimated_age", "widget-data-format": {"allowSigned": false, "numericType": "integer"}}'),
+  ('farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 1,
    '{"widget": "select", "widget-id": "language_spoken", "widget-type": "input", "widget-label": "farmers_language",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.language_spoken",
      "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "LANGUAGE"},
                             "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"}}'),
-  ('oan_farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 2,
+  ('farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 2,
    '{"widget": "text", "widget-id": "first_name_local", "widget-type": "input", "widget-label": "first_name_local",
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.first_name_local", "widget-data-validation": {"maxLength": 100},
      "widget-data-options": {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.local_name_from_fayda", "operator": "equals", "value": true}}}'),
-  ('oan_farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 3,
+  ('farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 3,
    '{"widget": "text", "widget-id": "middle_name_local", "widget-type": "input", "widget-label": "fathers_name_local",
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.middle_name_local", "widget-data-validation": {"maxLength": 100},
      "widget-data-options": {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.local_name_from_fayda", "operator": "equals", "value": true}}}'),
-  ('oan_farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 4,
+  ('farmer_name', 'farmer_farmer_personal_identification_section_01', 2, 4,
    '{"widget": "text", "widget-id": "last_name_local", "widget-type": "input", "widget-label": "grandfathers_name_local",
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_name_local", "widget-data-validation": {"maxLength": 100},
      "widget-data-options": {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.local_name_from_fayda", "operator": "equals", "value": true}}}'),
-  ('oan_farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 2, 1, '{"widget-id": "marital_status"}'),
-  ('oan_farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 2, 2, '{"widget-id": "education_level"}'),
+  ('farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 2, 1, '{"widget-id": "marital_status"}'),
+  ('farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 2, 2, '{"widget-id": "education_level"}'),
   -- Identity, in the order it is filled in: whether the farmer has a national
   -- ID, then (when yes) the Fayda ID, typed by staff (FIN, 12 digits, or FAN,
   -- 16 digits), then the Fayda registration ID; the other systems' IDs in the
   -- next column. Approval is the control: a typed ID with the uploaded ID
   -- document is accepted; verification (18_identity_verification.sql, on the
   -- farmer's record) is evidence, and a verified ID is locked afterwards.
-  ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 1, 1,
+  ('farmer_identity', 'farmer_farmer_personal_identification_section_01', 1, 1,
    '{"widget": "boolean", "widget-id": "has_national_id", "widget-type": "input", "widget-label": "has_national_id",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.has_national_id",
      "widget-data-format": {"allowUnset": false, "booleanControlType": "radio", "booleanRepresentation": "yes-no"}}'),
-   ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 1, 2,
+   ('farmer_identity', 'farmer_farmer_personal_identification_section_01', 1, 2,
      '{"widget": "text", "widget-id": "foundational_id", "widget-type": "input", "widget-label": "fayda_fin",
       "widget-readonly": false, "widget-required": false,
       "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.foundational_id",
      "widget-data-placeholder": "12 or 16 digits",
      "widget-data-validation": {"pattern": "^([0-9]{12}|[0-9]{16})$", "patternMessage": "fayda_fin_format"},
      "widget-data-options": {"actions": [{"action": "show", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.has_national_id", "operator": "equals", "value": true}}, {"action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}]}}'),
-  ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 1, 3,
+  ('farmer_identity', 'farmer_farmer_personal_identification_section_01', 1, 3,
    '{"widget": "text", "widget-id": "rid", "widget-type": "input", "widget-label": "fayda_rid",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.rid",
      "widget-data-validation": {"pattern": "^[0-9]{29}$", "patternMessage": "fayda_rid_format"}}'),
-  ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 2, 1,
+  ('farmer_identity', 'farmer_farmer_personal_identification_section_01', 2, 1,
    '{"widget": "text", "widget-id": "odk_farmer_id", "widget-type": "input", "widget-label": "odk_farmer_id",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.odk_farmer_id", "widget-data-validation": {"maxLength": 64}}'),
-  ('oan_farmer_personal_identification', 'farmer_farmer_personal_identification_section_01', 2, 2,
+  ('farmer_identity', 'farmer_farmer_personal_identification_section_01', 2, 2,
    '{"widget": "text", "widget-id": "pula_id", "widget-type": "input", "widget-label": "pula_id",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.pula_id", "widget-data-validation": {"maxLength": 64}}'),
 
   -- Socio-economic and health: disability, income, then farming.
-  ('oan_farmer_socio_economic_and_health', 'farmer_farmer_socio_economic_and_health_section_04', 1, 1, '{"widget-id": "disabled"}'),
-  ('oan_farmer_socio_economic_and_health', 'farmer_farmer_socio_economic_and_health_section_04', 1, 2, '{"widget-id": "disability_type"}'),
-  ('oan_farmer_socio_economic_and_health', 'farmer_farmer_socio_economic_and_health_section_04', 1, 3, '{"widget-id": "disability_severity"}'),
-  ('oan_farmer_socio_economic_and_health', 'farmer_farmer_socio_economic_and_health_section_04', 2, 1, '{"widget-id": "source_of_income"}'),
+  ('farmer_socio_economic_health', 'farmer_farmer_socio_economic_and_health_section_04', 1, 1, '{"widget-id": "disabled"}'),
+  ('farmer_socio_economic_health', 'farmer_farmer_socio_economic_and_health_section_04', 1, 2, '{"widget-id": "disability_type"}'),
+  ('farmer_socio_economic_health', 'farmer_farmer_socio_economic_and_health_section_04', 1, 3, '{"widget-id": "disability_severity"}'),
+  ('farmer_socio_economic_health', 'farmer_farmer_socio_economic_and_health_section_04', 2, 1, '{"widget-id": "source_of_income"}'),
   -- The other source of income, asked when the source is "Others".
-  ('oan_farmer_socio_economic_and_health', 'farmer_farmer_socio_economic_and_health_section_04', 2, 2,
+  ('farmer_socio_economic_health', 'farmer_farmer_socio_economic_and_health_section_04', 2, 2,
    '{"widget": "text", "widget-id": "source_of_income_other", "widget-type": "input", "widget-label": "source_of_income_other",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.source_of_income_other",
@@ -174,17 +174,17 @@ form_layout (oan_section_id, upstream_section_id, col, ord, w) AS (
        {"action": "show", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.source_of_income", "value": "SOI_OTHERS", "operator": "equals"}},
        {"action": "require", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.source_of_income", "value": "SOI_OTHERS", "operator": "equals"}}]}}'),
   -- Productive Safety Net Programme beneficiary.
-  ('oan_farmer_socio_economic_and_health', 'farmer_farmer_socio_economic_and_health_section_04', 2, 3,
+  ('farmer_socio_economic_health', 'farmer_farmer_socio_economic_and_health_section_04', 2, 3,
    '{"widget": "boolean", "widget-id": "is_psnp_user", "widget-type": "input", "widget-label": "is_psnp_user",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.is_psnp_user",
      "widget-data-format": {"allowUnset": false, "booleanControlType": "radio", "booleanRepresentation": "yes-no"}}'),
-  ('oan_farmer_socio_economic_and_health', 'farmer_farmer_socio_economic_and_health_section_04', 3, 1,
+  ('farmer_socio_economic_health', 'farmer_farmer_socio_economic_and_health_section_04', 3, 1,
    '{"widget": "boolean", "widget-id": "is_farmer", "widget-type": "input", "widget-label": "is_farmer",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.is_farmer",
      "widget-data-format": {"allowUnset": false, "booleanControlType": "radio", "booleanRepresentation": "yes-no"}}'),
-  ('oan_farmer_socio_economic_and_health', 'farmer_farmer_socio_economic_and_health_section_04', 3, 2,
+  ('farmer_socio_economic_health', 'farmer_farmer_socio_economic_and_health_section_04', 3, 2,
    '{"widget": "select", "widget-id": "farming_type", "widget-type": "input", "widget-label": "farming_type",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.farming_type",
@@ -193,13 +193,13 @@ form_layout (oan_section_id, upstream_section_id, col, ord, w) AS (
 
   -- Membership: one column per kind of membership, and the cluster's focal
   -- commodity for cluster members.
-  ('oan_farmer_membership_details', 'farmer_membership_membership_details_01', 1, 1, '{"widget-id": "is_primary_cooperative_member"}'),
-  ('oan_farmer_membership_details', 'farmer_membership_membership_details_01', 1, 2, '{"widget-id": "primary_cooperative_name"}'),
-  ('oan_farmer_membership_details', 'farmer_membership_membership_details_01', 2, 1, '{"widget-id": "is_cooperative_union_member"}'),
-  ('oan_farmer_membership_details', 'farmer_membership_membership_details_01', 2, 2, '{"widget-id": "cooperative_union_name"}'),
-  ('oan_farmer_membership_details', 'farmer_membership_membership_details_01', 3, 1, '{"widget-id": "is_farmer_cluster_member"}'),
-  ('oan_farmer_membership_details', 'farmer_membership_membership_details_01', 3, 2, '{"widget-id": "farmer_cluster_role"}'),
-  ('oan_farmer_membership_details', 'farmer_membership_membership_details_01', 3, 3,
+  ('farmer_membership', 'farmer_membership_membership_details_01', 1, 1, '{"widget-id": "is_primary_cooperative_member"}'),
+  ('farmer_membership', 'farmer_membership_membership_details_01', 1, 2, '{"widget-id": "primary_cooperative_name"}'),
+  ('farmer_membership', 'farmer_membership_membership_details_01', 2, 1, '{"widget-id": "is_cooperative_union_member"}'),
+  ('farmer_membership', 'farmer_membership_membership_details_01', 2, 2, '{"widget-id": "cooperative_union_name"}'),
+  ('farmer_membership', 'farmer_membership_membership_details_01', 3, 1, '{"widget-id": "is_farmer_cluster_member"}'),
+  ('farmer_membership', 'farmer_membership_membership_details_01', 3, 2, '{"widget-id": "farmer_cluster_role"}'),
+  ('farmer_membership', 'farmer_membership_membership_details_01', 3, 3,
    '{"widget": "select", "widget-id": "primary_commodity", "widget-type": "input", "widget-label": "primary_commodity",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "495f251c-83a5-4025-a307-1925712c9d0b.primary_commodity",
@@ -209,23 +209,23 @@ form_layout (oan_section_id, upstream_section_id, col, ord, w) AS (
        {"action": "show", "condition": {"field": "495f251c-83a5-4025-a307-1925712c9d0b.is_farmer_cluster_member", "value": true, "operator": "equals"}}]}}'),
 
   -- Household information: its size, its make-up, then who else is in it.
-  ('oan_household_information', 'household_household_household_information_section_01', 1, 1, '{"widget-id": "size_of_group"}'),
-  ('oan_household_information', 'household_household_household_information_section_01', 1, 2, '{"widget-id": "number_of_children"}'),
-  ('oan_household_information', 'household_household_household_information_section_01', 2, 1, '{"widget-id": "number_of_male_members"}'),
-  ('oan_household_information', 'household_household_household_information_section_01', 2, 2, '{"widget-id": "number_of_female_members"}'),
-  ('oan_household_information', 'household_household_household_information_section_01', 2, 3, '{"widget-id": "number_of_elderly_members"}'),
-  ('oan_household_information', 'household_household_household_information_section_01', 3, 1, '{"widget-id": "other_land_owner"}'),
-  ('oan_household_information', 'household_household_household_information_section_01', 3, 2,
+  ('household_information', 'household_household_household_information_section_01', 1, 1, '{"widget-id": "size_of_group"}'),
+  ('household_information', 'household_household_household_information_section_01', 1, 2, '{"widget-id": "number_of_children"}'),
+  ('household_information', 'household_household_household_information_section_01', 2, 1, '{"widget-id": "number_of_male_members"}'),
+  ('household_information', 'household_household_household_information_section_01', 2, 2, '{"widget-id": "number_of_female_members"}'),
+  ('household_information', 'household_household_household_information_section_01', 2, 3, '{"widget-id": "number_of_elderly_members"}'),
+  ('household_information', 'household_household_household_information_section_01', 3, 1, '{"widget-id": "other_land_owner"}'),
+  ('household_information', 'household_household_household_information_section_01', 3, 2,
    '{"widget": "boolean", "widget-id": "other_farmer_in_household", "widget-type": "input", "widget-label": "other_farmer_in_household",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "9055ab43-c85d-4833-bd00-ca657bb72644.other_farmer_in_household",
      "widget-data-format": {"allowUnset": false, "booleanControlType": "radio", "booleanRepresentation": "yes-no"}}'),
-  ('oan_household_information', 'household_household_household_information_section_01', 3, 3,
+  ('household_information', 'household_household_household_information_section_01', 3, 3,
    '{"widget": "boolean", "widget-id": "father_included", "widget-type": "input", "widget-label": "father_included",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "9055ab43-c85d-4833-bd00-ca657bb72644.father_included",
      "widget-data-format": {"allowUnset": false, "booleanControlType": "radio", "booleanRepresentation": "yes-no"}}'),
-  ('oan_household_information', 'household_household_household_information_section_01', 3, 4,
+  ('household_information', 'household_household_household_information_section_01', 3, 4,
    '{"widget": "boolean", "widget-id": "mother_included", "widget-type": "input", "widget-label": "mother_included",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "9055ab43-c85d-4833-bd00-ca657bb72644.mother_included",
@@ -246,20 +246,20 @@ form_layout (oan_section_id, upstream_section_id, col, ord, w) AS (
   -- coordinates to the elevation service, so remove "elevationUrl" where that
   -- is not acceptable, and the altitude stays as typed. Tile and elevation hosts
   -- must be allowed by the staff UI's CSP (CSP_SRC_IMG, CSP_SRC_CONNECT).
-  ('oan_farmer_location', 'farmer_farmer_location_section_03', 2, 1, '{"widget-id": "farmer_geo_hierarchy"}'),
-  ('oan_farmer_location', 'farmer_farmer_location_section_03', 2, 2, '{"widget-id": "address_line_1"}'),
-  ('oan_farmer_location', 'farmer_farmer_location_section_03', 2, 3, '{"widget-id": "address_line_2"}'),
-  ('oan_farmer_location', 'farmer_farmer_location_section_03', 2, 4, '{"widget-id": "postal_code"}'),
-  ('oan_farmer_location', 'farmer_farmer_location_section_03', 2, 5, '{"widget-id": "country_code", "widget-data-default": "ET", "widget-data-validation": {"pattern": "^[A-Z]{2}$", "minLength": 2, "maxLength": 2, "patternMessage": "country_code_format"}}'),
+  ('farmer_location', 'farmer_farmer_location_section_03', 2, 1, '{"widget-id": "farmer_geo_hierarchy"}'),
+  ('farmer_location', 'farmer_farmer_location_section_03', 2, 2, '{"widget-id": "address_line_1"}'),
+  ('farmer_location', 'farmer_farmer_location_section_03', 2, 3, '{"widget-id": "address_line_2"}'),
+  ('farmer_location', 'farmer_farmer_location_section_03', 2, 4, '{"widget-id": "postal_code"}'),
+  ('farmer_location', 'farmer_farmer_location_section_03', 2, 5, '{"widget-id": "country_code", "widget-data-default": "ET", "widget-data-validation": {"pattern": "^[A-Z]{2}$", "minLength": 2, "maxLength": 2, "patternMessage": "country_code_format"}}'),
   -- A second, local or community language.
-  ('oan_farmer_location', 'farmer_farmer_location_section_03', 2, 6,
+  ('farmer_location', 'farmer_farmer_location_section_03', 2, 6,
    '{"widget": "select", "widget-id": "local_language", "widget-type": "input", "widget-label": "local_language",
      "widget-readonly": false, "widget-required": false,
      "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.local_language",
      "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "LANGUAGE"},
                             "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"}}'),
-  ('oan_farmer_location', 'farmer_farmer_location_section_03', 2, 7, '{"widget-id": "plus_code"}'),
-  ('oan_farmer_location', 'farmer_farmer_location_section_03', 1, 1,
+  ('farmer_location', 'farmer_farmer_location_section_03', 2, 7, '{"widget-id": "plus_code"}'),
+  ('farmer_location', 'farmer_farmer_location_section_03', 1, 1,
    '{"widget": "oan-geo-point", "widget-id": "farmer_geo_point", "widget-type": "input",
      "widget-label": "farmer_location", "widget-readonly": false, "widget-required": false,
      "widget-data-path": {"latitude": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.latitude",
@@ -279,62 +279,57 @@ form_layout (oan_section_id, upstream_section_id, col, ord, w) AS (
 
   -- Documents: upstream's section, with the categories above as its widgets.
   UNION ALL
-  SELECT 'oan_farmer_documents', 'bc882922-9008-4902-8f4f-98db0fa8f9ad', col, ord, w FROM doc_widgets
+  SELECT 'farmer_documents', 'bc882922-9008-4902-8f4f-98db0fa8f9ad', col, ord, w FROM doc_widgets
 ),
-column_span (oan_section_id, col, span) AS (
-  VALUES ('oan_farmer_location', 1, 2)
+column_span (section_id, col, span) AS (
+  VALUES ('farmer_location', 1, 2)
 ),
 placed AS (
-  SELECT l.oan_section_id, l.col, l.ord,
+  SELECT l.section_id, l.col, l.ord,
          COALESCE(jsonb_path_query_first(u.section_ui_schema, '$.**.widgets[*] ? (@."widget-id" == $id)',
                                          jsonb_build_object('id', l.w->>'widget-id')), '{}'::jsonb) || l.w AS w
   FROM form_layout l
   JOIN "public"."g2p_register_sections" u ON u.section_id = l.upstream_section_id
 ),
 columns AS (
-  SELECT p.oan_section_id, p.col,
-         jsonb_build_object('panel-id', p.oan_section_id || '_col_' || p.col, 'panel-orientation', 'vertical',
+  SELECT p.section_id, p.col,
+         jsonb_build_object('panel-id', p.section_id || '_col_' || p.col, 'panel-orientation', 'vertical',
                             'widgets', jsonb_agg(p.w ORDER BY p.ord))
          || COALESCE((SELECT jsonb_build_object('panel-column-span', s.span) FROM column_span s
-                      WHERE s.oan_section_id = p.oan_section_id AND s.col = p.col), '{}'::jsonb) AS panel
+                      WHERE s.section_id = p.section_id AND s.col = p.col), '{}'::jsonb) AS panel
   FROM placed p
-  GROUP BY p.oan_section_id, p.col
+  GROUP BY p.section_id, p.col
 ),
 panels AS (
-  SELECT oan_section_id,
-         jsonb_build_array(jsonb_build_object('panel-id', oan_section_id || '_row', 'panel-orientation', 'horizontal',
+  SELECT section_id,
+         jsonb_build_array(jsonb_build_object('panel-id', section_id || '_row', 'panel-orientation', 'horizontal',
                                               'panels', jsonb_agg(panel ORDER BY col))) AS panels
   FROM columns
-  GROUP BY oan_section_id
+  GROUP BY section_id
 )
 INSERT INTO "public"."g2p_register_sections" (
   "register_id", "section_id", "section_register_id", "is_core_section", "section_mnemonic",
   "section_description", "documents_required", "no_of_verifications_required", "is_list",
   "section_weightage", "section_ui_schema", "cr_auto_approve_for_bene_portal",
   "cr_auto_approve_for_agent_portal", "cr_auto_approve_for_staff_portal", "cr_auto_approve_for_partner")
-SELECT u.register_id, d.oan_section_id, u.section_register_id, u.is_core_section,
-       CASE d.oan_section_id
-         WHEN 'oan_farmer_personal_identification' THEN 'oan_fr_farmer_identity'
-         WHEN 'oan_farmer_name' THEN 'oan_fr_farmer_name'
-         WHEN 'oan_farmer_personal_details' THEN 'oan_fr_farmer_personal_details'
-         ELSE 'oan_' || u.section_mnemonic
-       END,
+SELECT u.register_id, d.section_id, u.section_register_id, u.is_core_section,
+       d.section_id,
        u.section_description, u.documents_required, u.no_of_verifications_required, u.is_list, u.section_weightage,
        jsonb_set(
          jsonb_set(
            jsonb_set(u.section_ui_schema, '{panels}', p.panels),
-           '{section-id}', to_jsonb(d.oan_section_id)),
-         '{section-title}', to_jsonb(CASE d.oan_section_id
-           WHEN 'oan_farmer_personal_identification' THEN 'farmer_identity'
-           WHEN 'oan_farmer_name' THEN 'farmer_name'
-           WHEN 'oan_farmer_personal_details' THEN 'farmer_personal_details'
+           '{section-id}', to_jsonb(d.section_id)),
+         -- The three sections split from Personal Information are titled by
+         -- their own id; the others keep upstream's title.
+         '{section-title}', to_jsonb(CASE
+           WHEN d.section_id IN ('farmer_identity', 'farmer_name', 'farmer_personal_details') THEN d.section_id
            ELSE u.section_ui_schema->>'section-title'
          END)),
        u.cr_auto_approve_for_bene_portal, u.cr_auto_approve_for_agent_portal,
        u.cr_auto_approve_for_staff_portal, u.cr_auto_approve_for_partner
-FROM (SELECT DISTINCT oan_section_id, upstream_section_id FROM form_layout) d
+FROM (SELECT DISTINCT section_id, upstream_section_id FROM form_layout) d
 JOIN "public"."g2p_register_sections" u ON u.section_id = d.upstream_section_id
-JOIN panels p ON p.oan_section_id = d.oan_section_id
+JOIN panels p ON p.section_id = d.section_id
 ON CONFLICT ("section_id") DO UPDATE SET
   "register_id" = EXCLUDED."register_id", "section_register_id" = EXCLUDED."section_register_id",
   "is_core_section" = EXCLUDED."is_core_section", "section_mnemonic" = EXCLUDED."section_mnemonic",

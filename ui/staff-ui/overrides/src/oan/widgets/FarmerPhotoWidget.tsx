@@ -28,14 +28,14 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const DEFAULTS = { maxDimension: 1024, maxSizeKb: 2048, imageSize: 160, jpegQuality: 0.85 };
 
 const LABELS: Record<string, string> = {
-    oan_photo_upload: 'Upload photo',
-    oan_photo_replace: 'Replace photo',
-    oan_photo_remove: 'Remove',
-    oan_photo_hint: 'JPEG, PNG or WebP. On a phone, take a photo or pick one from the gallery.',
-    oan_photo_none: 'No photo',
-    oan_photo_bad_type: 'Use a JPEG, PNG or WebP image.',
-    oan_photo_too_large: 'The photo is larger than {size} KB after resizing. Choose a smaller image, or take the photo again.',
-    oan_photo_unreadable: 'The image could not be read. Choose another photo, or take it again.',
+    farmer_photo_upload: 'Upload photo',
+    farmer_photo_replace: 'Replace photo',
+    farmer_photo_remove: 'Remove',
+    farmer_photo_hint: 'JPEG, PNG or WebP. On a phone, take a photo or pick one from the gallery.',
+    farmer_photo_none: 'No photo',
+    farmer_photo_bad_type: 'Use a JPEG, PNG or WebP image.',
+    farmer_photo_too_large: 'The photo is larger than {size} KB after resizing. Choose a smaller image, or take the photo again.',
+    farmer_photo_unreadable: 'The image could not be read. Choose another photo, or take it again.',
 };
 
 const isSerializedFile = (value: unknown): value is SerializedFile =>
@@ -138,14 +138,14 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
             if (!file) return;
             setError(null);
             if (!ACCEPTED_TYPES.includes(file.type)) {
-                setError(label('oan_photo_bad_type'));
+                setError(label('farmer_photo_bad_type'));
                 return;
             }
             setBusy(true);
             try {
                 const blob = await shrink(file, Number(format.maxDimension), Number(format.jpegQuality));
                 if (blob.size > maxSizeKb * 1024) {
-                    setError(label('oan_photo_too_large', { size: maxSizeKb }));
+                    setError(label('farmer_photo_too_large', { size: maxSizeKb }));
                     return;
                 }
                 const resized = blob !== file;
@@ -158,7 +158,7 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
                     data: await readAsBase64(blob),
                 });
             } catch {
-                setError(label('oan_photo_unreadable'));
+                setError(label('farmer_photo_unreadable'));
             } finally {
                 setBusy(false);
             }
@@ -218,7 +218,7 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
                 onDragLeave={() => setDragging(false)}
                 onDrop={onDrop}
             >
-                {preview ? <img src={preview} alt={title || 'Farmer photo'} /> : <span>{label('oan_photo_none')}</span>}
+                {preview ? <img src={preview} alt={title || 'Farmer photo'} /> : <span>{label('farmer_photo_none')}</span>}
             </div>
             <div className="oan-photo-side">
                 {title && <span className="oan-photo-title">{title}</span>}
@@ -226,7 +226,7 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
                     <>
                         <div className="oan-photo-actions">
                             <button type="button" className="primary" disabled={disabled} onClick={() => fileInput.current?.click()}>
-                                {label(preview ? 'oan_photo_replace' : 'oan_photo_upload')}
+                                {label(preview ? 'farmer_photo_replace' : 'farmer_photo_upload')}
                             </button>
                             {preview && (
                                 <button
@@ -237,11 +237,11 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
                                         store(null);
                                     }}
                                 >
-                                    {label('oan_photo_remove')}
+                                    {label('farmer_photo_remove')}
                                 </button>
                             )}
                         </div>
-                        <span className="oan-photo-hint">{label('oan_photo_hint')}</span>
+                        <span className="oan-photo-hint">{label('farmer_photo_hint')}</span>
                         {error && (
                             <span className="oan-photo-error" role="alert">
                                 {error}

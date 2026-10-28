@@ -33,7 +33,7 @@ async def main():
         docs=(await session.execute(select(G2PIntakeFormSectionDocuments).where(G2PIntakeFormSectionDocuments.submission_id==submission_id))).scalars().all()
         assert farmer.foundational_id=="009900000123"
         assert crop.link_internal_record_id==land.internal_record_id
-        assert len(docs)==1 and docs[0].label=="identity_document_1" and docs[0].section_id=="oan_farmer_documents"
+        assert len(docs)==1 and docs[0].label=="identity_document_1" and docs[0].section_id=="farmer_documents"
         await session.rollback()
         assert await session.get(G2PRegistryDocument,document_id) is None
         print(json.dumps({"native_worker_save":"PASS","sections":len(sections),"land_link":True,"scoped_identity_document":True,"rolled_back":True,"finalized":False}))

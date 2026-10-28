@@ -2,6 +2,10 @@
 -- plus the household link and the intake photo section. The form sections
 -- (three columns of widgets) are laid out in 12_form_sections.sql.
 --
+-- An OAN section's id, its mnemonic and its UI "section-id" are one string
+-- that names the farmer's data it holds (farmer_lands, farmer_crops_intake).
+-- No upstream section id or mnemonic has that form, so they cannot collide.
+--
 -- The image copies this folder to /seed/meta_data/zz-oan/, so it runs after the
 -- farmer seed has upserted its own rows. Every OAN row is derived from the
 -- upstream row on each run, so upstream changes to a section reach the OAN copy
@@ -9,7 +13,7 @@
 -- only detaches them from the tabs.
 
 -- Sections that only gain widgets: the items are appended to the array at path.
-WITH additions (upstream_section_id, oan_section_id, path, items) AS (
+WITH additions (upstream_section_id, section_id, path, items) AS (
   VALUES
   -- Lands table (the register and the intake form share this section). The
   -- land certificate cell is OAN's widget (oan-file-cell): upstream's file
@@ -19,7 +23,7 @@ WITH additions (upstream_section_id, oan_section_id, path, items) AS (
   -- characters, so a pattern without any is shown as it is. The area in
   -- hectares is derived from the size and unit when the row is saved.
   ('farmer_farm_farm_details_section_01',
-   'oan_farmer_lands',
+   'farmer_lands',
    '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[],
    '[{"widget": "text", "column-key": "land_id", "widget-type": "input", "widget-label": "land_id",
       "widget-readonly": false, "widget-data-path": "land_id", "widget-data-validation": {"maxLength": 50}},
@@ -36,13 +40,13 @@ WITH additions (upstream_section_id, oan_section_id, path, items) AS (
       "widget-data-format": {"numericType": "decimal", "decimalPlaces": 4, "decimalSeparator": ".", "thousandSeparator": ","}}]'::jsonb),
 
   -- Crops: whether the crop is diseased, and with what.
-  ('farmer_crop_crop_details_section_01', 'oan_farmer_crops', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
-  ('farmer_crop_crop_details_intake_section_01', 'oan_farmer_crops_intake', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
+  ('farmer_crop_crop_details_section_01', 'farmer_crops', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
+  ('farmer_crop_crop_details_intake_section_01', 'farmer_crops_intake', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
 
   -- Household link: whether the farmer heads the household; the household's
   -- head name follows the answer.
   ('farmer_household_lookup_section_01',
-   'oan_farmer_household_lookup',
+   'farmer_household_lookup',
    '{panels,0,panels,0,widgets}'::text[],
    '[{"widget": "select", "widget-id": "is_household_head", "widget-type": "input", "widget-label": "is_household_head",
       "widget-readonly": false, "widget-required": false,
@@ -51,16 +55,16 @@ WITH additions (upstream_section_id, oan_section_id, path, items) AS (
 
   -- Livestock tables: gender, condition and production, when the count was
   -- taken and in which season, and disease.
-  ('farmer_livestock_livestock_details_section_01', 'oan_farmer_livestock', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
-  ('farmer_livestock_livestock_details_intake_section_01', 'oan_farmer_livestock_intake', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
+  ('farmer_livestock_livestock_details_section_01', 'farmer_livestock', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
+  ('farmer_livestock_livestock_details_intake_section_01', 'farmer_livestock_intake', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
 
   -- Farm input tables: each amount after its "used" answer, then the
   -- livestock's water source, irrigation and machinery.
-  ('farmer_farm_input_farm_input_details_section_01', 'oan_farmer_farm_inputs', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
-  ('farmer_farm_input_farm_input_details_intake_section_01', 'oan_farmer_farm_inputs_intake', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL)
+  ('farmer_farm_input_farm_input_details_section_01', 'farmer_farm_inputs', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL),
+  ('farmer_farm_input_farm_input_details_intake_section_01', 'farmer_farm_inputs_intake', '{panels,0,panels,0,widgets,0,widget-data-columns}'::text[], NULL)
 ),
-shared_columns (oan_section_id, items) AS (
-  SELECT oan_section_id, cols FROM (VALUES ('oan_farmer_livestock'), ('oan_farmer_livestock_intake')) s(oan_section_id),
+shared_columns (section_id, items) AS (
+  SELECT section_id, cols FROM (VALUES ('farmer_livestock'), ('farmer_livestock_intake')) s(section_id),
   LATERAL (SELECT '[{"widget": "select", "column-key": "gender", "widget-type": "input", "widget-label": "gender",
       "widget-readonly": false, "widget-data-path": "gender",
       "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "GENDER"}, "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"}},
@@ -86,7 +90,7 @@ shared_columns (oan_section_id, items) AS (
       "widget-data-options": {"actions": [
         {"action": "show", "condition": {"field": "is_diseased", "value": true, "operator": "equals"}}]}}]'::jsonb) c(cols)
   UNION ALL
-  SELECT oan_section_id, '[{"widget": "select", "column-key": "is_diseased", "widget-type": "input", "widget-label": "is_diseased",
+  SELECT section_id, '[{"widget": "select", "column-key": "is_diseased", "widget-type": "input", "widget-label": "is_diseased",
       "widget-readonly": false, "widget-data-path": "is_diseased",
       "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}},
      {"widget": "select", "column-key": "disease_type", "widget-type": "input", "widget-label": "disease_type",
@@ -95,10 +99,10 @@ shared_columns (oan_section_id, items) AS (
                              "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"},
       "widget-data-options": {"actions": [
         {"action": "show", "condition": {"field": "is_diseased", "value": true, "operator": "equals"}}]}}]'::jsonb
-  FROM (VALUES ('oan_farmer_crops'), ('oan_farmer_crops_intake')) s(oan_section_id)
+  FROM (VALUES ('farmer_crops'), ('farmer_crops_intake')) s(section_id)
   UNION ALL
   -- Each amount shows only when the matching "used" answer is yes.
-  SELECT oan_section_id, (
+  SELECT section_id, (
     SELECT jsonb_agg(jsonb_build_object(
       'widget', 'number', 'column-key', amount, 'widget-type', 'input', 'widget-label', amount,
       'widget-readonly', false, 'widget-data-path', amount,
@@ -121,23 +125,24 @@ shared_columns (oan_section_id, items) AS (
       FROM (VALUES (1, 'livestock_water_source', 'WATER_SOURCE'),
                    (2, 'irrigation_type', 'IRRIGATION_METHOD'),
                    (3, 'machinery_type', 'FARM_MACHINERY')) l(ord, field, list))
-  FROM (VALUES ('oan_farmer_farm_inputs'), ('oan_farmer_farm_inputs_intake')) s(oan_section_id)
+  FROM (VALUES ('farmer_farm_inputs'), ('farmer_farm_inputs_intake')) s(section_id)
 )
 INSERT INTO "public"."g2p_register_sections" (
   "register_id", "section_id", "section_register_id", "is_core_section", "section_mnemonic",
   "section_description", "documents_required", "no_of_verifications_required", "is_list",
   "section_weightage", "section_ui_schema", "cr_auto_approve_for_bene_portal",
   "cr_auto_approve_for_agent_portal", "cr_auto_approve_for_staff_portal", "cr_auto_approve_for_partner")
-SELECT u.register_id, a.oan_section_id, u.section_register_id, u.is_core_section, 'oan_' || u.section_mnemonic,
+SELECT u.register_id, a.section_id, u.section_register_id, u.is_core_section, a.section_id,
        u.section_description, u.documents_required, u.no_of_verifications_required, u.is_list,
        u.section_weightage,
-       jsonb_set(u.section_ui_schema, a.path,
-                 (u.section_ui_schema #> a.path) || COALESCE(a.items, s.items)),
+       jsonb_set(jsonb_set(u.section_ui_schema, a.path,
+                           (u.section_ui_schema #> a.path) || COALESCE(a.items, s.items)),
+                 '{section-id}', to_jsonb(a.section_id)),
        u.cr_auto_approve_for_bene_portal, u.cr_auto_approve_for_agent_portal,
        u.cr_auto_approve_for_staff_portal, u.cr_auto_approve_for_partner
 FROM additions a
 JOIN "public"."g2p_register_sections" u ON u.section_id = a.upstream_section_id
-LEFT JOIN shared_columns s ON s.oan_section_id = a.oan_section_id
+LEFT JOIN shared_columns s ON s.section_id = a.section_id
 WHERE jsonb_typeof(u.section_ui_schema #> a.path) = 'array'
 ON CONFLICT ("section_id") DO UPDATE SET
   "register_id" = EXCLUDED."register_id", "section_register_id" = EXCLUDED."section_register_id",
@@ -173,10 +178,10 @@ INSERT INTO "public"."g2p_register_sections" (
   "section_weightage", "section_ui_schema", "cr_auto_approve_for_bene_portal",
   "cr_auto_approve_for_agent_portal", "cr_auto_approve_for_staff_portal", "cr_auto_approve_for_partner")
 VALUES (
-  'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'oan_farmer_photo', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', false,
-  'oan_fr_farmer_photo', 'Farmer photo', false, 0, false, 0,
+  'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'farmer_photo', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', false,
+  'farmer_photo', 'Farmer photo', false, 0, false, 0,
   '{"section-id": "farmer_photo", "section-title": "farmer_photo", "section-editable": true, "section-column-span": 3,
-    "panels": [{"panel-id": "oan_panel_farmer_photo", "panel-orientation": "vertical", "widgets": [
+    "panels": [{"panel-id": "farmer_photo_col_1", "panel-orientation": "vertical", "widgets": [
       {"widget": "header-section", "widget-variant": "oan-farmer-photo", "widget-id": "farmer-photo",
        "widget-type": "group", "widget-label": "farmer_photo", "widget-readonly": false, "widget-required": false,
        "widget-data-path": {"image": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.record_image_document_id",
@@ -206,5 +211,5 @@ SET "section_ui_schema" = jsonb_set(s."section_ui_schema", '{panels,0,panels,0,w
                         THEN w || '{"widget-required": false, "widget-data-helptext": "household_lookup_helptext"}'::jsonb
                         ELSE w END ORDER BY i)
   FROM jsonb_array_elements(s."section_ui_schema" #> '{panels,0,panels,0,widgets}') WITH ORDINALITY x(w, i)))
-WHERE s."section_id" = 'oan_farmer_household_lookup'
+WHERE s."section_id" = 'farmer_household_lookup'
   AND jsonb_typeof(s."section_ui_schema" #> '{panels,0,panels,0,widgets}') = 'array';

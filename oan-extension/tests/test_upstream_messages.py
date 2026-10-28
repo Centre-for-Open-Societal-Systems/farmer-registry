@@ -45,7 +45,7 @@ def test_core_mds_transport_failure_does_not_expose_transport_details():
 
 def test_core_choice_message_uses_translation():
     text = "record 0: gender='unknown' is not a value of GENDER (permitted: MALE)"
-    assert reword(text, {"gender": "Gender", "oan_up_mds_option": "{label}: select a listed value instead of {value}."}) == (
+    assert reword(text, {"gender": "Gender", "upstream_mds_option": "{label}: select a listed value instead of {value}."}) == (
         "Gender: select a listed value instead of unknown.")
 
 # Upstream messages that already say what to do, so they are not reworded.
@@ -105,7 +105,7 @@ def test_missing_household_fields_are_listed_by_label():
 
 
 def test_a_language_rewords_by_key():
-    words = {"oan_up_land_size": "Land Size: enter more than 0"}
+    words = {"upstream_land_size": "Land Size: enter more than 0"}
     assert reword("land_size must be greater than zero when provided", words) == "Land Size: enter more than 0"
 
 

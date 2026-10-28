@@ -6,9 +6,9 @@ Crop or Livestock; they belong to the authoritative Farmer/Household domain.
 
 | Field | Native owner | Screen binding |
 | --- | --- | --- |
-| `is_household_head` | Farmer live/history/intake schema | `oan_farmer_household_lookup`, the native household lookup plus an OAN select widget |
-| `number_of_male_members` | Household live/history/intake schema | `oan_household_information`, second layout row |
-| `number_of_female_members` | Household live/history/intake schema | `oan_household_information`, second layout row |
+| `is_household_head` | Farmer live/history/intake schema | `farmer_household_lookup`, the native household lookup plus an OAN select widget |
+| `number_of_male_members` | Household live/history/intake schema | `household_information`, second layout row |
+| `number_of_female_members` | Household live/history/intake schema | `household_information`, second layout row |
 
 The OAN sections replace the corresponding native bindings through
 `meta_data/20_layout.sql`; their fields are declared in `10_sections.sql` and

@@ -39,20 +39,20 @@ Rules = dict[str, dict[str, dict]]
 # Message keys and their English text. {label} is the field's label, the other
 # names are the rule's values.
 MESSAGES = {
-    "oan_rule_pattern": "{label}: {message}.",
-    "oan_rule_pattern_default": "{label}: the format is not valid. Check the value and enter it again.",
-    "oan_rule_min_length": "{label}: too short. Enter at least {minLength} characters.",
-    "oan_rule_max_length": "{label}: too long. Enter at most {maxLength} characters.",
-    "oan_rule_min": "{label}: {value} is too small. Enter {min} or more.",
-    "oan_rule_max": "{label}: {value} is too large. Enter {max} or less.",
-    "oan_rule_boolean": "{label}: answer Yes or No.",
-    "oan_rule_integer": "{label}: \"{value}\" is not a whole number. Enter digits only, for example 12.",
-    "oan_rule_number": "{label}: \"{value}\" is not a number. Enter a number, for example 2.5.",
-    "oan_rule_date": "{label}: \"{value}\" is not a date. Pick the date from the calendar (DD/MM/YYYY).",
-    "oan_rule_option": "{label}: \"{value}\" is not one of the choices. Pick one from the list.",
-    "oan_rule_required": "{label}: this is required. Fill it in on every row before saving.",
-    "oan_rule_year_range": "{label}: enter a whole year from 1900 to {year}, or leave it empty.",
-    "oan_rule_future_date": "{label}: the date is in the future. Choose today or an earlier date.",
+    "rule_pattern": "{label}: {message}.",
+    "rule_pattern_default": "{label}: the format is not valid. Check the value and enter it again.",
+    "rule_min_length": "{label}: too short. Enter at least {minLength} characters.",
+    "rule_max_length": "{label}: too long. Enter at most {maxLength} characters.",
+    "rule_min": "{label}: {value} is too small. Enter {min} or more.",
+    "rule_max": "{label}: {value} is too large. Enter {max} or less.",
+    "rule_boolean": "{label}: answer Yes or No.",
+    "rule_integer": "{label}: \"{value}\" is not a whole number. Enter digits only, for example 12.",
+    "rule_number": "{label}: \"{value}\" is not a number. Enter a number, for example 2.5.",
+    "rule_date": "{label}: \"{value}\" is not a date. Pick the date from the calendar (DD/MM/YYYY).",
+    "rule_option": "{label}: \"{value}\" is not one of the choices. Pick one from the list.",
+    "rule_required": "{label}: this is required. Fill it in on every row before saving.",
+    "rule_year_range": "{label}: enter a whole year from 1900 to {year}, or leave it empty.",
+    "rule_future_date": "{label}: the date is in the future. Choose today or an earlier date.",
 }
 
 _TYPES = {
@@ -204,14 +204,14 @@ def _same_option(value, option) -> bool:
 
 def _type_problem(kind: str, value) -> str | None:
     if kind == "boolean":
-        return None if isinstance(value, bool) else "oan_rule_boolean"
+        return None if isinstance(value, bool) else "rule_boolean"
     if kind == "date":
-        return None if _is_date(value) else "oan_rule_date"
+        return None if _is_date(value) else "rule_date"
     number = _number(value)
     if number is None:
-        return "oan_rule_integer" if kind == "integer" else "oan_rule_number"
+        return "rule_integer" if kind == "integer" else "rule_number"
     if kind == "integer" and not number.is_integer():
-        return "oan_rule_integer"
+        return "rule_integer"
     return None
 
 
@@ -254,7 +254,7 @@ def check_record(record: dict, field_rules: dict[str, dict], messages: dict[str,
         label = say.label(rule.get("label"), field)
         if value is None or (isinstance(value, str) and not value.strip()) or (rule.get("multiple") and value == []):
             if rule.get("required") and (new or field in record):
-                problems.append(say("oan_rule_required", label=label))
+                problems.append(say("rule_required", label=label))
             continue
         if "type" in rule:
             problem = _type_problem(rule["type"], value)
@@ -265,7 +265,7 @@ def check_record(record: dict, field_rules: dict[str, dict], messages: dict[str,
             selected = value if rule.get("multiple") and isinstance(value, list) else [value]
             invalid = [item for item in selected if not any(_same_option(item, option) for option in rule["options"])]
             if invalid:
-                problems.append(say("oan_rule_option", label=label, value=", ".join(map(str, invalid))))
+                problems.append(say("rule_option", label=label, value=", ".join(map(str, invalid))))
                 continue
         if isinstance(value, str):
             text = value
@@ -274,17 +274,17 @@ def check_record(record: dict, field_rules: dict[str, dict], messages: dict[str,
                 if regex and not regex.fullmatch(text):
                     key = rule.get("patternMessage")
                     if key:
-                        problems.append(say("oan_rule_pattern", label=label, message=say.text(key).rstrip(".")))
+                        problems.append(say("rule_pattern", label=label, message=say.text(key).rstrip(".")))
                     else:
-                        problems.append(say("oan_rule_pattern_default", label=label))
+                        problems.append(say("rule_pattern_default", label=label))
             if "minLength" in rule and len(text) < int(rule["minLength"]):
-                problems.append(say("oan_rule_min_length", label=label, minLength=rule["minLength"]))
+                problems.append(say("rule_min_length", label=label, minLength=rule["minLength"]))
             if "maxLength" in rule and len(text) > int(rule["maxLength"]):
-                problems.append(say("oan_rule_max_length", label=label, maxLength=rule["maxLength"]))
+                problems.append(say("rule_max_length", label=label, maxLength=rule["maxLength"]))
         number = _number(value)
         if number is not None and rule.get("type") not in ("boolean", "date"):
-            for bound, key, out in (("min", "oan_rule_min", number < float(rule.get("min", 0))),
-                                    ("max", "oan_rule_max", number > float(rule.get("max", 0)))):
+            for bound, key, out in (("min", "rule_min", number < float(rule.get("min", 0))),
+                                    ("max", "rule_max", number > float(rule.get("max", 0)))):
                 if bound in rule and out:
                     custom = rule.get(bound + "Message")
                     if custom and custom in say.messages:
