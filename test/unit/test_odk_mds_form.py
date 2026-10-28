@@ -29,7 +29,7 @@ def pack(tmp_path):
     (root / "codelists").mkdir(parents=True)
     (root / "domains/agriculture").mkdir(parents=True)
     lists = {
-        "GENDER": ["FEMALE", "MALE", "OTHER"], "LANGUAGE": ["AMHARIC", "AFAAN_OROMO", "GEDEO"],
+        "GENDER": ["FEMALE", "MALE", "OTHER"], "LANGUAGE": ["AMHARIC", "AFAAN_OROMO", "SOMALI", "TIGRINYA", "AFAR", "GEDEO"],
         "FARMING_TYPE": ["CROP", "LIVESTOCK", "MIXED", "AQUACULTURE"], "MARITAL_STATUS": ["SINGLE", "MARRIED"],
         "EDUCATION_LEVEL": ["ILLITERATE", "CAN_READ_AND_WRITE", "TERTIARY"],
         "SOURCE_OF_INCOME": ["SOI_CROP_PRODUCTION", "SOI_LIVESTOCK_PRODUCTION", "SOI_OTHERS"],
@@ -136,3 +136,53 @@ def test_geography_comes_from_the_environments_master_data(pack, tmp_path):
                                                  "code": "kebele-ET010101101001", "parent": "woreda-ET010101"}]
     with (media / "region.csv").open(encoding="utf-8", newline="") as handle:
         assert [r["name"] for r in csv.DictReader(handle)] == ["region-ET01"]
+
+
+def survey_columns(book):
+    header = [cell.value for cell in book["survey"][1]]
+    return {key: index + 1 for index, key in enumerate(header) if key}
+
+
+def choice_names(book):
+    names = {}
+    for row in book["choices"].iter_rows(min_row=2, values_only=True):
+        if row[0]:
+            names.setdefault(row[0], set()).add(str(row[1]))
+    return names
+
+
+def test_rules_compare_selects_to_the_codes_the_lists_offer(pack, tmp_path):
+    """The v3 rules named the old choices (farming_type = 'mixed_farming'); with the lists
+    carrying Master Data codes they must say MIXED, or the questions they require stay optional."""
+    out = tmp_path / "form.xlsx"
+    report = build_mds_form.build(build_mds_form.SOURCE, pack, out, tmp_path / "media", "v")
+    book = openpyxl.load_workbook(out)
+    columns = survey_columns(book)
+    rows = {book["survey"].cell(r, columns["name"]).value: r for r in range(2, book["survey"].max_row + 1)}
+    required = book["survey"].cell(rows["primary_cooperative"], columns["required"]).value
+    assert required == "${farming_type} = 'MIXED' or ${farming_type} = 'CROP'"
+    assert book["survey"].cell(rows["hh_member_crop_information"], columns["relevant"]).value == "${hh_member_farming_type} != 'LIVESTOCK'"
+    assert "'AFAAN_OROMO'" in book["survey"].cell(rows["first_name_other"], columns["relevant"]).value
+    assert book["survey"].cell(rows["other_income_source"], columns["relevant"]).value == "selected(${income_source}, 'SOI_OTHERS')"
+    assert report["rewritten_expressions"]
+    lists = {n: s for n, s in choice_names(book).items() if n in build_mds_form.MDS_LISTS}
+    assert build_mds_form.check_literals(book["survey"], columns, lists) == []
+
+
+def test_a_rule_naming_a_choice_the_list_lacks_is_reported():
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.append(["type", "name", "relevant"])
+    sheet.append(["select_one choices_farming_type", "farming_type", None])
+    sheet.append(["text", "coop", "${farming_type} = 'mixed_farming'"])
+    columns = {"type": 1, "name": 2, "relevant": 3}
+    problems = build_mds_form.check_literals(sheet, columns, {"choices_farming_type": {"CROP", "MIXED"}})
+    assert len(problems) == 1 and "mixed_farming" in problems[0]
+
+
+def test_the_committed_v4_form_has_no_stale_rule():
+    book = openpyxl.load_workbook(REPO / "odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx")
+    lists = {n: s for n, s in choice_names(book).items() if n in build_mds_form.MDS_LISTS}
+    assert build_mds_form.check_literals(book["survey"], survey_columns(book), lists) == []
+    settings = {c.value: book["settings"].cell(2, c.column).value for c in book["settings"][1] if c.value}
+    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.10.29"

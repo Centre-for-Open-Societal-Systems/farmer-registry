@@ -38,6 +38,7 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import sys
 from collections import OrderedDict
 from copy import copy
@@ -126,6 +127,85 @@ def choice_rows(old_rows: list[dict], mds_list: dict, to_code, left_out: set[str
     return rows, report
 
 
+COLUMNS = ("relevant", "required", "constraint", "calculation", "trigger", "choice_filter", "default")
+
+
+def literal_patterns(field: str):
+    """The forms in which an expression compares a select to a choice name."""
+    name = re.escape(field)
+    return (re.compile(r"(\$\{" + name + r"\}\s*!?=\s*)'([^']*)'"),
+            re.compile(r"(selected\(\s*\$\{" + name + r"\}\s*,\s*)'([^']*)'"),
+            re.compile(r"'([^']*)'(\s*!?=\s*\$\{" + name + r"\})"))
+
+
+def rewrite_literals(survey, columns: dict, renames: dict) -> list[dict]:
+    """Move expressions from the old choice names to the Master Data codes.
+
+    The v3 expressions compare a select to the old XLSForm name
+    (${farming_type} = 'mixed_farming'); the list now offers the value code
+    (MIXED), so a rule left as it was never fires and the questions it
+    requires stay optional. renames maps each select question to
+    {old name: code}; every comparison of that question to an old name is
+    rewritten. Returns what changed, for the report.
+    """
+    changed = []
+    for row in range(2, survey.max_row + 1):
+        for column in COLUMNS:
+            if column not in columns:
+                continue
+            cell = survey.cell(row, columns[column])
+            if not isinstance(cell.value, str):
+                continue
+            text = cell.value
+            for field, mapping in renames.items():
+                if not mapping:
+                    continue
+                before, after, flipped = literal_patterns(field)
+                text = before.sub(lambda m: f"{m.group(1)}'{mapping.get(m.group(2), m.group(2))}'", text)
+                text = after.sub(lambda m: f"{m.group(1)}'{mapping.get(m.group(2), m.group(2))}'", text)
+                text = flipped.sub(lambda m: f"'{mapping.get(m.group(1), m.group(1))}'{m.group(2)}", text)
+            if text != cell.value:
+                changed.append({"row": row, "name": survey.cell(row, columns["name"]).value,
+                                "column": column, "was": cell.value, "now": text})
+                cell.value = text
+    return changed
+
+
+def select_lists(survey, columns: dict) -> dict[str, str]:
+    """Question name -> choice list, for the inline select_one / select_multiple questions."""
+    selects = {}
+    for row in range(2, survey.max_row + 1):
+        kind = survey.cell(row, columns["type"]).value
+        name = survey.cell(row, columns["name"]).value
+        parts = kind.split() if isinstance(kind, str) else []
+        if name and len(parts) > 1 and parts[0] in ("select_one", "select_multiple"):
+            selects[name] = parts[1]
+    return selects
+
+
+def check_literals(survey, columns: dict, choice_names: dict) -> list[str]:
+    """Every literal an expression compares a Master Data select to must be one of its choices."""
+    selects = select_lists(survey, columns)
+    problems = []
+    for row in range(2, survey.max_row + 1):
+        for column in COLUMNS:
+            if column not in columns:
+                continue
+            value = survey.cell(row, columns[column]).value
+            if not isinstance(value, str):
+                continue
+            for field, list_name in selects.items():
+                if list_name not in choice_names:
+                    continue
+                for pattern, group in zip(literal_patterns(field), (2, 2, 1)):
+                    for match in pattern.finditer(value):
+                        literal = match.group(group)
+                        if literal and literal not in choice_names[list_name]:
+                            name = survey.cell(row, columns["name"]).value
+                            problems.append(f"row {row} {name} {column}: {field} compared to '{literal}', which {list_name} does not offer")
+    return problems
+
+
 def write_media(units: dict[str, list[dict]], media: Path) -> dict[str, int]:
     media.mkdir(parents=True, exist_ok=True)
     counts = {}
@@ -161,6 +241,7 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str,
             replaced.setdefault(name, []).append(row)
         else:
             kept.append(row)
+    old_names = {name: [str(r["name"]) for r in old] for name, old in replaced.items()}
     for name, (attribute_id, to_code, left_out) in MDS_LISTS.items():
         if attribute_id not in lists:
             raise SystemExit(f"{attribute_id}: not in the pack")
@@ -184,6 +265,27 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str,
         kind = survey.cell(row, survey_columns["type"]).value
         if isinstance(kind, str) and kind.startswith("select_one choices_region"):
             survey.cell(row, survey_columns["type"], "select_one_from_file region.csv")
+    # Expressions still compare these questions to the v3 choice names.
+    renames: dict[str, dict[str, str]] = {}
+    for field, list_name in select_lists(survey, survey_columns).items():
+        if list_name not in MDS_LISTS:
+            continue
+        mapping = {}
+        for old in old_names.get(list_name, []):
+            try:
+                new = MDS_LISTS[list_name][1](old)
+            except Exception:
+                new = None
+            if new and new != old:
+                mapping[old] = new
+        renames[field] = mapping
+    rewritten = rewrite_literals(survey, survey_columns, renames)
+    choice_names: dict[str, set[str]] = {}
+    for row in kept:
+        choice_names.setdefault(row["list_name"], set()).add(str(row["name"]))
+    problems = check_literals(survey, survey_columns, {n: s for n, s in choice_names.items() if n in MDS_LISTS})
+    if problems:
+        raise SystemExit("expressions compare a select to a choice it no longer offers:\n" + "\n".join(problems))
     settings = book["settings"]
     settings_columns = {cell.value: cell.column for cell in settings[1] if cell.value}
     settings.cell(2, settings_columns["version"], version)
@@ -193,7 +295,7 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str,
     counts = write_media(read_values(geography), media)
     return {"source": str(source), "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             "pack": str(pack), "geography": str(geography), "pack_version": json.loads((pack / "manifest.json").read_text(encoding="utf-8")).get("version"),
-            "output": str(target), "version": version, "media": {level: f"{media / level}.csv" for level in LEVELS},
+            "output": str(target), "version": version, "rewritten_expressions": rewritten, "media": {level: f"{media / level}.csv" for level in LEVELS},
             "units": counts, "lists": report}
 
 
@@ -205,7 +307,7 @@ def main() -> None:
     parser.add_argument("--source", type=Path, default=SOURCE)
     parser.add_argument("--out", type=Path, default=TARGET)
     parser.add_argument("--media", type=Path, default=MEDIA)
-    parser.add_argument("--version", default="2026.10.28")
+    parser.add_argument("--version", default="2026.10.29")
     args = parser.parse_args()
     print(json.dumps(build(args.source, args.pack, args.out, args.media, args.version, args.geography), indent=2, ensure_ascii=False))
 
