@@ -128,7 +128,7 @@ def _open_tasks(cfg, cr_id):
     """Every OPEN task on the change request, across all assignees.
 
     Read from the AWE DB rather than `list_my_tasks`, because the shipped policy
-    stages are mode='all' and include demo approvers (alex.carter / nina.patel)
+    stages list the demo approvers (alex.carter / nina.patel) and admin
     besides the sanity user — so we must approve THEIR tasks too. The sanity user
     holds the AWE admin role, so it may decide any of them.
     """
@@ -143,8 +143,8 @@ def test_approval_through_awe_applies_the_change(cfg, staff_client, change_reque
     or three-level policy needs no change here. A later stage only becomes
     visible once the earlier one is cleared, so each round waits briefly for AWE
     to advance the workflow. The sanity user holds AWE_ADMIN, so it approves
-    every task regardless of assignee — the shipped mode='all' stages require
-    the demo approvers' tasks to be decided too.
+    every task regardless of assignee — a stage completes on one decision, but
+    sibling tasks are re-read so a stricter policy would still be cleared.
     """
     approved_any = False
     for _ in range(cfg.max_approval_rounds):
