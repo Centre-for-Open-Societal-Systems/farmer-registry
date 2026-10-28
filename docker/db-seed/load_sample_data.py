@@ -16,8 +16,11 @@ unchanged). Forms, sections and registers are looked up by mnemonic in the
 registry's metadata, and a record is split over the sections whose widgets
 write its fields.
 
-Staff accounts are used as they are: the loader logs in with the credentials
-the chart passes and never changes an account or a client.
+Staff accounts: the loader logs in as the chart's sample approvers with the
+password the chart passes. Only when Keycloak refuses that login (keycloak-init
+creates them with a temporary password, and the release client without the
+password grant) does it prepare them as OpenG2P's own sample loader does:
+direct access grants on the release client, the same password made permanent.
 
 Idempotent per person: a person whose Fayda ID a farmer already holds (or
 awaits approval with), or a household whose head is already a registered
@@ -390,11 +393,25 @@ def staff_clients() -> tuple[object, dict]:
     submit_user = base.env("INTAKE_SEED_SUBMIT_USER", "alex.carter")
     users = dict.fromkeys([submit_user, base.env("INTAKE_SEED_APPROVER_1", "alex.carter"),
                            base.env("INTAKE_SEED_APPROVER_2", "nina.patel")])
+    def token(u):
+        return base.fetch_token(token_url, client_id, u, password, client_secret)
+
+    try:
+        for user in users:
+            token(user)
+    except RuntimeError as exc:
+        # keycloak-init creates the demo approvers with a temporary password and
+        # the release client without the password grant. Make them usable the
+        # way OpenG2P's own sample loader does, only when the login is refused.
+        log(f"{exc}; preparing the sample approvers in Keycloak")
+        base.keycloak_prepare_users(
+            base.env("KEYCLOAK_BASE_URL", required=True), base.env("KEYCLOAK_REALM", required=True),
+            base.env("KEYCLOAK_ADMIN_USER", required=True), base.env("KEYCLOAK_ADMIN_PASSWORD", required=True),
+            client_id, list(users), password,
+        )
     clients = {}
     for user in users:
-        def token(u=user):
-            return base.fetch_token(token_url, client_id, u, password, client_secret)
-        clients[user] = base.StaffClient(staff_api, token(), user, token_provider=token)
+        clients[user] = base.StaffClient(staff_api, token(user), user, token_provider=lambda u=user: token(u))
         log(f"logged in as {user}")
     return clients[submit_user], clients
 

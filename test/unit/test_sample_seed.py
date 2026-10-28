@@ -133,3 +133,35 @@ def test_staging_never_loads_samples():
     spec.loader.exec_module(deployment)
     assert deployment.samples_overlay("staging") == {}
     assert deployment.samples_overlay("dev")["registry"]["dbSeed"]["loadSampleData"] is True
+
+
+def test_login_prepares_the_sample_approvers_only_when_keycloak_refuses(loader, monkeypatch):
+    base = loader.base
+    settings = {"STAFF_TOKEN_URL": "t", "STAFF_CLIENT_ID": "staff", "STAFF_CLIENT_SECRET": "s",
+                "INTAKE_SEED_PASSWORD": "p", "STAFF_API_URL": "api", "KEYCLOAK_BASE_URL": "kc",
+                "KEYCLOAK_REALM": "staff", "KEYCLOAK_ADMIN_USER": "admin", "KEYCLOAK_ADMIN_PASSWORD": "pw"}
+    prepared = []
+    ready = {"value": False}
+
+    def fetch_token(url, client_id, user, password, secret):
+        if not ready["value"]:
+            raise RuntimeError(f"password grant failed for '{user}' (400): not_allowed")
+        return "token-" + user
+
+    def prepare(*args):
+        prepared.append(args)
+        ready["value"] = True
+
+    monkeypatch.setattr(base, "env", lambda name, default=None, required=False: settings.get(name, default), raising=False)
+    monkeypatch.setattr(base, "fetch_token", fetch_token, raising=False)
+    monkeypatch.setattr(base, "keycloak_prepare_users", prepare, raising=False)
+    monkeypatch.setattr(base, "StaffClient", lambda api, token, user, token_provider: (user, token), raising=False)
+
+    client, clients = loader.staff_clients()
+    assert client == ("alex.carter", "token-alex.carter")
+    assert set(clients) == {"alex.carter", "nina.patel"}
+    assert prepared == [("kc", "staff", "admin", "pw", "staff", ["alex.carter", "nina.patel"], "p")]
+
+    prepared.clear()
+    loader.staff_clients()
+    assert prepared == [], "a working login changes nothing in Keycloak"
