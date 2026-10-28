@@ -253,6 +253,12 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'The id-authentication section is not on the farmer record tab';
   END IF;
+  IF (SELECT count(*) FROM "public"."g2p_register_ui_tab_sections" t
+      JOIN "public"."g2p_register_sections" s ON s.section_id = t.section_id
+      WHERE t.register_id = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd'
+        AND jsonb_path_exists(s.section_ui_schema, 'lax $.** ? (@.widget == "id-authentication")')) <> 1 THEN
+    RAISE EXCEPTION 'The farmer record must have exactly one id-authentication section';
+  END IF;
   -- Every dropdown's options come from Master Data (widget-data-source type
   -- "api", service "attributes"); a yes/no is a boolean, not a list.
   IF EXISTS (
