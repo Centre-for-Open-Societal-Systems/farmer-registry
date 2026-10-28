@@ -50,8 +50,8 @@ def pack(tmp_path):
         {"level_id": "l3", "level_mnemonic": "woreda", "parent_level_id": "l2"},
         {"level_id": "l4", "level_mnemonic": "kebele", "parent_level_id": "l3"}]), encoding="utf-8")
     units = [{"level_value_id": "ET", "level_id": "l0", "display_name": "Ethiopia", "parent_level_value_id": None}]
-    for r in ("01", "02"):
-        units.append({"level_value_id": f"ET{r}", "level_id": "l1", "display_name": f"Region {r}", "parent_level_value_id": "ET"})
+    for r, region in (("01", "Tigray"), ("03", "Amhara")):
+        units.append({"level_value_id": f"ET{r}", "level_id": "l1", "display_name": region, "parent_level_value_id": "ET"})
         for z in ("01", "02"):
             units.append({"level_value_id": f"ET{r}{z}", "level_id": "l2", "display_name": f"Zone {r}{z}", "parent_level_value_id": f"ET{r}"})
             units.append({"level_value_id": f"ET{r}{z}01", "level_id": "l3", "display_name": f"Woreda {r}{z}01", "parent_level_value_id": f"ET{r}{z}"})
@@ -84,7 +84,9 @@ def test_every_master_data_list_replaces_its_choice_list(pack, tmp_path):
     assert "SELF" not in [r["name"] for r in by_list["choices_household_relationship"]]
     # Lists that are not Master Data stay as they were: yes/no, consent, unions.
     assert [r["name"] for r in by_list["choices_phone_number"]] == ["yes", "no"]
-    assert len(by_list["choices_name_union"]) == 164
+    # Unions hang under the Master Data code of their region; this pack has Tigray and Amhara only.
+    assert {r["region"] for r in by_list["choices_name_union"]} == {"ET01", "ET03", "other_union"}
+    assert len(by_list["choices_name_union"]) < 164
     assert "choices_region" not in by_list
     assert report["lists"]["choices_machinery"]["master_data_list"] == "FARM_MACHINERY"
     assert book["settings"].cell(2, 3).value == "test-version"
@@ -185,4 +187,115 @@ def test_the_committed_v4_form_has_no_stale_rule():
     lists = {n: s for n, s in choice_names(book).items() if n in build_mds_form.MDS_LISTS}
     assert build_mds_form.check_literals(book["survey"], survey_columns(book), lists) == []
     settings = {c.value: book["settings"].cell(2, c.column).value for c in book["settings"][1] if c.value}
-    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.10.29"
+    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.10.30"
+
+
+COOPS = [
+    {"list_name": "choices_name_primary_cooperative", "name": "Wegahita", "label": "Wegahita", "region": "1"},
+    {"list_name": "choices_name_primary_cooperative", "name": "Gozamin", "label": "Gozamin", "region": "3"},
+    {"list_name": "choices_name_primary_cooperative", "name": "Hiwet", "label": "Hiwet", "region": "4"},
+    {"list_name": "choices_name_primary_cooperative", "name": "other", "label": "Other", "region": "other_primary_coop"},
+]
+
+
+def write_coops(path, rows=COOPS):
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["list_name", "name", "label", "region"])
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def test_cooperatives_and_unions_are_keyed_by_region_code(pack, tmp_path):
+    """The region question stores ET01; a list still keyed 1 would leave a Tigray farmer with only Other."""
+    source, target = tmp_path / "legacy.csv", tmp_path / "out" / "PrimaryCoopList.csv"
+    write_coops(source)
+    report = build_mds_form.build(build_mds_form.SOURCE, pack, tmp_path / "form.xlsx", tmp_path / "media", "v",
+                                  coops_source=source, coops_target=target)
+    with target.open(encoding="utf-8", newline="") as handle:
+        published = list(csv.DictReader(handle))
+    assert [(r["name"], r["region"]) for r in published] == [("Wegahita", "ET01"), ("Gozamin", "ET03"), ("other", "other_primary_coop")]
+    # Oromia is not in this pack: its cooperative is left out, not given an invented code, and reported.
+    left_out = [r for r in report["left_out"] if r["list"] == "primary cooperative"]
+    assert [(r["old_key"], r["name"]) for r in left_out] == [("4", "Hiwet")]
+    assert "Oromia" in left_out[0]["reason"]
+    assert report["region_bridge"]["1"] == "ET01" and report["region_bridge"]["3"] == "ET03"
+    book = openpyxl.load_workbook(tmp_path / "form.xlsx", read_only=True)
+    rows = list(book["choices"].iter_rows(values_only=True))
+    region = rows[0].index("region")
+    unions = [r for r in rows[1:] if r[0] == "choices_name_union"]
+    assert unions and {r[region] for r in unions} == {"ET01", "ET03", "other_union"}
+
+
+def test_the_matching_ignores_case_spacing_and_punctuation():
+    assert build_mds_form.normalise("Benishangul-Gumuz") == build_mds_form.normalise("  BENISHANGUL GUMUZ ")
+    old = [{"name": 2, "label::English (en)": "South West Ethiopia"}, {"name": 9, "label::English (en)": "Nowhere"}]
+    regions = [{"level_value_id": "ET11", "display_name": "South-West  ethiopia"}]
+    mapping, unmatched = build_mds_form.region_bridge(old, regions)
+    assert mapping == {"2": "ET11"} and "Nowhere" in unmatched["9"]
+
+
+def test_a_parent_key_outside_the_geography_is_reported():
+    rows = [{"name": "A", "region": "ET01"}, {"name": "B", "region": "7"}, {"name": "other", "region": "other_union"}]
+    problems = build_mds_form.check_parent_keys(rows, {"ET01"}, "other_union", "union")
+    assert len(problems) == 1 and "'B'" in problems[0] and "'7'" in problems[0]
+    assert build_mds_form.check_parent_keys(rows[:1] + rows[2:], {"ET01"}, "other_union", "union") == []
+
+
+def test_the_build_stops_when_a_cooperative_parent_is_outside_the_geography(pack, tmp_path, monkeypatch):
+    """If re-keying ever let a stale key through, the guard fails the build instead of publishing it."""
+    source = tmp_path / "legacy.csv"
+    write_coops(source)
+    monkeypatch.setattr(build_mds_form, "rekey", lambda rows, *args: (rows, []))
+    with pytest.raises(SystemExit) as stopped:
+        build_mds_form.build(build_mds_form.SOURCE, pack, tmp_path / "form.xlsx", tmp_path / "media", "v",
+                             coops_source=source, coops_target=tmp_path / "coops.csv")
+    assert "outside the geography" in str(stopped.value) and "Wegahita" in str(stopped.value)
+
+
+def test_unmatched_rows_are_left_out_never_given_a_code():
+    kept, left_out = build_mds_form.rekey([{"name": "A", "region": "1"}, {"name": "B", "region": "9"}],
+                                          {"1": "ET01"}, {"9": "region 'Nowhere' is not in the geography"}, "other_union", "union")
+    assert kept == [{"name": "A", "region": "ET01"}]
+    assert left_out == [{"list": "union", "old_key": "9", "name": "B", "reason": "region 'Nowhere' is not in the geography"}]
+
+
+LIVESTOCK = ("animal", "num_animals", "livestock_water_source")
+
+
+def test_livestock_questions_are_required_for_mixed_farmers_too(pack, tmp_path):
+    out = tmp_path / "form.xlsx"
+    report = build_mds_form.build(build_mds_form.SOURCE, pack, out, tmp_path / "media", "v")
+    book = openpyxl.load_workbook(out)
+    columns = survey_columns(book)
+    survey = book["survey"]
+    rows = {survey.cell(r, columns["name"]).value: r for r in range(2, survey.max_row + 1)}
+    for prefix, field in (("", "farming_type"), ("hh_member_", "hh_member_farming_type")):
+        for question in LIVESTOCK:
+            required = survey.cell(rows[prefix + question], columns["required"]).value
+            assert f"${{{field}}} = 'LIVESTOCK'" in required and f"${{{field}}} = 'MIXED'" in required, (prefix, question)
+        # The group they sit in is shown for every farmer who is not crop-only, so mixed farmers see it.
+        assert survey.cell(rows[prefix + "livestock_info"], columns["relevant"]).value == f"${{{field}}} != 'CROP'"
+    assert {c["name"] for c in report["livestock_for_mixed"]} == {p + q for p in ("", "hh_member_") for q in LIVESTOCK}
+
+
+def test_the_livestock_rule_is_not_applied_twice():
+    book = openpyxl.Workbook()
+    sheet = book.active
+    sheet.append(["name", "relevant", "required"])
+    sheet.append(["animal", None, "(${farming_type} = 'LIVESTOCK' or ${farming_type} = 'MIXED')"])
+    assert build_mds_form.livestock_for_mixed(sheet, {"name": 1, "relevant": 2, "required": 3}) == []
+
+
+def test_the_committed_cooperative_and_union_lists_use_region_codes():
+    regions = {row["code"] for row in csv.DictReader((REPO / "odk/media/mds/region.csv").open(encoding="utf-8"))}
+    coops = list(csv.DictReader((REPO / "odk/media/PrimaryCoopList.csv").open(encoding="utf-8")))
+    assert coops and {r["region"] for r in coops} - {"other_primary_coop"} <= regions
+    book = openpyxl.load_workbook(REPO / "odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx", read_only=True)
+    rows = list(book["choices"].iter_rows(values_only=True))
+    region = rows[0].index("region")
+    unions = {r[region] for r in rows[1:] if r[0] == "choices_name_union"}
+    assert unions and unions - {"other_union"} <= regions
+    survey = list(book["survey"].iter_rows(values_only=True))
+    column = survey[0].index("required")
+    required = {r[1]: r[column] for r in survey[1:] if r[1]}
+    assert "'MIXED'" in required["animal"] and "'MIXED'" in required["hh_member_livestock_water_source"]

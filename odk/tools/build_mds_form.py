@@ -17,6 +17,17 @@ the parent's). Left as
 they are: yes/no answers, consent, and the cooperative and union names, which
 are not Master Data lists.
 
+The cooperative and union pickers filter on the region the farmer chose, so their
+parent key is re-keyed from the v3 region number (1, 3, 4, 8) to the region's
+Master Data code (ET01, ET03, ET04, ET08). The bridge is the region's name: the
+v3 form's own region list gives number -> name, and the name is matched, with
+case, spacing and punctuation ignored, to the geography's regions. The cooperatives
+come from odk/legacy-geo/PrimaryCoopList.legacy.csv (the v3 file, kept as it was) and
+are written to odk/media/PrimaryCoopList.csv; the unions are the inline
+choices_name_union rows. A row whose region has no match is left out of the published
+list (a code is never invented) and is listed in the report; the build refuses
+to finish if any parent key that remains is not a region of the geography.
+
 A translation (Amharic, Afaan Oromoo) is carried over from the v3 choice that
 maps to the same code, by the registry's own mapping (odk/transform.py), so the
 enumerator sees the wording they know; a code the old form never offered gets
@@ -40,6 +51,7 @@ import hashlib
 import json
 import re
 import sys
+import unicodedata
 from collections import OrderedDict
 from copy import copy
 from pathlib import Path
@@ -53,6 +65,10 @@ from oan_farmer_registry_extension.odk import transform  # noqa: E402
 SOURCE = REPO / "odk/ATI_Farmers_Profile_ODK_Form_v3.xlsx"
 TARGET = REPO / "odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx"
 MEDIA = REPO / "odk/media/mds"
+COOPS_SOURCE = REPO / "odk/legacy-geo/PrimaryCoopList.legacy.csv"
+COOPS_TARGET = REPO / "odk/media/PrimaryCoopList.csv"
+# Rows that stay offered in every region: the filter is "region=${region} or region='<key>'".
+OTHER_KEYS = {"choices_name_primary_cooperative": "other_primary_coop", "choices_name_union": "other_union"}
 LABELS = ("label::English (en)", "label::Amharic (am)", "label::Afaan Oromoo (om)")
 LEVELS = ("region", "zone", "woreda", "kebele")
 
@@ -206,6 +222,83 @@ def check_literals(survey, columns: dict, choice_names: dict) -> list[str]:
     return problems
 
 
+def normalise(name) -> str:
+    """A place name with case, accents, spacing and punctuation ignored."""
+    text = unicodedata.normalize("NFKD", str(name or "")).casefold()
+    return re.sub(r"[^0-9a-z\u1200-\u137f]+", "", text)
+
+
+def region_bridge(old_regions: list[dict], regions: list[dict]) -> tuple[dict[str, str], dict[str, str]]:
+    """v3 region number -> Master Data region code, by name.
+
+    Returns (mapping, unmatched) where unmatched maps an old key to the reason it has no code.
+    """
+    by_name: dict[str, list[str]] = {}
+    for unit in regions:
+        by_name.setdefault(normalise(unit["display_name"]), []).append(unit["level_value_id"])
+    mapping, unmatched = {}, {}
+    for row in old_regions:
+        key, name = str(row["name"]), row.get("label::English (en)")
+        found = by_name.get(normalise(name), [])
+        if len(found) == 1:
+            mapping[key] = found[0]
+        else:
+            unmatched[key] = (f"region '{name}' is not in the geography" if not found
+                              else f"region '{name}' matches {len(found)} regions: {', '.join(found)}")
+    return mapping, unmatched
+
+
+def rekey(rows: list[dict], mapping: dict[str, str], unmatched: dict[str, str], other: str, label: str) -> tuple[list[dict], list[dict]]:
+    """The rows under their region code; rows whose region has no code are left out and returned."""
+    kept, left_out = [], []
+    for row in rows:
+        key = str(row["region"])
+        if key == other:
+            kept.append(row)
+        elif key in mapping:
+            kept.append({**row, "region": mapping[key]})
+        else:
+            left_out.append({"list": label, "old_key": key, "name": row["name"],
+                             "reason": unmatched.get(key, f"region key {key} is not a region of the v3 form")})
+    return kept, left_out
+
+
+def check_parent_keys(rows: list[dict], region_codes: set[str], other: str, label: str) -> list[str]:
+    """Every cooperative or union must hang under a region the geography has (or the 'other' key)."""
+    return [f"{label} '{row['name']}': parent key '{row['region']}' is not a region of the geography"
+            for row in rows if str(row["region"]) != other and str(row["region"]) not in region_codes]
+
+
+LIVESTOCK_QUESTIONS = ("animal", "num_animals", "livestock_water_source")
+
+
+def livestock_for_mixed(survey, columns: dict) -> list[dict]:
+    """Mixed farmers keep animals too: the livestock questions are required for them as well.
+
+    The v3 rules named livestock farming only (the group itself is shown for everything
+    but crop farming). Applies to the farmer's questions and the household member's copies.
+    """
+    changed = []
+    for row in range(2, survey.max_row + 1):
+        name = survey.cell(row, columns["name"]).value
+        for prefix, field in (("", "farming_type"), ("hh_member_", "hh_member_farming_type")):
+            if name not in [prefix + q for q in LIVESTOCK_QUESTIONS]:
+                continue
+            for column in ("relevant", "required"):
+                cell = survey.cell(row, columns[column])
+                if not isinstance(cell.value, str):
+                    continue
+                only = f"${{{field}}} = 'LIVESTOCK'"
+                both = f"(${{{field}}} = 'LIVESTOCK' or ${{{field}}} = 'MIXED')"
+                text = cell.value
+                if only in text and f"${{{field}}} = 'MIXED'" not in text:
+                    text = text.replace(only, both)
+                if text != cell.value:
+                    changed.append({"row": row, "name": name, "column": column, "was": cell.value, "now": text})
+                    cell.value = text
+    return changed
+
+
 def write_media(units: dict[str, list[dict]], media: Path) -> dict[str, int]:
     media.mkdir(parents=True, exist_ok=True)
     counts = {}
@@ -223,7 +316,7 @@ def write_media(units: dict[str, list[dict]], media: Path) -> dict[str, int]:
 
 
 def build(source: Path, pack: Path, target: Path, media: Path, version: str,
-          geography: Path | None = None) -> dict:
+          geography: Path | None = None, coops_source: Path | None = None, coops_target: Path | None = None) -> dict:
     lists = read_lists(pack)
     book = openpyxl.load_workbook(source)
     choices = book["choices"]
@@ -251,6 +344,31 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str,
             kept.append({"list_name": name, **new})
     # The region list leaves the form: the four levels are external lists.
     report["choices_region"] = {"master_data_list": "geo hierarchy (region.csv)", "codes": 0}
+    geography = geography or pack
+    units = read_values(geography)
+    bridge, no_match = region_bridge(replaced.get("choices_region", []), units["region"])
+    region_codes = {u["level_value_id"] for u in units["region"]}
+    unions = [row for row in kept if row["list_name"] == "choices_name_union"]
+    union_other = OTHER_KEYS["choices_name_union"]
+    rekeyed_unions, left_out = rekey(unions, bridge, no_match, union_other, "union")
+    kept = [row for row in kept if row["list_name"] != "choices_name_union"] + rekeyed_unions
+    problems = check_parent_keys(rekeyed_unions, region_codes, union_other, "union")
+    coop_rows = None
+    if coops_source:
+        with coops_source.open(encoding="utf-8", newline="") as handle:
+            coop_rows = list(csv.DictReader(handle))
+        coop_other = OTHER_KEYS["choices_name_primary_cooperative"]
+        coop_rows, coops_left_out = rekey(coop_rows, bridge, no_match, coop_other, "primary cooperative")
+        left_out += coops_left_out
+        problems += check_parent_keys(coop_rows, region_codes, coop_other, "primary cooperative")
+    if problems:
+        raise SystemExit("cooperative or union parents outside the geography:\n" + "\n".join(problems))
+    if coop_rows is not None and coops_target:
+        coops_target.parent.mkdir(parents=True, exist_ok=True)
+        with coops_target.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["list_name", "name", "label", "region"], lineterminator="\n")
+            writer.writeheader()
+            writer.writerows(coop_rows)
     style = [copy(choices.cell(2, c)._style) for c in range(1, choices.max_column + 1)]
     choices.delete_rows(2, choices.max_row)
     for index, row in enumerate(kept, start=2):
@@ -280,6 +398,7 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str,
                 mapping[old] = new
         renames[field] = mapping
     rewritten = rewrite_literals(survey, survey_columns, renames)
+    livestock = livestock_for_mixed(survey, survey_columns)
     choice_names: dict[str, set[str]] = {}
     for row in kept:
         choice_names.setdefault(row["list_name"], set()).add(str(row["name"]))
@@ -291,11 +410,12 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str,
     settings.cell(2, settings_columns["version"], version)
     target.parent.mkdir(parents=True, exist_ok=True)
     book.save(target)
-    geography = geography or pack
-    counts = write_media(read_values(geography), media)
+    counts = write_media(units, media)
     return {"source": str(source), "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             "pack": str(pack), "geography": str(geography), "pack_version": json.loads((pack / "manifest.json").read_text(encoding="utf-8")).get("version"),
-            "output": str(target), "version": version, "rewritten_expressions": rewritten, "media": {level: f"{media / level}.csv" for level in LEVELS},
+            "output": str(target), "version": version, "rewritten_expressions": rewritten, "livestock_for_mixed": livestock,
+            "region_bridge": bridge, "cooperatives_kept": len(coop_rows) if coop_rows is not None else None,
+            "unions_kept": len(rekeyed_unions), "left_out": left_out, "media": {level: f"{media / level}.csv" for level in LEVELS},
             "units": counts, "lists": report}
 
 
@@ -307,9 +427,11 @@ def main() -> None:
     parser.add_argument("--source", type=Path, default=SOURCE)
     parser.add_argument("--out", type=Path, default=TARGET)
     parser.add_argument("--media", type=Path, default=MEDIA)
-    parser.add_argument("--version", default="2026.10.29")
+    parser.add_argument("--coops-source", type=Path, default=COOPS_SOURCE, help="the v3 cooperative list, keyed by v3 region number")
+    parser.add_argument("--coops-out", type=Path, default=COOPS_TARGET)
+    parser.add_argument("--version", default="2026.10.30")
     args = parser.parse_args()
-    print(json.dumps(build(args.source, args.pack, args.out, args.media, args.version, args.geography), indent=2, ensure_ascii=False))
+    print(json.dumps(build(args.source, args.pack, args.out, args.media, args.version, args.geography, args.coops_source, args.coops_out), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
