@@ -49,10 +49,11 @@ region, zone, woreda and kebele lists become external CSVs
 serves, `parent` the parent's), so a submission carries the location ids the
 web intake stores and `odk/transform.py` passes every code through unchanged.
 
-Geography belongs to each environment's Master Data, not to the pack. The dev environment
-serves the catalogue migrated on 2026-10-27 (`region-ET01` …
-`kebele-ET010101101001`, 1379 woredas), not the pack's plain P-codes, so the
-committed CSVs are built from that catalogue. `--geography` takes a directory
+Geography belongs to each environment's Master Data, not to the pack. Since the
+commons deploy of 28 October 2026 the dev environment serves the pack's plain
+P-codes (`ET01` … `ET01010101`, 14 regions, 125 zones, 1362 woredas, 19535
+kebeles), so the committed CSVs are the pack's geography; the catalogue migrated
+on 27 October (`region-ET01` …, 1379 woredas) is gone. `--geography` takes a directory
 holding `levels.json` and `values.json` in the pack's format, read from the
 environment's `g2p_geo_levels` and `g2p_geo_level_values` (current rows);
 without it the pack's own geography is used. Rebuild the CSVs for each
@@ -65,7 +66,7 @@ names (not Master Data lists) stay as they are. Output:
 `oan-extension/tests/test_odk_mds_codes.py` the transform's pass-through.
 
 Publish it as a new version of the same `farmer_profile` form (project 1 on
-the dev environment) together with the four CSVs as form attachments; the connector and
+the dev environment) together with the four geography CSVs and `PrimaryCoopList.csv` as form attachments; the connector and
 the registry need no change. Choices the old form offered that Master Data
 does not have (three crops, six machinery names) are not carried: the
 registry's Master Data validation would refuse them anyway.
