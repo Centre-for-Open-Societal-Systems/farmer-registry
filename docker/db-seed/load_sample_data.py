@@ -8,9 +8,12 @@ crops, livestock and farm inputs, cooperative membership) are the same pack's
 samples/farms.json, baked into this image from openg2p-data. Nothing is
 invented here: a value the pack does not give is left empty.
 
-Each household is submitted on the household form, then every one of its
-people on the farmer form, linked to it; every submission is finalized and
-approved through AWE like any other, and Celery ingests it. The HTTP, AWE and
+Each household is entered on its head's farmer form, with its members, the
+way a new household is registered in the staff portal: on approval the
+household gets that farmer as its head. Every other person of the household
+is then a farmer picked into it through the household lookup. Every
+submission is finalized and approved through AWE like any other, and Celery
+ingests it. The HTTP, AWE and
 ingest helpers are OpenG2P's own sample loader's (openg2p_sample_loader.py,
 unchanged). Forms, sections and registers are looked up by mnemonic in the
 registry's metadata, and a record is split over the sections whose widgets
@@ -46,7 +49,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import openg2p_sample_loader as base
 
 FARMS_FILE = Path(os.environ.get("OAN_FARM_SAMPLES", "/seed/samples/farms.json"))
-HOUSEHOLD_FORM = "household_ingestion_intake"
 FARMER_FORM = "farmer_ingestion_intake"
 IDENTITY_DOCUMENT_LABEL = "identity_document_1"
 COUNTRY_CODE = {"ETH": "ET"}
@@ -200,14 +202,14 @@ def household_record(household: dict, members: list[dict], head: dict, geo: dict
     }
 
 
-def farmer_record(person: dict, household_id: str, geo: dict) -> dict:
+def farmer_record(person: dict, household_id: str, geo: dict, is_head: bool | None = None) -> dict:
     facts = {k: v for k, v in (person["farm"].get("farmer") or {}).items()
              if k not in ("grandfathers_name", "phone_type")}
     first, middle, last = person["name"]
     nid = person.get("national_id")
     return {
         "link_internal_record_id": household_id,
-        "is_household_head": person["relationship_to_head"] == "SELF",
+        "is_household_head": person["relationship_to_head"] == "SELF" if is_head is None else is_head,
         "has_national_id": bool(nid), "foundational_id": nid,
         "first_name": first, "middle_name": middle, "last_name": last,
         "gender": person["gender"], "birth_date": iso(person.get("birth_date")),
@@ -227,6 +229,10 @@ def phone_rows(person: dict) -> list[dict]:
         return []
     kind = (person["farm"].get("farmer") or {}).get("phone_type") or "PRIMARY"
     return [{"phone_type": kind, "phone_number": person["phone"], "country_code": "ET", "is_primary": True}]
+
+
+def same_name(a, b) -> bool:
+    return " ".join(str(a or "").split()).casefold() == " ".join(str(b or "").split()).casefold()
 
 
 def without(record: dict, *keys) -> dict:
@@ -256,7 +262,6 @@ class Seeder:
         self.approve_timeout, self.ingest_timeout = approve_timeout, ingest_timeout
         conn = base.registry_connect()
         try:
-            self.household_form = Form.load(conn, HOUSEHOLD_FORM)
             self.farmer_form = Form.load(conn, FARMER_FORM)
         finally:
             conn.close()
@@ -323,21 +328,22 @@ class Seeder:
             raise RuntimeError(f"identity document upload returned no document: {reply}")
         return [{"document_id": documents[0]["document_id"], "label": IDENTITY_DOCUMENT_LABEL}]
 
-    def submit_household(self, household: dict, members: list[dict], head: dict, geo: dict) -> str:
-        form = self.household_form
-        submission_id, household_id = self.save_record(
-            form, "Household", household_record(household, members, head, geo), None)
-        self.save_rows(form, "HouseholdMember",
-                       [{**member_record(m), "link_internal_record_id": household_id} for m in members],
-                       submission_id)
-        self.approve(form, submission_id)
-        base.wait_register_row("g2p_register_households", household_id, self.ingest_timeout)
-        return household_id
-
-    def submit_farmer(self, person: dict, household_id: str, geo: dict) -> str:
-        form, farm = self.farmer_form, person["farm"]
-        record = farmer_record(person, household_id, geo)
-        submission_id, farmer_id = self.save_record(form, "Farmer", without(record, "identity_document_type"), None)
+    def submit_farmer(self, person: dict, geo: dict, household_id: str | None = None,
+                      is_head: bool | None = None, new_household: tuple | None = None) -> tuple[str, str]:
+        """One farmer, picked into a registered household, or entered with a new
+        one (household, members, head) whose head the farmer is."""
+        form, farm, submission_id = self.farmer_form, person["farm"], None
+        if new_household:
+            household, members, head = new_household
+            submission_id, household_id = self.save_record(
+                form, "Household", household_record(household, members, head, geo), None)
+            self.save_rows(form, "HouseholdMember",
+                           [{**member_record(m), "link_internal_record_id": household_id} for m in members],
+                           submission_id)
+            is_head = True
+        record = farmer_record(person, household_id, geo, is_head)
+        submission_id, farmer_id = self.save_record(
+            form, "Farmer", without(record, "identity_document_type"), submission_id)
         self.save_rows(form, "FarmerPhone",
                        [{**r, "link_internal_record_id": farmer_id} for r in phone_rows(person)], submission_id)
         lands = farm.get("lands") or []
@@ -361,12 +367,14 @@ class Seeder:
         }], self.upload_identity_document())
         self.approve(form, submission_id)
         base.wait_register_row("g2p_register_farmers", farmer_id, self.ingest_timeout)
-        return farmer_id
+        if new_household:
+            base.wait_register_row("g2p_register_households", household_id, self.ingest_timeout)
+        return farmer_id, household_id
 
 
-def already_registered(conn) -> tuple[set, dict]:
-    """Fayda IDs a farmer already holds or awaits approval with, and the
-    household of each registered member's Fayda ID."""
+def already_registered(conn) -> tuple[set, dict, dict]:
+    """Fayda IDs a farmer already holds or awaits approval with, the household
+    of each registered member's Fayda ID, and each household's head."""
     with conn.cursor() as cur:
         cur.execute(
             "SELECT foundational_id FROM g2p_register_farmers WHERE foundational_id IS NOT NULL"
@@ -381,7 +389,9 @@ def already_registered(conn) -> tuple[set, dict]:
             " WHERE foundational_id IS NOT NULL"
         )
         members = dict(cur.fetchall())
-    return farmers, members
+        cur.execute("SELECT internal_record_id, household_head FROM g2p_register_households")
+        heads = {str(k): v for k, v in cur.fetchall()}
+    return farmers, members, heads
 
 
 def staff_clients() -> tuple[object, dict]:
@@ -429,7 +439,7 @@ def main() -> None:
 
     conn = base.registry_connect()
     try:
-        farmers_done, member_households = already_registered(conn)
+        farmers_done, member_households, heads = already_registered(conn)
     finally:
         conn.close()
 
@@ -445,19 +455,28 @@ def main() -> None:
     try:
         for household, members, head in households_plan:
             household_id = member_households.get(head.get("national_id"))
-            if household_id:
-                log(f"household {household['household_id']}: already registered")
-            else:
-                household_id = seeder.submit_household(household, members, head, geo)
-                created["households"] += 1
-                log(f"household {household['household_id']}: registered")
-            for person in members:
+            for person in [head] + [m for m in members if m is not head]:
+                name = " ".join(n for n in person["name"] if n)
                 if person.get("national_id") in farmers_done:
                     log(f"  farmer {person['individual_id']}: already registered or awaiting approval")
                     continue
-                seeder.submit_farmer(person, household_id, geo)
+                if household_id is None and person is not head:
+                    log(f"  farmer {person['individual_id']}: waits for household {household['household_id']}, "
+                        "whose head awaits approval")
+                    continue
+                if household_id is None:
+                    _, household_id = seeder.submit_farmer(person, geo, new_household=(household, members, head))
+                    created["households"] += 1
+                    log(f"household {household['household_id']}: registered with its head {name}")
+                else:
+                    # A registered household's head changes only through a change
+                    # request; mark the head only where the household names them.
+                    is_head = person is head and same_name(heads.get(str(household_id)), name)
+                    if person is head and not is_head:
+                        log(f"  household {household['household_id']} names no head; {name} joins it as a member")
+                    seeder.submit_farmer(person, geo, household_id=household_id, is_head=is_head)
                 created["farmers"] += 1
-                log(f"  farmer {person['individual_id']} {' '.join(person['name'])}: registered")
+                log(f"  farmer {person['individual_id']} {name}: registered")
     finally:
         awe_conn.close()
     log(f"Done: {created['farmers']} farmers and {created['households']} households registered.")

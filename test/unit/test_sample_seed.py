@@ -165,3 +165,12 @@ def test_login_prepares_the_sample_approvers_only_when_keycloak_refuses(loader, 
     prepared.clear()
     loader.staff_clients()
     assert prepared == [], "a working login changes nothing in Keycloak"
+
+
+def test_farmer_record_takes_the_head_answer_the_household_allows(loader):
+    head = person("I1", "H1", "SELF")
+    head["farm"] = {}
+    head["name"] = loader.full_name(head, head["farm"])
+    assert loader.farmer_record(head, "hh", GEO)["is_household_head"] is True
+    assert loader.farmer_record(head, "hh", GEO, is_head=False)["is_household_head"] is False
+    assert loader.same_name(" GivenI1  FatherI1 ", "giveni1 fatheri1")
