@@ -235,6 +235,12 @@ def samples_overlay(environment="dev"):
     return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-samples.yaml")
 
 
+def allowed_loaders(environment="dev"):
+    """Seed loaders a release may enable: only the pack's samples, where the overlay turns them on."""
+    seed = samples_overlay(environment).get("registry", {}).get("dbSeed", {})
+    return {"LOAD_SAMPLE_DATA"} if seed.get("loadSampleData") else set()
+
+
 def merge(target, overlay):
     for key, value in overlay.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
@@ -477,7 +483,8 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                     if image.startswith((prefix + ':', prefix + '@')) and image != prefix + ':' + images[component]['tag'] + '@' + images[component]['digest']:
                         raise ValueError(f'Built component did not use recorded digest: {key}')
             for e in container.get("env", []):
-                if e["name"] in ("LOAD_GEO_DATA", "LOAD_SAMPLE_DATA", "LOAD_IMAGES") and e.get("value") != "false":
+                if (e["name"] in ("LOAD_GEO_DATA", "LOAD_SAMPLE_DATA", "LOAD_IMAGES") and e.get("value") != "false"
+                        and e["name"] not in allowed_loaders(environment)):
                     raise ValueError(f"Demo/geography loader enabled: {key}/{e['name']}")
 
 
