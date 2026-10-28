@@ -1,6 +1,6 @@
 """Build the farmer ODK form whose every choice list comes from Master Data.
 
-    python odk/tools/build_mds_form.py --pack ../openg2p-data/packs/ETH-OAN
+    python odk/tools/build_mds_form.py --pack ../openg2p-data/packs/ETH-OAN         --geography <export of the environment's Master Data geography>
 
 ODK Collect cannot read Master Data while a form is filled in, so the form
 carries the lists at build time, exactly as Master Data serves them: the
@@ -11,8 +11,9 @@ through unchanged, with no alias table between the form and the registry.
 Taken from the v3 form (odk/tools/build_v3.py): every question, group, repeat,
 relevance, constraint and translation. Replaced: the rows of every choice list
 that is a Master Data list (the table below), and the region/zone/woreda/kebele
-lists, which become the pack's hierarchy as external CSVs (name and code are
-the P-code Master Data uses as level_value_id, parent the parent's). Left as
+lists, which become the geography as external CSVs (name and code are the
+level_value_id Master Data serves, which the web intake stores too; parent is
+the parent's). Left as
 they are: yes/no answers, consent, and the cooperative and union names, which
 are not Master Data lists.
 
@@ -20,6 +21,14 @@ A translation (Amharic, Afaan Oromoo) is carried over from the v3 choice that
 maps to the same code, by the registry's own mapping (odk/transform.py), so the
 enumerator sees the wording they know; a code the old form never offered gets
 the Master Data display in every language until a translation is added.
+
+Geography belongs to each environment's Master Data, not to the pack: an
+environment migrated from an older catalogue keeps its own unit ids (New Dev
+serves region-ET01 ... kebele-ET010101101001). --geography takes a directory
+with that catalogue's levels.json and values.json, in the pack's format, read
+from the environment's Master Data (g2p_geo_levels, g2p_geo_level_values). It
+defaults to the pack's own geography, for an environment seeded from the pack.
+The CSVs must be rebuilt for each environment the form is published to.
 """
 from __future__ import annotations
 
@@ -131,7 +140,8 @@ def write_media(units: dict[str, list[dict]], media: Path) -> dict[str, int]:
     return counts
 
 
-def build(source: Path, pack: Path, target: Path, media: Path, version: str) -> dict:
+def build(source: Path, pack: Path, target: Path, media: Path, version: str,
+          geography: Path | None = None) -> dict:
     lists = read_lists(pack)
     book = openpyxl.load_workbook(source)
     choices = book["choices"]
@@ -177,9 +187,10 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str) -> 
     settings.cell(2, settings_columns["version"], version)
     target.parent.mkdir(parents=True, exist_ok=True)
     book.save(target)
-    counts = write_media(read_values(pack), media)
+    geography = geography or pack
+    counts = write_media(read_values(geography), media)
     return {"source": str(source), "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-            "pack": str(pack), "pack_version": json.loads((pack / "manifest.json").read_text(encoding="utf-8")).get("version"),
+            "pack": str(pack), "geography": str(geography), "pack_version": json.loads((pack / "manifest.json").read_text(encoding="utf-8")).get("version"),
             "output": str(target), "version": version, "media": {level: f"{media / level}.csv" for level in LEVELS},
             "units": counts, "lists": report}
 
@@ -187,12 +198,14 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str) -> 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--pack", required=True, type=Path, help="the country pack (packs/ETH-OAN of openg2p-data)")
+    parser.add_argument("--geography", type=Path, default=None,
+                        help="levels.json + values.json of the target environment's Master Data geography (default: the pack's)")
     parser.add_argument("--source", type=Path, default=SOURCE)
     parser.add_argument("--out", type=Path, default=TARGET)
     parser.add_argument("--media", type=Path, default=MEDIA)
     parser.add_argument("--version", default="2026.10.28")
     args = parser.parse_args()
-    print(json.dumps(build(args.source, args.pack, args.out, args.media, args.version), indent=2, ensure_ascii=False))
+    print(json.dumps(build(args.source, args.pack, args.out, args.media, args.version, args.geography), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

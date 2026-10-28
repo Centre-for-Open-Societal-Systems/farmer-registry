@@ -111,3 +111,28 @@ def test_choice_rows_report_old_choices_master_data_does_not_have():
     assert [r["name"] for r in rows] == ["MACH_TRACTOR", "MACH_SPRAYER"]
     assert rows[0]["label::Amharic (am)"] == "ትራክተር" and rows[1]["label::Amharic (am)"] == "Mach Sprayer"
     assert info == {"codes": 2, "translated": 1, "dropped_choices": ["rice_polisher"]}
+
+
+def test_geography_comes_from_the_environments_master_data(pack, tmp_path):
+    """An environment migrated from an older catalogue keeps its own unit ids;
+    the form's location lists carry those, not the pack's."""
+    geo = tmp_path / "env-geo"
+    geo.mkdir()
+    (geo / "levels.json").write_text(json.dumps([
+        {"level_id": "level-region", "level_mnemonic": "region", "parent_level_id": None},
+        {"level_id": "level-zone", "level_mnemonic": "zone", "parent_level_id": "level-region"},
+        {"level_id": "level-woreda", "level_mnemonic": "woreda", "parent_level_id": "level-zone"},
+        {"level_id": "level-kebele", "level_mnemonic": "kebele", "parent_level_id": "level-woreda"}]), encoding="utf-8")
+    (geo / "values.json").write_text(json.dumps([
+        {"level_value_id": "region-ET01", "level_id": "level-region", "display_name": "Tigray", "parent_level_value_id": None},
+        {"level_value_id": "zone-ET0101", "level_id": "level-zone", "display_name": "North Western", "parent_level_value_id": "region-ET01"},
+        {"level_value_id": "woreda-ET010101", "level_id": "level-woreda", "display_name": "Tahtay Adiyabo", "parent_level_value_id": "zone-ET0101"},
+        {"level_value_id": "kebele-ET010101101001", "level_id": "level-kebele", "display_name": "Kebele 1", "parent_level_value_id": "woreda-ET010101"}]), encoding="utf-8")
+    media = tmp_path / "media"
+    report = build_mds_form.build(build_mds_form.SOURCE, pack, tmp_path / "form.xlsx", media, "v", geography=geo)
+    assert report["units"] == {"region": 1, "zone": 1, "woreda": 1, "kebele": 1}
+    with (media / "kebele.csv").open(encoding="utf-8", newline="") as handle:
+        assert list(csv.DictReader(handle)) == [{"name": "kebele-ET010101101001", "label": "Kebele 1",
+                                                 "code": "kebele-ET010101101001", "parent": "woreda-ET010101"}]
+    with (media / "region.csv").open(encoding="utf-8", newline="") as handle:
+        assert [r["name"] for r in csv.DictReader(handle)] == ["region-ET01"]
