@@ -34,6 +34,19 @@ BEGIN
     RAISE EXCEPTION 'OAN rows under retired oan_ ids remain (add them to 22_retired_rows.sql): %', found;
   END IF;
 
+  -- Data saved under a retired section id would be invisible on the forms;
+  -- 21_renamed_section_data.sql moves it to the current id.
+  SELECT string_agg(id, ', ') INTO found FROM (
+    SELECT 'record documents under ' || section_id AS id FROM "public"."g2p_register_section_documents"
+    WHERE section_id LIKE 'oan\_%' GROUP BY section_id
+    UNION ALL SELECT 'intake documents under ' || section_id FROM "public"."g2p_intake_section_documents"
+    WHERE section_id LIKE 'oan\_%' GROUP BY section_id
+    UNION ALL SELECT 'change requests under ' || section_id FROM "public"."g2p_register_change_requests"
+    WHERE section_id LIKE 'oan\_%' GROUP BY section_id) o;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Data under retired oan_ section ids remains (add the id to 21_renamed_section_data.sql): %', found;
+  END IF;
+
   SELECT string_agg(e.section_id, ', ') INTO found
   FROM unnest(pg_temp.oan_section_ids()) e(section_id)
   LEFT JOIN "public"."g2p_register_sections" s ON s.section_id = e.section_id
