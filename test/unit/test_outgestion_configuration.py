@@ -27,6 +27,6 @@ def test_oan_reseed_enables_source_without_resetting_native_topic_checkpoint():
 
 
 def test_dev_publishers_use_internal_hub():
-    config=yaml.safe_load((ROOT/'helm/environments/dev/registry-outgestion.yaml').read_text())['registry']
+    config=yaml.safe_load((ROOT/'helm/environments/dev/farmer-outgestion.yaml').read_text())['registry']
     for component in ['staffApi','partnerApi','celeryWorker']:
         assert config[component]['envVars']['REGISTRY_CORE_WEBSUB_BASE_URL']=='http://commons-services-websub.commons.svc.cluster.local'

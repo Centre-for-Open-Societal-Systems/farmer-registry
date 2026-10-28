@@ -8,7 +8,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location(
-    "odk_map_policy", REPO / "scripts/operations/prepare-odk-map-policy.py"
+    "odk_map_policy", REPO / "scripts/operations/prepare_odk_map_policy.py"
 )
 policy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(policy)

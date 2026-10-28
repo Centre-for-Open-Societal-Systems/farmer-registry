@@ -1,4 +1,4 @@
-"""G2R-333/361/362: dev Location reads use reviewed routes and service bindings."""
+"""Dev Location reads use reviewed routes and service bindings."""
 import copy
 
 import pytest

@@ -123,7 +123,7 @@ def test_seed_image_takes_farm_samples_only_from_openg2p_data_at_a_pinned_commit
     ref = dockerfile.split("ARG OPENG2P_DATA_REF=")[1].split()[0]
     assert len(ref) == 40, "pin a commit, not a branch"
     assert not (ROOT / "docker/db-seed/seed-data").exists()
-    overlay = (ROOT / "helm/environments/dev/registry-samples.yaml").read_text()
+    overlay = (ROOT / "helm/environments/dev/farmer-samples.yaml").read_text()
     assert "loadSampleData: true" in overlay
 
 

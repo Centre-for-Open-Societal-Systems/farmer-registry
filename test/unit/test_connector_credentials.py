@@ -42,7 +42,7 @@ def test_credentials_cannot_be_installed_under_other_owners(namespace, release):
 
 
 def test_staging_credentials_use_dedicated_secrets_and_reject_dev_namespace():
-    values = ROOT / "helm/environments/staging/connector-credentials.yaml"
+    values = ROOT / "helm/environments/staging/farmer-connector-credentials.yaml"
     def staging(namespace):
         return subprocess.run(["helm", "template", "farmer-connector-credentials", str(CHART),
                                "-n", namespace, "-f", str(values)], capture_output=True, text=True, timeout=60)

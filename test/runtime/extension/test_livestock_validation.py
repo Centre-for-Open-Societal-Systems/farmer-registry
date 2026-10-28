@@ -1,4 +1,4 @@
-"""G2R-334: validate the Farmer form's optional livestock section."""
+"""Validate the Farmer form's optional livestock section."""
 import unittest
 from openg2p_registry_core.errors import G2PRegistryException
 from openg2p_registry_farmer_extension.register_domain.services.g2p_register_domain_service_livestock import G2PRegisterDomainServiceLivestock

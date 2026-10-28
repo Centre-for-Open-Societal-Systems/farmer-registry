@@ -1,4 +1,4 @@
-"""Safety properties for upgrading the existing new-dev release."""
+"""Safety properties for upgrading the existing dev release."""
 import copy
 import importlib.util
 import json
@@ -200,13 +200,13 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
     "farmer-registry-development.oanstaging.com",
     "farmer-registry.development.oanstaging.com",
 ])
-def test_new_dev_hostnames_are_accepted(release, hostname):
+def test_dev_hostnames_are_accepted(release, hostname):
     values = {"global": {"registryHostname": hostname}}
     assert deployment.prepare(values, release[0], ECR, TAG)["global"]["registryHostname"] == hostname
 
 
 def test_wrong_environment_is_rejected(release):
-    with pytest.raises(ValueError, match="new-dev"):
+    with pytest.raises(ValueError, match="verified dev Registry hostname"):
         deployment.prepare({"global": {"registryHostname": "registry.production.example"}}, release[0], ECR, TAG)
 
 
@@ -309,7 +309,7 @@ def test_dashboard_image_is_not_silently_upgraded(release):
         deployment.validate(before, after, ECR, TAG)
 
 
-def test_dev_values_enable_registrant_authentication_with_the_new_dev_hosts(release):
+def test_dev_values_enable_registrant_authentication_with_the_dev_hosts(release):
     before, _ = release
     values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}}
     result = deployment.prepare(values, before, ECR, TAG)

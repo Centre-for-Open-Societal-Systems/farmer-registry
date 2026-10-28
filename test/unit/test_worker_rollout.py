@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location("worker_rollout", Path(__file__).resolve().parents[2] / "scripts/operations/registry/deploy-worker-only.py")
+spec = importlib.util.spec_from_file_location("worker_rollout", Path(__file__).resolve().parents[2] / "scripts/operations/registry/deploy_worker_only.py")
 rollout = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(rollout)
 
