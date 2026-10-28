@@ -1,14 +1,12 @@
 # Farmer Registry documentation
 
-Start with [the current refactor candidate](refactor-candidate.md). Dated rollout
-reports and legacy staging guides describe their recorded deployments.
+Start with [the current refactor candidate](refactor-candidate.md).
 
 - [Household-head and male/female fields](household-fields.md)
 
 ## Development
 
 - [Domain package](development/farmer-extension.md)
-- [Local Commons and Registry stack](development/local-stack.md)
 - [Background worker extensions](development/worker.md)
 - [Repository layout and ownership](development/repository-layout.md)
 
@@ -22,17 +20,10 @@ reports and legacy staging guides describe their recorded deployments.
 - [Signing, checkpoints and recovery](operations/connector.md)
 - [ODK form and intake](odk/README.md)
 - [New-dev ODK hostname, Livestock migration and archive](operations/odk-dev-hostname.md)
-- [Cleanup inventory](operations/cleanup-inventory.md)
 
 ## Verification and evidence
 
 - [Tests and execution environments](testing/README.md)
 - [Sanity end-to-end suite](testing/sanity.md)
-- [Performance testing](testing/performance/README.md)
-- [Accepted dev rollout manifest](rollouts/2026-10-15-farmer-dev.json)
-- [Read-only staging inspection](rollouts/2026-10-16-staging-inspection.json)
-- [Staging migration implementation status](rollouts/2026-10-16-staging-upgrade.json)
-- [Staging reset rehearsal and remaining cutover](rollouts/2026-10-16-staging-reset.json)
-- [Historical report catalogue](history/README.md)
+- [Performance testing](../performance-testing/README.md)
 
-Historical commands and removed Jenkins job links are not current operating instructions.

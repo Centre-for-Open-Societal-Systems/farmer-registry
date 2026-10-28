@@ -22,14 +22,14 @@ CI or trusted-host environments; the Windows unit result does not establish them
 
 | Suite | Location | Environment |
 | --- | --- | --- |
-| Offline guards/metadata | `tests/unit/` | Python dependencies; Helm for chart cases |
-| Deployment shell harnesses | `tests/integration/` | Bash, including Bash 4.3 compatibility |
-| Database integration | `tests/integration/test_data_scopes.py` | Platform packages, disposable PostgreSQL |
-| Worker and signing | `tests/runtime/` | Built worker/Partner API images |
-| Domain behavior | `tests/runtime/extension/` | Built staff API image |
-| Connector media/signing | `tests/runtime/test_connector_media.py` | Built connector image |
-| Sanity and local approval | `tests/e2e/` | Explicit isolated stack or synthetic fixture |
-| Load testing | `tests/performance/` | Explicit target, authorization and seeded data |
+| Offline guards/metadata | `test/unit/` | Python dependencies; Helm for chart cases |
+| Deployment shell harnesses | `test/integration/` | Bash, including Bash 4.3 compatibility |
+| Database integration | `test/integration/test_data_scopes.py` | Platform packages, disposable PostgreSQL |
+| Worker and signing | `test/runtime/` | Built worker/Partner API images |
+| Domain behavior | `test/runtime/extension/` | Built staff API image |
+| Connector media/signing | `test/runtime/test_connector_media.py` | Built connector image |
+| Sanity suite | `test/sanity/` | The sanity-tests image against a deployed release |
+| Load testing | `performance-testing/` | Explicit target, authorization and seeded data |
 
 Dev image builds run worker attribution and Partner API signature checks. The
 connector coordinator runs media/signing tests and isolated database rehearsal
@@ -40,14 +40,11 @@ Example domain runtime check using an already built image:
 
 ```sh
 docker run --rm -v "$PWD:/repo:ro" -e PYTHONPATH=/repo/farmer-extension/src \
-  -w /repo/tests/runtime --entrypoint python "$STAFF_API_IMAGE" -m unittest \
+  -w /repo/test/runtime --entrypoint python "$STAFF_API_IMAGE" -m unittest \
   extension.test_domain_validation_utils extension.test_farmer_geo_sync \
   extension.test_intake_record_image_urls extension.test_household_family_size
 ```
 
-Local approval launchers are under `tests/e2e/local/`; generated output is ignored.
 Never run live intake, approval or load scripts as unit-test checks. Historical
-load results do not establish current capacity. See [performance testing](performance/README.md).
+load results do not establish current capacity. See [performance testing](../../performance-testing/README.md).
 
-See [Location and livestock QA](location-livestock-qa.md) for the five-ticket
-regression matrix and isolated database/browser runners.

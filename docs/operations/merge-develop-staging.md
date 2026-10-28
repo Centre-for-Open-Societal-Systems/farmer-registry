@@ -29,9 +29,9 @@ The deployed new-dev register page requests `page_size: 20`. That is the number 
 
 The staging 500-row seed remains present. The remaining staging rows are reported only as an aggregate; their origin was not classified by this check. Intake and history are separate tables and are excluded from registered-farmer totals.
 
-New dev's earlier sample loader used the shared Master Data demographic sample, which supplied 21 people, rather than creating one farmer for every entry in the older 500-row fixture. `docker/db-seed/load_sample_data.py` prefers those shared people and uses `seed-data/farmers.json` as additional farmer fields; the JSON fixture is not the population source in that path. The [earlier seed diagnosis](../history/gen2-db-seed-diagnosis.md) recorded the same 21 seeded farmers before this migration PR.
+New Dev's sample farmers come from the ETH-OAN country pack: `docker/db-seed/load_sample_data.py` registers its 21 people in their 6 households through intake and approval, with farm facts from the pack's `samples/farms.json` in openg2p-data. Nothing in this repository is a sample population source.
 
-The maintained metadata seed and deployment preparation disable geography/sample/image/bulk fixture loading. This merge does not reload 500 people, truncate a register or reconcile existing Farmer locations. Expanding the new-dev demo population is a separate explicit data operation, with canonical geography and duplicate handling, rather than an automatic deployment hook.
+Deployment preparation disables geography, image and bulk fixture loading; sample loading is on for New Dev only (`helm/environments/dev/registry-samples.yaml`). This merge does not reload 500 people, truncate a register or reconcile existing Farmer locations. Expanding the new-dev demo population is a separate explicit data operation, with canonical geography and duplicate handling, rather than an automatic deployment hook.
 
 ## Staging deployment prerequisites still outstanding
 
@@ -49,4 +49,4 @@ These prerequisites remain enforced. Do not mark their evidence fields true mere
 - Fresh server-side candidate renders against new-dev revision 26 and staging revision 36 passed Helm lint and resource/configuration preservation. New dev's live schema gate passed. Staging's read-only schema gate correctly rejected all 36 unconverted coordinate columns. No release, schema or business data was changed by these previews.
 - GitHub checks on the final PR head remain the merge gate. The promotion PR must also pass its own checks after the develop merge.
 
-The [rollout manifest](../rollouts/2026-10-16-staging-upgrade.json) records the rehearsal results, image identities, live outcomes and remaining blockers. Private dumps, Helm values, raw submissions and credentials remain in protected operator storage.
+The rollout manifest records the rehearsal results, image identities, live outcomes and remaining blockers. Private dumps, Helm values, raw submissions and credentials remain in protected operator storage.

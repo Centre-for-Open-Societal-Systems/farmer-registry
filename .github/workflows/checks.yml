@@ -35,5 +35,5 @@ jobs:
             if curl --fail --silent http://127.0.0.1:49216/pm/health >/dev/null; then break; fi
             sleep 1
           done
-          python -m pytest -q -p no:cacheprovider oan-extension/tests/test_odk_signature_http.py tests/unit/test_reporting_geography.py
+          python -m pytest -q -p no:cacheprovider oan-extension/tests/test_odk_signature_http.py test/unit/test_reporting_geography.py
 

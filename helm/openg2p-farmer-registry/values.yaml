@@ -152,7 +152,7 @@ registry:
     regType: Farmer
     regRecordType: 'spdci-extensions-dci:Farmer'
     # farmer functional_record_id of the injected sanity record (see
-    # tests/e2e/sanity/sanity/fixtures.py).
+    # test/sanity/sanity/fixtures.py).
     searchText: SANITY-FARMER-0001
     # Data scopes the sanity consent asks for, and scopes whose seeded values
     # must not come back: names from the Farmer Registry's scope catalogue

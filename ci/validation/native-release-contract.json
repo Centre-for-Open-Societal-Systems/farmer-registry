@@ -3,19 +3,19 @@
   "platformVersion": "1.2.2-rc.557",
   "parents": {
     "staff-api": {
-      "dockerfile": "docker/oan/staff-api.Dockerfile",
+      "dockerfile": "docker/staff-api/Dockerfile",
       "repository": "openg2p/openg2p-farmer-registry-staff-api"
     },
     "partner-api": {
-      "dockerfile": "docker/oan/partner-api.Dockerfile",
+      "dockerfile": "docker/partner-api/Dockerfile",
       "repository": "openg2p/openg2p-farmer-registry-partner-api"
     },
     "celery": {
-      "dockerfile": "docker/oan/celery.Dockerfile",
+      "dockerfile": "docker/celery/Dockerfile",
       "repository": "openg2p/openg2p-farmer-registry-celery"
     },
     "db-seed": {
-      "dockerfile": "docker/oan/db-seed.Dockerfile",
+      "dockerfile": "docker/db-seed/Dockerfile",
       "repository": "openg2p/openg2p-farmer-registry-db-seed"
     }
   },

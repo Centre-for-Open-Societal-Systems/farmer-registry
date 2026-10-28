@@ -13,7 +13,7 @@ def check(root=ROOT):
         raise ValueError("All four native Farmer parent roles must be reviewed")
     for role in ROLES:
         selected = contract["parents"][role]
-        expected = {"dockerfile": f"docker/oan/{role}.Dockerfile", "repository": f"openg2p/openg2p-farmer-registry-{role}"}
+        expected = {"dockerfile": f"docker/{role}/Dockerfile", "repository": f"openg2p/openg2p-farmer-registry-{role}"}
         if selected != expected:
             raise ValueError("Native Farmer parent path or repository changed")
         content = (root / selected["dockerfile"]).read_text(encoding="utf-8")

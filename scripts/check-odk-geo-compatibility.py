@@ -95,7 +95,7 @@ def canonical_catalog():
     spec = importlib.util.spec_from_file_location("odk_locations", REPO / "odk/build_location_media.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    hierarchy = module.load_hierarchy(REPO / "local/upstream/assets/geo/ethiopia_geo_seed.sql.gz")
+    hierarchy = module.load_hierarchy(REPO / "odk/legacy-geo/ethiopia_geo_seed.sql.gz")
     levels, values = [], []
     for level, parent_level in PARENTS.items():
         levels.append({"level_id": "level-" + level, "level_mnemonic": level,

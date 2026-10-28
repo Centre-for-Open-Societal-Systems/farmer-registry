@@ -1,5 +1,4 @@
 .git
-local/upstream/generated
 **/__pycache__
 **/.pytest_cache
 **/.env

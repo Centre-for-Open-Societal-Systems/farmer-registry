@@ -26,13 +26,13 @@ head and require the implementation commit in **both** develop and staging.
    tags and digests. Do not rebuild images in staging. Refresh the standard
    [upgrade rehearsal](staging-upgrade.md), including isolated dump restores,
    every enabled hook, partner/signing-key readiness, issuer and signature tests.
-2. Run `python tests/runtime/test_staging_reset_database.py` on a Docker host.
+2. Run `python test/runtime/test_staging_reset_database.py` on a Docker host.
    It tests database grants/settings, atomic exchange, repeated invocation,
    injected failure, recovery and preservation of an unrelated database.
 3. Run the empty bootstrap against the exact accepted images:
 
    ```bash
-   python tests/runtime/test_staging_reset_bootstrap.py \
+   python test/runtime/test_staging_reset_bootstrap.py \
      --api-image "$ACCEPTED_API_IMAGE" --seed-image "$ACCEPTED_SEED_IMAGE" \
      --directory /private/farmer-reset-bootstrap-<run>
    ```
