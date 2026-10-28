@@ -33,7 +33,7 @@ def check_domain_bounds(records, mnemonic, field_rules, say, today=None):
                 year = None
             if year is None or not 1900 <= year <= today.year:
                 problems.append(
-                    say("oan_rule_year_range", label=label, year=today.year)
+                    say("rule_year_range", label=label, year=today.year)
                 )
         else:
             if isinstance(value, datetime):
@@ -46,7 +46,7 @@ def check_domain_bounds(records, mnemonic, field_rules, say, today=None):
                 except ValueError:
                     parsed = None
             if parsed is None:
-                problems.append(say("oan_rule_date", label=label, value=value))
+                problems.append(say("rule_date", label=label, value=value))
             elif parsed > today:
-                problems.append(say("oan_rule_future_date", label=label))
+                problems.append(say("rule_future_date", label=label))
     return problems

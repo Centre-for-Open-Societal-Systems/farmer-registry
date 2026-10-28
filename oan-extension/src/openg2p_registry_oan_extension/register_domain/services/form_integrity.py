@@ -27,15 +27,15 @@ from collections.abc import Iterable
 from .widget_rules import _Say
 
 MESSAGES = {
-    "oan_form_missing": "{section}: {label} is required. Open {section}, fill it in and save, then submit again.",
-    "oan_form_document_missing": (
+    "form_missing": "{section}: {label} is required. Open {section}, fill it in and save, then submit again.",
+    "form_document_missing": (
         "{section}: {label} is required. Open {section}, add the file and save, then submit again."
     ),
-    "oan_fin_registered": (
+    "fayda_fin_registered": (
         "{label}: {fin} is already registered to {name} ({record}). Open that record instead of "
         "registering the farmer again; if the ID was mistyped, correct it."
     ),
-    "oan_fin_pending": (
+    "fayda_fin_pending": (
         "{label}: {fin} is already in another submitted form, for {name} ({record}), waiting for approval. "
         "Do not register the farmer twice: wait for that decision, or ask the approver to reject it first."
     ),
@@ -198,9 +198,9 @@ def missing_required(
                     label = say.label(title_key, field)
                 saved = documents.get(section.get("section_id"), set())
                 if not ({widget.get("widget-label"), field, widget.get("widget-id")} & saved):
-                    problems.append(say("oan_form_document_missing", section=title, label=label))
+                    problems.append(say("form_document_missing", section=title, label=label))
             elif _blank(value_at(values, path)):
-                problems.append(say("oan_form_missing", section=title, label=label))
+                problems.append(say("form_missing", section=title, label=label))
     return list(dict.fromkeys(problems))
 
 
@@ -327,7 +327,7 @@ async def check_fayda_id_unique(record, label: str, session, messages: dict, *, 
     kind, found = held
     if kind == "registered":
         record_id = _get(found, "functional_record_id") or _get(found, "internal_record_id")
-        return say("oan_fin_registered", label=label, fin=fin, name=holder_name(found), record=record_id)
+        return say("fayda_fin_registered", label=label, fin=fin, name=holder_name(found), record=record_id)
     row, reference = found
-    return say("oan_fin_pending", label=label, fin=fin, name=holder_name(row),
+    return say("fayda_fin_pending", label=label, fin=fin, name=holder_name(row),
                record=reference or _get(row, "submission_id"))

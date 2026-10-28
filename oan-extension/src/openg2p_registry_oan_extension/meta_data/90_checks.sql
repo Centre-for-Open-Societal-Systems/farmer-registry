@@ -4,6 +4,92 @@
 -- the seed log naming what is missing; the OAN entrypoint then runs this file
 -- once more with ON_ERROR_STOP=1, so a failed check fails the seed job.
 
+-- The OAN-owned sections, by id (10, 12, 15 and 18_*.sql). Session-local.
+CREATE OR REPLACE FUNCTION pg_temp.oan_section_ids() RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
+  SELECT ARRAY[
+    'farmer_identity', 'farmer_identity_verification', 'farmer_name', 'farmer_personal_details',
+    'farmer_socio_economic_health', 'farmer_location', 'farmer_photo', 'farmer_phones', 'farmer_documents',
+    'farmer_household_lookup', 'household_information', 'farmer_membership', 'farmer_lands',
+    'farmer_land_summary', 'farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake',
+    'farmer_farm_inputs', 'farmer_farm_inputs_intake', 'farmer_enumerator']
+$$;
+
+-- Names: an OAN section's id, mnemonic and UI section-id are one string; an
+-- OAN attachment is <tab_id>__<section_id> on a register tab and
+-- farmer_intake__ / household_intake__<section_id> on an intake form
+-- (20_layout.sql); and no OAN row keeps the retired "oan_" prefix
+-- (22_retired_rows.sql removes the known ones).
+DO $$
+DECLARE
+  found text;
+BEGIN
+  SELECT string_agg(id, ', ') INTO found FROM (
+    SELECT 'section ' || section_id AS id FROM "public"."g2p_register_sections" WHERE section_id LIKE 'oan\_%'
+    UNION ALL SELECT 'register tab ' || tab_id FROM "public"."g2p_register_ui_tabs" WHERE tab_id LIKE 'oan\_%'
+    UNION ALL SELECT 'register attachment ' || tab_section_id FROM "public"."g2p_register_ui_tab_sections"
+              WHERE tab_section_id LIKE 'oan\_%' OR section_id LIKE 'oan\_%'
+    UNION ALL SELECT 'intake attachment ' || tab_section_id FROM "public"."g2p_intake_form_ui_tab_sections"
+              WHERE tab_section_id LIKE 'oan\_%' OR section_id LIKE 'oan\_%') o;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'OAN rows under retired oan_ ids remain (add them to 22_retired_rows.sql): %', found;
+  END IF;
+
+  SELECT string_agg(e.section_id, ', ') INTO found
+  FROM unnest(pg_temp.oan_section_ids()) e(section_id)
+  LEFT JOIN "public"."g2p_register_sections" s ON s.section_id = e.section_id
+  WHERE s.section_id IS NULL
+     OR s.section_mnemonic IS DISTINCT FROM s.section_id
+     OR s.section_ui_schema->>'section-id' IS DISTINCT FROM s.section_id;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'OAN sections missing, or with a mnemonic or UI section-id other than their id: %', found;
+  END IF;
+
+  SELECT string_agg(tab_section_id, ', ') INTO found FROM (
+    SELECT tab_section_id FROM "public"."g2p_register_ui_tab_sections"
+    WHERE section_id = ANY (pg_temp.oan_section_ids())
+      AND tab_section_id IS DISTINCT FROM tab_id || '__' || section_id
+    UNION ALL
+    SELECT tab_section_id FROM "public"."g2p_intake_form_ui_tab_sections"
+    WHERE section_id = ANY (pg_temp.oan_section_ids())
+      AND tab_section_id IS DISTINCT FROM
+          CASE tab_id WHEN 'a1a4d25a-1cd4-4356-abac-72482721' THEN 'farmer_intake__'
+                      WHEN '9055ab43-c85d-4833-bd00-ca657bb72651' THEN 'household_intake__' END || section_id) o;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'OAN attachments not named <tab>__<section>: %', found;
+  END IF;
+
+  -- Ingestion and outgestion rows: readable ids; the mnemonics, event type
+  -- and topic name the connector and the subscribers use are unchanged.
+  IF NOT EXISTS (SELECT 1 FROM "public"."data_models"
+                 WHERE data_model_id = 'odk_to_farmer_intake' AND data_model_mnemonic = 'FARMER_ODK_MODEL')
+     OR NOT EXISTS (SELECT 1 FROM "public"."incoming_model_key_paths"
+                    WHERE key_path_id = 'odk_to_farmer_intake_key_path' AND data_model_id = 'odk_to_farmer_intake')
+     OR NOT EXISTS (SELECT 1 FROM "public"."incoming_model_semantic_patterns"
+                    WHERE semantic_pattern_id = 'odk_to_farmer_intake_pattern' AND data_model_id = 'odk_to_farmer_intake'
+                      AND raw_payload_enricher_class = 'OdkToFarmerIntakeEnricher')
+     OR NOT EXISTS (SELECT 1 FROM "public"."incoming_templates" t
+                    JOIN "public"."g2p_registry_documents" d ON d.document_id = t.template_document_id
+                    WHERE t.template_id = 'odk_to_farmer_intake_template' AND t.data_model_id = 'odk_to_farmer_intake'
+                      AND d.document_store_id = 'odk_to_farmer_intake.j2') THEN
+    RAISE EXCEPTION 'ODK ingestion rows odk_to_farmer_intake* are missing or inconsistent (60_odk_ingestion.sql)';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM "public"."outgoing_templates" t
+                 JOIN "public"."g2p_registry_documents" d ON d.document_id = t.template_document_id
+                 WHERE t.template_id = 'OUT-TMPL-1' AND d.document_id = 'farmer_dci_search_response_document'
+                   AND d.document_store_id = 'farmer_dci_search_response.j2')
+     OR NOT EXISTS (SELECT 1 FROM "public"."outgoing_templates" t
+                    JOIN "public"."g2p_registry_documents" d ON d.document_id = t.template_document_id
+                    WHERE t.template_id = 'farmer_reference_changed_v1_template'
+                      AND t.data_model_id = '873c2342-cfde-5db4-9f9f-6e491a5001f7'
+                      AND d.document_store_id = 'farmer_reference_changed_v1.j2')
+     OR NOT EXISTS (SELECT 1 FROM "public"."outgoing_topics"
+                    WHERE topic_id = 'farmer_reference_changed_v1_topic'
+                      AND data_model_id = '873c2342-cfde-5db4-9f9f-6e491a5001f7'
+                      AND websub_topic = 'oan.farmer-reference.changed.v1') THEN
+    RAISE EXCEPTION 'Outgestion rows (OUT-TMPL-1, farmer_reference_changed_v1_*) are missing or inconsistent (50_outgestion.sql)';
+  END IF;
+END $$;
+
 -- No section may appear twice on a tab, on the record or on a form, and the
 -- intake forms are the farmer's and the household's only. These are generic:
 -- they catch any leftover row, not a fixed list of ids.
@@ -45,7 +131,7 @@ BEGIN
   SELECT string_agg(tab_section_id || '->' || section_id, ', ') INTO found
   FROM "public"."g2p_intake_form_ui_tab_sections"
   WHERE tab_id = 'a1a4d25a-1cd4-4356-abac-72482721'
-    AND section_id NOT LIKE 'oan\_%'
+    AND section_id <> ALL (pg_temp.oan_section_ids())
     AND section_id <> 'household_household_household_member_section_02';
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'Rows on the farmer intake tab that no current seed writes: %', found;
@@ -58,49 +144,49 @@ DECLARE
 BEGIN
   SELECT string_agg(f, ', ') INTO missing
   FROM (VALUES
-    ('oan_farmer_name', 'first_name_local'),
-    ('oan_farmer_name', 'last_name_local'),
-    ('oan_farmer_name', 'language_spoken'),
-    ('oan_farmer_personal_details', 'birth_date'),
-    ('oan_farmer_photo', 'farmer-photo'),
-    ('oan_farmer_socio_economic_and_health', 'is_psnp_user'),
-    ('oan_farmer_membership_details', 'primary_commodity'),
-    ('oan_farmer_lands', 'land_id'),
-    ('oan_farmer_lands', 'remark'),
-    ('oan_farmer_livestock', 'production_type'),
-    ('oan_farmer_livestock_intake', 'production_type'),
-    ('oan_farmer_farm_inputs', 'amount_improved_seed_utilized'),
-    ('oan_farmer_farm_inputs_intake', 'amount_improved_seed_utilized'),
-    ('oan_farmer_socio_economic_and_health', 'source_of_income_other'),
-    ('oan_farmer_household_lookup', 'is_household_head'),
-    ('oan_household_information', 'father_included'),
-    ('oan_farmer_location', 'farmer_geo_point'),
-    ('oan_farmer_location', 'local_language'),
-    ('oan_farmer_location', 'farmer_geo_hierarchy'),
-    ('oan_farmer_photo', 'enumerator-position'),
-    ('oan_farmer_lands', 'certificate_storage_id'),
-    ('oan_farmer_crops', 'is_diseased'),
-    ('oan_farmer_crops_intake', 'disease_type'),
-    ('oan_farmer_livestock_intake', 'collected_date'),
-    ('oan_farmer_farm_inputs_intake', 'machinery_types'),
-    ('oan_farmer_socio_economic_and_health', 'income_sources'),
-    ('oan_farmer_crops_intake', 'water_sources'),
-    ('oan_farmer_livestock_intake', 'water_sources'),
-    ('oan_farmer_farm_inputs_intake', 'finance_access_types'),
-    ('oan_farmer_personal_identification', 'has_national_id'),
-    ('oan_farmer_socio_economic_and_health', 'farming_type'),
-    ('oan_household_information', 'other_farmer_in_household'),
-    ('oan_farmer_household_lookup', 'is_household_head'),
-    ('oan_household_information', 'number_of_male_members'),
-    ('oan_household_information', 'number_of_female_members'),
-    ('oan_farmer_documents', 'identity_document_1'),
-    ('oan_farmer_documents', 'identity_document_type'),
-    ('oan_farmer_phones', 'phone_number'),
-    ('oan_farmer_personal_identification', 'foundational_id'),
-    ('oan_farmer_personal_identification', 'rid'),
-    ('oan_farmer_personal_identification', 'pula_id'),
-    ('oan_farmer_land_summary', 'total_land_area'),
-    ('oan_farmer_enumerator', 'enumerator_name')
+    ('farmer_name', 'first_name_local'),
+    ('farmer_name', 'last_name_local'),
+    ('farmer_name', 'language_spoken'),
+    ('farmer_personal_details', 'birth_date'),
+    ('farmer_photo', 'farmer-photo'),
+    ('farmer_socio_economic_health', 'is_psnp_user'),
+    ('farmer_membership', 'primary_commodity'),
+    ('farmer_lands', 'land_id'),
+    ('farmer_lands', 'remark'),
+    ('farmer_livestock', 'production_type'),
+    ('farmer_livestock_intake', 'production_type'),
+    ('farmer_farm_inputs', 'amount_improved_seed_utilized'),
+    ('farmer_farm_inputs_intake', 'amount_improved_seed_utilized'),
+    ('farmer_socio_economic_health', 'source_of_income_other'),
+    ('farmer_household_lookup', 'is_household_head'),
+    ('household_information', 'father_included'),
+    ('farmer_location', 'farmer_geo_point'),
+    ('farmer_location', 'local_language'),
+    ('farmer_location', 'farmer_geo_hierarchy'),
+    ('farmer_photo', 'enumerator-position'),
+    ('farmer_lands', 'certificate_storage_id'),
+    ('farmer_crops', 'is_diseased'),
+    ('farmer_crops_intake', 'disease_type'),
+    ('farmer_livestock_intake', 'collected_date'),
+    ('farmer_farm_inputs_intake', 'machinery_types'),
+    ('farmer_socio_economic_health', 'income_sources'),
+    ('farmer_crops_intake', 'water_sources'),
+    ('farmer_livestock_intake', 'water_sources'),
+    ('farmer_farm_inputs_intake', 'finance_access_types'),
+    ('farmer_identity', 'has_national_id'),
+    ('farmer_socio_economic_health', 'farming_type'),
+    ('household_information', 'other_farmer_in_household'),
+    ('farmer_household_lookup', 'is_household_head'),
+    ('household_information', 'number_of_male_members'),
+    ('household_information', 'number_of_female_members'),
+    ('farmer_documents', 'identity_document_1'),
+    ('farmer_documents', 'identity_document_type'),
+    ('farmer_phones', 'phone_number'),
+    ('farmer_identity', 'foundational_id'),
+    ('farmer_identity', 'rid'),
+    ('farmer_identity', 'pula_id'),
+    ('farmer_land_summary', 'total_land_area'),
+    ('farmer_enumerator', 'enumerator_name')
   ) e(section_id, field)
   CROSS JOIN LATERAL (SELECT e.section_id || '.' || e.field AS f) n
   WHERE NOT EXISTS (
@@ -118,30 +204,30 @@ BEGIN
   SELECT string_agg(DISTINCT s.section_id || '.' || (w->>'widget-id'), ', ') INTO missing
   FROM "public"."g2p_register_sections" s,
        jsonb_path_query(s.section_ui_schema, 'lax $.**.widgets[*]') w
-  WHERE s.section_id LIKE 'oan\_%' AND NOT w ? 'widget';
+  WHERE s.section_id = ANY (pg_temp.oan_section_ids()) AND NOT w ? 'widget';
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'OAN form layout names upstream widgets that do not exist: %', missing;
   END IF;
 
   SELECT string_agg(section_id, ', ') INTO missing
-   FROM (VALUES ('oan_farmer_personal_identification'), ('oan_farmer_name'), ('oan_farmer_personal_details'),
-                ('oan_farmer_socio_economic_and_health'),
-               ('oan_farmer_membership_details'), ('oan_farmer_lands'), ('oan_farmer_livestock'),
-               ('oan_farmer_farm_inputs'), ('oan_farmer_household_lookup'), ('oan_household_information'),
-               ('oan_farmer_location'), ('oan_farmer_crops'), ('oan_farmer_phones'),
-               ('oan_farmer_land_summary'), ('oan_farmer_enumerator'), ('oan_farmer_documents')) e(section_id)
+   FROM (VALUES ('farmer_identity'), ('farmer_name'), ('farmer_personal_details'),
+                ('farmer_socio_economic_health'),
+               ('farmer_membership'), ('farmer_lands'), ('farmer_livestock'),
+               ('farmer_farm_inputs'), ('farmer_household_lookup'), ('household_information'),
+               ('farmer_location'), ('farmer_crops'), ('farmer_phones'),
+               ('farmer_land_summary'), ('farmer_enumerator'), ('farmer_documents')) e(section_id)
   WHERE NOT EXISTS (SELECT 1 FROM "public"."g2p_register_ui_tab_sections" t WHERE t.section_id = e.section_id);
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'OAN sections not on any register tab: %', missing;
   END IF;
 
   SELECT string_agg(section_id, ', ') INTO missing
-   FROM (VALUES ('oan_farmer_personal_identification'), ('oan_farmer_name'), ('oan_farmer_personal_details'),
-                ('oan_farmer_socio_economic_and_health'),
-               ('oan_farmer_membership_details'), ('oan_farmer_lands'), ('oan_farmer_livestock_intake'),
-               ('oan_farmer_farm_inputs_intake'), ('oan_farmer_photo'),
-               ('oan_household_information'), ('oan_farmer_location'), ('oan_farmer_crops_intake'),
-               ('oan_farmer_phones'), ('oan_farmer_documents')) e(section_id)
+   FROM (VALUES ('farmer_identity'), ('farmer_name'), ('farmer_personal_details'),
+                ('farmer_socio_economic_health'),
+               ('farmer_membership'), ('farmer_lands'), ('farmer_livestock_intake'),
+               ('farmer_farm_inputs_intake'), ('farmer_photo'),
+               ('household_information'), ('farmer_location'), ('farmer_crops_intake'),
+               ('farmer_phones'), ('farmer_documents')) e(section_id)
   WHERE NOT EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections" t WHERE t.section_id = e.section_id);
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'OAN sections not on the intake form: %', missing;
@@ -160,7 +246,7 @@ BEGIN
   END IF;
 
   IF EXISTS (SELECT 1 FROM "public"."g2p_register_sections"
-             WHERE section_id LIKE 'oan\_%'
+             WHERE section_id = ANY (pg_temp.oan_section_ids())
                AND jsonb_path_exists(section_ui_schema, 'lax $.** ? (@.widget == "oan-ethiopian-date")')) THEN
     RAISE EXCEPTION 'Obsolete read-only Ethiopian date widget remains in OAN metadata';
   END IF;
@@ -179,7 +265,7 @@ BEGIN
 
   -- The household is asked on the farmer's intake form (20_layout.sql).
   SELECT string_agg(section_id, ', ') INTO missing
-  FROM (VALUES ('oan_household_information'), ('household_household_household_member_section_02')) e(section_id)
+  FROM (VALUES ('household_information'), ('household_household_household_member_section_02')) e(section_id)
   WHERE NOT EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections" t
                     WHERE t.section_id = e.section_id AND t.tab_id = 'a1a4d25a-1cd4-4356-abac-72482721');
   IF missing IS NOT NULL THEN
@@ -189,16 +275,16 @@ BEGIN
   -- A new household can be entered, so the household lookup is optional (10_sections.sql).
   IF EXISTS (SELECT 1 FROM "public"."g2p_register_sections" s,
                    jsonb_array_elements(s."section_ui_schema" #> '{panels,0,panels,0,widgets}') w
-              WHERE s."section_id" = 'oan_farmer_household_lookup'
+              WHERE s."section_id" = 'farmer_household_lookup'
                 AND w ->> 'widget-id' = 'household_lookup' AND (w ->> 'widget-required')::boolean IS TRUE) THEN
     RAISE EXCEPTION 'The household lookup on the farmer form is still required';
   END IF;
 
   SELECT string_agg(tab_id || ':' || section_id, ', ') INTO missing
   FROM (VALUES
-    ('farmer_farmer_tab', 'oan_farmer_personal_identification'),
-    ('farmer_farmer_tab', 'oan_farmer_name'),
-    ('farmer_farmer_tab', 'oan_farmer_personal_details')
+    ('farmer_farmer_tab', 'farmer_identity'),
+    ('farmer_farmer_tab', 'farmer_name'),
+    ('farmer_farmer_tab', 'farmer_personal_details')
   ) e(tab_id, section_id)
   WHERE NOT EXISTS (
     SELECT 1 FROM "public"."g2p_register_ui_tab_sections" t
@@ -210,9 +296,9 @@ BEGIN
 
   SELECT string_agg(tab_id || ':' || section_id, ', ') INTO missing
   FROM (VALUES
-    ('a1a4d25a-1cd4-4356-abac-72482721', 'oan_farmer_personal_identification'),
-    ('a1a4d25a-1cd4-4356-abac-72482721', 'oan_farmer_name'),
-    ('a1a4d25a-1cd4-4356-abac-72482721', 'oan_farmer_personal_details')
+    ('a1a4d25a-1cd4-4356-abac-72482721', 'farmer_identity'),
+    ('a1a4d25a-1cd4-4356-abac-72482721', 'farmer_name'),
+    ('a1a4d25a-1cd4-4356-abac-72482721', 'farmer_personal_details')
   ) e(tab_id, section_id)
   WHERE NOT EXISTS (
     SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections" t
@@ -224,7 +310,7 @@ BEGIN
 
   SELECT string_agg(section_mnemonic, ', ') INTO missing
   FROM "public"."g2p_register_sections"
-  WHERE section_id IN ('oan_farmer_personal_identification', 'oan_farmer_name', 'oan_farmer_personal_details')
+  WHERE section_id IN ('farmer_identity', 'farmer_name', 'farmer_personal_details')
   GROUP BY section_mnemonic
   HAVING count(*) > 1;
   IF missing IS NOT NULL THEN
@@ -236,7 +322,7 @@ BEGIN
   IF (
     SELECT count(*) <> 1 OR bool_or(w->>'widget' IS DISTINCT FROM 'text' OR (w->>'widget-readonly')::boolean IS TRUE)
     FROM g2p_register_sections, jsonb_path_query(section_ui_schema, 'strict $.**') w
-    WHERE section_id = 'oan_farmer_personal_identification'
+    WHERE section_id = 'farmer_identity'
       AND jsonb_typeof(w) = 'object' AND w ? 'widget' AND w->>'widget-id' = 'foundational_id'
   ) THEN
     RAISE EXCEPTION 'The Fayda ID on the Identity section must be one editable text widget';
@@ -248,7 +334,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM "public"."g2p_register_ui_tab_sections" t
     JOIN "public"."g2p_register_sections" s ON s.section_id = t.section_id
-    WHERE t.tab_id = 'farmer_farmer_tab' AND t.section_id = 'oan_farmer_identity_verification'
+    WHERE t.tab_id = 'farmer_farmer_tab' AND t.section_id = 'farmer_identity_verification'
       AND jsonb_path_exists(s.section_ui_schema, 'lax $.** ? (@.widget == "id-authentication")')
   ) THEN
     RAISE EXCEPTION 'The id-authentication section is not on the farmer record tab';
@@ -263,7 +349,7 @@ BEGIN
   -- "api", service "attributes"); a yes/no is a boolean, not a list.
   IF EXISTS (
     SELECT 1 FROM "public"."g2p_register_sections", jsonb_path_query(section_ui_schema, 'strict $.**') w
-    WHERE section_id LIKE 'oan\_%' ESCAPE '\'
+    WHERE section_id = ANY (pg_temp.oan_section_ids())
       AND jsonb_typeof(w) = 'object' AND w->>'widget' IN ('select', 'multi-select')
       AND w->'widget-data-source'->>'type' = 'static'
       AND EXISTS (SELECT 1 FROM jsonb_array_elements(w->'widget-data-source'->'options') o
@@ -272,11 +358,11 @@ BEGIN
     RAISE EXCEPTION 'A choice list is written in the registry metadata; every dropdown comes from Master Data';
   END IF;
   IF EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections"
-             WHERE section_id = 'oan_farmer_identity_verification') THEN
+             WHERE section_id = 'farmer_identity_verification') THEN
     RAISE EXCEPTION 'Record verification must not be on the intake form; core authenticates register records';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections"
-                 WHERE tab_id = 'a1a4d25a-1cd4-4356-abac-72482721' AND section_id = 'oan_farmer_household_lookup') THEN
+                 WHERE tab_id = 'a1a4d25a-1cd4-4356-abac-72482721' AND section_id = 'farmer_household_lookup') THEN
     RAISE EXCEPTION 'The household lookup with the household-head question is not on the farmer intake form';
   END IF;
   IF NOT EXISTS (
@@ -290,9 +376,9 @@ BEGIN
     SELECT 1
     FROM (
       SELECT
-        max(section_order) FILTER (WHERE section_id = 'oan_farmer_personal_identification') AS identity_order,
-        max(section_order) FILTER (WHERE section_id = 'oan_farmer_name') AS name_order,
-        max(section_order) FILTER (WHERE section_id = 'oan_farmer_personal_details') AS details_order
+        max(section_order) FILTER (WHERE section_id = 'farmer_identity') AS identity_order,
+        max(section_order) FILTER (WHERE section_id = 'farmer_name') AS name_order,
+        max(section_order) FILTER (WHERE section_id = 'farmer_personal_details') AS details_order
       FROM "public"."g2p_register_ui_tab_sections"
       WHERE tab_id = 'farmer_farmer_tab'
     ) o
@@ -305,10 +391,10 @@ BEGIN
     SELECT 1
     FROM (
       SELECT
-        max(section_order) FILTER (WHERE section_id = 'oan_farmer_personal_identification') AS identity_order,
-        max(section_order) FILTER (WHERE section_id = 'oan_farmer_name') AS name_order,
-        max(section_order) FILTER (WHERE section_id = 'oan_farmer_personal_details') AS details_order,
-        max(section_order) FILTER (WHERE section_id = 'oan_farmer_photo') AS photo_order
+        max(section_order) FILTER (WHERE section_id = 'farmer_identity') AS identity_order,
+        max(section_order) FILTER (WHERE section_id = 'farmer_name') AS name_order,
+        max(section_order) FILTER (WHERE section_id = 'farmer_personal_details') AS details_order,
+        max(section_order) FILTER (WHERE section_id = 'farmer_photo') AS photo_order
       FROM "public"."g2p_intake_form_ui_tab_sections"
       WHERE tab_id = 'a1a4d25a-1cd4-4356-abac-72482721'
     ) o

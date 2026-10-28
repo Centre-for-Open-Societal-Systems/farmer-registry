@@ -15,12 +15,12 @@ type Props = {
 };
 
 const LABELS: Record<string, string> = {
-    oan_file_attached: 'Attached',
-    oan_file_upload: 'Upload',
-    oan_file_replace: 'Replace',
-    oan_file_remove: 'Remove',
-    oan_file_too_large: 'The file is larger than {size} MB. Choose a smaller file, or scan it again at a lower resolution.',
-    oan_file_bad_type: '{name} cannot be attached here. Choose a {types} file.',
+    documents_file_attached: 'Attached',
+    documents_upload: 'Upload',
+    documents_replace: 'Replace',
+    documents_remove: 'Remove',
+    documents_too_large: 'The file is larger than {size} MB. Choose a smaller file, or scan it again at a lower resolution.',
+    documents_bad_type: '{name} cannot be attached here. Choose a {types} file.',
 };
 
 /**
@@ -58,9 +58,9 @@ export function FileCellWidget({ config, value, onChange, onBlur, isEnabled = tr
     const name = isSerializedFile(value)
         ? value.name
         : isStoredDocumentRef(value)
-          ? value.source_filename || value.label || label('oan_file_attached')
+          ? value.source_filename || value.label || label('documents_file_attached')
           : typeof value === 'string' && value
-            ? label('oan_file_attached')
+            ? label('documents_file_attached')
             : '';
     const hasFile = name !== '';
 
@@ -68,11 +68,11 @@ export function FileCellWidget({ config, value, onChange, onBlur, isEnabled = tr
         if (!file) return;
         setError(null);
         if (!accepts(file, accept)) {
-            setError(label('oan_file_bad_type', { name: file.name, types: acceptedTypes(accept) }));
+            setError(label('documents_bad_type', { name: file.name, types: acceptedTypes(accept) }));
             return;
         }
         if (maxSize && file.size > maxSize) {
-            setError(label('oan_file_too_large', { size: Math.round(maxSize / 1048576) }));
+            setError(label('documents_too_large', { size: Math.round(maxSize / 1048576) }));
             return;
         }
         onChange?.(await serializeFile(file));
@@ -101,7 +101,7 @@ export function FileCellWidget({ config, value, onChange, onBlur, isEnabled = tr
                 </span>
             )}
             <button type="button" disabled={!enabled} onClick={() => input.current?.click()}>
-                {label(hasFile ? 'oan_file_replace' : 'oan_file_upload')}
+                {label(hasFile ? 'documents_replace' : 'documents_upload')}
             </button>
             {hasFile && (
                 <button
@@ -112,7 +112,7 @@ export function FileCellWidget({ config, value, onChange, onBlur, isEnabled = tr
                         onChange?.(null);
                     }}
                 >
-                    {label('oan_file_remove')}
+                    {label('documents_remove')}
                 </button>
             )}
             {error && (

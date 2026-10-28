@@ -9,10 +9,10 @@
 -- record is verified. A verified ID is then locked on the Identity section.
 WITH sections (section_id, mnemonic, description, ui) AS (
   VALUES
-  ('oan_farmer_identity_verification', 'oan_fr_farmer_identity_verification', 'Fayda verification of the farmer',
+  ('farmer_identity_verification', 'farmer_identity_verification', 'Fayda verification of the farmer',
    '{"section-id": "farmer_identity_verification", "section-title": "identity_verification",
      "section-editable": false, "section-hide-edit-button": true, "section-column-span": 3,
-     "panels": [{"panel-id": "oan_panel_identity_verification", "panel-orientation": "vertical", "panel-column-span": 3, "widgets": [
+     "panels": [{"panel-id": "farmer_identity_verification_col_1", "panel-orientation": "vertical", "panel-column-span": 3, "widgets": [
        {"widget": "id-authentication", "widget-id": "identity_verification", "widget-type": "group",
         "widget-label": "identity_verification", "widget-readonly": true,
         "widget-data-path": {

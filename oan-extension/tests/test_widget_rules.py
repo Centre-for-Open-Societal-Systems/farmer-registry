@@ -136,7 +136,7 @@ def test_an_api_select_is_not_checked_here():
 
 
 def test_messages_can_be_reworded_per_language():
-    words = {**MESSAGES, "oan_rule_boolean": "{label}: choose Yes or No"}
+    words = {**MESSAGES, "rule_boolean": "{label}: choose Yes or No"}
     assert widget_rules.check_record({"has_national_id": 3}, RULES[FARMER], words) == ["Has National ID: choose Yes or No"]
 
 

@@ -34,7 +34,7 @@ class Session:
 
 def fixture(action, name):
     classified = SimpleNamespace(ingest_id="synthetic-ingest", intake_form_id="form", register_id="farmer",
-                                 data_model_id="FARMER_ODK_MODEL", partner_id="farmer-partner",
+                                 data_model_id="odk_to_farmer_intake", partner_id="farmer-partner",
                                  pipeline_action=action, ingestion_number_of_attempts=0)
     enriched = SimpleNamespace(enriched_data_json={"__system": {"submitterName": name}},
                                transformed_data_json={"personal": [{"first_name": "Synthetic"}]})

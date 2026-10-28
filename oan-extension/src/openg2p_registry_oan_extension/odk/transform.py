@@ -6,12 +6,12 @@ location codes are invented when a submission omits them.
 """
 import json
 
-SECTIONS = ("oan_fr_farmer_household_lookup", "oan_fr_farmer_identity", "oan_fr_farmer_name",
-    "oan_fr_farmer_personal_details", "oan_fr_farmer_photo", "oan_fr_farmer_phones",
-    "oan_fr_farmer_socio_and_health", "oan_hh_information", "hh_members",
-    "oan_fr_farmer_location", "oan_fr_farmer_land", "oan_intake_fr_farmer_crops",
-    "oan_intake_fr_farmer_farm_input", "oan_intake_fr_farmer_livestocks",
-    "oan_fr_farmer_membership", "oan_fr_docs")
+SECTIONS = ("farmer_household_lookup", "farmer_identity", "farmer_name",
+    "farmer_personal_details", "farmer_photo", "farmer_phones",
+    "farmer_socio_economic_health", "household_information", "hh_members",
+    "farmer_location", "farmer_lands", "farmer_crops_intake",
+    "farmer_farm_inputs_intake", "farmer_livestock_intake",
+    "farmer_membership", "farmer_documents")
 
 
 def code(value, aliases=None, prefix=""):
@@ -135,7 +135,7 @@ def intake_sections(d):
     survey = d.get("survey_metadata") or {}
     system = d.get("__system") or {}
     is_head = boolean(questions.get("household_head"))
-    household_id = d.get("oan_household_id")
+    household_id = d.get("matched_household_id")
     first = personal.get("first_name_english") or personal.get("first_name")
     middle = personal.get("father_name_english") or personal.get("middle_name")
     last = personal.get("grandfather_name_english") or personal.get("last_name")

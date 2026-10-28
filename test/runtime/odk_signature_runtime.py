@@ -39,7 +39,7 @@ class SignatureRuntime(unittest.IsolatedAsyncioTestCase):
         stored = SimpleNamespace(raw_data_json=envelope)
         session.get.return_value = stored
         service = G2PIngestService()
-        model = SimpleNamespace(data_model_id="FARMER_ODK_MODEL", response_template_document_id=None)
+        model = SimpleNamespace(data_model_id="odk_to_farmer_intake", response_template_document_id=None)
         with patch("openg2p_registry_core.services.g2p_ingest_service.get_async_session_maker", return_value=lambda: session), \
              patch.object(service, "_get_data_model", AsyncMock(return_value=model)), \
              patch.object(service, "_match_model_signature_pattern", AsyncMock(return_value=(SimpleNamespace(partner_id="farmer-partner"), "verified", {}, SimpleNamespace(is_list=False)))), \
@@ -68,10 +68,10 @@ class SignatureRuntime(unittest.IsolatedAsyncioTestCase):
              patch.object(service, "_get_partner_from_partner_mnemonic", AsyncMock(return_value=SimpleNamespace(partner_id="farmer-partner"))), \
              patch("openg2p_registry_core.helpers.partner_management.get_partner_mgmt_settings", return_value=SimpleNamespace(partner_mgmt_api_url="http://pm.internal")), \
              patch.object(odk_signature.httpx, "AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(response), **kw)):
-            await service._match_model_signature_pattern("FARMER_ODK_MODEL", envelope, session)
+            await service._match_model_signature_pattern("odk_to_farmer_intake", envelope, session)
             message["payload"]["name"] = "Tampered"
             with self.assertRaises(HTTPException):
-                await service._match_model_signature_pattern("FARMER_ODK_MODEL", envelope, session)
+                await service._match_model_signature_pattern("odk_to_farmer_intake", envelope, session)
             # Unrelated models retain their existing integration contracts.
             await service._match_model_signature_pattern("OTHER_MODEL", envelope, session)
 

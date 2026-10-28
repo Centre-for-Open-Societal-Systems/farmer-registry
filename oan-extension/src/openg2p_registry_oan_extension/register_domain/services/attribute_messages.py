@@ -29,7 +29,7 @@ class OANAttributeValueValidator(G2PAttributeValueValidator):
             # Native MDS transport/configuration errors also fail closed, with
             # an actionable service message rather than a generic system error.
             messages = await _messages()
-            message = messages.get("oan_up_mds_unavailable") or MDS_UNAVAILABLE
+            message = messages.get("upstream_mds_unavailable") or MDS_UNAVAILABLE
             raise G2PRegistryException(
                 code=G2PRegistryErrorCodes.REQUEST_VALIDATION_ERROR.value[1],
                 message=message,

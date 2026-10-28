@@ -1,11 +1,11 @@
 -- OAN sections that upstream has no counterpart for. 20_layout.sql attaches
 -- them.
 --
---   oan_farmer_phones         the farmer's phone numbers (FarmerPhone)
---   oan_farmer_land_summary   the farmer's land totals, derived, read only
---   oan_farmer_enumerator     who collected the record, where and when, read
---                             only: filled from the submission and the
---                             enumerator's device, never typed
+--   farmer_phones         the farmer's phone numbers (FarmerPhone)
+--   farmer_land_summary   the farmer's land totals, derived, read only
+--   farmer_enumerator     who collected the record, where and when, read
+--                         only: filled from the submission and the
+--                         enumerator's device, never typed
 
 -- Sections of OAN's own, written out. A table section belongs to the child
 -- register (is_list); a read-only section has "section-editable": false.
@@ -13,10 +13,10 @@
 -- mandatory, and a phone is not required of every farmer.
 WITH sections (section_id, section_register_id, mnemonic, description, is_list, weightage, ui) AS (
   VALUES
-  ('oan_farmer_phones', 'c4f1d8e2-7a9b-4c5d-8e6f-1a2b3c4d5e6f', 'oan_fr_farmer_phones', 'Farmer phone numbers', true, 5,
+  ('farmer_phones', 'c4f1d8e2-7a9b-4c5d-8e6f-1a2b3c4d5e6f', 'farmer_phones', 'Farmer phone numbers', true, 5,
    '{"section-id": "farmer_phones", "section-title": "phone_numbers", "section-editable": true,
-     "panels": [{"panel-id": "oan_panel_phones", "panel-orientation": "horizontal", "panels": [
-       {"panel-id": "oan_panel_phones_table", "panel-column-span": 3, "panel-orientation": "vertical", "widgets": [
+     "panels": [{"panel-id": "farmer_phones_row", "panel-orientation": "horizontal", "panels": [
+       {"panel-id": "farmer_phones_col_1", "panel-column-span": 3, "panel-orientation": "vertical", "widgets": [
          {"widget": "table", "widget-id": "phones_table", "widget-type": "table", "widget-label": "phone_numbers",
           "widget-readonly": false, "widget-data-path": "c4f1d8e2-7a9b-4c5d-8e6f-1a2b3c4d5e6f.records",
           "widget-data-add-label": "add_phone_number", "widget-data-operations": {"add": true, "edit": true, "remove": true},
@@ -33,40 +33,40 @@ WITH sections (section_id, section_register_id, mnemonic, description, is_list, 
             {"widget": "boolean", "column-key": "is_primary", "widget-type": "input", "widget-label": "is_primary",
              "widget-readonly": false, "widget-data-path": "is_primary"}]}]}]}]}'),
 
-  ('oan_farmer_land_summary', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'oan_fr_farmer_land_summary', 'Farmer land totals', false, 0,
+  ('farmer_land_summary', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'farmer_land_summary', 'Farmer land totals', false, 0,
    '{"section-id": "farmer_land_summary", "section-title": "land_summary", "section-editable": false,
-     "panels": [{"panel-id": "oan_panel_land_summary", "panel-orientation": "horizontal", "panels": [
-       {"panel-id": "oan_panel_land_summary_1", "panel-orientation": "vertical", "widgets": [
+     "panels": [{"panel-id": "farmer_land_summary_row", "panel-orientation": "horizontal", "panels": [
+       {"panel-id": "farmer_land_summary_col_1", "panel-orientation": "vertical", "widgets": [
          {"widget": "number", "widget-id": "total_land_area", "widget-type": "input", "widget-label": "total_land_area",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.total_land_area"},
          {"widget": "text", "widget-id": "land_ownership", "widget-type": "input", "widget-label": "land_ownership",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.land_ownership"}]},
-       {"panel-id": "oan_panel_land_summary_2", "panel-orientation": "vertical", "widgets": [
+       {"panel-id": "farmer_land_summary_col_2", "panel-orientation": "vertical", "widgets": [
          {"widget": "number", "widget-id": "total_land_owned_area", "widget-type": "input", "widget-label": "total_land_owned_area",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.total_land_owned_area"},
          {"widget": "number", "widget-id": "total_land_rent_area", "widget-type": "input", "widget-label": "total_land_rent_area",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.total_land_rent_area"}]},
-       {"panel-id": "oan_panel_land_summary_3", "panel-orientation": "vertical", "widgets": [
+       {"panel-id": "farmer_land_summary_col_3", "panel-orientation": "vertical", "widgets": [
          {"widget": "number", "widget-id": "total_land_crop_sharing_area", "widget-type": "input",
           "widget-label": "total_land_crop_sharing_area", "widget-readonly": true,
           "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.total_land_crop_sharing_area"}]}]}]}'),
 
-  ('oan_farmer_enumerator', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'oan_fr_farmer_enumerator', 'Enumerator details', false, 0,
+  ('farmer_enumerator', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'farmer_enumerator', 'Enumerator details', false, 0,
    '{"section-id": "farmer_enumerator", "section-title": "enumerator", "section-editable": false,
-     "panels": [{"panel-id": "oan_panel_enumerator", "panel-orientation": "horizontal", "panels": [
-       {"panel-id": "oan_panel_enumerator_1", "panel-orientation": "vertical", "widgets": [
+     "panels": [{"panel-id": "farmer_enumerator_row", "panel-orientation": "horizontal", "panels": [
+       {"panel-id": "farmer_enumerator_col_1", "panel-orientation": "vertical", "widgets": [
          {"widget": "text", "widget-id": "enumerator_name", "widget-type": "input", "widget-label": "enumerator_name",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.enumerator_name"},
          {"widget": "text", "widget-id": "enumerator_user_id", "widget-type": "input", "widget-label": "enumerator_user_id",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.enumerator_user_id"},
          {"widget": "date", "widget-id": "data_collection_date", "widget-type": "input", "widget-label": "data_collection_date",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.data_collection_date"}]},
-       {"panel-id": "oan_panel_enumerator_2", "panel-orientation": "vertical", "widgets": [
+       {"panel-id": "farmer_enumerator_col_2", "panel-orientation": "vertical", "widgets": [
          {"widget": "number", "widget-id": "enumerator_latitude", "widget-type": "input", "widget-label": "enumerator_latitude",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.enumerator_latitude"},
          {"widget": "number", "widget-id": "enumerator_longitude", "widget-type": "input", "widget-label": "enumerator_longitude",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.enumerator_longitude"}]},
-       {"panel-id": "oan_panel_enumerator_3", "panel-orientation": "vertical", "widgets": [
+       {"panel-id": "farmer_enumerator_col_3", "panel-orientation": "vertical", "widgets": [
          {"widget": "number", "widget-id": "enumerator_altitude", "widget-type": "input", "widget-label": "enumerator_altitude",
           "widget-readonly": true, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.enumerator_altitude"},
          {"widget": "number", "widget-id": "enumerator_accuracy", "widget-type": "input", "widget-label": "enumerator_accuracy",

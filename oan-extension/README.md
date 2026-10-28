@@ -14,7 +14,7 @@ platform's Extensions Contract describes for coexisting extensions.
 | `register_domain/ethiopian_calendar.py` | Gregorian and Ethiopian calendar conversion |
 | `register_domain/services/` | the farmer domain services, each extended with the derived values (`derivations.py`) and the section widgets' value rules (`widget_rules.py`); the FarmerPhone service |
 | `app.py` | the farmer initializer, plus migration of OAN registers |
-| `meta_data/` | the `oan_` metadata layer, applied after the farmer's (`/seed/meta_data/zz-oan/`) |
+| `meta_data/` | the OAN metadata layer, applied after the farmer's (`/seed/meta_data/zz-oan/`) |
 | `tests/` | `uv run --no-project --with pytest pytest oan-extension/tests` |
 
 Images are built FROM the published farmer images (`docker/<component>/Dockerfile`).
@@ -77,7 +77,7 @@ registry is the source (`meta_data/50_outgestion.sql`, templates in
 |---|---|
 | Lookup | the signed, consent-checked DCI search on the partner API. Its response is the farmer extension's own template plus a `farmer_reference` block (record id, farmer id, FIN or FAN, approval time, status, names, Amharic names, phone, location). `build_dci_template.py` builds it at image build, so the block follows upstream's template. A Consent Manager policy with scope `farmer_reference` releases that block only |
 | Change notice | outgestion publishes `farmer_reference.changed.v1` (event id, farmer id, FIN or FAN; no personal details) to the WebSub topic `oan.farmer-reference.changed.v1` on every approved farmer change; receivers fetch the details through the lookup |
-| Seed | `LOAD_TEMPLATES=true` uploads both templates; the Farmer register's `outgest_applicable` is on |
+| Seed | `LOAD_TEMPLATES=true` uploads both templates (`farmer_dci_search_response.j2`, `farmer_reference_changed_v1.j2`); the Farmer register's `outgest_applicable` is on |
 
 Per deployment, outside this repository:
 - the partner API's response signing key;
@@ -170,12 +170,32 @@ Each file runs after the whole farmer seed, in name order:
 |---|---|
 | `05_registers.sql` | the FarmerPhone register, the location names in the farmer list, and Fayda verification for the Farmer register |
 | `10_sections.sql` | the table sections: each upstream one with OAN columns added, so upstream changes carry over on the next seed; the household link and the intake photo section |
-| `12_form_sections.sql` | the form sections as one row of three columns: which widget goes where, upstream's by `widget-id` and OAN's written out (personal identification, socio-economic, membership, household, location, documents) |
+| `12_form_sections.sql` | the form sections as one row of three columns: which widget goes where, upstream's by `widget-id` and OAN's written out (identity, name, personal details, socio-economic and health, membership, household, location, documents) |
 | `15_sections.sql` | sections with no upstream counterpart: phones, land totals, enumerator |
+| `16_value_bounds.sql`, `17_multi_choice.sql` | value bounds and multi-answer questions on the OAN widgets |
+| `18_identity_verification.sql` | the Fayda verification section of the farmer's record |
 | `20_layout.sql` | attaches the OAN sections where the upstream ones were, then detaches those by explicit id |
-| `30_translations.sql` | adds labels to each language's domain translations; upstream wording wins on a shared key |
+| `22_retired_rows.sql` | deletes, by explicit id, rows that earlier seeds wrote and no current seed writes |
+| `30_translations.sql` | adds labels to each language's domain translations; OAN's text wins on a shared key |
 | `40_deduplication.sql` | the farmer duplicate check, with the father's name (middle name) added |
-| `90_checks.sql` | raises an error in the seed log if anything above did not apply |
+| `50_outgestion.sql` | the Farmer DCI search response and the farmer reference change notice (see above) |
+| `55_default_approvals.sql` | the default approval policies of the farmer and household forms and change requests |
+| `60_odk_ingestion.sql` | ODK connector submissions as Farmer intakes |
+| `90_checks.sql` | raises an error in the seed log if anything above did not apply, or if a row still carries a retired id |
+
+OAN's ids name what a row holds or does, without an `oan_` prefix:
+
+| Row | Id |
+|---|---|
+| section | the farmer's data it holds, which is also its mnemonic and its UI `section-id`: `farmer_identity`, `farmer_name`, `farmer_personal_details`, `farmer_identity_verification`, `farmer_socio_economic_health`, `farmer_location`, `farmer_photo`, `farmer_phones`, `farmer_documents`, `farmer_household_lookup`, `household_information`, `farmer_membership`, `farmer_lands`, `farmer_land_summary`, `farmer_crops`, `farmer_livestock`, `farmer_farm_inputs` (and `*_intake` for the intake form's table sections), `farmer_enumerator` |
+| tab | `farmer_tab_enumerator` |
+| attachment | `<tab_id>__<section_id>` on a register tab, `farmer_intake__<section_id>` and `household_intake__<section_id>` on the intake forms |
+| ODK ingestion | data model `odk_to_farmer_intake` (mnemonic `FARMER_ODK_MODEL`, which the connector sends), key path `odk_to_farmer_intake_key_path`, pattern `odk_to_farmer_intake_pattern` with the enricher `OdkToFarmerIntakeEnricher`, template `odk_to_farmer_intake_template` and its document `odk_to_farmer_intake_document` (`templates/odk_to_farmer_intake.j2`) |
+| outgestion | `farmer_dci_search_response_document` (`farmer_dci_search_response.j2`, built from `templates/farmer_reference_block.j2`; upstream's `OUT-TMPL-1` points at it), `farmer_reference_changed_v1_template`, `farmer_reference_changed_v1_document` (`templates/farmer_reference_changed_v1.j2`), `farmer_reference_changed_v1_topic`; the data model `FARMER_REFERENCE_CHANGED_V1`, the event type and the topic name are what the subscribers use |
+
+The staff UI's own labels are `farmer_photo_*`, `geo_point_*` and `documents_*`;
+the server's messages are `rule_*`, `upstream_*`, `form_*`, `fayda_fin_*` and
+`household_*`.
 
 Upstream section rows are never changed. Every choice list (body condition,
 production type, commodities, languages, the kinds of document, phone number
