@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from jinja2 import Environment, StrictUndefined
-from openg2p_registry_oan_extension.odk import enricher
-from openg2p_registry_oan_extension.odk.transform import SECTIONS, intake_sections
+from oan_farmer_registry_extension.odk import enricher
+from oan_farmer_registry_extension.odk.transform import SECTIONS, intake_sections
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -31,28 +31,28 @@ def example():
 
 def test_prepared_sections_render_as_native_json_with_mds_codes_and_exact_roster():
     sections = intake_sections(example())
-    template = Environment(undefined=StrictUndefined).from_string((ROOT/'templates'/'oan_farmer_odk_transform.j2').read_text())
+    template = Environment(undefined=StrictUndefined).from_string((ROOT/'templates'/'odk_to_farmer_intake.j2').read_text())
     assert json.loads(template.render(expanded={"oan_intake_sections":sections})) == sections
     assert set(sections) == set(SECTIONS) and len(SECTIONS) == 16
-    assert sections['oan_fr_farmer_identity'][0]['foundational_id'] == '001234567890'
-    assert sections['oan_fr_farmer_phones'][0]['country_code'] == 'ET'
-    assert sections['oan_fr_farmer_phones'][0]['phone_number'] == '911000001'
-    assert sections['oan_fr_farmer_name'][0]['language_spoken'] == 'AFAAN_OROMO'
-    socio = sections['oan_fr_farmer_socio_and_health'][0]
+    assert sections['farmer_identity'][0]['foundational_id'] == '001234567890'
+    assert sections['farmer_phones'][0]['country_code'] == 'ET'
+    assert sections['farmer_phones'][0]['phone_number'] == '911000001'
+    assert sections['farmer_name'][0]['language_spoken'] == 'AFAAN_OROMO'
+    socio = sections['farmer_socio_economic_health'][0]
     assert socio['education_level'] == 'CAN_READ_AND_WRITE'
     assert socio['source_of_income'] == 'SOI_CROP_PRODUCTION'
-    household = sections['oan_hh_information'][0]
+    household = sections['household_information'][0]
     assert household['size_of_group'] == 2
     assert household['number_of_male_members'] == household['number_of_female_members'] == 1
     assert sections['hh_members'][0]['is_head'] is True
     assert sections['hh_members'][1]['relationship_to_the_head'] == 'SPOUSE'
-    loc = sections['oan_fr_farmer_location'][0]
+    loc = sections['farmer_location'][0]
     assert loc['geo_lowest_level_value_id'] == 'ET01010102'
     assert len(json.loads(loc['geo_code_hierarchy_json'])['hierarchy']) == 4
-    crop = sections['oan_intake_fr_farmer_crops'][0]
+    crop = sections['farmer_crops_intake'][0]
     assert crop['commodity'] == 'CROP_BREAD_WHEAT' and crop['season'] == 'SEASON_MEHER'
     assert crop['link_internal_record_id'] == 'land-uuid-1'
-    assert sections['oan_fr_docs'][0]['oan_documents'] == {'oan_fr_docs':{'identity_document_1':'stored-identity-document'}}
+    assert sections['farmer_documents'][0]['oan_documents'] == {'farmer_documents':{'identity_document_1':'stored-identity-document'}}
 
 
 def test_multiple_lands_require_explicit_child_link_and_do_not_attach_to_first_land():
@@ -61,16 +61,16 @@ def test_multiple_lands_require_explicit_child_link_and_do_not_attach_to_first_l
     with pytest.raises(ValueError,match='select exactly one land'):
         intake_sections(data)
     data['crop_information']['crop_repeat'][0]['land_id']='PLOT-2'
-    assert intake_sections(data)['oan_intake_fr_farmer_crops'][0]['link_internal_record_id']=='land-uuid-2'
+    assert intake_sections(data)['farmer_crops_intake'][0]['link_internal_record_id']=='land-uuid-2'
 
 
 def test_legacy_numeric_geography_is_not_invented_and_existing_household_is_not_recreated():
     data=example();data['basic_info']['locale_info']={'region':'4','woreda':'40801'}
-    data['oan_household_id']='approved-household'
+    data['matched_household_id']='approved-household'
     result=intake_sections(data)
-    assert result['oan_fr_farmer_location']==[{}]
-    assert result['oan_hh_information']==[] and result['hh_members']==[]
-    assert result['oan_fr_farmer_household_lookup'][0]['link_internal_record_id']=='approved-household'
+    assert result['farmer_location']==[{}]
+    assert result['household_information']==[] and result['hh_members']==[]
+    assert result['farmer_household_lookup'][0]['link_internal_record_id']=='approved-household'
 
 
 def test_enricher_replaces_every_embedded_file_and_leaves_commit_to_worker():
@@ -79,7 +79,7 @@ def test_enricher_replaces_every_embedded_file_and_leaves_commit_to_worker():
     data['land_info']['land_info_repeat'][0]['land_certificate']={"__type":"File","data":"Ag=="}
     session=MagicMock()
     with patch.object(enricher,'store_file',side_effect=['document-1','document-2','document-3']) as store:
-        result=enricher.OANOdkFarmerEnricherService().enrich(data,session)
+        result=enricher.OdkToFarmerIntakeEnricher().enrich(data,session)
     assert store.call_count==3
     assert '__type' not in json.dumps(result)
     assert result['land_info']['land_info_repeat'][0]['oan_land_id']!='land-uuid-1'
@@ -90,12 +90,12 @@ def test_enricher_replaces_every_embedded_file_and_leaves_commit_to_worker():
 def test_registered_head_lookup_is_unique_and_does_not_create_new_household():
     data=example();data['household_questions'].update(household_head='no',head_registered='yes',member_reference_id='ODK-HEAD')
     session=MagicMock();session.execute.return_value.scalars.return_value.all.return_value=[SimpleNamespace(link_internal_record_id='household-1')]
-    result=enricher.OANOdkFarmerEnricherService().enrich(data,session)
-    assert result['oan_intake_sections']['oan_fr_farmer_household_lookup'][0]['link_internal_record_id']=='household-1'
-    assert result['oan_intake_sections']['oan_hh_information']==[]
+    result=enricher.OdkToFarmerIntakeEnricher().enrich(data,session)
+    assert result['oan_intake_sections']['farmer_household_lookup'][0]['link_internal_record_id']=='household-1'
+    assert result['oan_intake_sections']['household_information']==[]
     session.execute.return_value.scalars.return_value.all.return_value=[]
     with pytest.raises(ValueError,match='one approved registered head'):
-        enricher.OANOdkFarmerEnricherService().enrich(data,session)
+        enricher.OdkToFarmerIntakeEnricher().enrich(data,session)
 
 
 def test_empty_file_is_rejected_before_storage():
@@ -112,19 +112,19 @@ def test_real_form_land_nested_repeats_receive_their_own_parent_ids():
         'livestock_info':{'livestock_repeat':[{'animal':'cattle','num_animals':3}]}}
     data['land_info']['land_info_repeat'].append(second)
     result=intake_sections(data)
-    assert result['oan_intake_fr_farmer_crops'][0]['link_internal_record_id']=='land-uuid-1'
-    assert result['oan_intake_fr_farmer_farm_input'][0]['link_internal_record_id']=='land-uuid-1'
-    assert result['oan_intake_fr_farmer_livestocks'][0]['link_internal_record_id']=='land-uuid-2'
-    assert result['oan_intake_fr_farmer_livestocks'][0]['livestock_type']=='LSTK_CATTLE'
-    assert result['oan_intake_fr_farmer_farm_input'][0]['fertilizer_use'] is True
+    assert result['farmer_crops_intake'][0]['link_internal_record_id']=='land-uuid-1'
+    assert result['farmer_farm_inputs_intake'][0]['link_internal_record_id']=='land-uuid-1'
+    assert result['farmer_livestock_intake'][0]['link_internal_record_id']=='land-uuid-2'
+    assert result['farmer_livestock_intake'][0]['livestock_type']=='LSTK_CATTLE'
+    assert result['farmer_farm_inputs_intake'][0]['fertilizer_use'] is True
 
 
 def test_partner_payload_cannot_supply_trusted_household_or_prepared_sections():
-    data=example();data['oan_household_id']='injected-household';data['oan_intake_sections']={'injected':[{}]}
-    result=enricher.OANOdkFarmerEnricherService().enrich(data,MagicMock())
-    assert result.get('oan_household_id') is None
+    data=example();data['matched_household_id']='injected-household';data['oan_intake_sections']={'injected':[{}]}
+    result=enricher.OdkToFarmerIntakeEnricher().enrich(data,MagicMock())
+    assert result.get('matched_household_id') is None
     assert 'injected' not in result['oan_intake_sections']
-    assert result['oan_intake_sections']['oan_hh_information'][0]['size_of_group']==2
+    assert result['oan_intake_sections']['household_information'][0]['size_of_group']==2
 
 
 def test_multi_answer_questions_keep_every_value_and_each_land_parent():
@@ -138,24 +138,24 @@ def test_multi_answer_questions_keep_every_value_and_each_land_parent():
     land['access_to_finance'] = {'finance_access':'yes','finance_access_type':'loan insurance'}
     data.pop('crop_information')
     mapped = intake_sections(data)
-    socio = mapped['oan_fr_farmer_socio_and_health'][0]
+    socio = mapped['farmer_socio_economic_health'][0]
     assert socio['income_sources'] == ['SOI_CROP_PRODUCTION','SOI_LIVESTOCK_PRODUCTION','SOI_OTHERS']
     assert 'source_of_income' not in socio
     assert socio['source_of_income_other'] == 'Weaving'
-    inputs = mapped['oan_intake_fr_farmer_farm_input'][0]
+    inputs = mapped['farmer_farm_inputs_intake'][0]
     assert inputs['machinery_types'] == ['MACH_TRACTOR','MACH_COMBINE']
     assert 'machinery_type' not in inputs
     assert inputs['finance_access_types'] == ['LOAN','INSURANCE']
     assert inputs['water_sources'] == ['WS_RAINFED','WS_IRRIGATION_GROUND']
-    assert mapped['oan_intake_fr_farmer_crops'][0]['water_sources'] == ['WS_RAINFED','WS_IRRIGATION_SURFACE']
-    assert mapped['oan_intake_fr_farmer_livestocks'][0]['water_sources'] == ['WS_WELL_GROUND','WS_SURFACE_WATER']
+    assert mapped['farmer_crops_intake'][0]['water_sources'] == ['WS_RAINFED','WS_IRRIGATION_SURFACE']
+    assert mapped['farmer_livestock_intake'][0]['water_sources'] == ['WS_WELL_GROUND','WS_SURFACE_WATER']
 
 
 def test_native_schema_accepts_multi_answer_fields_and_native_validator_checks_each_code():
     import asyncio
     from openg2p_registry_core.errors import G2PRegistryException
     from openg2p_registry_core.services.g2p_attribute_value_validator import G2PAttributeValueValidator
-    from openg2p_registry_oan_extension.register_domain import schemas, models
+    from oan_farmer_registry_extension.register_domain import schemas, models
 
     class CodedLists(G2PAttributeValueValidator):
         @property
@@ -182,6 +182,6 @@ def test_distinct_machinery_answers_are_not_guessed_into_one_broader_category():
     data=example()
     data['land_info']['land_info_repeat'][0]['agricultural_input']={
         'type_of_machinery':'maize_sheller multi_crop_trasher rice_polisher harvester combiner'}
-    row=intake_sections(data)['oan_intake_fr_farmer_farm_input'][0]
+    row=intake_sections(data)['farmer_farm_inputs_intake'][0]
     assert row['machinery_types']==['MACH_MAIZE_SHELLER','MACH_MULTI_CROP_TRASHER','MACH_RICE_POLISHER','MACH_HARVESTER','MACH_COMBINER']
     assert 'machinery_type' not in row

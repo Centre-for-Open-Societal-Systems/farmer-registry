@@ -17,7 +17,7 @@ def call() {
             KUBECONFIG_CREDENTIAL = 'staging-farmer-kubeconfig'
         }
         stages {
-            stage('Validate staging RC') {
+            stage('Test') {
                 steps {
                     checkout scm
                     dir('service-outcomes') { deleteDir() }
@@ -42,7 +42,7 @@ def call() {
                     stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,test/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
                 }
             }
-            stage('Promote rehearsed staging Registry (far)') {
+            stage('Deploy (registry)') {
                 when { beforeAgent true; expression { params.DEPLOY_STAGING } }
                 agent { label 'vpn-agent2' }
                 steps {
@@ -50,7 +50,7 @@ def call() {
                         deleteDir()
                         unstash 'staging-deployment'
                         withCredentials([
-                            file(credentialsId: 'staging-farmer-kubeconfig', variable: 'KUBECONFIG'),
+                            file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
                             file(credentialsId: 'staging-farmer-rehearsal', variable: 'STAGING_EVIDENCE_FILE')
                         ]) {
                             sh '''
@@ -68,7 +68,7 @@ def call() {
                     }
                 }
             }
-            stage('Build staging optional services') {
+            stage('Build (services)') {
                 when { expression { params.DEPLOY_STAGING && params.COORDINATE_SERVICES } }
                 steps {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
@@ -92,7 +92,7 @@ def call() {
                     stash name: 'staging-services', includes: 'helm/**,ci/**,scripts/**,integrations/**,service-outcomes/staging-build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
                 }
             }
-            stage('Deploy staging optional services') {
+            stage('Deploy (services)') {
                 when { beforeAgent true; expression { params.DEPLOY_STAGING && params.COORDINATE_SERVICES } }
                 agent { label 'vpn-agent2' }
                 steps {
@@ -109,7 +109,7 @@ def call() {
                         }
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                             withCredentials([
-                                file(credentialsId: 'staging-farmer-kubeconfig', variable: 'KUBECONFIG'),
+                                file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
                                 file(credentialsId: 'staging-farmer-dev-acceptance', variable: 'DEV_ACCEPTANCE')
                             ]) {
                                 // Missing protected connector backup fails that service;

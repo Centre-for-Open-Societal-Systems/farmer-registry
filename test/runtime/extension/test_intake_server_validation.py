@@ -1,4 +1,4 @@
-"""Server-side enforcement of the intake rules (G2R-47, gaps G2/G3).
+"""Server-side enforcement of the intake rules.
 
 Same convention as test_farmer_birth_date_sync.py: imports openg2p_registry_core,
 so it runs in the container, not on a bare host checkout.

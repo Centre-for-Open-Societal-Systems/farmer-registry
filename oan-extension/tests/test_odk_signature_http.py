@@ -13,7 +13,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from openg2p_registry_oan_extension.odk.signature import InvalidOdkSignature, verify_odk_signature
+from oan_farmer_registry_extension.odk.signature import InvalidOdkSignature, verify_odk_signature
 
 URL = os.environ.get('OAN_ODK_PM_SIMULATION_URL')
 pytestmark = pytest.mark.skipif(not URL, reason='Requires the local Postman PM-key simulation')

@@ -12,7 +12,7 @@
       true
     ],
     "files": [
-      "oan-extension/src/openg2p_registry_oan_extension/meta_data/15_sections.sql"
+      "oan-extension/src/oan_farmer_registry_extension/meta_data/15_sections.sql"
     ]
   },
   "birth_date": {
@@ -28,7 +28,7 @@
       false
     ],
     "files": [
-      "oan-extension/src/openg2p_registry_oan_extension/meta_data/10_sections.sql"
+      "oan-extension/src/oan_farmer_registry_extension/meta_data/10_sections.sql"
     ]
   },
   "planted_date": {

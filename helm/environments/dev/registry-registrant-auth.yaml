@@ -1,9 +1,0 @@
-# Fayda verification on New Dev through the Commons eSignet (mock identity
-# system). The chart's registrantAuth hook writes the provider row and the
-# shared eSignet client from these values; the client key lives in a Secret the
-# hook creates on first run. Merged over saved release values by
-# ci/deploy/deployment.py for dev only.
-registrantAuth:
-  enabled: true
-  esignetBaseUrl: https://esignet.development.oanstaging.com
-  callbackUrl: https://staff-farmer.development.oanstaging.com/registrant-auth/callback

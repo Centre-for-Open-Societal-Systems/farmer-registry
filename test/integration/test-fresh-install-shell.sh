@@ -66,7 +66,7 @@ run() {
 }
 line_of() { grep -n -- "$1" "$CALLS" | head -n 1 | cut -d: -f1; }
 
-export OAN_DELIVERY_ACTION=fresh-install
+export DELIVERY_ACTION=fresh-install
 run
 if [ "$result" -ne 0 ]; then cat "$TEST_ROOT/output"; exit 1; fi
 archive=$(line_of 'ssh .*sudo -n tee /var/backups/oan/farmer/')
@@ -82,13 +82,13 @@ grep -q 'docker .*deployment.py prepare ' "$CALLS"
 if grep -q '^helm upgrade' "$CALLS"; then echo 'Fresh install must not upgrade'; exit 1; fi
 echo "PASS: archive, uninstall, drop, install in order"
 
-export OAN_DELIVERY_ACTION=deploy
+export DELIVERY_ACTION=deploy
 run
 test "$result" -ne 0
 if grep -q '^helm \|^kubectl \|^ssh ' "$CALLS"; then echo 'Other actions must stop before any tool runs'; exit 1; fi
 echo 'PASS: only the explicit fresh-install action runs this script'
 
-export OAN_DELIVERY_ACTION=fresh-install TEST_ARCHIVE_CORRUPT=1
+export DELIVERY_ACTION=fresh-install TEST_ARCHIVE_CORRUPT=1
 run
 test "$result" -ne 0
 if grep -q '^helm uninstall\|DROP DATABASE' "$CALLS"; then echo 'A bad archive must stop before removal'; exit 1; fi

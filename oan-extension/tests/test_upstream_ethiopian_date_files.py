@@ -21,7 +21,7 @@ def test_upstream_calendar_bytes_are_unchanged(path, digest):
 
 def test_custom_table_date_keeps_server_date_validation():
     rules_path = Path(__file__).parents[1] / (
-        "src/openg2p_registry_oan_extension/register_domain/services/widget_rules.py"
+        "src/oan_farmer_registry_extension/register_domain/services/widget_rules.py"
     )
     spec = importlib.util.spec_from_file_location("ec_widget_rules", rules_path)
     rules_module = importlib.util.module_from_spec(spec)

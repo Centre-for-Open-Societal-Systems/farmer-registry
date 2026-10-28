@@ -41,24 +41,24 @@ Use one Household as subject. Add OAN-owned list sections for all Farmer fields 
 
 ```json
 {
-  "oan_household_information": [{"internal_record_id":"HH-UUID","household_head":"Head Fixture Person","size_of_group":2}],
-  "oan_household_members": [
+  "household_information": [{"internal_record_id":"HH-UUID","household_head":"Head Fixture Person","size_of_group":2}],
+  "household_members": [
     {"internal_record_id":"MEMBER-A","link_internal_record_id":"HH-UUID","first_name":"Head","is_head":true},
     {"internal_record_id":"MEMBER-B","link_internal_record_id":"HH-UUID","first_name":"Other","relationship_to_the_head":"SPOUSE"}
   ],
-  "oan_household_farmer_identity": [
+  "household_farmer_identity": [
     {"internal_record_id":"FARMER-A","link_internal_record_id":"HH-UUID","foundational_id":"001234567890"},
     {"internal_record_id":"FARMER-B","link_internal_record_id":"HH-UUID","foundational_id":"009876543210"}
   ],
-  "oan_household_farmer_names": [
+  "household_farmer_names": [
     {"internal_record_id":"FARMER-A","first_name":"Head","middle_name":"Fixture","last_name":"Person"},
     {"internal_record_id":"FARMER-B","first_name":"Other","middle_name":"Fixture","last_name":"Person"}
   ],
-  "oan_household_farmer_lands": [
+  "household_farmer_lands": [
     {"internal_record_id":"LAND-A","link_internal_record_id":"FARMER-A","land_id":"PLOT-A"},
     {"internal_record_id":"LAND-B","link_internal_record_id":"FARMER-B","land_id":"PLOT-B"}
   ],
-  "oan_household_farmer_crops": [
+  "household_farmer_crops": [
     {"internal_record_id":"CROP-A","link_internal_record_id":"LAND-A","commodity":"CROP_FOOD_BARLEY"},
     {"internal_record_id":"CROP-B","link_internal_record_id":"LAND-B","commodity":"CROP_TEA"}
   ]

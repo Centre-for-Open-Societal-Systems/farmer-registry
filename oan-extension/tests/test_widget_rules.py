@@ -9,7 +9,7 @@ tests run without the registry installed:
 import importlib.util
 from pathlib import Path
 
-_PATH = Path(__file__).parents[1] / "src/openg2p_registry_oan_extension/register_domain/services/widget_rules.py"
+_PATH = Path(__file__).parents[1] / "src/oan_farmer_registry_extension/register_domain/services/widget_rules.py"
 _spec = importlib.util.spec_from_file_location("widget_rules", _PATH)
 widget_rules = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(widget_rules)
@@ -136,7 +136,7 @@ def test_an_api_select_is_not_checked_here():
 
 
 def test_messages_can_be_reworded_per_language():
-    words = {**MESSAGES, "oan_rule_boolean": "{label}: choose Yes or No"}
+    words = {**MESSAGES, "rule_boolean": "{label}: choose Yes or No"}
     assert widget_rules.check_record({"has_national_id": 3}, RULES[FARMER], words) == ["Has National ID: choose Yes or No"]
 
 

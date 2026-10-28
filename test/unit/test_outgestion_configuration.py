@@ -5,7 +5,7 @@ import yaml
 ROOT=Path(__file__).resolve().parents[2]
 
 def test_oan_reseed_enables_source_without_resetting_native_topic_checkpoint():
-    source=(ROOT/'oan-extension/src/openg2p_registry_oan_extension/meta_data/50_outgestion.sql').read_text(encoding='utf-8').replace('"public".','')
+    source=(ROOT/'oan-extension/src/oan_farmer_registry_extension/meta_data/50_outgestion.sql').read_text(encoding='utf-8').replace('"public".','')
     db=sqlite3.connect(':memory:')
     db.create_function('NOW',0,lambda:'2026-10-25T00:00:00')
     for table,columns in re.findall(r'INSERT INTO\s+"([a-z0-9_]+)"\s*\((.*?)\)\s*VALUES',source,re.S|re.I):
@@ -27,6 +27,6 @@ def test_oan_reseed_enables_source_without_resetting_native_topic_checkpoint():
 
 
 def test_dev_publishers_use_internal_hub():
-    config=yaml.safe_load((ROOT/'helm/environments/dev/registry-outgestion.yaml').read_text())['registry']
+    config=yaml.safe_load((ROOT/'helm/environments/dev/farmer-outgestion.yaml').read_text())['registry']
     for component in ['staffApi','partnerApi','celeryWorker']:
         assert config[component]['envVars']['REGISTRY_CORE_WEBSUB_BASE_URL']=='http://commons-services-websub.commons.svc.cluster.local'

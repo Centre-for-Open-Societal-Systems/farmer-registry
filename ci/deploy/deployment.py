@@ -14,9 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from environments import configuration, namespace
 
 RELEASE = "farmer-registry"
-# Exact verified Registry UI hostnames of the new-dev release. Keep installed
+# Exact verified Registry UI hostnames of the dev release. Keep installed
 # names valid during hostname migrations without rewriting the release's routes.
-NEW_DEV_HOSTNAMES = {
+DEV_HOSTNAMES = {
     "registry.farmer-dev.oanstaging.com",
     "farmer-registry-development.oanstaging.com",
     "farmer-registry.development.oanstaging.com",
@@ -171,7 +171,7 @@ def image_root(registry, tag):
 
 
 def identity_overlay(environment="dev"):
-    return load(Path(__file__).resolve().parents[2] / "helm/environments" / environment / "registry-identity.yaml")
+    return load(Path(__file__).resolve().parents[2] / "helm/environments" / environment / "farmer-identity.yaml")
 
 
 def identity_env(suffix, environment="dev"):
@@ -194,7 +194,7 @@ def master_data_env(suffix, environment="dev"):
 def location_overlay(environment="dev"):
     if environment != "dev":
         return {}
-    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-location.yaml")
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/farmer-location.yaml")
 
 
 def location_env(suffix, environment="dev"):
@@ -206,7 +206,7 @@ def location_env(suffix, environment="dev"):
 def outgestion_overlay(environment="dev"):
     if environment != "dev":
         return {}
-    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-outgestion.yaml")
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/farmer-outgestion.yaml")
 
 
 def outgestion_env(suffix, environment="dev"):
@@ -215,24 +215,24 @@ def outgestion_env(suffix, environment="dev"):
 
 
 def registrant_auth_overlay(environment="dev"):
-    """Fayda (eSignet) verification for the farmer register; New Dev only."""
+    """Fayda (eSignet) verification for the farmer register; dev only."""
     if environment != "dev":
         return {}
-    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-registrant-auth.yaml")
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/farmer-registrant-auth.yaml")
 
 
 def dci_signing_overlay(environment="dev"):
-    """The partner API's DCI response-signing key (chart dciSigning hook); New Dev only."""
+    """The partner API's DCI response-signing key (chart dciSigning hook); dev only."""
     if environment != "dev":
         return {}
-    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-dci-signing.yaml")
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/farmer-dci-signing.yaml")
 
 
 def samples_overlay(environment="dev"):
-    """The pack's sample farmers and households through the db-seed; New Dev only."""
+    """The pack's sample farmers and households through the db-seed; dev only."""
     if environment != "dev":
         return {}
-    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/registry-samples.yaml")
+    return load(Path(__file__).resolve().parents[2] / "helm/environments/dev/farmer-samples.yaml")
 
 
 def allowed_loaders(environment="dev"):
@@ -257,9 +257,9 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     values = copy.deepcopy(values)
     if not isinstance(values, dict) or not values.get("global", {}).get("registryHostname"):
         raise ValueError("Existing environment values required; refusing default-host installation")
-    allowed = NEW_DEV_HOSTNAMES if environment == "dev" else {configuration(environment)["registryHostname"]}
+    allowed = DEV_HOSTNAMES if environment == "dev" else {configuration(environment)["registryHostname"]}
     if values["global"]["registryHostname"] not in allowed:
-        raise ValueError("This pipeline targets only the verified new-dev Registry hostname" if environment == "dev"
+        raise ValueError("This pipeline targets only the verified dev Registry hostname" if environment == "dev"
                          else "Registry hostname does not match staging")
     config = values.setdefault("registry", {})
     if environment == 'dev':

@@ -21,18 +21,18 @@ from openg2p_fastapi_common.context import component_registry
 from openg2p_registry_core.services import G2PIngestService
 from openg2p_registry_core.services.intake_form_data_service import G2PIntakeFormDataService
 from openg2p_registry_core.services.g2p_register_change_request_service import G2PRegisterChangeRequestService
-from openg2p_registry_extensions.odk.ingest import OANIngestService
-from openg2p_registry_extensions.register_domain.services.household_intake import OANIntakeFormDataService
-from openg2p_registry_extensions.register_domain.services.outgest_json import OANOutgestChangeRequestService
+from openg2p_registry_extensions.odk.ingest import OdkSignedIngestService
+from openg2p_registry_extensions.register_domain.services.household_intake import HouseholdCheckedIntakeFormDataService
+from openg2p_registry_extensions.register_domain.services.outgest_json import JsonSafeOutgestChangeRequestService
 
 runtime = importlib.import_module('openg2p_registry_extensions.runtime')
 for _ in range(3):
     runtime.install()
 mapping = {}
 for base, extension in (
-    (G2PIntakeFormDataService, OANIntakeFormDataService),
-    (G2PIngestService, OANIngestService),
-    (G2PRegisterChangeRequestService, OANOutgestChangeRequestService),
+    (G2PIntakeFormDataService, HouseholdCheckedIntakeFormDataService),
+    (G2PIngestService, OdkSignedIngestService),
+    (G2PRegisterChangeRequestService, JsonSafeOutgestChangeRequestService),
 ):
     assert isinstance(base.get_component(), extension), base.__name__
     assert sum(isinstance(item, extension) for item in component_registry) == 1, extension.__name__

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openg2p-registry-oan-extension"
+name = "oan-farmer-registry-extension"
 description = "OpenAgriNet layer on the OpenG2P Farmer Registry extension"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ dependencies = []
 dynamic = ["version"]
 
 [tool.hatch.version]
-path = "src/openg2p_registry_oan_extension/__init__.py"
+path = "src/oan_farmer_registry_extension/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/openg2p_registry_oan_extension"]
+packages = ["src/oan_farmer_registry_extension"]

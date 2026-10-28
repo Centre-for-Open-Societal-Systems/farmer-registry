@@ -10,7 +10,7 @@ import sys
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-SCRIPT = REPO / "scripts/check-odk-geo-compatibility.py"
+SCRIPT = REPO / "scripts/check_odk_geo_compatibility.py"
 spec = importlib.util.spec_from_file_location("geo_audit", SCRIPT)
 audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)

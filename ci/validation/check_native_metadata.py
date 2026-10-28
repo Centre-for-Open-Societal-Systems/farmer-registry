@@ -15,11 +15,19 @@ import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
+# The OAN-owned sections (meta_data/10, 12, 15 and 18_*.sql); 90_checks.sql
+# holds the same list.
+OAN_SECTIONS = frozenset((
+    'farmer_identity', 'farmer_identity_verification', 'farmer_name', 'farmer_personal_details',
+    'farmer_socio_economic_health', 'farmer_location', 'farmer_photo', 'farmer_phones', 'farmer_documents',
+    'farmer_household_lookup', 'household_information', 'farmer_membership', 'farmer_lands',
+    'farmer_land_summary', 'farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake',
+    'farmer_farm_inputs', 'farmer_farm_inputs_intake', 'farmer_enumerator'))
 
 
 def probe(host, mode):
     from sqlalchemy import create_engine, text
-    sys.modules['openg2p_registry_extensions'] = importlib.import_module('openg2p_registry_oan_extension')
+    sys.modules['openg2p_registry_extensions'] = importlib.import_module('oan_farmer_registry_extension')
     importlib.import_module('openg2p_registry_staff_api.config').Settings.get_config()
     importlib.import_module('openg2p_registry_extensions.app').Initializer()
     from openg2p_fastapi_common.models import BaseORMModel
@@ -28,7 +36,7 @@ def probe(host, mode):
         connection.execute(text('CREATE EXTENSION IF NOT EXISTS pg_trgm'))
     BaseORMModel.metadata.create_all(engine)
     if mode == 'ddl':
-        # Actual New Dev legacy UUID owns this unique mnemonic. The native
+        # A legacy database's UUID owns this unique mnemonic. The native
         # seed uses a different UUID for the same crop intake capability.
         from openg2p_registry_core.models import G2PRegisterSection
         with engine.begin() as connection:
@@ -133,18 +141,18 @@ def probe(host, mode):
                 assert not any(w.get('widget') == 'oan-identity-verification' for w in actual), section_id
             assert fin_sections, 'No bound Farmer FIN input was checked'
             assert any(w.get('widget') == 'id-authentication' for _, schema in sections
-                       if _ == 'oan_farmer_identity_verification' for w in widgets(schema)), 'id-authentication section missing'
+                       if _ == 'farmer_identity_verification' for w in widgets(schema)), 'id-authentication section missing'
             section_map = dict(sections)
             for section_id, fields in {
-                'oan_farmer_household_lookup': {'is_household_head'},
-                'oan_household_information': {'number_of_male_members', 'number_of_female_members'},
+                'farmer_household_lookup': {'is_household_head'},
+                'household_information': {'number_of_male_members', 'number_of_female_members'},
             }.items():
                 assert section_id in bound, (section_id, 'household section is not bound')
                 found = {w.get('widget-id') or w.get('column-key') for w in widgets(section_map[section_id])}
                 assert fields <= found, (section_id, fields-found)
             # Every dropdown reads Master Data; a static list is only ever a yes/no.
             for section_id, schema in sections:
-                if not section_id.startswith('oan_'):
+                if section_id not in OAN_SECTIONS:
                     continue
                 for w in widgets(schema):
                     source = w.get('widget-data-source') or {}
@@ -154,7 +162,7 @@ def probe(host, mode):
                     if w.get('widget') in ('select', 'multi-select') and source.get('type') == 'api':
                         assert source.get('service') in ('attributes', 'master-data', 'register'), (section_id, source)
             for section_id, schema in sections:
-                if section_id == 'oan_farmer_socio_economic_and_health':
+                if section_id == 'farmer_socio_economic_health':
                     raw = json.dumps(schema)
                     assert 'income_sources' in raw and 'multi-select' in raw
                     assert 'contains' in raw
@@ -179,7 +187,7 @@ def run():
     def native(mode):
         return command('docker','run','--rm','--memory=768m','--network',network,'--entrypoint','python',
             '-v',f'{ROOT.as_posix()}:/repo:ro','-e','PYTHONPATH=/repo/oan-extension/src:/repo/farmer-extension/src',
-            '-e','REGISTRY_EXTENSION_MODULE=openg2p_registry_oan_extension',image,
+            '-e','REGISTRY_EXTENSION_MODULE=oan_farmer_registry_extension',image,
             '/repo/ci/validation/check_native_metadata.py','--probe',database,mode)
 
     try:
@@ -197,8 +205,8 @@ def run():
             raise RuntimeError('Disposable PostgreSQL startup timed out')
         print(native('ddl').decode().splitlines()[-1],flush=True)
         files = []
-        for domain in ('farmer','oan'):
-            files += sorted((ROOT/f'{domain}-extension/src/openg2p_registry_{domain}_extension/meta_data').rglob('*.sql'))
+        for package in ('farmer-extension/src/openg2p_registry_farmer_extension', 'oan-extension/src/oan_farmer_registry_extension'):
+            files += sorted((ROOT/package/'meta_data').rglob('*.sql'))
         snapshots = []
         for attempt in (1,2):
             command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',

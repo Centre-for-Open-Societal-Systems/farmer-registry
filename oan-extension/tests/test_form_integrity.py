@@ -12,7 +12,7 @@ import sys
 import types
 from pathlib import Path
 
-_DIR = Path(__file__).parents[1] / "src/openg2p_registry_oan_extension/register_domain/services"
+_DIR = Path(__file__).parents[1] / "src/oan_farmer_registry_extension/register_domain/services"
 _package = types.ModuleType("oan_services_pure")
 _package.__path__ = [str(_DIR)]
 sys.modules.setdefault("oan_services_pure", _package)

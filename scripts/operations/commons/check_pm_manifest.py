@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a rendered new-dev Commons release or live YAML; never apply it.
+"""Validate a rendered dev Commons release or live YAML; never apply it.
 
 Usage: python scripts/operations/commons/check_pm_manifest.py rendered-commons.yaml
 Requires PyYAML (scripts/operations/commons/requirements.txt). Secret documents are never printed.

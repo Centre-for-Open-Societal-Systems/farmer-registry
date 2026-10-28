@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-PATH = Path(__file__).resolve().parents[1]/'src/openg2p_registry_oan_extension/odk/transform.py'
+PATH = Path(__file__).resolve().parents[1]/'src/oan_farmer_registry_extension/odk/transform.py'
 SPEC = importlib.util.spec_from_file_location('land_link_mapper', PATH)
 mapper = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mapper)
@@ -28,9 +28,9 @@ class LandLinkTests(unittest.TestCase):
         value = submission()
         original = deepcopy(value)
         sections = mapper.intake_sections(value)
-        self.assertEqual(sections['oan_intake_fr_farmer_crops'][0]['link_internal_record_id'], 'native-land-b')
-        self.assertEqual(sections['oan_intake_fr_farmer_livestocks'][0]['link_internal_record_id'], 'native-land-a')
-        inputs = sections['oan_intake_fr_farmer_farm_input'][0]
+        self.assertEqual(sections['farmer_crops_intake'][0]['link_internal_record_id'], 'native-land-b')
+        self.assertEqual(sections['farmer_livestock_intake'][0]['link_internal_record_id'], 'native-land-a')
+        inputs = sections['farmer_farm_inputs_intake'][0]
         self.assertEqual(inputs['link_internal_record_id'], 'native-land-b')
         self.assertEqual(inputs['finance_access_types'], ['LOAN', 'INSURANCE'])
         self.assertEqual(value, original)

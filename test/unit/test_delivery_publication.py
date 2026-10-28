@@ -22,21 +22,21 @@ COMMIT = "abcdef012345" + "b" * 28
 COMPONENTS = ("staff-api", "partner-api", "celery", "db-seed", "sanity-tests", "staff-ui")
 
 
-@pytest.mark.parametrize("environment", [{}, {"NEW_DEV_DELIVERY_ACTION": ""}, {"NEW_DEV_DELIVERY_ACTION": "publish-only"}])
+@pytest.mark.parametrize("environment", [{}, {"DELIVERY_ACTION": ""}, {"DELIVERY_ACTION": "publish-only"}])
 def test_first_build_or_explicit_publication_never_selects_deployment(environment):
     assert delivery.action(environment) == "publish-only"
 
 
 @pytest.mark.parametrize("selected", ["deploy", "fresh-install"])
 def test_cluster_actions_are_explicit_choices(selected):
-    assert delivery.action({"NEW_DEV_DELIVERY_ACTION": selected}) == selected
+    assert delivery.action({"DELIVERY_ACTION": selected}) == selected
 
 
 @pytest.mark.parametrize("environment", [
-    {"NEW_DEV_DELIVERY_ACTION": "automatic"},
-    {"NEW_DEV_DELIVERY_ACTION": "Deploy"},
-    {"NEW_DEV_DELIVERY_ACTION": "preserve-upgrade"},
-    {"NEW_DEV_DELIVERY_ACTION": "reset"},
+    {"DELIVERY_ACTION": "automatic"},
+    {"DELIVERY_ACTION": "Deploy"},
+    {"DELIVERY_ACTION": "preserve-upgrade"},
+    {"DELIVERY_ACTION": "reset"},
 ])
 def test_unknown_actions_are_rejected(environment):
     with pytest.raises(ValueError):
@@ -51,7 +51,7 @@ def published(tmp_path, monkeypatch):
     path.write_text("".join(f"{component}\t{ECR}/openg2p/farmer-registry/{component}:{COMMIT[:12]}\tsha256:{'c' * 64}\n"
                             for component in COMPONENTS), encoding="utf-8")
     return {"ECR_REGISTRY": ECR, "IMAGE_TAG": COMMIT[:12], "SOURCE_COMMIT": COMMIT,
-            "OAN_DELIVERY_ACTION": "publish-only"}, path
+            "DELIVERY_ACTION": "publish-only"}, path
 
 
 def test_publication_receipt_records_all_digests_and_no_deployment_claim(published):
@@ -65,7 +65,7 @@ def test_publication_receipt_records_all_digests_and_no_deployment_claim(publish
     assert "cluster" not in json.dumps(result)
 
 
-@pytest.mark.parametrize("defect", ["missing", "duplicate", "digest", "repository", "source", "action"])
+@pytest.mark.parametrize("defect", ["missing", "duplicate", "digest", "repository", "source"])
 def test_receipt_rejects_incomplete_or_mismatched_build_provenance(published, defect):
     environment, path = published
     content = path.read_text()
@@ -77,10 +77,8 @@ def test_receipt_rejects_incomplete_or_mismatched_build_provenance(published, de
         content = content.replace("sha256:", "unverified:")
     elif defect == "repository":
         content = content.replace("/openg2p/farmer-registry/", "/openg2p/another/")
-    elif defect == "source":
-        environment["SOURCE_COMMIT"] = "d" * 40
     else:
-        environment["NEW_DEV_DELIVERY_ACTION"] = "deploy"
+        environment["SOURCE_COMMIT"] = "d" * 40
     path.write_text(content)
     with pytest.raises(ValueError):
         delivery.publication(environment)
@@ -88,27 +86,27 @@ def test_receipt_rejects_incomplete_or_mismatched_build_provenance(published, de
 
 def test_every_cluster_or_optional_stage_requires_explicit_deploy():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
-    for stage, actions in (("Deploy new dev", "env.OAN_DELIVERY_ACTION in ['deploy', 'fresh-install']"),
-                           ("Build optional services", "env.OAN_DELIVERY_ACTION == 'deploy'"),
-                           ("Deploy optional services", "env.OAN_DELIVERY_ACTION == 'deploy'")):
+    for stage, actions in (("Deploy (registry)", "env.DELIVERY_ACTION in ['deploy', 'fresh-install']"),
+                           ("Build (services)", "env.DELIVERY_ACTION == 'deploy'"),
+                           ("Deploy (services)", "env.DELIVERY_ACTION == 'deploy'")):
         definition = pipeline.split("stage('" + stage + "')", 1)[1].split("steps {", 1)[0]
         assert actions in definition
         assert "branch 'develop'" in definition
         assert "not { changeRequest() }" in definition
-    publication = pipeline.split("stage('Publish dev images')", 1)[1].split("steps {", 1)[0]
+    publication = pipeline.split("stage('Publish')", 1)[1].split("steps {", 1)[0]
     assert "branch 'develop'" in publication and "not { changeRequest() }" in publication
-    assert "OAN_DELIVERY_ACTION" not in publication
+    assert "DELIVERY_ACTION" not in publication
     assert "COORDINATE_SERVICES', defaultValue: false" in pipeline
     assert "ci-output/native-worker-save/**" in pipeline
     assert "check_native_worker_save.py" in (ROOT / "ci/build/images.sh").read_text()
     assert "choices: ['publish-only', 'deploy', 'fresh-install']" in pipeline
-    assert "NEW_DEV_RESET_ACTION" not in pipeline
+    assert "RESET_ACTION" not in pipeline
 
 
 def test_fresh_install_runs_only_its_own_script_with_the_backup_key():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
-    deploy = pipeline.split("stage('Deploy new dev')", 1)[1].split("stage('Build optional services')", 1)[0]
-    fresh = deploy.split("if (env.OAN_DELIVERY_ACTION == 'fresh-install')", 1)[1].split("} else {", 1)[0]
+    deploy = pipeline.split("stage('Deploy (registry)')", 1)[1].split("stage('Build (services)')", 1)[0]
+    fresh = deploy.split("if (env.DELIVERY_ACTION == 'fresh-install')", 1)[1].split("} else {", 1)[0]
     assert "farmer-new-dev-backup-ssh" in fresh and "ci/deploy/fresh-install-dev.sh" in fresh
     assert "deploy-dev.sh" not in fresh
     assert "ci/deploy/fresh-install-dev.sh" not in deploy.split("} else {", 1)[1]

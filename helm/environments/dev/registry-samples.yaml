@@ -1,9 +1,0 @@
-# Sample data on New Dev: the country pack's sample people (ETH-OAN samples/
-# in openg2p-data, served by Master Data) registered as Farmers in their
-# households through intake and AWE approval, with their farm facts from the
-# pack's samples/farms.json (docker/db-seed/load_sample_data.py). Idempotent per
-# person, so every upgrade only adds what is missing. Merged over saved release
-# values by ci/deploy/deployment.py for dev only; staging never loads samples.
-registry:
-  dbSeed:
-    loadSampleData: true

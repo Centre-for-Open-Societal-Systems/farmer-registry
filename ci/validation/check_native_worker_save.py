@@ -38,8 +38,8 @@ def initialize(host):
     task = importlib.import_module("openg2p_registry_celery_worker.tasks.ingest_data_worker")
     assert task._session_maker is Engine.get_async_session_maker()
     from openg2p_registry_core.services.intake_form_data_service import G2PIntakeFormDataService
-    from openg2p_registry_extensions.register_domain.services.household_intake import OANIntakeFormDataService
-    assert isinstance(G2PIntakeFormDataService.get_component(), OANIntakeFormDataService)
+    from openg2p_registry_extensions.register_domain.services.household_intake import HouseholdCheckedIntakeFormDataService
+    assert isinstance(G2PIntakeFormDataService.get_component(), HouseholdCheckedIntakeFormDataService)
     from openg2p_registry_core.interfaces import G2PRegisterDomainFactory
     services = importlib.import_module("openg2p_registry_extensions.register_domain.services")
     factory = G2PRegisterDomainFactory.get_component()
@@ -80,7 +80,7 @@ def initialize(host):
     for name, method in {
         "worker_save_sections": task._save_sections_async,
         "selected_intake_save": selected_intake.save_intake_form_submission_with_session,
-        "selected_parent_save": super(OANIntakeFormDataService, selected_intake).save_intake_form_submission_with_session,
+        "selected_parent_save": super(HouseholdCheckedIntakeFormDataService, selected_intake).save_intake_form_submission_with_session,
     }.items():
         source = inspect.getsource(method)
         resolved[name] = {"module": method.__module__, "qualname": method.__qualname__,
@@ -137,7 +137,7 @@ async def save_probe(Engine, task):
     maker = Engine.get_async_session_maker()
     assert task._session_maker is maker
     async with maker() as session:
-        binding = (await session.execute(text("SELECT register_id,intake_form_id FROM incoming_model_semantic_patterns WHERE data_model_id='FARMER_ODK_MODEL'"))).one()
+        binding = (await session.execute(text("SELECT register_id,intake_form_id FROM incoming_model_semantic_patterns WHERE data_model_id='odk_to_farmer_intake'"))).one()
         classified = SimpleNamespace(register_id=binding[0], intake_form_id=binding[1], partner_id=None)
         sections = await task._get_ordered_form_sections(classified.intake_form_id, session)
         expect([s.section_mnemonic for s in sections], list(SECTIONS), "ordered native section binding")
@@ -304,8 +304,8 @@ def run():
             raise RuntimeError("Owned PostgreSQL did not become ready")
         native("ddl", database)
         files = []
-        for domain in ("farmer", "oan"):
-            files += sorted((ROOT / f"{domain}-extension/src/openg2p_registry_{domain}_extension/meta_data").rglob("*.sql"))
+        for package in ("farmer-extension/src/openg2p_registry_farmer_extension", "oan-extension/src/oan_farmer_registry_extension"):
+            files += sorted((ROOT / package / "meta_data").rglob("*.sql"))
         for path in files:
             command("docker", "exec", "-i", db, "psql", "-X", "-U", "postgres", "-d", "native_worker_save", "-v", "ON_ERROR_STOP=1", data=path.read_bytes())
         report["seed_sql_files"] = len(files)

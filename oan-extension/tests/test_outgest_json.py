@@ -17,7 +17,7 @@ from openg2p_registry_core.models import OutgoingRawDataPayload
 
 _path = (
     Path(__file__).parents[1]
-    / "src/openg2p_registry_oan_extension/register_domain/services/outgest_json.py"
+    / "src/oan_farmer_registry_extension/register_domain/services/outgest_json.py"
 )
 _spec = importlib.util.spec_from_file_location("oan_outgest_json_test", _path)
 module = importlib.util.module_from_spec(_spec)
@@ -42,7 +42,7 @@ def test_native_payload_decimal_reproduction_and_json_boundary(monkeypatch):
         module.G2PRegisterHierarchicalService, "enrich_record_hierarchy", native
     )
     result = asyncio.run(
-        module.OANJsonHierarchy().enrich_record_hierarchy(None, None, None)
+        module.JsonSafeHierarchyService().enrich_record_hierarchy(None, None, None)
     )
     payload = OutgoingRawDataPayload(payload_id="after", raw_data_json=result)
     assert json.loads(payload.raw_data_text) == result
@@ -80,7 +80,7 @@ def test_installer_and_native_fanout_injection(monkeypatch):
     )
     asyncio.run(service._fanout_outgest_for_change_request(cr, "session"))
     assert isinstance(
-        fanout.call_args.kwargs["hierarchical_service"], module.OANJsonHierarchy
+        fanout.call_args.kwargs["hierarchical_service"], module.JsonSafeHierarchyService
     )
     assert fanout.call_args.kwargs["approved_by"] == "reviewer"
     assert fanout.call_args.kwargs["change_request_id"] == "cr"
@@ -118,7 +118,7 @@ def test_intake_ingest_fanout_uses_json_hierarchy(monkeypatch):
         )
     )
     assert isinstance(
-        native.call_args.kwargs["hierarchical_service"], module.OANJsonHierarchy
+        native.call_args.kwargs["hierarchical_service"], module.JsonSafeHierarchyService
     )
     assert native.call_args.kwargs["intake_form_submission_id"] == "submission"
     assert module.install_intake_outgest_json("oan_missing_worker_module") is None
