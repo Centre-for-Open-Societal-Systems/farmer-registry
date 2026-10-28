@@ -29,7 +29,7 @@ The deployed new-dev register page requests `page_size: 20`. That is the number 
 
 The staging 500-row seed remains present. The remaining staging rows are reported only as an aggregate; their origin was not classified by this check. Intake and history are separate tables and are excluded from registered-farmer totals.
 
-New dev's earlier sample loader used the shared Master Data demographic sample, which supplied 21 people, rather than creating one farmer for every entry in the older 500-row fixture. `docker/db-seed/load_sample_data.py` prefers those shared people and uses `seed-data/farmers.json` as additional farmer fields; the JSON fixture is not the population source in that path. The [earlier seed diagnosis](../history/gen2-db-seed-diagnosis.md) recorded the same 21 seeded farmers before this migration PR.
+New dev's earlier sample loader used the shared Master Data demographic sample, which supplied 21 people, rather than creating one farmer for every entry in the older 500-row fixture. That historical loader used shared people plus local farmer-field fixtures. The current [MDS sample loader](../mds-sample-seeding.md) consumes MDS only and no longer ships those fixtures. The [earlier seed diagnosis](../history/gen2-db-seed-diagnosis.md) recorded the same 21 seeded farmers before this migration PR.
 
 The maintained metadata seed and deployment preparation disable geography/sample/image/bulk fixture loading. This merge does not reload 500 people, truncate a register or reconcile existing Farmer locations. Expanding the new-dev demo population is a separate explicit data operation, with canonical geography and duplicate handling, rather than an automatic deployment hook.
 

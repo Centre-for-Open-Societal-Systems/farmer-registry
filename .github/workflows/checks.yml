@@ -13,10 +13,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -r ci/validation/requirements.txt ruff==0.17.2
+      - run: pip install -r ci/validation/requirements.txt ruff==0.17.2 psycopg2-binary
       - name: Source syntax and inherited delivery boundaries
         run: |
           python -m ruff check --select E9,F63,F7,F82 oan-extension/src oan-extension/tests
+          python -m pytest -q tests/unit/test_mds_sample_seed.py
           bash ci/validation/validate.sh
       - uses: actions/setup-node@v4
         with:
@@ -37,3 +38,15 @@ jobs:
           done
           python -m pytest -q -p no:cacheprovider oan-extension/tests/test_odk_signature_http.py tests/unit/test_reporting_geography.py
 
+      - name: MDS sample intake HTTP contract
+        env:
+          OAN_SEED_SIMULATION_URL: http://127.0.0.1:49218/farmer
+        run: |
+          postman simulation run postman/simulations/mds-seed.sim.yaml --port 49218 --output ndjson > "$RUNNER_TEMP/seed-simulation.ndjson" 2> "$RUNNER_TEMP/seed-simulation.err" &
+          simulation_pid=$!
+          trap 'kill "$simulation_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:49218/farmer/health >/dev/null; then break; fi
+            sleep 1
+          done
+          python -m pytest -q -p no:cacheprovider tests/unit/test_mds_seed_http.py

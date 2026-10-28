@@ -1,0 +1,5 @@
+simulation: farmer-mds-seed
+routing: path
+mocks:
+  - routeKey: farmer
+    path: ../mocks/farmer-seed/config.yaml

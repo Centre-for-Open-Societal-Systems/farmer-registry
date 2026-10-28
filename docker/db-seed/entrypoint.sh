@@ -25,6 +25,10 @@ restore_registry_pg() {
 }
 
 LOAD_GEO_DATA="${LOAD_GEO_DATA:-false}"
+if [ "$LOAD_GEO_DATA" = "true" ]; then
+  echo "[db-seed] ERROR: publish geography through MDS/MDM before registry seeding." >&2
+  exit 1
+fi
 SYNC_GEO_WIDGETS="${SYNC_GEO_WIDGETS:-false}"
 LOAD_SAMPLE_DATA="${LOAD_SAMPLE_DATA:-false}"
 LOAD_IMAGES="${LOAD_IMAGES:-false}"

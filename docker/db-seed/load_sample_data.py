@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """Seed Farmer Registry sample records through the intake-form API.
 
-Households are submitted and approved first. Farmers are then submitted with
-the live household id, land is saved before crop / livestock / farm-inputs
-(those rows parent to land), then each intake is finalized and approved by
+MDS sample households are submitted and approved first. Their heads
+are then submitted as farmers with the live household id. No farm assets or
+reference values are invented. Each intake is finalized and approved by
 alex.carter (stage 1) and nina.patel (stage 2). Celery ingest writes the
 register rows — this script never INSERTs into g2p_register_*.
 """
 
 from __future__ import annotations
 
-import csv
 import json
 import os
 import ssl
 import sys
 import time
 import uuid
-from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
+from datetime import date, datetime, timezone
 from typing import Any, Callable
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
@@ -26,6 +24,8 @@ from urllib import request as urllib_request
 
 import psycopg2
 import psycopg2.extras
+
+from master_data_samples import load_samples
 
 # ── Register / form / section ids (farmer-extension meta_data) ───────────────
 HOUSEHOLD_REGISTER_ID = "9055ab43-c85d-4833-bd00-ca657bb72644"
@@ -54,47 +54,6 @@ FARMER_LIVESTOCK_SECTION = "farmer_livestock_livestock_details_intake_section_01
 FARMER_MEMBERSHIP_SECTION = "farmer_membership_membership_details_01"
 
 ARTIFACT_INTAKE = "registry.intake_form"
-
-EDU_MAP = {
-    "NONE": "ILLITERATE",
-    "VOCATIONAL": "CAN_READ_AND_WRITE",
-    "ILLITERATE": "ILLITERATE",
-    "CAN_READ_AND_WRITE": "CAN_READ_AND_WRITE",
-    "NON_FORMAL": "NON_FORMAL",
-    "NEVER_ATTEND": "NEVER_ATTEND",
-    "BASIC": "BASIC",
-    "PRIMARY": "PRIMARY",
-    "INTERMEDIARY": "INTERMEDIARY",
-    "SECONDARY": "SECONDARY",
-    "TERTIARY": "TERTIARY",
-    "HIGHER_EDUCATION": "HIGHER_EDUCATION",
-}
-INCOME_MAP = {
-    "CROP_PRODUCTION": "SOI_CROP_PRODUCTION",
-    "SOI_CROP_PRODUCTION": "SOI_CROP_PRODUCTION",
-    "LIVESTOCK_PRODUCTION": "SOI_LIVESTOCK_PRODUCTION",
-    "SOI_LIVESTOCK_PRODUCTION": "SOI_LIVESTOCK_PRODUCTION",
-    "LIVESTOCK": "SOI_LIVESTOCK_PRODUCTION",
-    "GOVERNMENT_NGO_SUPPORT": "SOI_GOVERNMENT_NGO_SUPPORT",
-    "SOI_GOVERNMENT_NGO_SUPPORT": "SOI_GOVERNMENT_NGO_SUPPORT",
-    "OTHERS": "SOI_OTHERS",
-    "SOI_OTHERS": "SOI_OTHERS",
-    "REMITTANCES": "SOI_OTHERS",
-    "WAGE_LABOR": "SOI_OTHERS",
-    "BUSINESS_TRADE": "SOI_OTHERS",
-}
-LANG_MAP = {
-    "ENGLISH": "ENGLISH",
-    "HINDI": "HINDI",
-    "SPANISH": "SPANISH",
-    "FRENCH": "FRENCH",
-    "LOCAL": "ENGLISH",
-}
-
-OPENG2P_DATA_DIR = Path(os.environ.get("OPENG2P_DATA_DIR", "/openg2p-data"))
-DEMO_DIR = OPENG2P_DATA_DIR / "demography"
-JSON_COLUMNS_INDIVIDUAL = {"phone_numbers"}
-
 
 def log(msg: str) -> None:
     print(f"[load-sample-data] {msg}", flush=True)
@@ -142,9 +101,7 @@ def registry_env(name: str, required: bool = True) -> str:
 
 # ── Geo (master-data) ────────────────────────────────────────────────────────
 
-_GEO_INDEX: dict = {}
 _GEO_BY_ID: dict = {}
-_GEO_LEAF: dict | None = None
 
 
 def _md_connect():
@@ -162,7 +119,7 @@ def _md_connect():
 
 
 def load_geo_indexes() -> None:
-    global _GEO_INDEX, _GEO_BY_ID, _GEO_LEAF
+    global _GEO_BY_ID
     conn = _md_connect()
     if conn is None:
         log("MD_PG* not set — geo ids will be empty.")
@@ -180,23 +137,6 @@ def load_geo_indexes() -> None:
                 vid: (mnemonic.get(lid, lid), name, parent)
                 for vid, lid, name, parent in rows
             }
-            _GEO_INDEX = {
-                (parent or "", (name or "").strip().lower()): vid
-                for vid, _lid, name, parent in rows
-            }
-            children = {parent for _vid, _lid, _name, parent in rows if parent}
-            leaves = [
-                vid for vid, _lid, _name, parent in rows if vid not in children
-            ]
-            _GEO_LEAF = _GEO_BY_ID.get(leaves[0]) and {
-                "id": leaves[0],
-                "hierarchy": hierarchy_from_id(leaves[0]),
-            }
-            if leaves:
-                _GEO_LEAF = {
-                    "id": leaves[0],
-                    "hierarchy": hierarchy_from_id(leaves[0]),
-                }
         log(f"master-data geo: {len(_GEO_BY_ID)} units.")
     finally:
         conn.close()
@@ -220,188 +160,11 @@ def hierarchy_from_id(pcode: str) -> dict:
     return {"hierarchy": chain}
 
 
-def geo_for_record(rec: dict) -> tuple[str | None, dict | None]:
-    if rec.get("geo_pcode") and rec["geo_pcode"] in _GEO_BY_ID:
-        return rec["geo_pcode"], hierarchy_from_id(rec["geo_pcode"])
-    if _GEO_LEAF:
-        return _GEO_LEAF["id"], _GEO_LEAF["hierarchy"]
-    return None, None
-
-
-def _address_line(parts) -> str:
-    if not parts:
-        return ""
-    if isinstance(parts, str):
-        return parts
-    return ", ".join(str(v) for v in parts.values() if v)
-
-
-def _age_from_birth(birth: str | None, fallback: int | None) -> int | None:
-    if not birth:
-        return fallback
-    try:
-        y, m, d = [int(x) for x in str(birth)[:10].split("-")]
-        born = date(y, m, d)
-    except (TypeError, ValueError):
-        return fallback
-    today = date.today()
-    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
-
-
-def _map_edu(value: str | None) -> str:
-    key = (value or "BASIC").upper()
-    return EDU_MAP.get(key, "BASIC")
-
-
-def _map_income(value: str | None) -> str:
-    key = (value or "SOI_CROP_PRODUCTION").upper()
-    return INCOME_MAP.get(key, "SOI_CROP_PRODUCTION")
-
-
-def _map_lang(value: str | None) -> str:
-    key = (value or "ENGLISH").upper()
-    return LANG_MAP.get(key, "ENGLISH")
-
-
-def _read_csv_rows(path: Path, json_columns: set) -> list:
-    if not path.is_file():
-        return []
-    with path.open(newline="", encoding="utf-8") as f:
-        out = []
-        for row in csv.DictReader(f):
-            parsed = {}
-            for k, v in row.items():
-                if v == "":
-                    parsed[k] = None
-                elif k in json_columns:
-                    parsed[k] = json.loads(v)
-                else:
-                    parsed[k] = v
-            out.append(parsed)
-        return out
-
-
-def load_people_from_csv() -> tuple[list, list]:
-    inds_raw = _read_csv_rows(DEMO_DIR / "individuals.csv", JSON_COLUMNS_INDIVIDUAL)
-    hhs_raw = _read_csv_rows(DEMO_DIR / "households.csv", set())
-    if not inds_raw:
-        return [], []
-    individuals = []
-    for i in inds_raw:
-        phones = i.get("phone_numbers")
-        phone = None
-        if isinstance(phones, list) and phones:
-            phone = phones[0].get("number") if isinstance(phones[0], dict) else str(phones[0])
-        birth = i.get("birth_date") or "1985-01-01"
-        individuals.append(
-            {
-                "internal_record_id": i.get("internal_record_id"),
-                "household_id": i.get("household_id"),
-                "full_name": i.get("full_name") or f"{i.get('first_name') or ''} {i.get('last_name') or ''}".strip(),
-                "first_name": i.get("first_name") or "Farmer",
-                "middle_name": i.get("middle_name"),
-                "last_name": i.get("last_name") or "Seed",
-                "given_name": i.get("given_name") or i.get("first_name") or "Farmer",
-                "gender": (i.get("gender") or "MALE").upper(),
-                "birth_date": str(birth)[:10],
-                "estimated_age": _as_int(i.get("estimated_age")) or _age_from_birth(str(birth)[:10], 40),
-                "marital_status": (i.get("marital_status") or "MARRIED").upper(),
-                "education_level": _map_edu(i.get("education_level")),
-                "foundational_id": i.get("foundational_id") or f"NID-{str(i.get('internal_record_id'))[-6:]}",
-                "phone": phone,
-                "latitude": i.get("latitude"),
-                "longitude": i.get("longitude"),
-                "address_line_1": i.get("address_line_1") or "",
-                "country_code": i.get("country_code"),
-                "geo_pcode": i.get("geo_pcode"),
-            }
-        )
-    by_hh: dict[str, list] = {}
-    for i in individuals:
-        by_hh.setdefault(i.get("household_id"), []).append(i)
-    households = []
-    for h in hhs_raw:
-        hid = h.get("internal_record_id") or h.get("household_id")
-        members = by_hh.get(hid, [])
-        if not members:
-            continue
-        head_name = h.get("head_name") or ""
-        head = next((m for m in members if m["full_name"] == head_name), members[0])
-        households.append(
-            {
-                "household_id": hid,
-                "head": head,
-                "members": members,
-                "latitude": h.get("latitude") or head.get("latitude"),
-                "longitude": h.get("longitude") or head.get("longitude"),
-                "address_line_1": h.get("address_line_1") or head.get("address_line_1"),
-                "country_code": h.get("country_code") or head.get("country_code"),
-                "geo_pcode": h.get("geo_pcode") or head.get("geo_pcode"),
-            }
-        )
-    log(f"CSV samples: {len(individuals)} individuals, {len(households)} households.")
-    return individuals, households
-
-
-def synthetic_households(count: int) -> list:
-    geo_id, geo_h = geo_for_record({})
-    out = []
-    for n in range(count):
-        members = []
-        for mi, (first, last, gender, age) in enumerate(
-            (
-                ("Amina", f"Seed{n+1}", "FEMALE", 42),
-                ("Omar", f"Seed{n+1}", "MALE", 45),
-                ("Lila", f"Seed{n+1}", "FEMALE", 12),
-            )
-        ):
-            birth = date.today().replace(year=date.today().year - age)
-            members.append(
-                {
-                    "internal_record_id": f"syn-{n}-{mi}",
-                    "household_id": f"syn-hh-{n}",
-                    "full_name": f"{first} {last}",
-                    "first_name": first,
-                    "middle_name": None,
-                    "last_name": last,
-                    "given_name": first,
-                    "gender": gender,
-                    "birth_date": birth.isoformat(),
-                    "estimated_age": age,
-                    "marital_status": "MARRIED" if age >= 18 else "SINGLE",
-                    "education_level": "BASIC",
-                    "foundational_id": f"NID-SYN{n}{mi}",
-                    "phone": f"+25470000{n:02d}{mi}",
-                    "latitude": 1.29,
-                    "longitude": 36.82,
-                    "address_line_1": f"{n+1} Seed Lane",
-                    "country_code": "KE",
-                    "geo_pcode": geo_id,
-                }
-            )
-        head = members[0]
-        out.append(
-            {
-                "household_id": f"syn-hh-{n}",
-                "head": head,
-                "members": members,
-                "latitude": 1.29,
-                "longitude": 36.82,
-                "address_line_1": head["address_line_1"],
-                "country_code": "KE",
-                "geo_pcode": geo_id,
-            }
-        )
-        _ = geo_h
-    log(f"synthetic samples: {len(out)} household(s).")
-    return out
-
-
-def _as_int(v):
-    try:
-        return int(v) if v not in (None, "") else None
-    except (TypeError, ValueError):
-        return None
+def geo_for_record(rec: dict) -> tuple[str, dict]:
+    pcode = rec.get("geo_pcode")
+    if not pcode or pcode not in _GEO_BY_ID:
+        raise ValueError(f"Sample geography {pcode!r} is absent from published MDS geography")
+    return pcode, hierarchy_from_id(pcode)
 
 
 def _as_float(v):
@@ -417,71 +180,34 @@ def person_phones(person: dict) -> list | None:
     return [{"type": "personal", "number": str(person["phone"]), "is_primary": True}]
 
 
-def person_emails(person: dict) -> list:
-    slug = "".join(ch for ch in (person.get("first_name") or "farmer").lower() if ch.isalnum())
-    return [{"type": "personal", "address": f"{slug}.seed@example.org", "is_primary": True}]
-
-
 def geo_fields(rec: dict) -> dict:
     lowest, hierarchy = geo_for_record(rec)
     return {
         "latitude": _as_float(rec.get("latitude")),
         "longitude": _as_float(rec.get("longitude")),
-        "altitude": 1200.0,
-        "plus_code": "SEED+00",
-        "address_line_1": rec.get("address_line_1") or "1 Seed Road",
-        "address_line_2": "Plot 1",
-        "postal_code": "00100",
-        "country_code": rec.get("country_code") or "KE",
+        "address_line_1": rec.get("address_line_1"),
+        "country_code": rec.get("country_code"),
         "geo_lowest_level_value_id": lowest,
         "geo_code_hierarchy_json": hierarchy,
     }
 
 
 def person_fields(person: dict, *, extra: dict | None = None) -> dict:
-    gender = (person.get("gender") or "MALE").upper()
-    if gender == "OTHERS":
-        gender = "OTHER"
-    if gender not in ("MALE", "FEMALE", "OTHER", "UNKNOWN"):
-        gender = "MALE"
-    marital = (person.get("marital_status") or "MARRIED").upper()
-    if marital not in ("SINGLE", "MARRIED", "DIVORCED", "WIDOWED", "SEPARATED", "UNKNOWN"):
-        marital = "MARRIED"
-    birth = str(person.get("birth_date") or "1985-01-01")[:10]
-    age = person.get("estimated_age") or _age_from_birth(birth, 40)
-    # Domain rule: estimated_age must match birth_date within one year.
-    computed = _age_from_birth(birth, age)
-    if computed is not None:
-        age = computed
-    nid = person.get("foundational_id") or "NID-000000"
-    payload = {
-        "first_name": person.get("first_name") or "Farmer",
-        "middle_name": person.get("middle_name") or "K",
-        "last_name": person.get("last_name") or "Seed",
-        "given_name": person.get("given_name") or person.get("first_name") or "Farmer",
-        "prefix": "Ms" if gender == "FEMALE" else "Mr",
-        "suffix": None,
-        "gender": gender,
-        "birth_date": birth,
-        "foundational_id": nid,
-        "phone_numbers": person_phones(person) or [
-            {"type": "personal", "number": "+254700000001", "is_primary": True}
-        ],
-        "emails": person_emails(person),
-        "marital_status": marital,
-        "occupation": "FARMER",
-        "income_level": "LOW",
-        "language_code": "en",
-        "education_level": _map_edu(person.get("education_level")),
+    # MDS samples do not contain titles, email, income or occupation. Do not
+    # fabricate them (in particular, Mr/Ms are labels, not PREFIX codes).
+    payload = {key: person.get(key) for key in (
+        "first_name", "middle_name", "last_name", "given_name", "gender",
+        "birth_date", "foundational_id", "marital_status", "education_level",
+    )}
+    payload.update({
+        "phone_numbers": person_phones(person),
         "registration_date": date.today().isoformat(),
         **geo_fields(person),
-    }
+    })
     if extra:
         payload.update(extra)
     return payload
 
-
-# ── HTTP / Keycloak / Staff API ──────────────────────────────────────────────
 
 def _ssl_ctx():
     if env_bool("INTAKE_SEED_VERIFY_TLS", True):
@@ -640,72 +366,6 @@ def fetch_token(token_url: str, client_id: str, username: str, password: str, cl
     return body["access_token"]
 
 
-def keycloak_prepare_users(
-    base_url: str,
-    realm: str,
-    admin_user: str,
-    admin_password: str,
-    client_id: str,
-    usernames: list[str],
-    password: str,
-) -> None:
-    """Make alex.carter / nina.patel usable for the password grant."""
-    token_url = f"{base_url.rstrip('/')}/realms/master/protocol/openid-connect/token"
-    status, body = http_json(
-        "POST",
-        token_url,
-        form={
-            "grant_type": "password",
-            "client_id": "admin-cli",
-            "username": admin_user,
-            "password": admin_password,
-        },
-        timeout=20,
-    )
-    if status != 200:
-        log(f"keycloak admin login skipped ({status}): {body}")
-        return
-    admin_token = body["access_token"]
-    hdrs = {"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"}
-    realm_url = f"{base_url.rstrip('/')}/admin/realms/{realm}"
-
-    status, clients = http_json(
-        "GET", f"{realm_url}/clients?clientId={urllib_parse.quote(client_id)}", headers=hdrs
-    )
-    if status == 200 and clients:
-        client = clients[0]
-        if not client.get("directAccessGrantsEnabled"):
-            client["directAccessGrantsEnabled"] = True
-            http_json("PUT", f"{realm_url}/clients/{client['id']}", data=client, headers=hdrs)
-            log(f"enabled direct access grants on {client_id}")
-
-    for username in usernames:
-        status, users = http_json(
-            "GET",
-            f"{realm_url}/users?username={urllib_parse.quote(username)}&exact=true",
-            headers=hdrs,
-        )
-        if status != 200 or not users:
-            log(f"keycloak user '{username}' not found — login may fail")
-            continue
-        user_id = users[0]["id"]
-        http_json(
-            "PUT",
-            f"{realm_url}/users/{user_id}/reset-password",
-            data={"type": "password", "value": password, "temporary": False},
-            headers=hdrs,
-        )
-        http_json(
-            "PUT",
-            f"{realm_url}/users/{user_id}",
-            data={"requiredActions": [], "enabled": True},
-            headers=hdrs,
-        )
-        log(f"keycloak user '{username}': password set non-temporary")
-
-
-# ── Intake helpers ───────────────────────────────────────────────────────────
-
 def section_record_id(save_result: dict, section_register_id: str) -> str:
     for payload in save_result.get("section_payloads") or []:
         if payload.get("section_register_id") != section_register_id:
@@ -808,9 +468,7 @@ def approve_intake(
             assignee = (task.get("assignee") or "").strip()
             client = clients.get(assignee) or clients.get(assignee.split("@")[0])
             if client is None:
-                # Fall back to the named stage users if AWE stores a UUID.
-                stage = int(task.get("stage_order") or 1)
-                client = clients["alex.carter"] if stage == 1 else clients["nina.patel"]
+                raise RuntimeError(f"No configured seed credential for AWE assignee {assignee!r}")
             client.post(
                 "/awe/submit_task_decision",
                 {
@@ -956,17 +614,28 @@ def wait_linked_rows(
     )
 
 
-def already_seeded() -> bool:
+def already_seeded(households: list[dict]) -> bool:
+    """Do not mistake unrelated records for samples or duplicate a partial seed.
+
+    Completed source identities are a no-op. Partial/in-flight source identities
+    require native intake recovery before retry; this seed never force-replays.
+    """
+    identities = [hh["head"]["foundational_id"] for hh in households]
     conn = registry_connect()
     try:
         with conn.cursor() as cur:
-            cur.execute("select count(*) from g2p_register_households")
-            hh = cur.fetchone()[0]
-            cur.execute("select count(*) from g2p_register_farmers")
-            fr = cur.fetchone()[0]
-            return hh > 0 and fr > 0
-    except Exception:  # noqa: BLE001
-        return False
+            cur.execute("SELECT foundational_id FROM g2p_register_farmers WHERE foundational_id = ANY(%s)", (identities,))
+            registered = [row[0] for row in cur.fetchall()]
+            if len(registered) == len(identities) and set(registered) == set(identities):
+                return True
+            cur.execute("SELECT count(*) FROM g2p_intake_form_farmers WHERE foundational_id = ANY(%s)", (identities,))
+            pending = cur.fetchone()[0]
+            cur.execute("SELECT count(*) FROM g2p_intake_form_households WHERE household_head = ANY(%s)",
+                        ([hh["head"]["full_name"] for hh in households],))
+            household_intakes = cur.fetchone()[0]
+            if registered or pending or household_intakes:
+                raise RuntimeError("Partial or existing MDS sample identities found; recover their native intakes before retrying (no force replay)")
+            return False
     finally:
         conn.close()
 
@@ -977,11 +646,7 @@ def household_payload(hh: dict) -> dict:
     females = sum(1 for m in members if (m.get("gender") or "").upper() == "FEMALE")
     children = sum(1 for m in members if (m.get("estimated_age") or 0) < 18)
     elderly = sum(1 for m in members if (m.get("estimated_age") or 0) >= 60)
-    size = males + females
-    if size == 0:
-        size = len(members) or 1
-        males = size
-        females = 0
+    size = len(members)
     return {
         "household_head": hh["head"]["full_name"],
         "size_of_group": size,
@@ -989,118 +654,17 @@ def household_payload(hh: dict) -> dict:
         "number_of_elderly_members": elderly,
         "number_of_male_members": males,
         "number_of_female_members": females,
-        "other_land_owner": False,
         **geo_fields(hh),
     }
 
 
 def member_payload(member: dict, household_intake_id: str, *, is_head: bool = False) -> dict:
-    age = member.get("estimated_age") or 0
-    # Codes come from the master-data RELATIONSHIP_TO_HEAD list; the head is SELF.
-    if is_head:
-        relationship = "SELF"
-    elif age < 18:
-        relationship = "CHILD"
-    elif (member.get("marital_status") or "").upper() == "MARRIED":
-        relationship = "SPOUSE"
-    else:
-        relationship = "OTHER_RELATIVE"
     return {
         **person_fields(member),
-        "is_disabled": False,
+        "is_disabled": member["disability_status"] == "YES",
         "is_head": is_head,
-        "relationship_to_the_head": relationship,
+        "relationship_to_the_head": member["relationship_to_head"],
         "link_internal_record_id": household_intake_id,
-    }
-
-
-def farmer_extra(index: int) -> dict:
-    disabled = index % 4 == 0
-    income = (
-        "SOI_CROP_PRODUCTION",
-        "SOI_LIVESTOCK_PRODUCTION",
-        "SOI_GOVERNMENT_NGO_SUPPORT",
-        "SOI_OTHERS",
-    )[index % 4]
-    return {
-        "estimated_age": None,  # filled from birth
-        "has_personal_phone": True,
-        "disabled": disabled,
-        "disability_type": "MOBILITY" if disabled else None,
-        "disability_severity": "SOME_DIFFICULTY" if disabled else None,
-        "source_of_income": income,
-        "source_of_income_other": "Seasonal work" if income == "SOI_OTHERS" else None,
-        "language_spoken": ("ENGLISH", "HINDI", "FRENCH", "SPANISH")[index % 4],
-        "national_id_masked": "XXXXXX1234",
-    }
-
-
-def land_payload(hh: dict, farmer_id: str, index: int) -> dict:
-    geo = geo_fields(hh)
-    lat = _as_float(hh.get("latitude")) or 1.29
-    lon = _as_float(hh.get("longitude")) or 36.82
-    return {
-        "link_internal_record_id": farmer_id,
-        "land_ownership_type": ("OWNER", "TENANT", "CROP_SHARE")[index % 3],
-        "certificate_storage_id": None,
-        "land_size": 2.5 + index,
-        "unit": "HECTARE",
-        "soil_fertility": ("SF_HIGH", "SF_MEDIUM", "SF_LOW")[index % 3],
-        "current_land_use": "AGRICULTURAL",
-        "farming_type": "MIXED",
-        "year_of_acquisition": 2018,
-        "means_of_acquisition": "MOA_INHERITANCE",
-        **geo,
-        "shape_type": "POINT",
-        "shape_coordinates_json": {"type": "Point", "coordinates": [lon, lat]},
-    }
-
-
-def crop_payload(land_id: str, index: int) -> dict:
-    commodity = ("CROP_MAIZE", "CROP_WHEAT", "CROP_TEFF")[index % 3]
-    planted = (date.today() - timedelta(days=40)).isoformat()
-    return {
-        "link_internal_record_id": land_id,
-        "commodity": commodity,
-        "planted_date": planted,
-        "season": "SEASON_MEHER",
-        "end_use": "FOOD_HUMAN_CONSUMPTION",
-    }
-
-
-def livestock_payload(land_id: str, index: int) -> dict:
-    kind = ("LSTK_GOAT", "LSTK_CATTLE", "LSTK_SHEEP")[index % 3]
-    return {
-        "link_internal_record_id": land_id,
-        "livestock_type": kind,
-        "breed": "BREED_LOCAL",
-        "head_count": 6 + index,
-        "livestock_system": "MIXED",
-    }
-
-
-def farm_inputs_payload(land_id: str) -> dict:
-    return {
-        "link_internal_record_id": land_id,
-        "fertilizer_use": True,
-        "pesticide_use": False,
-        "insecticide_use": False,
-        "improved_seed_use": True,
-        "water_source": "WS_WELL_GROUND",
-        "access_to_machinery": True,
-        "access_to_finance": False,
-    }
-
-
-def membership_payload(farmer_id: str, name: str) -> dict:
-    return {
-        "link_internal_record_id": farmer_id,
-        "is_primary_cooperative_member": True,
-        "primary_cooperative_name": f"{name} Cooperative",
-        "is_cooperative_union_member": True,
-        "cooperative_union_name": "District Farmers Union",
-        "is_farmer_cluster_member": True,
-        "farmer_cluster_role": "MEMBER",
     }
 
 
@@ -1153,9 +717,9 @@ def submit_farmer(
     client: StaffClient, hh: dict, household_id: str, index: int
 ) -> tuple[str, str]:
     farmer = hh["head"]
-    extra = farmer_extra(index)
-    extra["estimated_age"] = _age_from_birth(farmer.get("birth_date"), farmer.get("estimated_age") or 40)
-    extra["national_id_masked"] = f"XXXX{(farmer.get('foundational_id') or '0000')[-4:]}"
+    extra = {"disabled": farmer["disability_status"] == "YES", "has_personal_phone": bool(farmer.get("phone"))}
+    extra["estimated_age"] = farmer["estimated_age"]
+    extra["national_id_masked"] = f"XXXX{farmer['foundational_id'][-4:]}"
     personal = {
         **person_fields(farmer, extra=extra),
         "link_internal_record_id": household_id,
@@ -1200,57 +764,6 @@ def submit_farmer(
         records=[linked],
     )
 
-    land_rows = [land_payload(hh, farmer_id, 0), land_payload(hh, farmer_id, 1)]
-    land_saved = save_section(
-        client,
-        submission_id=submission_id,
-        section_id=FARMER_LAND_SECTION,
-        section_register_id=LAND_REGISTER_ID,
-        form_id=FARMER_FORM_ID,
-        register_id=FARMER_REGISTER_ID,
-        records=land_rows,
-    )
-    land_ids = section_record_ids(land_saved, LAND_REGISTER_ID)
-    if len(land_ids) < 2:
-        raise RuntimeError(f"expected 2 land ids, got {land_ids}")
-    land_a, land_b = land_ids[0], land_ids[1]
-
-    save_section(
-        client,
-        submission_id=submission_id,
-        section_id=FARMER_CROP_SECTION,
-        section_register_id=CROP_REGISTER_ID,
-        form_id=FARMER_FORM_ID,
-        register_id=FARMER_REGISTER_ID,
-        records=[crop_payload(land_a, 0), crop_payload(land_b, 1)],
-    )
-    save_section(
-        client,
-        submission_id=submission_id,
-        section_id=FARMER_LIVESTOCK_SECTION,
-        section_register_id=LIVESTOCK_REGISTER_ID,
-        form_id=FARMER_FORM_ID,
-        register_id=FARMER_REGISTER_ID,
-        records=[livestock_payload(land_a, 0), livestock_payload(land_a, 1)],
-    )
-    save_section(
-        client,
-        submission_id=submission_id,
-        section_id=FARMER_INPUT_SECTION,
-        section_register_id=FARM_INPUTS_REGISTER_ID,
-        form_id=FARMER_FORM_ID,
-        register_id=FARMER_REGISTER_ID,
-        records=[farm_inputs_payload(land_a), farm_inputs_payload(land_b)],
-    )
-    save_section(
-        client,
-        submission_id=submission_id,
-        section_id=FARMER_MEMBERSHIP_SECTION,
-        section_register_id=MEMBERSHIP_REGISTER_ID,
-        form_id=FARMER_FORM_ID,
-        register_id=FARMER_REGISTER_ID,
-        records=[membership_payload(farmer_id, farmer["full_name"])],
-    )
     finalize(client, submission_id, FARMER_REGISTER_ID, FARMER_FORM_ID)
     return submission_id, farmer_id
 
@@ -1273,7 +786,7 @@ def main() -> None:
         sys.exit(1)
     client_id = env("STAFF_CLIENT_ID", required=True)
     client_secret = env("STAFF_CLIENT_SECRET")
-    password = env("INTAKE_SEED_PASSWORD", env("KEYCLOAK_AWE_APPROVER_PASSWORD", "pass"))
+    password = env("INTAKE_SEED_PASSWORD", env("KEYCLOAK_AWE_APPROVER_PASSWORD"), required=True)
     submit_user = env("INTAKE_SEED_SUBMIT_USER", "alex.carter")
     approver1 = env("INTAKE_SEED_APPROVER_1", "alex.carter")
     approver2 = env("INTAKE_SEED_APPROVER_2", "nina.patel")
@@ -1281,31 +794,16 @@ def main() -> None:
     approve_timeout = env_int("INTAKE_SEED_APPROVE_TIMEOUT", 180)
     max_hh = env_int("INTAKE_SEED_MAX_HOUSEHOLDS", 25)
 
-    if already_seeded() and not env_bool("INTAKE_SEED_FORCE"):
-        log("register already has household + farmer rows — skip (INTAKE_SEED_FORCE=true to redo).")
-        return
-
     load_geo_indexes()
-    _, households = load_people_from_csv()
-    if not households:
-        households = synthetic_households(max_hh)
+    _, households = load_samples(_md_connect, _GEO_BY_ID)
+    if max_hh < 1:
+        raise ValueError("INTAKE_SEED_MAX_HOUSEHOLDS must be positive")
     households = households[:max_hh]
-    if not households:
-        print("[load-sample-data] no people to seed", file=sys.stderr)
-        sys.exit(1)
-
-    kc_base = env("KEYCLOAK_BASE_URL")
-    kc_admin = env("KEYCLOAK_ADMIN_USER")
-    kc_admin_pw = env("KEYCLOAK_ADMIN_PASSWORD")
-    kc_realm = env("KEYCLOAK_REALM", "staff")
+    if already_seeded(households):
+        log("All requested MDS household heads already exist; no records changed.")
+        return
+    # Account provisioning belongs to IAM/Keycloak, never to a data seed.
     users = list(dict.fromkeys([submit_user, approver1, approver2]))
-    if kc_base and kc_admin and kc_admin_pw:
-        try:
-            keycloak_prepare_users(
-                kc_base, kc_realm, kc_admin, kc_admin_pw, client_id, users, password
-            )
-        except Exception as exc:  # noqa: BLE001
-            log(f"keycloak prepare warning: {exc}")
 
     clients: dict[str, StaffClient] = {}
     for username in users:
@@ -1335,18 +833,13 @@ def main() -> None:
             hh_sub, hh_id = submit_household(submitter, hh)
             approve_intake(clients, awe_conn, hh_sub, approve_timeout)
             wait_register_row("g2p_register_households", hh_id, ingest_timeout)
-            wait_linked_rows("g2p_register_household_members", hh_id, 1, ingest_timeout)
+            wait_linked_rows("g2p_register_household_members", hh_id, len(hh["members"]), ingest_timeout)
             log(f"  household ingested id={hh_id}")
 
             log(f"farmer {index + 1}/{len(households)}: {hh['head']['full_name']} -> household {hh_id}")
             fr_sub, fr_id = submit_farmer(submitter, hh, hh_id, index)
             approve_intake(clients, awe_conn, fr_sub, approve_timeout)
             wait_register_row("g2p_register_farmers", fr_id, ingest_timeout)
-            wait_linked_rows("g2p_register_lands", fr_id, 2, ingest_timeout)
-            wait_linked_rows("g2p_register_crops", None, 2, ingest_timeout, via_land_of=fr_id)
-            wait_linked_rows("g2p_register_livestocks", None, 2, ingest_timeout, via_land_of=fr_id)
-            wait_linked_rows("g2p_register_farm_inputs", None, 2, ingest_timeout, via_land_of=fr_id)
-            wait_linked_rows("g2p_register_membership_details", fr_id, 1, ingest_timeout)
             log(f"  farmer ingested id={fr_id}")
     finally:
         awe_conn.close()

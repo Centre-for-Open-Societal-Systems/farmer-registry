@@ -20,7 +20,11 @@ RUN python3 /oan/templates/build_dci_template.py /seed/templates/openg2p_farmer_
     && cp /oan/templates/oan_farmer_reference_changed.json.j2 /seed/templates/ \
     && cp /oan/templates/oan_farmer_odk_transform.j2 /seed/templates/
 
-# Sample people from Master Data (the country pack's samples); see oan-extension/seed/.
+# MDS-owned sample input; replace inherited country-specific demo loaders.
+COPY docker/db-seed/load_sample_data.py docker/db-seed/master_data_samples.py /seed/
+RUN rm -rf /seed/seed-data /openg2p-data/demography \
+    && rm -f /seed/generate_fr_bulk_sample.py
+# Registry metadata and templates remain extension-owned.
 COPY oan-extension/reporting/ /seed/oan-reporting/
 COPY oan-extension/reporting/reporting_views.sql /seed/reporting_views.sql
 
