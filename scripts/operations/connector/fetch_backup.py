@@ -28,7 +28,7 @@ def main():
     args = parser.parse_args()
     args.directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     expected = yaml.safe_load((ROOT / "helm/environments/dev/services/registry-connector.yaml").read_text())["_coordination"]["backupHash"]
-    known_hosts = ROOT / "scripts/operations/connector/new-dev-known-hosts"
+    known_hosts = ROOT / "scripts/operations/connector/dev-known-hosts"
     PHASE = "authenticated-ssh-transfer"
     process = subprocess.Popen(["ssh", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
                                 "-o", "UserKnownHostsFile=" + str(known_hosts), "-o", "ConnectTimeout=15",

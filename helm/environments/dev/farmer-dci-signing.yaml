@@ -1,4 +1,4 @@
-# DCI response signing on New Dev. The chart's dciSigning hook generates the
+# DCI response signing on the dev environment. The chart's dciSigning hook generates the
 # partner API's RSA key into Secret farmer-registry-dci-signing on first run and
 # publishes the public key in ConfigMap farmer-registry-dci-signing-public for
 # the consuming registries (Crop Sown) to pin. The partner API mounts the Secret

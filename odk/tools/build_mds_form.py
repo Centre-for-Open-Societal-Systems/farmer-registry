@@ -23,7 +23,7 @@ enumerator sees the wording they know; a code the old form never offered gets
 the Master Data display in every language until a translation is added.
 
 Geography belongs to each environment's Master Data, not to the pack: an
-environment migrated from an older catalogue keeps its own unit ids (New Dev
+environment migrated from an older catalogue keeps its own unit ids (the dev environment
 serves region-ET01 ... kebele-ET010101101001). --geography takes a directory
 with that catalogue's levels.json and values.json, in the pack's format, read
 from the environment's Master Data (g2p_geo_levels, g2p_geo_level_values). It

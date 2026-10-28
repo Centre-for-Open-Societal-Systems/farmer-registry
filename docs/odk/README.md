@@ -4,7 +4,7 @@ Form assets remain under odk/: the XLSForm, location media, ingestion transform,
 and legacy setup assets. The published live form is farmer_profile; its permanent
 connector configuration is private.
 
-Canonical new dev is [odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com), with Farmer project `1`, Crop project `2` and migrated Livestock project `6`. See [hostname migration and archived old projects](../operations/odk-dev-hostname.md). The former Commons hostname remains a compatibility alias. Public staging remains the separate `odk-central.oanstaging.com` VM.
+The canonical dev ODK Central is [odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com), with Farmer project `1`, Crop project `2` and migrated Livestock project `6`. See [hostname migration and archived old projects](../operations/odk-dev-hostname.md). The former Commons hostname remains a compatibility alias. Public staging remains the separate `odk-central.oanstaging.com` VM.
 
 ```sh
 python odk/build_location_media.py --check
@@ -49,7 +49,7 @@ region, zone, woreda and kebele lists become external CSVs
 serves, `parent` the parent's), so a submission carries the location ids the
 web intake stores and `odk/transform.py` passes every code through unchanged.
 
-Geography belongs to each environment's Master Data, not to the pack. New Dev
+Geography belongs to each environment's Master Data, not to the pack. The dev environment
 serves the catalogue migrated on 2026-10-27 (`region-ET01` …
 `kebele-ET010101101001`, 1379 woredas), not the pack's plain P-codes, so the
 committed CSVs are built from that catalogue. `--geography` takes a directory
@@ -65,7 +65,7 @@ names (not Master Data lists) stay as they are. Output:
 `oan-extension/tests/test_odk_mds_codes.py` the transform's pass-through.
 
 Publish it as a new version of the same `farmer_profile` form (project 1 on
-new dev) together with the four CSVs as form attachments; the connector and
+the dev environment) together with the four CSVs as form attachments; the connector and
 the registry need no change. Choices the old form offered that Master Data
 does not have (three crops, six machinery names) are not carried: the
 registry's Master Data validation would refuse them anyway.

@@ -19,7 +19,7 @@ import yaml
 
 ISSUER = "https://keycloak-development.oanstaging.com/realms/staff"
 IAM = "https://staff-iam-development.oanstaging.com"
-OVERLAY = Path(__file__).resolve().parents[3] / "helm/environments/dev/registry-identity.yaml"
+OVERLAY = Path(__file__).resolve().parents[3] / "helm/environments/dev/farmer-identity.yaml"
 CHECKS = ("usersVerified", "clientsVerified", "rolesVerified", "audiencesVerified",
           "serviceAccountCredentialsVerified", "sharedPortalRoutingVerified",
           "issuerAndSignatureValidationVerified", "workerTokenSettingsVerified",
@@ -31,7 +31,7 @@ def environment_settings(environment):
         return ISSUER, IAM, OVERLAY
     if environment == "staging":
         return ("https://keycloak.oanstaging.com/realms/staff", "https://staff-iam.oanstaging.com",
-                Path(__file__).resolve().parents[3] / "helm/environments/staging/registry-identity.yaml")
+                Path(__file__).resolve().parents[3] / "helm/environments/staging/farmer-identity.yaml")
     raise ValueError("Unknown identity environment")
 
 

@@ -28,7 +28,7 @@ def probe(host, mode):
         connection.execute(text('CREATE EXTENSION IF NOT EXISTS pg_trgm'))
     BaseORMModel.metadata.create_all(engine)
     if mode == 'ddl':
-        # Actual New Dev legacy UUID owns this unique mnemonic. The native
+        # The legacy UUID already present on the dev environment owns this unique mnemonic. The native
         # seed uses a different UUID for the same crop intake capability.
         from openg2p_registry_core.models import G2PRegisterSection
         with engine.begin() as connection:

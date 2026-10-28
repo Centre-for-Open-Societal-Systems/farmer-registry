@@ -1,6 +1,6 @@
 # Farmer reference notification publisher
 
-`config.yaml` describes the explicit New Dev REGISTER topic and dedicated
+`config.yaml` describes the explicit dev REGISTER topic and dedicated
 notification data model. `notification.json.j2` is the MinIO outgoing template.
 It publishes the source functional ID, FAN and a stable event identifier derived
 from internal ID and approval time; it does not publish demographic fields.
@@ -12,7 +12,7 @@ outgestion for the Farmer register. New registers stay disabled by default;
 reseeding preserves the administrator's installed switch. No historical records
 are replayed. Retain all other topics, templates, register flags and approvals.
 
-The New Dev overlay supplies the internal Commons WebSub URL to Core and the
+The dev overlay supplies the internal Commons WebSub URL to Core and the
 publisher processes. CI renders and verifies it, while staging remains separate.
 Do not point Celery at Kafka: Redis continues to broker Celery work; WebSub owns
 its Kafka delivery infrastructure.

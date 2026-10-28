@@ -32,7 +32,7 @@ The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`)
 
 Sample data lives only in openg2p-data: the db-seed image takes the pack's
 `samples/farms.json` at a pinned commit, and Master Data serves the pack's sample
-people and households. New Dev loads them (`helm/environments/dev/registry-samples.yaml`).
+people and households. The dev environment loads them (`helm/environments/dev/farmer-samples.yaml`).
 
 Helm ownership is centralized in
 [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm).
@@ -50,8 +50,8 @@ For delivery tests, install `ci/validation/requirements.txt` and run
 `python -m pytest` (runs `test/unit`). Native extension and repeatable metadata checks
 run against the published runtime in CI. See [the documentation index](docs/README.md),
 [native ODK intake](docs/odk-native-intake.md) and
-[New Dev delivery](docs/NEW_DEV_FARMER_FIRST.md).
+[dev delivery](docs/dev-farmer-first.md).
 
 Local acceptance runs serially: Commons + Farmer + Crop, then Commons + Farmer +
-Livestock. Existing New Dev and staging deployments are unchanged by publication
+Livestock. Existing dev and staging deployments are unchanged by publication
 of this candidate.

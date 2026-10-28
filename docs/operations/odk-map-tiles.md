@@ -3,7 +3,7 @@
 Dev and public staging are repaired. Both pass authenticated Chrome and Firefox
 checks of rendered tiles, origin-only Referer headers and point selection.
 
-New dev subsequently moved to [odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com); the former Commons address remains an alias. The same map checks passed on the canonical origin. See [hostname migration](odk-dev-hostname.md).
+The dev environment subsequently moved to [odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com); the former Commons address remains an alias. The same map checks passed on the canonical origin. See [hostname migration](odk-dev-hostname.md).
 
 The screenshot matches an [upstream Central issue](https://github.com/getodk/central/issues/1885).
 `Referrer-Policy: same-origin` suppresses the cross-origin Referer required by
@@ -54,7 +54,7 @@ older template over the VM's newer configuration. Run the offline helper **on
 the VM** against the captured files:
 
 ```sh
-python3 scripts/operations/prepare-odk-map-policy.py \
+python3 scripts/operations/prepare_odk_map_policy.py \
   --template /private/before/odk.conf.template \
   --headers /private/before/common-headers.conf \
   --output /private/odk-map-policy

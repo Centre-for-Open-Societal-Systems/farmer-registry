@@ -9,20 +9,21 @@ pipeline {
     }
     environment {
         AWS_REGION = 'ap-south-1'
-        ECR_PATH = 'openg2p/farmer-registry'
+        ECR_REPOSITORY = 'openg2p/farmer-registry'
         HELM_RELEASE = 'farmer-registry'
         HELM_NAMESPACE = 'farmer'
+        KUBECONFIG_CREDENTIAL = 'farmer-dev-kubeconfig'
     }
     parameters {
-        choice(name: 'NEW_DEV_DELIVERY_ACTION', choices: ['publish-only', 'deploy', 'fresh-install'],
-            description: 'publish-only builds and pushes the images. deploy upgrades the existing New Dev release with them. fresh-install backs up the New Dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all New Dev farmer data is lost; Commons is untouched).')
+        choice(name: 'DELIVERY_ACTION', choices: ['publish-only', 'deploy', 'fresh-install'],
+            description: 'publish-only builds and pushes the images. deploy upgrades the existing dev release with them. fresh-install backs up the dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all dev farmer data is lost; Commons is untouched).')
         booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
             description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
         booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
             description: 'Apply reviewed Commons staff identity values; requires fresh farmer-dev-identity-evidence credential.')
     }
     stages {
-        stage('Checkout and validate') {
+        stage('Test') {
             steps {
                 checkout scm
                 dir('service-outcomes') { deleteDir() }
@@ -37,7 +38,7 @@ pipeline {
                     env.SOURCE_COMMIT = commit
                     // Branch-index builds may not yet have the new parameters.
                     // Resolve that case to publication, never cluster mutation.
-                    env.OAN_DELIVERY_ACTION = sh(returnStdout: true,
+                    env.DELIVERY_ACTION = sh(returnStdout: true,
                         script: 'python3 ci/delivery.py action').trim()
                 }
                 sh '''
@@ -49,7 +50,7 @@ pipeline {
                 '''
             }
         }
-        stage('Build RC images') {
+        stage('Build') {
             steps {
                 sh '''
                     set -eu
@@ -57,7 +58,7 @@ pipeline {
                 '''
             }
         }
-        stage('Publish dev images') {
+        stage('Publish') {
             when { allOf { branch 'develop'; not { changeRequest() } } }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
@@ -81,16 +82,16 @@ pipeline {
                         mkdir -p service-outcomes
                         : > service-outcomes/registry-images.tsv
                         for component in staff-api partner-api celery db-seed sanity-tests staff-ui; do
-                          image="$ECR_REGISTRY/$ECR_PATH/$component:$IMAGE_TAG"
+                          image="$ECR_REGISTRY/$ECR_REPOSITORY/$component:$IMAGE_TAG"
                           docker tag "coss-ci/$component:$IMAGE_TAG" "$image"
                           docker push "$image"
                           digest=$(aws ecr describe-images --region "$AWS_REGION" \
-                            --repository-name "$ECR_PATH/$component" --image-ids "imageTag=$IMAGE_TAG" \
+                            --repository-name "$ECR_REPOSITORY/$component" --image-ids "imageTag=$IMAGE_TAG" \
                             --query 'imageDetails[0].imageDigest' --output text)
                           printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
                         done
                         docker run --rm --network none --user "$(id -u):$(id -g)" \
-                          -e NEW_DEV_DELIVERY_ACTION -e OAN_DELIVERY_ACTION \
+                          -e DELIVERY_ACTION \
                           -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT \
                           -v "$PWD:/repo" "coss-ci/validation:$IMAGE_TAG" \
                           python ci/delivery.py publication service-outcomes/publication.json
@@ -98,28 +99,28 @@ pipeline {
                 }
             }
         }
-        stage('Prepare dev deployment') {
-            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION != 'publish-only' } } }
+        stage('Deploy (package)') {
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION != 'publish-only' } } }
             steps {
                 stash name: 'dev-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,test/runtime/**,service-outcomes/**,oan-extension/**,farmer-extension/**,ui/staff-ui/overrides/**,docker/**,test/sanity/**', excludes: 'helm/**/charts/**,**/__pycache__/**,**/.pytest_cache/**', useDefaultExcludes: false
             }
         }
-        stage('Deploy new dev') {
+        stage('Deploy (registry)') {
             when {
                 beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION in ['deploy', 'fresh-install'] } }
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION in ['deploy', 'fresh-install'] } }
             }
             agent { label 'vpn-agent2' }
             steps {
                 dir('dev-deployment') {
                     deleteDir()
                     unstash 'dev-deployment'
-                    withCredentials([file(credentialsId: 'farmer-dev-kubeconfig', variable: 'KUBECONFIG')]) {
+                    withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
                         script {
                           def deployRegistry = {
                             try {
-                              if (env.OAN_DELIVERY_ACTION == 'fresh-install') {
-                                // The database backups go to the New Dev box over the existing backup key.
+                              if (env.DELIVERY_ACTION == 'fresh-install') {
+                                // The database backups go to the dev box over the existing backup key.
                                 withCredentials([sshUserPrivateKey(credentialsId: 'farmer-new-dev-backup-ssh', keyFileVariable: 'BACKUP_SSH_KEY')]) {
                                   sh '''
                             set -eu
@@ -156,8 +157,8 @@ pipeline {
                 }
             }
         }
-        stage('Build optional services') {
-            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } } }
+        stage('Build (services)') {
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } } }
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
@@ -172,10 +173,10 @@ pipeline {
                 stash name: 'optional-deployment', includes: 'ci/**,helm/**,scripts/**,integrations/**,test/runtime/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
         }
-        stage('Deploy optional services') {
+        stage('Deploy (services)') {
             when {
                 beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() }; expression { env.OAN_DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
             }
             agent { label 'vpn-agent2' }
             steps {
@@ -191,7 +192,7 @@ pipeline {
                       }
                     }
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
-                        withCredentials([file(credentialsId: 'farmer-dev-kubeconfig', variable: 'KUBECONFIG')]) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
                             sh '''
                                 set -eu
                                 if ! test -d "$CONNECTOR_BACKUP_DIRECTORY"; then unset CONNECTOR_BACKUP_DIRECTORY; fi

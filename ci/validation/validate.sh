@@ -13,4 +13,4 @@ bash test/integration/test-container-shell.sh
 bash -n ci/build/staging-legacy.sh ci/deploy/staging-legacy.sh
 python ci/environments.py dev
 python ci/environments.py staging
-python scripts/check-doc-links.py
+python scripts/check_doc_links.py

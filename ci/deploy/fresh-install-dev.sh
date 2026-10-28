@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# New Dev only: rebuild the Farmer registry from an empty database.
+# Dev only: rebuild the Farmer registry from an empty database.
 #
 # This is the standard OpenG2P first install of the pinned chart, done again:
 # the release is uninstalled, the registry and ID-generator databases are
@@ -10,8 +10,8 @@
 # postgres-init re-syncs the database roles to them. Commons, the connector and
 # the dashboard releases are not touched.
 #
-# Every farmer, household, document, approval and issued ID on New Dev is lost.
-# Both databases are archived to the New Dev box first, over the existing
+# Every farmer, household, document, approval and issued ID on dev is lost.
+# Both databases are archived to the dev box first, over the existing
 # backup key, and the archive is checked before anything is removed.
 set -euo pipefail
 set +x
@@ -20,7 +20,7 @@ umask 077
 : "${ECR_REGISTRY:?Missing published ECR registry}"
 : "${IMAGE_TAG:?Missing immutable commit image tag}"
 : "${BACKUP_SSH_KEY:?Bind farmer-new-dev-backup-ssh}"
-test "${OAN_DELIVERY_ACTION:-}" = fresh-install
+test "${DELIVERY_ACTION:-}" = fresh-install
 test "${DELIVERY_ENVIRONMENT:-dev}" = dev
 export DELIVERY_ENVIRONMENT=dev
 test "${HELM_NAMESPACE:-}" = farmer
@@ -33,7 +33,7 @@ test -n "$REGISTRY_DB" && test -n "$IDGEN_DB"
 export REGISTRY_DB IDGEN_DB
 BACKUP_HOST=ubuntu@13.201.58.55
 BACKUP_DIR=/var/backups/oan/farmer
-KNOWN_HOSTS=scripts/operations/connector/new-dev-known-hosts
+KNOWN_HOSTS=scripts/operations/connector/dev-known-hosts
 STAMP=$(date -u +%Y%m%d-%H%M%S)
 JOB="farmer-fresh-install-$STAMP"
 STATE=$(mktemp -d)
@@ -84,7 +84,7 @@ helm template "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" -f "$STATE/values.ya
 
 # 2. Archive both databases. The Jenkins account is confined to the farmer
 #    namespace, which holds a copy of the Commons PostgreSQL Secret, so the
-#    dump runs in a Job there and is copied out and shipped to the New Dev box.
+#    dump runs in a Job there and is copied out and shipped to the dev box.
 kubectl get secret -n "$HELM_NAMESPACE" commons-postgresql -o name > /dev/null
 kubectl apply -f - <<EOF
 apiVersion: batch/v1
@@ -157,7 +157,7 @@ for name in "$REGISTRY_DB.dump" "$IDGEN_DB.dump" SHA256SUMS; do
   expected=$(sha256sum "$STATE/backup/$name" | cut -d ' ' -f 1)
   written=$(remote "sudo -n tee $BACKUP_DIR/$STAMP-$name | sha256sum" < "$STATE/backup/$name" | cut -d ' ' -f 1)
   if [[ "$written" != "$expected" ]]; then
-    echo "Archive $name did not arrive intact on the New Dev box; nothing was changed." >&2
+    echo "Archive $name did not arrive intact on the dev box; nothing was changed." >&2
     exit 1
   fi
 done

@@ -1,4 +1,4 @@
-# New-dev ODK hostname and old-VM archive
+# Dev ODK hostname and old-VM archive
 
 Executed on 16 October 2026. Canonical Central is now
 [odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com).
@@ -8,7 +8,7 @@ on its separate VM at `odk-central.oanstaging.com`.
 
 ## Configuration and ownership
 
-New dev remains `commons/commons-services-odk-central-*`, Central v2025.2.1.
+The dev environment remains `commons/commons-services-odk-central-*`, Central v2025.2.1.
 Images, databases, storage and Secret references were retained. Only backend and
 Enketo rolled for the configuration changes:
 
@@ -26,7 +26,7 @@ At the next reviewed **Commons Services** deployment, combine
 [`values-map-tiles.yaml`](../../ci/odk/values-map-tiles.yaml). The overlay keeps
 the Commons-managed route on the compatibility hostname; preserve the separately
 installed canonical route recorded in
-[`new-dev-canonical-route.yaml`](../../ci/odk/new-dev-canonical-route.yaml).
+[`dev-canonical-route.yaml`](../../ci/odk/dev-canonical-route.yaml).
 The Farmer pipeline does not apply these Commons files. Live targeted patches
 do not update Helm's stored values; deploying Commons without the overlays can
 revert them. Helm lint/render against installed ODK chart v2025.2.2 reproduced
@@ -35,7 +35,7 @@ allowing equivalent API representations of empty environment values.
 
 ## Connectors and Livestock migration
 
-All six existing new-dev definitions now use the canonical base URL. They were
+All six existing dev definitions now use the canonical base URL. They were
 paused and snapshotted before retargeting. IDs, mappings, sender settings,
 failed-run history, successful idempotency rows and checkpoints were preserved.
 Each registry retains one existing beat deployment with one replica.
@@ -104,7 +104,7 @@ the dump includes its stored blobs.
 Protected locations:
 
 - Old VM: `/var/backups/new-dev-odk-domain-20261016/`.
-- New dev: `/var/backups/farmer-dev-odk-hostname-20261016/`, including the old
+- Dev: `/var/backups/farmer-dev-odk-hostname-20261016/`, including the old
   archive, checksums, Livestock API export, pre-change Central/connector dumps,
   configuration and execution evidence.
 - Operator: `Temp/farmer-staging-20261016-private/odk-hostname/`.

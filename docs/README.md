@@ -19,7 +19,7 @@ Start with [the current refactor candidate](refactor-candidate.md).
 - [Service coordination](operations/coordinated-services-rollout.md)
 - [Signing, checkpoints and recovery](operations/connector.md)
 - [ODK form and intake](odk/README.md)
-- [New-dev ODK hostname, Livestock migration and archive](operations/odk-dev-hostname.md)
+- [Dev ODK hostname, Livestock migration and archive](operations/odk-dev-hostname.md)
 
 ## Verification and evidence
 
