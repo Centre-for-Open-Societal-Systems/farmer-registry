@@ -61,7 +61,7 @@ environment the form is published to. The chart's `odkGeoSync` (Central Entity
 Lists kept equal to Master Data) replaces this step once a Central
 project-manager login is provisioned for it. Yes/no answers, consent, and the cooperative and union
 names (not Master Data lists) stay as they are. Output:
-`odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.28`;
+`odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.29`;
 `test/unit/test_odk_mds_form.py` checks the build against a small pack and
 `oan-extension/tests/test_odk_mds_codes.py` the transform's pass-through.
 
