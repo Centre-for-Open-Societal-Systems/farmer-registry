@@ -205,8 +205,8 @@ def run():
             raise RuntimeError('Disposable PostgreSQL startup timed out')
         print(native('ddl').decode().splitlines()[-1],flush=True)
         files = []
-        for domain in ('farmer','oan'):
-            files += sorted((ROOT/f'{domain}-extension/src/openg2p_registry_{domain}_extension/meta_data').rglob('*.sql'))
+        for package in ('farmer-extension/src/openg2p_registry_farmer_extension', 'oan-extension/src/oan_farmer_registry_extension'):
+            files += sorted((ROOT/package/'meta_data').rglob('*.sql'))
         snapshots = []
         for attempt in (1,2):
             command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
