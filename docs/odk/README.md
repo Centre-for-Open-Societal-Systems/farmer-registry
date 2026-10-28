@@ -35,7 +35,7 @@ form, submissions, media, service account and permanent partner. Staging cleanup
 `odk/tools/build_mds_form.py` builds the form whose dropdowns are Master Data's:
 
 ```sh
-python odk/tools/build_mds_form.py --pack <openg2p-data>/packs/ETH-OAN
+python odk/tools/build_mds_form.py --pack <openg2p-data>/packs/ETH-OAN   --geography <export of the target environment's Master Data geography>
 ```
 
 It takes the v3 form and replaces the rows of every choice list that is a
@@ -44,11 +44,21 @@ income sources, crops, cluster role, land ownership, crop season, water
 sources, livestock type, machinery, finance access, identity document type,
 relationship to the head) with the pack's codes and displays, keeping the
 Amharic and Afaan Oromoo wording of the choices the old form had. The
-region, zone, woreda and kebele lists become the pack's hierarchy as external
-CSVs (`odk/media/mds/*.csv`: `name` and `code` are the P-code Master Data
-uses as `level_value_id`, `parent` the parent's), so a submission carries the
-location codes the registry stores and `odk/transform.py` passes every code
-through unchanged. Yes/no answers, consent, and the cooperative and union
+region, zone, woreda and kebele lists become external CSVs
+(`odk/media/mds/*.csv`: `name` and `code` are the `level_value_id` Master Data
+serves, `parent` the parent's), so a submission carries the location ids the
+web intake stores and `odk/transform.py` passes every code through unchanged.
+
+Geography belongs to each environment's Master Data, not to the pack. New Dev
+serves the catalogue migrated on 2026-10-27 (`region-ET01` …
+`kebele-ET010101101001`, 1379 woredas), not the pack's plain P-codes, so the
+committed CSVs are built from that catalogue. `--geography` takes a directory
+holding `levels.json` and `values.json` in the pack's format, read from the
+environment's `g2p_geo_levels` and `g2p_geo_level_values` (current rows);
+without it the pack's own geography is used. Rebuild the CSVs for each
+environment the form is published to. The chart's `odkGeoSync` (Central Entity
+Lists kept equal to Master Data) replaces this step once a Central
+project-manager login is provisioned for it. Yes/no answers, consent, and the cooperative and union
 names (not Master Data lists) stay as they are. Output:
 `odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.28`;
 `tests/unit/test_odk_mds_form.py` checks the build against a small pack and
