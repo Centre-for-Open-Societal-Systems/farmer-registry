@@ -45,5 +45,5 @@ failure inspect Helm history and pod events/logs to establish the final state;
 an atomic upgrade request alone does not prove a successful rollback.
 
 See [delivery](README.md), [signing and recovery](connector.md), and
-[staging cutover](staging-upgrade.md). The [accepted dev rollout
-evidence](../history/signed-connector-dev-20261015.md) does not establish staging acceptance.
+[staging cutover](staging-upgrade.md). The accepted dev rollout
+evidence does not establish staging acceptance.

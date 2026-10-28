@@ -61,7 +61,7 @@ def manifest_hash(documents):
 def delivery_hash(root=ROOT):
     """Bind code, chart, migrations and overlays; omit downloads and local output."""
     result = hashlib.sha256()
-    for directory in ("ci", "helm", "scripts", "integrations", "docker", "farmer-extension", "tests/runtime"):
+    for directory in ("ci", "helm", "scripts", "integrations", "docker", "farmer-extension", "test/runtime"):
         for path in sorted((root / directory).rglob("*")):
             relative = path.relative_to(root)
             if not path.is_file() or {"charts", "__pycache__", ".pytest_cache", ".venv"}.intersection(relative.parts):

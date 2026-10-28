@@ -22,7 +22,7 @@ exact signed retries return the original correlation identifier.
 ODK collector identity populates the intake creator and Enumerator field and the
 worker's change-request path. Attachments persist through approval. Dev web and
 signed ODK intake passed the live approval policy and reached Register; see
-[acceptance evidence](../rollouts/2026-10-15-farmer-dev.json).
+acceptance evidence.
 
 Operator tools live in `scripts/operations/connector/`:
 

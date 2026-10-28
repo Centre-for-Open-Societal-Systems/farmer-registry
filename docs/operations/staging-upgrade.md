@@ -13,15 +13,15 @@ This procedure upgrades only Farmer in `far`, through the existing
 `DEPLOY_STAGING=false` remains the default. Registry deployment is fatal on
 failure; optional services release independently and failures mark Jenkins unstable.
 
-The [rollout manifest](../rollouts/2026-10-16-staging-upgrade.json) records current
+The rollout manifest records current
 implementation and execution status. Historical revision 36 / connector revision 3
 are inspection findings, not permission to assume the cluster is still unchanged.
-Refresh remote refs and live inventories before review. The [map tile follow-up](odk-map-tiles.md) records the verified dev and public staging repairs. The [ODK location update](../history/odk-staging-location-20261016.md) is published
+Refresh remote refs and live inventories before review. The [map tile follow-up](odk-map-tiles.md) records the verified dev and public staging repairs. The ODK location update is published
 as form 1.0.5. Registry and legacy connector revisions remain 36 and 3. The latest
 inspection found legacy Farmer geography references and missing Farmer partner
 registration; do not enter maintenance or authorize deployment until those
 prerequisites and the remaining rehearsals pass. The separately reviewed
-[shared-geography repair](staging-geography-review.md) was authorized and applied.
+shared-geography repair was authorized and applied.
 Master Data now matches the canonical seed; the credential reference blocking
 its API was corrected to the owning Commons Helm values.
 
@@ -230,7 +230,7 @@ acceptance outcomes and recovery location references in the rollout manifest.
 Keep dumps, raw manifests, ODK credentials, tokens, keys and submission data in
 protected storage. Do not report any live criterion as passing until it was run.
 
-The [16 October 2026 execution record](staging-cutover-2026-10-16.md) records the
+The 16 October 2026 execution record records the
 deployed revisions, tested image/configuration repairs, acceptance results,
 remaining upstream defects and protected recovery locations. Consult it before
 the next deployment; the retired legacy connector must remain stopped.

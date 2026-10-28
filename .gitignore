@@ -213,9 +213,7 @@ local/
 # Retain the lock for the pinned Farmer RC chart; other legacy charts may
 # still use generated locks.
 !helm/openg2p-farmer-registry/Chart.lock
-local/*
-!local/upstream/
-local/upstream/generated/
+local/
 
 # Jenkins local validation artifacts (never include credentials or venv in builds).
 .ci-venv/
@@ -226,10 +224,12 @@ service-outcomes/
 
 # Operator exports and local acceptance artifacts never belong in Git.
 /private-exports/
-tests/e2e/local/generated/
 
 # The repository image build helpers are source, not packaging artifacts.
 !ci/build/
 !ci/build/**
 
 /ci-output/
+
+# Load-test outputs are generated per run
+performance-testing/locust/api/results/

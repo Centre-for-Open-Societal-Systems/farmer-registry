@@ -12,16 +12,27 @@ database rehearsals do not establish live acceptance. Read the
 [candidate scope and remaining checks](docs/refactor-candidate.md) before using
 historical operational instructions.
 
-| Directory | Purpose |
+The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`):
+
+| Path | Purpose |
 | --- | --- |
-| `oan-extension/` | OAN models, registered services, metadata, ODK enrichment and reporting |
+| `oan-extension/` | OAN models, registered services, metadata, ODK enrichment and reporting, with its tests |
 | `farmer-extension/` | Upstream Farmer domain reference, retained for standard extension composition |
 | `ui/staff-ui/overrides/` | Registered OAN widgets and supported source overlays |
-| `docker/oan/` | Images extending the published Farmer runtime |
-| `ci/` | Existing Jenkins delivery plus source and native metadata checks |
-| `odk/` | Source XLSForms and unpublished candidate form |
-| `tests/` | Delivery, integration and regression checks |
-| `docs/` | Current guides and dated historical evidence |
+| `docker/<component>/Dockerfile` | Images extending the published Farmer runtime: staff-api, partner-api, celery, staff-ui, db-seed, sanity-tests |
+| `docker/db-seed/` | The OAN seed: metadata layer, and sample farmers from the ETH-OAN pack in [openg2p-data](https://github.com/Centre-for-Open-Societal-Systems/openg2p-data) |
+| `helm/` | Environment overlays read by `ci/deploy`, plus the Farmer chart sources |
+| `ci/`, `Jenkinsfile` | Jenkins delivery, source and native metadata checks |
+| `integrations/` | Registry connector adapters |
+| `odk/` | Source XLSForms, form builders and media |
+| `test/` | `unit/` (offline, CI), `integration/` (shell harnesses, disposable DBs), `runtime/` (inside built images), `sanity/` (sanity-tests image) |
+| `performance-testing/` | Load-test plan, Locust workloads, bulk seeding and report tools |
+| `scripts/` | `bump-rp-version.sh`, `uninstall-registry.sh`, doc-link check and live operations tools |
+| `docs/` | Current guides |
+
+Sample data lives only in openg2p-data: the db-seed image takes the pack's
+`samples/farms.json` at a pinned commit, and Master Data serves the pack's sample
+people and households. New Dev loads them (`helm/environments/dev/registry-samples.yaml`).
 
 Helm ownership is centralized in
 [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm).
@@ -36,7 +47,7 @@ does not establish verification. Offline ODK identity evidence remains
 unverified until normal approval.
 
 For delivery tests, install `ci/validation/requirements.txt` and run
-`python -m pytest tests/unit`. Native extension and repeatable metadata checks
+`python -m pytest` (runs `test/unit`). Native extension and repeatable metadata checks
 run against the published runtime in CI. See [the documentation index](docs/README.md),
 [native ODK intake](docs/odk-native-intake.md) and
 [New Dev delivery](docs/NEW_DEV_FARMER_FIRST.md).

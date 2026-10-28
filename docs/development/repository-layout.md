@@ -4,10 +4,11 @@ Maintained guides live in `docs/`; the root and package README files are entrypo
 Chart descriptions and portal-rendered Markdown remain beside their consumers
 because they are application/build inputs.
 
-All tests live in `tests/`. Runtime tests execute in built application images;
-local/live end-to-end scripts require explicit invocation. Ordinary pytest runs
-only offline unit tests. Performance assets and historical results stay together
-under `tests/performance/`.
+Repository tests live in `test/` (`unit`, `integration`, `runtime`, `sanity`);
+the extension's own tests stay in `oan-extension/tests/`. Runtime tests execute
+in built application images and the sanity suite in the sanity-tests image.
+Ordinary pytest runs only the offline unit tests. Performance tooling lives only
+under `performance-testing/`; its run outputs are not committed.
 
 The root Jenkinsfile loads `ci/pipelines/dev.groovy` or
 `ci/pipelines/staging.groovy`. Shared helpers remain under `ci/`.

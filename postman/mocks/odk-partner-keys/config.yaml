@@ -1,9 +1,0 @@
-version: 1
-name: ODK active partner signing key contract
-slug: odk-partner-keys
-protocol: http
-interceptRequests: true
-scenarios:
-  - name: default
-    path: ./default.js
-    default: true

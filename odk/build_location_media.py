@@ -4,7 +4,7 @@
 The form picks region from the XLSForm choices sheet and zone > woreda >
 kebele from external CSV lists. External lists avoid duplicating thousands of
 translated XML labels in the form model. All four levels are generated from
-local/upstream/assets/geo/ethiopia_geo_seed.sql.gz, the COSS Ethiopia hierarchy the
+odk/legacy-geo/ethiopia_geo_seed.sql.gz, the COSS Ethiopia hierarchy the
 registry's Master Data is seeded with (region-ET04, zone-ET0408,
 woreda-ET040801, kebele-ET040801101001), so every place Master Data knows is
 offered, under its Master Data name and parent, and nothing else.
@@ -41,7 +41,7 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parent
-SOURCE = REPO / "local/upstream/assets/geo/ethiopia_geo_seed.sql.gz"
+SOURCE = REPO / "odk/legacy-geo/ethiopia_geo_seed.sql.gz"
 FORM = HERE / "ATI_Farmers_Profile_ODK_Form_v2.xlsx"
 KEBELES = HERE / "media" / "KebeleList.csv"
 ZONES = HERE / "media" / "ZoneList.csv"

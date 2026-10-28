@@ -39,7 +39,7 @@ def call() {
                       docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" \
                         "coss-ci/validation:$IMAGE_TAG" bash ci/validation/validate.sh
                     '''
-                    stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,tests/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
+                    stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,test/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
                 }
             }
             stage('Promote rehearsed staging Registry (far)') {

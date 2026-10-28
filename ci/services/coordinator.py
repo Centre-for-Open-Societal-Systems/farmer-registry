@@ -346,7 +346,7 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
              "--label", "org.opencontainers.image.revision=" + commit,
              "--label", "org.openg2p.overlay.sha256=" + chart_hash(overlay),
              "-t", image, str(overlay)])
-        runtime_test = ROOT / "tests/runtime/test_connector_media.py"
+        runtime_test = ROOT / "test/runtime/test_connector_media.py"
         rehearsal = ROOT / "scripts/operations/connector/rehearse.py"
         if runtime_test.is_file():
             run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "python",

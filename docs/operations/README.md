@@ -76,5 +76,5 @@ Its configured `ci/commons-services/Jenkinsfile` is absent from current upstream
 `develop`; do not run it until its owner restores the source. Farmer cleanup does
 not grant permission to upgrade shared Commons services.
 
-See [service coordination](coordinated-services-rollout.md),
-[connector recovery](connector.md), and the [cleanup inventory](cleanup-inventory.md).
+See [service coordination](coordinated-services-rollout.md)
+and [connector recovery](connector.md).
