@@ -1,8 +1,9 @@
-"""Separate immutable image publication from New Dev deployment.
+"""Separate immutable image publication from dev deployment.
 
-publish-only builds and pushes the images. deploy upgrades the existing New Dev
-release with them. fresh-install rebuilds New Dev from an empty database with
-the same images and chart (ci/deploy/fresh-install-dev.sh).
+DELIVERY_ACTION selects what a build does. publish-only builds and pushes the
+images. deploy upgrades the existing dev release with them. fresh-install
+rebuilds dev from an empty database with the same images and chart
+(ci/deploy/fresh-install-dev.sh).
 """
 import json
 import os
@@ -13,9 +14,9 @@ ACTIONS = ("publish-only", "deploy", "fresh-install")
 
 
 def action(environment):
-    selected = environment.get("NEW_DEV_DELIVERY_ACTION") or "publish-only"
+    selected = environment.get("DELIVERY_ACTION") or "publish-only"
     if selected not in ACTIONS:
-        raise ValueError("Unknown New Dev delivery action")
+        raise ValueError("Unknown delivery action")
     return selected
 
 
@@ -25,8 +26,6 @@ def publication(environment):
     sys.path.insert(0, str(Path(__file__).resolve().parent / "deploy"))
     from deployment import registry_provenance
     selected = action(environment)
-    if environment.get("OAN_DELIVERY_ACTION") != selected:
-        raise ValueError("Delivery action changed after validation")
     images = registry_provenance(environment["ECR_REGISTRY"],
                                  environment["IMAGE_TAG"], environment["SOURCE_COMMIT"])
     return {"component": "farmer-registry", "sourceCommit": environment["SOURCE_COMMIT"],

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read-only snapshot audit; no SQL execution, DB connections, or output files.
 
-Usage: python scripts/check-odk-geo-compatibility.py --catalog catalog.json
+Usage: python scripts/check_odk_geo_compatibility.py --catalog catalog.json
        --references references.json
 References contain only table, geo_lowest_level_value_id, and positive integer
 count. An explicit [] means known-empty coverage; omission means unknown.

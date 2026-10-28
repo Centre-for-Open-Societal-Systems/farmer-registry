@@ -96,7 +96,7 @@ survive, and its image must match the accepted staff-UI digest.
    dedicated queue; record its separately rehearsed `connectorChartHash` as well
    as the original dev chart hash, overlay hashes, image digests and dev revision.
 6. Export the shared geography and all Farmer geography references, then run
-   `scripts/check-odk-geo-compatibility.py --catalog <catalog.json> --references
+   `scripts/check_odk_geo_compatibility.py --catalog <catalog.json> --references
    <references.json>`. Require exact canonical IDs and relationships. Do not change
    the shared catalogue. Rehearse publishing canonical Farmer media as a new form
    version. Account for the 35 staging-only Kebele IDs; preserve all submissions
@@ -174,7 +174,7 @@ ODK credential file only inside protected authentication/configuration handling.
 
 1. Create the retained credential-only release using
    `helm/farmer-connector-credentials` and
-   `helm/environments/staging/connector-credentials.yaml`. Create the isolated
+   `helm/environments/staging/farmer-connector-credentials.yaml`. Create the isolated
    database and dedicated application role through protected PostgreSQL handling.
    Restore the complete final legacy dump into this database with ownership
    assigned to the new role; run the rehearsed application migrations there.

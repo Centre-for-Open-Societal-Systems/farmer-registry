@@ -1,4 +1,4 @@
-# Existing new-dev route; preserve alongside the Commons-owned compatibility alias.
+# Existing dev route; preserve alongside the Commons-owned compatibility alias.
 apiVersion: networking.istio.io/v1
 kind: VirtualService
 spec:

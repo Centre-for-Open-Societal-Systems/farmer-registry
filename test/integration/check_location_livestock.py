@@ -89,7 +89,7 @@ async def main():
                              "g2p_intake_form_ui_tab_sections.sql", "zz_farmer_location_layout.sql"):
                 await raw.execute((META / filename).read_text())
             repair = (META / "zz_livestock_row_validation.sql").read_text()
-            # Simulate installed metadata before G2R-334, including an unrelated option.
+            # Simulate installed metadata from before the livestock row validation, including an unrelated option.
             old = await conn.scalar(text("SELECT section_ui_schema FROM g2p_register_sections WHERE section_id=:section"), {"section": ANIMALS})
             old["custom-preservation-marker"] = True
             old_columns = old["panels"][0]["panels"][0]["widgets"][0]["widget-data-columns"]

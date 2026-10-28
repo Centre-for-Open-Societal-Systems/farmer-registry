@@ -26,32 +26,32 @@ cat > $STATE/override.yaml <<EOF
 registry:
   staffApi:
     image:
-      repository: ${ECR_REGISTRY}/${ECR_PATH}/staff-api
+      repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}/staff-api
       tag: "${IMAGE_TAG}"
   staffUi:
     image:
-      repository: ${ECR_REGISTRY}/${ECR_PATH}/staff-ui
+      repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}/staff-ui
       tag: "${IMAGE_TAG}"
   partnerApi:
     image:
-      repository: ${ECR_REGISTRY}/${ECR_PATH}/partner-api
+      repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}/partner-api
       tag: "${IMAGE_TAG}"
   celeryWorker:
     image:
-      repository: ${ECR_REGISTRY}/${ECR_PATH}/celery
+      repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}/celery
       tag: "${IMAGE_TAG}"
   celeryBeat:
     image:
-      repository: ${ECR_REGISTRY}/${ECR_PATH}/celery
+      repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}/celery
       tag: "${IMAGE_TAG}"
   dbSeed:
     image:
-      repository: ${ECR_REGISTRY}/${ECR_PATH}/db-seed
+      repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}/db-seed
       tag: "${IMAGE_TAG}"
     loadAttributes: false
   sanity:
     image:
-      repository: ${ECR_REGISTRY}/${ECR_PATH}/sanity-tests
+      repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}/sanity-tests
       tag: "${IMAGE_TAG}"
 # Of the chart's analytics layer only the reporting views and their hourly
 # refresh are deployed: the dashboard API reads fr_rpt_farmer and fr_rpt_land.

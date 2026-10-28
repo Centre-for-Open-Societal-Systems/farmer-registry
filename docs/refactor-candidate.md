@@ -24,7 +24,7 @@ the OAN popup widget and its server code are gone. A backing value is not
 verification. The signed Farmer-reference lookup contract remains separate.
 
 Existing Jenkins agents, credentials, ECR paths and preservation tooling remain.
-PR and feature-branch validation do not deploy. First New Dev reset requires the
+PR and feature-branch validation do not deploy. The first dev reset requires the
 reviewed per-registry manifest, durable external receipt, producer pause, verified
 backup/restore, explicit initialization or recovery and accepted seed checks.
 Ordinary deployment requires the matching VERIFIED receipt. No operational reset
@@ -38,7 +38,7 @@ Kafka-created AWE tasks, imports/ODK, geographic denial, reporting and restored-
 acceptance remain promotion requirements. A missing supported hook is a blocker.
 
 Local runtime acceptance is serial: Commons + Farmer + Crop, then Commons + Farmer
-+ Livestock. No New Dev or staging application/data was changed by preparing this
++ Livestock. No dev or staging application/data was changed by preparing this
 branch. The current local Docker control failure prevents fresh native containers;
 running HTTP applications and source checks have separate evidence.
 

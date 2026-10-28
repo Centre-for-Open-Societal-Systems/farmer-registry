@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Bump the pinned openg2p-registry (registry-platform) version this variant
-# extends — in BOTH the Dockerfiles (ARG RP_VERSION) and the Helm chart
+# extends — in BOTH the Dockerfiles (ARG BASE_IMAGE_VERSION) and the Helm chart
 # dependency — atomically, so the two can never drift.
 #
 # WHY "SAFE" LATEST
@@ -30,7 +30,7 @@ note() { echo "  $*"; }
 
 usage() {
   while IFS= read -r help_line; do printf '%s\n' "$help_line"; done <<'EOF'
-Bump the pinned openg2p-registry version (Dockerfiles' ARG RP_VERSION + the Helm
+Bump the pinned openg2p-registry version (Dockerfiles' ARG BASE_IMAGE_VERSION + the Helm
 chart dependency) atomically, so images and chart never drift.
 
 Usage:
@@ -137,7 +137,7 @@ m=re.search(r'name:\s*openg2p-registry\b.*?version:\s*(\S+)', s, re.S)
 print(m.group(1) if m else "")
 PY
 )
-CUR_DOCKER=$(grep -hoE 'ARG RP_VERSION=\S+' docker/*/Dockerfile | sed 's/ARG RP_VERSION=//' | sort -u | tr '\n' ',' | sed 's/,$//')
+CUR_DOCKER=$(grep -hoE 'ARG BASE_IMAGE_VERSION=\S+' docker/*/Dockerfile | sed 's/ARG BASE_IMAGE_VERSION=//' | sort -u | tr '\n' ',' | sed 's/,$//')
 note "current: chart=$CUR_CHART  dockerfiles=$CUR_DOCKER"
 
 if [ "$CHECK_ONLY" = "true" ]; then
@@ -156,12 +156,12 @@ fi
 
 # ── rewrite (atomic: same value to every Dockerfile + the chart dep) ──────────
 for f in docker/*/Dockerfile; do
-  grep -q 'ARG RP_VERSION=' "$f" || continue
+  grep -q 'ARG BASE_IMAGE_VERSION=' "$f" || continue
   python3 - "$f" "$VERSION" <<'PY'
 import re,sys
 f,v=sys.argv[1],sys.argv[2]
 s=open(f).read()
-s=re.sub(r'ARG RP_VERSION=\S+', f'ARG RP_VERSION={v}', s)
+s=re.sub(r'ARG BASE_IMAGE_VERSION=\S+', f'ARG BASE_IMAGE_VERSION={v}', s)
 open(f,'w').write(s)
 PY
 done
@@ -189,7 +189,7 @@ m=re.search(r'name:\s*openg2p-registry\b.*?version:\s*(\S+)', open(sys.argv[1]).
 print(m.group(1) if m else "")
 PY
 )
-NEW_DOCKER=$(grep -hoE 'ARG RP_VERSION=\S+' docker/*/Dockerfile | sed 's/ARG RP_VERSION=//' | sort -u | tr '\n' ',' | sed 's/,$//')
+NEW_DOCKER=$(grep -hoE 'ARG BASE_IMAGE_VERSION=\S+' docker/*/Dockerfile | sed 's/ARG BASE_IMAGE_VERSION=//' | sort -u | tr '\n' ',' | sed 's/,$//')
 [ "$NEW_CHART" = "$VERSION" ] && [ "$NEW_DOCKER" = "$VERSION" ] \
   || die "post-write check failed: chart=$NEW_CHART dockerfiles=$NEW_DOCKER (expected $VERSION)"
 

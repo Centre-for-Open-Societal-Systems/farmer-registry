@@ -3,7 +3,7 @@
 The OpenAgriNet layer on the OpenG2P Farmer Registry. It changes nothing
 upstream: the package re-exports the farmer extension and adds its own
 registers, services and metadata in new files. It is selected at runtime with
-`REGISTRY_EXTENSION_MODULE=openg2p_registry_oan_extension`, as the registry
+`REGISTRY_EXTENSION_MODULE=oan_farmer_registry_extension`, as the registry
 platform's Extensions Contract describes for coexisting extensions.
 
 | Path | Holds |

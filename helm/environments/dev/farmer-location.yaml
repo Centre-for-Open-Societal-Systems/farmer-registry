@@ -1,4 +1,4 @@
-# G2R-333/361/362: Farmer runs in namespace farmer; Master Data is in commons.
+# Farmer runs in namespace farmer; Master Data is in commons. Location reads use reviewed routes and service bindings.
 # Merge over saved release values. Keep existing client IDs and Secret refs.
 global:
   masterDataApiUrl: http://commons-services-master-data-api.commons.svc.cluster.local

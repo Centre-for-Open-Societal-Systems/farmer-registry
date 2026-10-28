@@ -15,4 +15,4 @@ defaults that the prepared values explicitly null.
 
 Moving dev to a new chart version is a reviewed change to `oan-chart.json`
 (repository commit, version, SHA-256) followed by `deploy`; a change that needs
-an empty database uses `fresh-install` (see [New Dev delivery](NEW_DEV_FARMER_FIRST.md)).
+an empty database uses `fresh-install` (see [dev delivery](dev-farmer-first.md)).
