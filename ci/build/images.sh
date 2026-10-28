@@ -2,14 +2,14 @@
 # Build the Farmer Registry images and test the extension inside them.
 #
 # The registry images are upstream's published Farmer images with the OAN
-# extension installed (docker/oan/), the same images the local stack runs. The
+# extension installed (docker/<component>/Dockerfile), the same images the local stack runs. The
 # sanity suite is upstream's (docker/sanity-tests). Images are tagged
 # coss-ci/<component>:<tag>; the publish stage pushes them under these names.
 set -euo pipefail
 tag="${1:?usage: ci/build/images.sh <image tag>}"
 
 for component in staff-api partner-api celery db-seed staff-ui; do
-  docker build -f "docker/oan/$component.Dockerfile" -t "coss-ci/$component:$tag" .
+  docker build -f "docker/$component/Dockerfile" -t "coss-ci/$component:$tag" .
 done
 
 # Exercise real native SAVE (including parent/finance rejection and complete

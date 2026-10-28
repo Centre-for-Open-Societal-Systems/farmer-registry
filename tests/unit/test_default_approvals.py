@@ -37,6 +37,6 @@ def test_existing_policy_customizations_cannot_leak_into_the_reset_defaults():
     assert "DELETE FROM" not in sql and "UPDATE public." not in sql
     bindings = (package / "meta_data/55_default_approvals.sql").read_text()
     assert "context_field_names=NULL" in bindings
-    dockerfile = (ROOT / "docker/oan/db-seed.Dockerfile").read_text()
+    dockerfile = (ROOT / "docker/db-seed/Dockerfile").read_text()
     assert "rm -f /seed/awe_meta_data/10_approval_policy.sql" in dockerfile
     assert "rm -rf /seed/awe_meta_data" not in dockerfile

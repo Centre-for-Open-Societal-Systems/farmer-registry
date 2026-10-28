@@ -202,7 +202,7 @@ def run():
         snapshots = []
         for attempt in (1,2):
             command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
-                    '-v','ON_ERROR_STOP=1',data=(ROOT/'oan-extension/seed/metadata_compat.sql').read_bytes())
+                    '-v','ON_ERROR_STOP=1',data=(ROOT/'docker/db-seed/metadata_compat.sql').read_bytes())
             for path in files:
                 try:
                     command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',

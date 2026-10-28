@@ -14,7 +14,7 @@ for component in staff-api staff-ui partner-api celery db-seed sanity-tests; do
     if [[ "$component" == sanity-tests ]]; then
         docker build --build-arg "RP_VERSION=$RP_VERSION" -f docker/sanity-tests/Dockerfile -t "$image" .
     else
-        docker build -f "docker/oan/$component.Dockerfile" -t "$image" .
+        docker build -f "docker/$component/Dockerfile" -t "$image" .
     fi
     docker push "$image"
     digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$ECR_PATH/$component" --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)

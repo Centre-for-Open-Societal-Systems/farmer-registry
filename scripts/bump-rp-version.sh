@@ -72,7 +72,7 @@ done
 
 # This legacy mutator cannot represent native Farmer parent ABI + immutable
 # central package provenance. Fence before tools, network or any file writes.
-if [[ -f ci/deploy/oan-chart.json && -f docker/oan/celery.Dockerfile ]]; then
+if [[ -f ci/deploy/oan-chart.json && -f docker/celery/Dockerfile ]]; then
   die "Native OAN candidate: legacy RP bump (including -n) is disabled. Review ci/validation/native-release-contract.json and the immutable central chart profile; no automatic RC update is supported."
 fi
 

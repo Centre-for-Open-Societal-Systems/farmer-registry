@@ -18,7 +18,7 @@ BASH = shutil.which("bash")
 @pytest.fixture
 def source(tmp_path):
     paths = ["ci/validation/native-release-contract.json", "ci/deploy/oan-chart.json"]
-    paths += [f"docker/oan/{role}.Dockerfile" for role in pins.ROLES]
+    paths += [f"docker/{role}/Dockerfile" for role in pins.ROLES]
     for path in paths:
         target = tmp_path / path
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -29,7 +29,7 @@ def source(tmp_path):
 @pytest.mark.parametrize("kind", ["parent-tag", "parent-repository", "platform", "mutable-archive"])
 def test_release_contract_rejects_unreviewed_pin_drift(source, kind):
     if kind.startswith("parent"):
-        path = source / "docker/oan/celery.Dockerfile"
+        path = source / "docker/celery/Dockerfile"
         content = path.read_text()
         content = content.replace("1.2.1-rc.192", "unreviewed") if kind == "parent-tag" else content.replace("openg2p/openg2p-farmer-registry-celery", "example/other")
         path.write_text(content)

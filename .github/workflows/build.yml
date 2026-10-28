@@ -13,11 +13,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {component: staff-api, dockerfile: docker/oan/staff-api.Dockerfile}
-          - {component: partner-api, dockerfile: docker/oan/partner-api.Dockerfile}
-          - {component: celery, dockerfile: docker/oan/celery.Dockerfile}
-          - {component: db-seed, dockerfile: docker/oan/db-seed.Dockerfile}
-          - {component: staff-ui, dockerfile: docker/oan/staff-ui.Dockerfile}
+          - {component: staff-api, dockerfile: docker/staff-api/Dockerfile}
+          - {component: partner-api, dockerfile: docker/partner-api/Dockerfile}
+          - {component: celery, dockerfile: docker/celery/Dockerfile}
+          - {component: db-seed, dockerfile: docker/db-seed/Dockerfile}
+          - {component: staff-ui, dockerfile: docker/staff-ui/Dockerfile}
           - {component: sanity-tests, dockerfile: docker/sanity-tests/Dockerfile}
     steps:
       - uses: actions/checkout@v4
