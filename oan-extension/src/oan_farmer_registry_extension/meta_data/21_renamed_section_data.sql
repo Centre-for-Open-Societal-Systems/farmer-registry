@@ -37,7 +37,7 @@ BEGIN
   LOOP
     -- Tables whose key does not include the section: the row simply moves.
     FOREACH tbl IN ARRAY ARRAY[
-        'g2p_register_section_documents', 'g2p_intake_section_documents',
+        'g2p_register_section_documents', 'g2p_register_document_history', 'g2p_intake_section_documents',
         'g2p_change_request_documents', 'g2p_register_change_requests',
         'g2p_register_verifications', 'g2p_completion_score_computation_queue',
         'g2p_register_history_farmers', 'g2p_register_history_households',
