@@ -630,8 +630,8 @@ def already_seeded(households: list[dict]) -> bool:
                 return True
             cur.execute("SELECT count(*) FROM g2p_intake_form_farmers WHERE foundational_id = ANY(%s)", (identities,))
             pending = cur.fetchone()[0]
-            cur.execute("SELECT count(*) FROM g2p_intake_form_households WHERE household_head = ANY(%s)",
-                        ([hh["head"]["full_name"] for hh in households],))
+            cur.execute("SELECT count(*) FROM g2p_intake_form_household_members WHERE foundational_id = ANY(%s)",
+                        ([member["foundational_id"] for hh in households for member in hh["members"]],))
             household_intakes = cur.fetchone()[0]
             if registered or pending or household_intakes:
                 raise RuntimeError("Partial or existing MDS sample identities found; recover their native intakes before retrying (no force replay)")
