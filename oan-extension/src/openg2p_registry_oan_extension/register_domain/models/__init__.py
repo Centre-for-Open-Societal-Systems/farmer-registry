@@ -1,8 +1,10 @@
 # Everything the farmer extension provides, then OAN's additions below. Core
 # resolves classes by name on this module, so a name defined here wins.
 from openg2p_registry_core.models import G2PRegisterAuthentication
+from openg2p_registry_core.models.g2p_register import _populate_record_name, _populate_search_text
 from openg2p_registry_farmer_extension.register_domain import models as _farmer
 from openg2p_registry_farmer_extension.register_domain.models import *
+from sqlalchemy import event
 from sqlalchemy.orm import column_property, mapped_column
 
 from ..derived import farmer_search_text
@@ -65,3 +67,27 @@ class G2PIntakeFormFarmer(_farmer.G2PIntakeFormFarmer):
 
     def get_search_text_fields(self) -> str:
         return farmer_search_text(self.to_dict())
+
+
+def _populate_derived_columns(mapper, connection, target) -> None:
+    _populate_search_text(target)
+    _populate_record_name(target)
+
+
+def _listen_like_core(cls) -> None:
+    """Fill search_text and record_name for a subclass on a native table.
+
+    Core registers these listeners only on the class that declares the table,
+    and without propagate, so rows saved through an OAN subclass would keep
+    both columns NULL, and the register list (search_text ILIKE) would never
+    show them. Core's helpers walk the MRO, so the OAN, farmer and core field
+    hooks all contribute, exactly as for a native row.
+    """
+    for event_name in ("before_insert", "before_update"):
+        if not event.contains(cls, event_name, _populate_derived_columns):  # importing twice must not add twice
+            event.listen(cls, event_name, _populate_derived_columns)
+
+
+for _cls in (G2PRegisterFarmer, G2PIntakeFormFarmer):
+    if "__tablename__" not in _cls.__dict__:
+        _listen_like_core(_cls)

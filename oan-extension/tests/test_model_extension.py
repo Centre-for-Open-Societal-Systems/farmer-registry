@@ -25,3 +25,27 @@ def test_native_farmer_instances_carry_the_authentication_columns():
     data = row.to_dict()
     assert data['last_authentication_id'] is None
     assert set(oan.G2PRegisterFarmer().to_dict()) == set(data)
+
+
+def test_oan_subclasses_fill_search_text_and_record_name_like_native_rows():
+    """Core's listeners do not propagate to a subclass on a native table, so the
+    register list (search_text ILIKE) would never show a farmer saved through it."""
+    from sqlalchemy import event
+
+    for name in ('G2PRegisterFarmer', 'G2PIntakeFormFarmer'):
+        cls = getattr(oan, name)
+        for event_name in ('before_insert', 'before_update'):
+            assert event.contains(cls, event_name, oan._populate_derived_columns)
+        row = cls(functional_record_id='FR-123456789012', foundational_id='502628318720',
+                  first_name='Berhanu', middle_name='Abebe', last_name='Kebede')
+        oan._populate_derived_columns(None, None, row)
+        for value in ('FR-123456789012', '502628318720', 'Berhanu', 'Abebe', 'Kebede'):
+            assert value in row.search_text
+        assert row.record_name
+
+
+def test_registering_the_listeners_again_adds_nothing():
+    dispatch = oan.G2PRegisterFarmer.__mapper__.dispatch.before_insert
+    before = len(list(dispatch))
+    oan._listen_like_core(oan.G2PRegisterFarmer)
+    assert len(list(dispatch)) == before
