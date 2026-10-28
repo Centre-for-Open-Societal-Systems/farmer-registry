@@ -1,126 +1,126 @@
 name,label,code,parent
-zone-ET0101,North Western,zone-ET0101,region-ET01
-zone-ET0102,Central,zone-ET0102,region-ET01
-zone-ET0103,Eastern,zone-ET0103,region-ET01
-zone-ET0104,Southern,zone-ET0104,region-ET01
-zone-ET0105,Western,zone-ET0105,region-ET01
-zone-ET0106,South Eastern,zone-ET0106,region-ET01
-zone-ET0107,Mekelle,zone-ET0107,region-ET01
-zone-ET0201,Awsi /Zone 1,zone-ET0201,region-ET02
-zone-ET0202,Kilbati /Zone2,zone-ET0202,region-ET02
-zone-ET0203,Gabi /Zone 3,zone-ET0203,region-ET02
-zone-ET0204,Fanti /Zone 4,zone-ET0204,region-ET02
-zone-ET0205,Hari /Zone 5,zone-ET0205,region-ET02
-zone-ET0206,Mahi /Zone 6,zone-ET0206,region-ET02
-zone-ET0301,North Gondar,zone-ET0301,region-ET03
-zone-ET0302,South Gondar,zone-ET0302,region-ET03
-zone-ET0303,North Wello,zone-ET0303,region-ET03
-zone-ET0304,South Wello,zone-ET0304,region-ET03
-zone-ET0305,North Shewa (AM),zone-ET0305,region-ET03
-zone-ET0306,East Gojam,zone-ET0306,region-ET03
-zone-ET0307,West Gojam,zone-ET0307,region-ET03
-zone-ET0308,Wag Hamra,zone-ET0308,region-ET03
-zone-ET0309,Awi,zone-ET0309,region-ET03
-zone-ET0310,Oromia,zone-ET0310,region-ET03
-zone-ET0311,Central Gondar,zone-ET0311,region-ET03
-zone-ET0312,West Gondar,zone-ET0312,region-ET03
-zone-ET0313,North Gojam,zone-ET0313,region-ET03
-zone-ET0314,Bahir Dar,zone-ET0314,region-ET03
-zone-ET0401,West Wellega,zone-ET0401,region-ET04
-zone-ET0402,East Wellega,zone-ET0402,region-ET04
-zone-ET0403,Ilu Aba Bora,zone-ET0403,region-ET04
-zone-ET0404,Jimma,zone-ET0404,region-ET04
-zone-ET0405,West Shewa,zone-ET0405,region-ET04
-zone-ET0406,North Shewa (OR),zone-ET0406,region-ET04
-zone-ET0407,East Shewa,zone-ET0407,region-ET04
-zone-ET0408,Arsi,zone-ET0408,region-ET04
-zone-ET0409,West Hararge,zone-ET0409,region-ET04
-zone-ET0410,East Hararge,zone-ET0410,region-ET04
-zone-ET0411,Bale,zone-ET0411,region-ET04
-zone-ET0412,Borena,zone-ET0412,region-ET04
-zone-ET0413,South West Shewa,zone-ET0413,region-ET04
-zone-ET0414,Guji,zone-ET0414,region-ET04
-zone-ET0415,West Guji,zone-ET0415,region-ET04
-zone-ET0416,Buno Bedele,zone-ET0416,region-ET04
-zone-ET0417,West Arsi,zone-ET0417,region-ET04
-zone-ET0418,Kelem Wellega,zone-ET0418,region-ET04
-zone-ET0419,Horo Gudru Wellega,zone-ET0419,region-ET04
-zone-ET0420,Shager,zone-ET0420,region-ET04
-zone-ET0421,East Bale,zone-ET0421,region-ET04
-zone-ET0422,East Borena,zone-ET0422,region-ET04
-zone-ET0423,Bishoftu Liyu Zone,zone-ET0423,region-ET04
-zone-ET0425,Dukam Liyu Zone,zone-ET0425,region-ET04
-zone-ET0428,Nekemte Liyu Zone,zone-ET0428,region-ET04
-zone-ET0429,Jimma Liyu,zone-ET0429,region-ET04
-zone-ET0431,Shashamane Liyu Zone,zone-ET0431,region-ET04
-zone-ET0433,Robe Liyu Zone,zone-ET0433,region-ET04
-zone-ET0434,Ambo City Admin,zone-ET0434,region-ET04
-zone-ET0435,Batu Liyu Zone,zone-ET0435,region-ET04
-zone-ET0436,Modjo Liyu Zone,zone-ET0436,region-ET04
-zone-ET0437,Holeta Liyu Zone,zone-ET0437,region-ET04
-zone-ET0438,Woliso Liyu Zone,zone-ET0438,region-ET04
-zone-ET0439,Bishan Guracha Liyu Zone,zone-ET0439,region-ET04
-zone-ET0501,Siti,zone-ET0501,region-ET05
-zone-ET0502,Fafan,zone-ET0502,region-ET05
-zone-ET0503,Jarar,zone-ET0503,region-ET05
-zone-ET0504,Erer,zone-ET0504,region-ET05
-zone-ET0505,Korahe,zone-ET0505,region-ET05
-zone-ET0506,Shabelle,zone-ET0506,region-ET05
-zone-ET0507,Doolo,zone-ET0507,region-ET05
-zone-ET0508,Afder,zone-ET0508,region-ET05
-zone-ET0509,Liban,zone-ET0509,region-ET05
-zone-ET0510,Nogob,zone-ET0510,region-ET05
-zone-ET0511,Daawa,zone-ET0511,region-ET05
-zone-ET0602,Metekel,zone-ET0602,region-ET06
-zone-ET0603,Assosa,zone-ET0603,region-ET06
-zone-ET0604,Kamashi,zone-ET0604,region-ET06
-zone-ET0605,Mao Komo Special,zone-ET0605,region-ET06
-zone-ET0701,Guraghe,zone-ET0701,region-ET07
-zone-ET0702,Hadiya,zone-ET0702,region-ET07
-zone-ET0703,Kembata,zone-ET0703,region-ET07
-zone-ET0704,East Guraghe,zone-ET0704,region-ET07
-zone-ET0705,Kebena Special,zone-ET0705,region-ET07
-zone-ET0706,Mareko Special,zone-ET0706,region-ET07
-zone-ET0707,Tembaro Special,zone-ET0707,region-ET07
-zone-ET0711,korey,zone-ET0711,region-ET07
-zone-ET0713,Dilla City Admin,zone-ET0713,region-ET07
-zone-ET0714,Halaba,zone-ET0714,region-ET07
-zone-ET0720,Siltie,zone-ET0720,region-ET07
-zone-ET0724,Yem,zone-ET0724,region-ET07
-zone-ET0801,Wolayita,zone-ET0801,region-ET08
-zone-ET0802,Gamo,zone-ET0802,region-ET08
-zone-ET0803,Gofa,zone-ET0803,region-ET08
-zone-ET0804,Basketo,zone-ET0804,region-ET08
-zone-ET0805,South Omo Agr,zone-ET0805,region-ET08
-zone-ET0806,Alle,zone-ET0806,region-ET08
-zone-ET0807,Derashe,zone-ET0807,region-ET08
-zone-ET0808,Amaro,zone-ET0808,region-ET08
-zone-ET0809,Konso,zone-ET0809,region-ET08
-zone-ET0810,Burji,zone-ET0810,region-ET08
-zone-ET0811,Gedeo,zone-ET0811,region-ET08
-zone-ET0812,South Omo Pas,zone-ET0812,region-ET08
-zone-ET1101,Sheka,zone-ET1101,region-ET11
-zone-ET1102,Kefa,zone-ET1102,region-ET11
-zone-ET1103,Bench Sheko,zone-ET1103,region-ET11
-zone-ET1104,Dawuro,zone-ET1104,region-ET11
-zone-ET1105,Mirab Omo,zone-ET1105,region-ET11
-zone-ET1106,Konta,zone-ET1106,region-ET11
-zone-ET1201,Nuwer,zone-ET1201,region-ET12
-zone-ET1202,Agnewak,zone-ET1202,region-ET12
-zone-ET1203,Majang,zone-ET1203,region-ET12
-zone-ET1204,Itang Special woreda,zone-ET1204,region-ET12
-zone-ET1301,Harari,zone-ET1301,region-ET13
-zone-ET1401,Addis Ababa,zone-ET1401,region-ET14
-zone-ET1402,Addis Ketema Subcity,zone-ET1402,region-ET14
-zone-ET1403,Kolfe Keraniyo Subcity,zone-ET1403,region-ET14
-zone-ET1404,Lideta Subcity,zone-ET1404,region-ET14
-zone-ET1405,Kerkos Subcity,zone-ET1405,region-ET14
-zone-ET1406,Arada Subcity,zone-ET1406,region-ET14
-zone-ET1407,Yeka Subcity,zone-ET1407,region-ET14
-zone-ET1408,Bole Subcity,zone-ET1408,region-ET14
-zone-ET1409,Nifas Slik Lafto Subcity,zone-ET1409,region-ET14
-zone-ET1410,Akaki Kaliti Subcity,zone-ET1410,region-ET14
-zone-ET1411,Lemi kura,zone-ET1411,region-ET14
-zone-ET1501,Dire Dawa urban,zone-ET1501,region-ET15
-zone-ET1502,Dire Dawa rural,zone-ET1502,region-ET15
-zone-ET1600,Sidama,zone-ET1600,region-ET16
+ET0101,North Western,ET0101,ET01
+ET0102,Central,ET0102,ET01
+ET0103,Eastern,ET0103,ET01
+ET0104,Southern,ET0104,ET01
+ET0105,Western,ET0105,ET01
+ET0106,South Eastern,ET0106,ET01
+ET0107,Mekelle,ET0107,ET01
+ET0201,Awsi /Zone 1,ET0201,ET02
+ET0202,Kilbati /Zone2,ET0202,ET02
+ET0203,Gabi /Zone 3,ET0203,ET02
+ET0204,Fanti /Zone 4,ET0204,ET02
+ET0205,Hari /Zone 5,ET0205,ET02
+ET0206,Mahi /Zone 6,ET0206,ET02
+ET0301,North Gondar,ET0301,ET03
+ET0302,South Gondar,ET0302,ET03
+ET0303,North Wello,ET0303,ET03
+ET0304,South Wello,ET0304,ET03
+ET0305,North Shewa (AM),ET0305,ET03
+ET0306,East Gojam,ET0306,ET03
+ET0307,West Gojam,ET0307,ET03
+ET0308,Wag Hamra,ET0308,ET03
+ET0309,Awi,ET0309,ET03
+ET0310,Oromia,ET0310,ET03
+ET0311,Central Gondar,ET0311,ET03
+ET0312,West Gondar,ET0312,ET03
+ET0313,North Gojam,ET0313,ET03
+ET0314,Bahir Dar,ET0314,ET03
+ET0401,West Wellega,ET0401,ET04
+ET0402,East Wellega,ET0402,ET04
+ET0403,Ilu Aba Bora,ET0403,ET04
+ET0404,Jimma,ET0404,ET04
+ET0405,West Shewa,ET0405,ET04
+ET0406,North Shewa (OR),ET0406,ET04
+ET0407,East Shewa,ET0407,ET04
+ET0408,Arsi,ET0408,ET04
+ET0409,West Hararge,ET0409,ET04
+ET0410,East Hararge,ET0410,ET04
+ET0411,Bale,ET0411,ET04
+ET0412,Borena,ET0412,ET04
+ET0413,South West Shewa,ET0413,ET04
+ET0414,Guji,ET0414,ET04
+ET0415,West Guji,ET0415,ET04
+ET0416,Buno Bedele,ET0416,ET04
+ET0417,West Arsi,ET0417,ET04
+ET0418,Kelem Wellega,ET0418,ET04
+ET0419,Horo Gudru Wellega,ET0419,ET04
+ET0420,Shager,ET0420,ET04
+ET0421,East Bale,ET0421,ET04
+ET0422,East Borena,ET0422,ET04
+ET0423,Bishoftu Liyu Zone,ET0423,ET04
+ET0425,Dukam Liyu Zone,ET0425,ET04
+ET0428,Nekemte Liyu Zone,ET0428,ET04
+ET0429,Jimma Liyu,ET0429,ET04
+ET0431,Shashamane Liyu Zone,ET0431,ET04
+ET0433,Robe Liyu Zone,ET0433,ET04
+ET0434,Ambo City Admin,ET0434,ET04
+ET0435,Batu Liyu Zone,ET0435,ET04
+ET0436,Modjo Liyu Zone,ET0436,ET04
+ET0437,Holeta Liyu Zone,ET0437,ET04
+ET0438,Woliso Liyu Zone,ET0438,ET04
+ET0439,Bishan Guracha Liyu Zone,ET0439,ET04
+ET0501,Siti,ET0501,ET05
+ET0502,Fafan,ET0502,ET05
+ET0503,Jarar,ET0503,ET05
+ET0504,Erer,ET0504,ET05
+ET0505,Korahe,ET0505,ET05
+ET0506,Shabelle,ET0506,ET05
+ET0507,Doolo,ET0507,ET05
+ET0508,Afder,ET0508,ET05
+ET0509,Liban,ET0509,ET05
+ET0510,Nogob,ET0510,ET05
+ET0511,Daawa,ET0511,ET05
+ET0602,Metekel,ET0602,ET06
+ET0603,Assosa,ET0603,ET06
+ET0604,Kamashi,ET0604,ET06
+ET0605,Mao Komo Special,ET0605,ET06
+ET0701,Guraghe,ET0701,ET07
+ET0702,Hadiya,ET0702,ET07
+ET0703,Kembata,ET0703,ET07
+ET0704,East Guraghe,ET0704,ET07
+ET0705,Kebena Special,ET0705,ET07
+ET0706,Mareko Special,ET0706,ET07
+ET0707,Tembaro Special,ET0707,ET07
+ET0711,korey,ET0711,ET07
+ET0713,Dilla City Admin,ET0713,ET07
+ET0714,Halaba,ET0714,ET07
+ET0720,Siltie,ET0720,ET07
+ET0724,Yem,ET0724,ET07
+ET0801,Wolayita,ET0801,ET08
+ET0802,Gamo,ET0802,ET08
+ET0803,Gofa,ET0803,ET08
+ET0804,Basketo,ET0804,ET08
+ET0805,South Omo Agr,ET0805,ET08
+ET0806,Alle,ET0806,ET08
+ET0807,Derashe,ET0807,ET08
+ET0808,Amaro,ET0808,ET08
+ET0809,Konso,ET0809,ET08
+ET0810,Burji,ET0810,ET08
+ET0811,Gedeo,ET0811,ET08
+ET0812,South Omo Pas,ET0812,ET08
+ET1101,Sheka,ET1101,ET11
+ET1102,Kefa,ET1102,ET11
+ET1103,Bench Sheko,ET1103,ET11
+ET1104,Dawuro,ET1104,ET11
+ET1105,Mirab Omo,ET1105,ET11
+ET1106,Konta,ET1106,ET11
+ET1201,Nuwer,ET1201,ET12
+ET1202,Agnewak,ET1202,ET12
+ET1203,Majang,ET1203,ET12
+ET1204,Itang Special woreda,ET1204,ET12
+ET1301,Harari,ET1301,ET13
+ET1401,Addis Ababa,ET1401,ET14
+ET1402,Addis Ketema Subcity,ET1402,ET14
+ET1403,Kolfe Keraniyo Subcity,ET1403,ET14
+ET1404,Lideta Subcity,ET1404,ET14
+ET1405,Kerkos Subcity,ET1405,ET14
+ET1406,Arada Subcity,ET1406,ET14
+ET1407,Yeka Subcity,ET1407,ET14
+ET1408,Bole Subcity,ET1408,ET14
+ET1409,Nifas Slik Lafto Subcity,ET1409,ET14
+ET1410,Akaki Kaliti Subcity,ET1410,ET14
+ET1411,Lemi kura,ET1411,ET14
+ET1501,Dire Dawa urban,ET1501,ET15
+ET1502,Dire Dawa rural,ET1502,ET15
+ET1600,Sidama,ET1600,ET16
