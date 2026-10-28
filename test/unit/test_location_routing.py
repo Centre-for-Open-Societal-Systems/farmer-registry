@@ -60,3 +60,10 @@ def test_dev_promotion_requires_approved_service_binding(release, failure):
         next(entry for entry in env if entry["name"] == name)["valueFrom"]["secretKeyRef"]["optional"] = True
     with pytest.raises(ValueError, match="Master Data credentials were not rendered"):
         deployment.validate(before, after, ECR, TAG)
+
+
+def test_dev_staff_ui_allows_the_location_map_hosts():
+    env = deployment.location_env("staff-portal-ui")
+    assert "https://tile.openstreetmap.org" in env["CSP_SRC_IMG"].split()
+    assert "https://minio-farmer.development.oanstaging.com" in env["CSP_SRC_IMG"].split()
+    assert "https://api.open-meteo.com" in env["CSP_SRC_CONNECT"].split()
