@@ -59,9 +59,17 @@ environment's `g2p_geo_levels` and `g2p_geo_level_values` (current rows);
 without it the pack's own geography is used. Rebuild the CSVs for each
 environment the form is published to. The chart's `odkGeoSync` (Central Entity
 Lists kept equal to Master Data) replaces this step once a Central
-project-manager login is provisioned for it. Yes/no answers, consent, and the cooperative and union
-names (not Master Data lists) stay as they are. Output:
-`odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.29`;
+project-manager login is provisioned for it. Yes/no answers and consent stay as they are.
+The cooperative and union names are not Master Data lists, but they are filtered by the
+region the farmer picked, which is now a Master Data code: the build re-keys them from the
+v3 region number (1, 3, 4, 8) to the region code (ET01, ET03, ET04, ET08) by matching the v3
+region's name to the geography's, writes `odk/media/PrimaryCoopList.csv` from the v3 list kept
+in `odk/legacy-geo/PrimaryCoopList.legacy.csv`, and refuses to build if any cooperative or
+union parent is not a region of the geography. A row whose region has no match is left out
+and listed in the build report (none are, against the ETH-OAN pack). The animal, number of
+animals and livestock water source questions are required for mixed farmers as well as
+livestock farmers, for the farmer and for household members. Output:
+`odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.30`;
 `test/unit/test_odk_mds_form.py` checks the build against a small pack and
 `oan-extension/tests/test_odk_mds_codes.py` the transform's pass-through.
 

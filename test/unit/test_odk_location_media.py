@@ -114,7 +114,9 @@ def test_regions_carry_their_translations(workbook):
 def test_cooperatives_and_unions_hang_under_a_region_the_form_offers(workbook):
     current, _ = build_location_media.current_choice_rows(workbook)
     regions = {str(row["name"]) for row in current if row["list_name"] == "choices_region"}
+    # The cooperative list is keyed by the region's Master Data code (odk/media/mds/region.csv), not the v2 number.
     coops = {row["region"] for row in csv.DictReader((ODK / "media" / "PrimaryCoopList.csv").open(encoding="utf-8"))}
+    codes = {row["code"] for row in csv.DictReader((ODK / "media" / "mds" / "region.csv").open(encoding="utf-8"))}
     sheet = workbook["choices"]
     header = [str(cell).strip() if cell else "" for cell in next(sheet.iter_rows(values_only=True))]
     unions = {
@@ -122,5 +124,5 @@ def test_cooperatives_and_unions_hang_under_a_region_the_form_offers(workbook):
         for row in sheet.iter_rows(min_row=2, values_only=True)
         if row and row[0] == "choices_name_union"
     }
-    assert coops - {"other_primary_coop"} <= regions
+    assert coops - {"other_primary_coop"} <= codes
     assert unions - {"other_union"} <= regions
