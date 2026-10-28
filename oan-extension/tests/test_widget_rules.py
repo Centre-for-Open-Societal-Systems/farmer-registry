@@ -9,7 +9,7 @@ tests run without the registry installed:
 import importlib.util
 from pathlib import Path
 
-_PATH = Path(__file__).parents[1] / "src/openg2p_registry_oan_extension/register_domain/services/widget_rules.py"
+_PATH = Path(__file__).parents[1] / "src/oan_farmer_registry_extension/register_domain/services/widget_rules.py"
 _spec = importlib.util.spec_from_file_location("widget_rules", _PATH)
 widget_rules = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(widget_rules)

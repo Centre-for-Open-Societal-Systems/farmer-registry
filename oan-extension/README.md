@@ -3,13 +3,13 @@
 The OpenAgriNet layer on the OpenG2P Farmer Registry. It changes nothing
 upstream: the package re-exports the farmer extension and adds its own
 registers, services and metadata in new files. It is selected at runtime with
-`REGISTRY_EXTENSION_MODULE=openg2p_registry_oan_extension`, as the registry
+`REGISTRY_EXTENSION_MODULE=oan_farmer_registry_extension`, as the registry
 platform's Extensions Contract describes for coexisting extensions.
 
 | Path | Holds |
 |---|---|
 | `register_domain/fields.py` | the OAN columns on the farmer registers, declared once |
-| `register_domain/models/`, `schemas/` | append those columns to the farmer models and schemas; OAN's own register, FarmerPhone (`registers.py`) |
+| `register_domain/models/`, `schemas/` | append those columns to the farmer models and schemas; the FarmerPhone register (`farmer_phone.py`) |
 | `register_domain/derived.py` | the values derived rather than typed (land totals in hectares, location names, Ethiopian calendar dates, phone numbers, the farmer's search text), with no framework imports |
 | `register_domain/ethiopian_calendar.py` | Gregorian and Ethiopian calendar conversion |
 | `register_domain/services/` | the farmer domain services, each extended with the derived values (`derivations.py`) and the section widgets' value rules (`widget_rules.py`); the FarmerPhone service |

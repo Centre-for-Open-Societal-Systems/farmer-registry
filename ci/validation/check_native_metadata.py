@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def probe(host, mode):
     from sqlalchemy import create_engine, text
-    sys.modules['openg2p_registry_extensions'] = importlib.import_module('openg2p_registry_oan_extension')
+    sys.modules['openg2p_registry_extensions'] = importlib.import_module('oan_farmer_registry_extension')
     importlib.import_module('openg2p_registry_staff_api.config').Settings.get_config()
     importlib.import_module('openg2p_registry_extensions.app').Initializer()
     from openg2p_fastapi_common.models import BaseORMModel
@@ -179,7 +179,7 @@ def run():
     def native(mode):
         return command('docker','run','--rm','--memory=768m','--network',network,'--entrypoint','python',
             '-v',f'{ROOT.as_posix()}:/repo:ro','-e','PYTHONPATH=/repo/oan-extension/src:/repo/farmer-extension/src',
-            '-e','REGISTRY_EXTENSION_MODULE=openg2p_registry_oan_extension',image,
+            '-e','REGISTRY_EXTENSION_MODULE=oan_farmer_registry_extension',image,
             '/repo/ci/validation/check_native_metadata.py','--probe',database,mode)
 
     try:

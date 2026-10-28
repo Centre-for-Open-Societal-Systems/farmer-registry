@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("openg2p_registry_core")
 
 from openg2p_registry_core.errors import G2PRegistryException
-from openg2p_registry_oan_extension.register_domain.services import (
+from oan_farmer_registry_extension.register_domain.services import (
     household_intake as hi,
 )
 

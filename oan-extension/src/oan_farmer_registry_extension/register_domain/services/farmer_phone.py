@@ -1,4 +1,4 @@
-"""Domain service of OAN's own child register (models/registers.py)."""
+"""Domain service of the FarmerPhone register (models/farmer_phone.py)."""
 
 from openg2p_registry_core.services import G2PRegisterDomainService
 from openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils import (

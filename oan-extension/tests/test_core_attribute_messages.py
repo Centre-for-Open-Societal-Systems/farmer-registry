@@ -10,15 +10,15 @@ pytest.importorskip("openg2p_registry_core")
 
 from openg2p_registry_core.errors import G2PRegistryException
 
-from openg2p_registry_oan_extension.register_domain.services import (
+from oan_farmer_registry_extension.register_domain.services import (
     attribute_messages as am,
 )
-from openg2p_registry_oan_extension.register_domain.services.upstream_messages import (
+from oan_farmer_registry_extension.register_domain.services.upstream_messages import (
     MDS_UNAVAILABLE,
 )
 
 
-class NativeValidatorWithFixtureLists(am.OANAttributeValueValidator):
+class NativeValidatorWithFixtureLists(am.AttributeValueValidator):
     codes: ClassVar[dict[str, set[str]]] = {"GENDER": {"MALE"}}
 
     @property
@@ -86,8 +86,8 @@ def test_native_transport_failure_gets_actionable_service_message(monkeypatch):
 
 
 def test_wrapper_does_not_override_native_enablement_or_loading():
-    assert "enabled" not in am.OANAttributeValueValidator.__dict__
-    assert "_load" not in am.OANAttributeValueValidator.__dict__
+    assert "enabled" not in am.AttributeValueValidator.__dict__
+    assert "_load" not in am.AttributeValueValidator.__dict__
 
 
 def test_wording_component_is_registered_ahead_of_core_and_is_idempotent():

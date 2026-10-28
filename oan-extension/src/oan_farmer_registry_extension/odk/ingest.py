@@ -27,7 +27,7 @@ _logger = logging.getLogger("g2p-partner-service")
 _matched = contextvars.ContextVar("oan_odk_matched", default=None)
 
 
-class OANIngestService(G2PIngestService):
+class OdkSignedIngestService(G2PIngestService):
     async def ingest_data(self, data_model_mnemonic, ingest_data, *, register_id=None, intake_form_id=None):
         async with get_async_session_maker()() as session:
             data_model = await self._get_data_model(ingest_data, data_model_mnemonic, session)
@@ -109,12 +109,12 @@ def _message(envelope):
     return body.get("message") if isinstance(body, dict) else None
 
 
-def install() -> OANIngestService:
+def install() -> OdkSignedIngestService:
     """Put the service ahead of core's: the ingest controller looks it up per request."""
     current = G2PIngestService.get_component()
-    if isinstance(current, OANIngestService):
+    if isinstance(current, OdkSignedIngestService):
         return current
-    service = OANIngestService()
+    service = OdkSignedIngestService()
     component_registry.remove(service)
     index = component_registry.index(current) if current in component_registry else len(component_registry)
     component_registry.insert(index, service)

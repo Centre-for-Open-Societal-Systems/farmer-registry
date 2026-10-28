@@ -1,7 +1,7 @@
 """A submission of the Master Data driven form (odk/tools/build_mds_form.py)
 reaches the intake with its codes unchanged: the form's choice names are the
 list codes, so no alias table sits between the form and the registry."""
-from openg2p_registry_oan_extension.odk.transform import SECTIONS, intake_sections
+from oan_farmer_registry_extension.odk.transform import SECTIONS, intake_sections
 
 SUBMISSION = {
     "meta": {"instanceID": "uuid:mds-form"},

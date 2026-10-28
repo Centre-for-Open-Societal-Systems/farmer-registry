@@ -33,7 +33,7 @@ from openg2p_registry_core.services.g2p_register_hierarchical_service import (
 from pydantic_core import to_jsonable_python
 
 
-class OANJsonHierarchy(G2PRegisterHierarchicalService):
+class JsonSafeHierarchyService(G2PRegisterHierarchicalService):
     async def enrich_record_hierarchy(
         self, register_definition, record, session, visited_registers=None
     ):
@@ -45,7 +45,7 @@ class OANJsonHierarchy(G2PRegisterHierarchicalService):
         return to_jsonable_python(result)
 
 
-class OANOutgestChangeRequestService(G2PRegisterChangeRequestService):
+class JsonSafeOutgestChangeRequestService(G2PRegisterChangeRequestService):
     async def _fanout_outgest_for_change_request(self, change_request, session):
         definition, register_class, _ = await self._get_register_class_and_schema(
             change_request.register_id, session
@@ -65,13 +65,13 @@ class OANOutgestChangeRequestService(G2PRegisterChangeRequestService):
             approved_by=change_request.approved_by,
             approved_at=change_request.approved_at,
             changed_by_partner_id=change_request.source_partner_id,
-            hierarchical_service=OANJsonHierarchy.get_component(),
+            hierarchical_service=JsonSafeHierarchyService.get_component(),
         )
 
 
 async def fanout_outgest_rows_json(*args, **kwargs):
     """Native fanout with the JSON-safe hierarchy, whatever the caller built."""
-    kwargs["hierarchical_service"] = OANJsonHierarchy.get_component()
+    kwargs["hierarchical_service"] = JsonSafeHierarchyService.get_component()
     return await fanout_outgest_rows(*args, **kwargs)
 
 
@@ -95,13 +95,13 @@ def install_intake_outgest_json(module_name=INGEST_WORKER_MODULE):
 
 
 def install_outgest_json():
-    if OANJsonHierarchy.get_component() is None:
-        OANJsonHierarchy()
+    if JsonSafeHierarchyService.get_component() is None:
+        JsonSafeHierarchyService()
     install_intake_outgest_json()
     current = G2PRegisterChangeRequestService.get_component()
-    if isinstance(current, OANOutgestChangeRequestService):
+    if isinstance(current, JsonSafeOutgestChangeRequestService):
         return current
-    service = OANOutgestChangeRequestService()
+    service = JsonSafeOutgestChangeRequestService()
     component_registry.remove(service)
     first = next(
         (

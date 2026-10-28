@@ -45,7 +45,7 @@ import openpyxl
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "oan-extension/src"))
-from openg2p_registry_oan_extension.odk import transform  # noqa: E402
+from oan_farmer_registry_extension.odk import transform  # noqa: E402
 
 SOURCE = REPO / "odk/ATI_Farmers_Profile_ODK_Form_v3.xlsx"
 TARGET = REPO / "odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx"

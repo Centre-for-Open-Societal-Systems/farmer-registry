@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from jinja2 import Environment, StrictUndefined
-from openg2p_registry_oan_extension.odk import enricher
-from openg2p_registry_oan_extension.odk.transform import SECTIONS, intake_sections
+from oan_farmer_registry_extension.odk import enricher
+from oan_farmer_registry_extension.odk.transform import SECTIONS, intake_sections
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -79,7 +79,7 @@ def test_enricher_replaces_every_embedded_file_and_leaves_commit_to_worker():
     data['land_info']['land_info_repeat'][0]['land_certificate']={"__type":"File","data":"Ag=="}
     session=MagicMock()
     with patch.object(enricher,'store_file',side_effect=['document-1','document-2','document-3']) as store:
-        result=enricher.OANOdkFarmerEnricherService().enrich(data,session)
+        result=enricher.OdkToFarmerIntakeEnricher().enrich(data,session)
     assert store.call_count==3
     assert '__type' not in json.dumps(result)
     assert result['land_info']['land_info_repeat'][0]['oan_land_id']!='land-uuid-1'
@@ -90,12 +90,12 @@ def test_enricher_replaces_every_embedded_file_and_leaves_commit_to_worker():
 def test_registered_head_lookup_is_unique_and_does_not_create_new_household():
     data=example();data['household_questions'].update(household_head='no',head_registered='yes',member_reference_id='ODK-HEAD')
     session=MagicMock();session.execute.return_value.scalars.return_value.all.return_value=[SimpleNamespace(link_internal_record_id='household-1')]
-    result=enricher.OANOdkFarmerEnricherService().enrich(data,session)
+    result=enricher.OdkToFarmerIntakeEnricher().enrich(data,session)
     assert result['oan_intake_sections']['oan_fr_farmer_household_lookup'][0]['link_internal_record_id']=='household-1'
     assert result['oan_intake_sections']['oan_hh_information']==[]
     session.execute.return_value.scalars.return_value.all.return_value=[]
     with pytest.raises(ValueError,match='one approved registered head'):
-        enricher.OANOdkFarmerEnricherService().enrich(data,session)
+        enricher.OdkToFarmerIntakeEnricher().enrich(data,session)
 
 
 def test_empty_file_is_rejected_before_storage():
@@ -121,7 +121,7 @@ def test_real_form_land_nested_repeats_receive_their_own_parent_ids():
 
 def test_partner_payload_cannot_supply_trusted_household_or_prepared_sections():
     data=example();data['oan_household_id']='injected-household';data['oan_intake_sections']={'injected':[{}]}
-    result=enricher.OANOdkFarmerEnricherService().enrich(data,MagicMock())
+    result=enricher.OdkToFarmerIntakeEnricher().enrich(data,MagicMock())
     assert result.get('oan_household_id') is None
     assert 'injected' not in result['oan_intake_sections']
     assert result['oan_intake_sections']['oan_hh_information'][0]['size_of_group']==2
@@ -155,7 +155,7 @@ def test_native_schema_accepts_multi_answer_fields_and_native_validator_checks_e
     import asyncio
     from openg2p_registry_core.errors import G2PRegistryException
     from openg2p_registry_core.services.g2p_attribute_value_validator import G2PAttributeValueValidator
-    from openg2p_registry_oan_extension.register_domain import schemas, models
+    from oan_farmer_registry_extension.register_domain import schemas, models
 
     class CodedLists(G2PAttributeValueValidator):
         @property

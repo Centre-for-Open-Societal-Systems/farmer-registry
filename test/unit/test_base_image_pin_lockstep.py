@@ -1,7 +1,10 @@
 """Guard: the openg2p-registry pin must be identical in every place it appears.
 
 A variant extends ONE registry-platform version, used two ways:
-  * the Docker base images — `ARG RP_VERSION=<v>` in every docker/*/Dockerfile
+  * the Docker base images — `ARG BASE_IMAGE_VERSION=<v>` in every docker/*/Dockerfile
+    whose FROM is a platform image (`openg2p/openg2p-registry-<role>`); the farmer
+    parents (`openg2p/openg2p-farmer-registry-<role>`) carry their own pin, reviewed
+    by ci/validation/check_release_pins.py
   * the Helm chart — the `openg2p-registry` dependency `version:` in Chart.yaml
 
 If these drift, the sanity image is built FROM one base while the chart deploys
@@ -22,11 +25,15 @@ REPO = pathlib.Path(__file__).resolve().parents[2]
 CHART = REPO / "helm" / "openg2p-farmer-registry" / "Chart.yaml"
 
 
+PLATFORM_IMAGE = re.compile(r"^FROM openg2p/openg2p-registry-[a-z-]+:\$\{BASE_IMAGE_VERSION\}$", re.M)
+
+
 def _docker_pins():
     pins = {}
     for f in sorted((REPO / "docker").glob("*/Dockerfile")):
-        m = re.search(r"^ARG RP_VERSION=(\S+)", f.read_text(), re.M)
-        if m:
+        content = f.read_text()
+        m = re.search(r"^ARG BASE_IMAGE_VERSION=(\S+)", content, re.M)
+        if m and PLATFORM_IMAGE.search(content):
             pins[f.relative_to(REPO).as_posix()] = m.group(1)
     return pins
 
@@ -39,10 +46,10 @@ def _chart_pin():
     return m.group(1) if m else None
 
 
-def test_rp_pin_is_in_lockstep():
+def test_platform_pin_is_in_lockstep():
     docker = _docker_pins()
     chart = _chart_pin()
-    assert docker, "no ARG RP_VERSION found in any docker/*/Dockerfile"
+    assert docker, "no ARG BASE_IMAGE_VERSION found in any docker/*/Dockerfile built FROM a platform image"
     assert chart, "no openg2p-registry dependency version found in Chart.yaml"
 
     oan_pin = json.loads((REPO / 'ci/deploy/oan-chart.json').read_text())['platformVersion']

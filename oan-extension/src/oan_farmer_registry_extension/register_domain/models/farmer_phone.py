@@ -1,4 +1,4 @@
-"""OAN's own child register of the farmer, laid out as the farmer extension's.
+"""The FarmerPhone child register of the farmer, laid out as the farmer extension's.
 
 FarmerPhone is a TABLE register under the Farmer (meta_data/05_registers.sql):
 a farmer has any number of phone numbers. On the intake form a row is linked to

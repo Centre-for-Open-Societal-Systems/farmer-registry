@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-PATH = Path(__file__).resolve().parents[1]/'src/openg2p_registry_oan_extension/odk/transform.py'
+PATH = Path(__file__).resolve().parents[1]/'src/oan_farmer_registry_extension/odk/transform.py'
 SPEC = importlib.util.spec_from_file_location('land_link_mapper', PATH)
 mapper = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(mapper)

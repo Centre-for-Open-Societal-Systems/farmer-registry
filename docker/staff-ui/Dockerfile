@@ -3,17 +3,17 @@
 # commit of the published image it replaces, so the overlay is the only
 # difference. Build from the repository root:
 #   docker build -f docker/staff-ui/Dockerfile .
-# REGISTRY_PLATFORM_REF is the org.opencontainers.image.revision label of
+# BASE_IMAGE_VERSION is the org.opencontainers.image.revision label of
 # openg2p/openg2p-registry-staff-ui:1.2.2-rc.557.
 FROM node:20-alpine AS base
 WORKDIR /app
 
 FROM base AS source
-ARG REGISTRY_PLATFORM_REF=4d5482dfea23d1accf98fe474fb90ed6ddb5f651
+ARG BASE_IMAGE_VERSION=4d5482dfea23d1accf98fe474fb90ed6ddb5f651
 RUN apk add --no-cache git \
  && git init -q /src && cd /src \
  && git remote add origin https://github.com/OpenG2P/registry-platform.git \
- && git fetch -q --depth 1 --filter=blob:none origin "$REGISTRY_PLATFORM_REF" \
+ && git fetch -q --depth 1 --filter=blob:none origin "$BASE_IMAGE_VERSION" \
  && git sparse-checkout set ui/staff-ui \
  && git checkout -q FETCH_HEAD
 

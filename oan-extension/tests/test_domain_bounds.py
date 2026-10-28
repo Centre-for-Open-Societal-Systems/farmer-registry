@@ -6,7 +6,7 @@ import pytest
 
 SERVICES = (
     Path(__file__).parents[1]
-    / "src/openg2p_registry_oan_extension/register_domain/services"
+    / "src/oan_farmer_registry_extension/register_domain/services"
 )
 
 

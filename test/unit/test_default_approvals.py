@@ -16,7 +16,7 @@ def test_native_farmer_policy_has_two_all_block_stages_and_default_reviewers():
             assert re.search(re.escape("'" + key + "'") + rf", {order}, 'Stage {order} Officers', 'all'", stage)
             assert re.search(re.escape("'" + key + "'") + rf', {order}, \'user\',.*' + re.escape(user), rules)
     assert "'block'" in stage
-    runtime = (ROOT / "oan-extension/src/openg2p_registry_oan_extension/runtime.py").read_text()
+    runtime = (ROOT / "oan-extension/src/oan_farmer_registry_extension/runtime.py").read_text()
     assert "geo_approval" not in runtime
 
 
@@ -32,7 +32,7 @@ def test_existing_policy_customizations_cannot_leak_into_the_reset_defaults():
             assert stage["mode"] == "all" and stage["on_empty"] == "block"
             assert stage["rules"] == [{"rule_type":"user", "rule_value":{"user_id":user},
                                        "kind":"approver", "required":False}]
-    package = ROOT / "oan-extension/src/openg2p_registry_oan_extension"
+    package = ROOT / "oan-extension/src/oan_farmer_registry_extension"
     sql = "\n".join(p.read_text() for p in (package / "awe_meta_data").glob("*.sql"))
     assert "DELETE FROM" not in sql and "UPDATE public." not in sql
     bindings = (package / "meta_data/55_default_approvals.sql").read_text()

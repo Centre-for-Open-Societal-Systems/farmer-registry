@@ -38,8 +38,8 @@ def initialize(host):
     task = importlib.import_module("openg2p_registry_celery_worker.tasks.ingest_data_worker")
     assert task._session_maker is Engine.get_async_session_maker()
     from openg2p_registry_core.services.intake_form_data_service import G2PIntakeFormDataService
-    from openg2p_registry_extensions.register_domain.services.household_intake import OANIntakeFormDataService
-    assert isinstance(G2PIntakeFormDataService.get_component(), OANIntakeFormDataService)
+    from openg2p_registry_extensions.register_domain.services.household_intake import HouseholdCheckedIntakeFormDataService
+    assert isinstance(G2PIntakeFormDataService.get_component(), HouseholdCheckedIntakeFormDataService)
     from openg2p_registry_core.interfaces import G2PRegisterDomainFactory
     services = importlib.import_module("openg2p_registry_extensions.register_domain.services")
     factory = G2PRegisterDomainFactory.get_component()
@@ -80,7 +80,7 @@ def initialize(host):
     for name, method in {
         "worker_save_sections": task._save_sections_async,
         "selected_intake_save": selected_intake.save_intake_form_submission_with_session,
-        "selected_parent_save": super(OANIntakeFormDataService, selected_intake).save_intake_form_submission_with_session,
+        "selected_parent_save": super(HouseholdCheckedIntakeFormDataService, selected_intake).save_intake_form_submission_with_session,
     }.items():
         source = inspect.getsource(method)
         resolved[name] = {"module": method.__module__, "qualname": method.__qualname__,

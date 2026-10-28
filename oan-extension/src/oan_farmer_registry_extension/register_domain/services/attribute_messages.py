@@ -16,7 +16,7 @@ async def _messages():
     return (await _load())[2]
 
 
-class OANAttributeValueValidator(G2PAttributeValueValidator):
+class AttributeValueValidator(G2PAttributeValueValidator):
     async def validate_records(self, records, *, field_map=None):
         try:
             return await super().validate_records(records, field_map=field_map)
@@ -38,9 +38,9 @@ class OANAttributeValueValidator(G2PAttributeValueValidator):
 
 def install_attribute_messages():
     core = G2PAttributeValueValidator.get_component()
-    if isinstance(core, OANAttributeValueValidator):
+    if isinstance(core, AttributeValueValidator):
         return core
-    service = OANAttributeValueValidator()
+    service = AttributeValueValidator()
     component_registry.remove(service)
     first = next(
         (

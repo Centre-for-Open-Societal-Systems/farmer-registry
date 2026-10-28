@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 assert os.environ.get("OAN_ODK_ROLLBACK_CHECK") == "local", "Run only as an explicitly selected local rollback check"
-sys.modules["openg2p_registry_extensions"]=importlib.import_module("openg2p_registry_oan_extension")
+sys.modules["openg2p_registry_extensions"]=importlib.import_module("oan_farmer_registry_extension")
 from openg2p_registry_celery_worker.config import Settings
 Settings.get_config()
 from openg2p_registry_extensions.app import Initializer

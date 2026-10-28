@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 _package = types.ModuleType("oan_register_domain")
-_package.__path__ = [str(Path(__file__).parents[1] / "src/openg2p_registry_oan_extension/register_domain")]
+_package.__path__ = [str(Path(__file__).parents[1] / "src/oan_farmer_registry_extension/register_domain")]
 sys.modules["oan_register_domain"] = _package
 derived = importlib.import_module("oan_register_domain.derived")
 calendar = importlib.import_module("oan_register_domain.ethiopian_calendar")

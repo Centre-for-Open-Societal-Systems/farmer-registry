@@ -19,7 +19,7 @@ from .derivations import DERIVATIONS, Derivations
 from .domain_bounds import check_domain_bounds
 from .household_intake import install_farmer_household_check  # noqa: F401
 from .registrant_auth_compat import install_registrant_auth_compat  # noqa: F401
-from .registers import FarmerPhoneService
+from .farmer_phone import FarmerPhoneService
 from .upstream_messages import reword
 from .widget_rules import Rules, _Say, check_record, collect_rules, normalize_record
 
@@ -143,7 +143,7 @@ for _name in dir(_farmer):
     ):
         globals()[_name] = _with_widget_rules(_name, _base)
 
-# OAN's own registers.
+# The registers this package adds.
 for _name, _service in (("FarmerPhone", FarmerPhoneService),):
     globals()[_PREFIX + _name] = type(_PREFIX + _name, (WidgetRuleValidation, _service),
                                       {"__module__": __name__, "_upstream_validates": True})

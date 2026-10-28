@@ -19,7 +19,7 @@ try {
         Start-Sleep -Milliseconds 200
     }
     if (-not $ready) { throw 'Disposable PostgreSQL did not become ready' }
-    docker run --rm --network $taskName -v "${repoRoot}:/repo:ro" --entrypoint python $ApiImage /repo/test/integration/check_location_livestock.py
+    docker run --rm --network $taskName -v "${repoRoot}:/repo:ro" --entrypoint python $ApiImage /repo/test/integration/test_location_livestock.py
     if ($LASTEXITCODE -ne 0) { throw 'Location/livestock integration failed' }
 } finally {
     if ($containerCreated) { docker rm -f $taskName | Out-Null }

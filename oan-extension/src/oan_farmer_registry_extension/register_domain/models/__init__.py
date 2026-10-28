@@ -9,7 +9,7 @@ from sqlalchemy.orm import column_property, mapped_column
 
 from ..derived import farmer_search_text
 from ..fields import OAN_FIELDS
-from .registers import (  # noqa: F401  re-exported for core
+from .farmer_phone import (  # noqa: F401  re-exported for core
     G2PIntakeFormFarmerPhone,
     G2PRegisterFarmerPhone,
     G2PRegisterHistoryFarmerPhone,

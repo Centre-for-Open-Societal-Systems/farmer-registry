@@ -17,9 +17,9 @@ def check(root=ROOT):
         if selected != expected:
             raise ValueError("Native Farmer parent path or repository changed")
         content = (root / selected["dockerfile"]).read_text(encoding="utf-8")
-        versions = re.findall(r"^ARG FARMER_VERSION=(\S+)$", content, re.M)
+        versions = re.findall(r"^ARG BASE_IMAGE_VERSION=(\S+)$", content, re.M)
         sources = re.findall(r"^FROM (\S+)$", content, re.M)
-        if versions != [contract["farmerParentVersion"]] or sources != [selected["repository"] + ":${FARMER_VERSION}"]:
+        if versions != [contract["farmerParentVersion"]] or sources != [selected["repository"] + ":${BASE_IMAGE_VERSION}"]:
             raise ValueError("Native Farmer parent pin or FROM changed without contract review")
     pin = json.loads((root / "ci/deploy/oan-chart.json").read_text(encoding="utf-8"))
     if pin["platformVersion"] != contract["platformVersion"]:

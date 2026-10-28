@@ -149,7 +149,7 @@ def check_farmer_household(farmers: list, household, members: list, messages: di
     validate_household_roster(household, members)
 
 
-class OANIntakeFormDataService(G2PFarmerIntakeFormDataService):
+class HouseholdCheckedIntakeFormDataService(G2PFarmerIntakeFormDataService):
     """The farmer extension's intake service, with the farmer household check."""
 
     async def finalize_submission_with_session(self, submission_id: str, session, *args, **kwargs):
@@ -254,8 +254,8 @@ async def check_farmer_submission(submission_id: str, session, submission=None) 
         check_farmer_household(farmers, households[0] if households else None, members, messages)
 
 
-def install_farmer_household_check() -> OANIntakeFormDataService:
-    """Put OAN's intake service ahead of every other one: get_component()
+def install_farmer_household_check() -> HouseholdCheckedIntakeFormDataService:
+    """Put the household-checked intake service ahead of every other one: get_component()
     returns the first registered instance (the farmer extension does the same)."""
     from openg2p_fastapi_common.context import component_registry
     from openg2p_registry_core.services.intake_form_data_service import (
@@ -263,9 +263,9 @@ def install_farmer_household_check() -> OANIntakeFormDataService:
     )
 
     current = G2PIntakeFormDataService.get_component()
-    if isinstance(current, OANIntakeFormDataService):
+    if isinstance(current, HouseholdCheckedIntakeFormDataService):
         return current
-    service = OANIntakeFormDataService()
+    service = HouseholdCheckedIntakeFormDataService()
     component_registry.remove(service)
     first = next((i for i, c in enumerate(component_registry) if isinstance(c, G2PIntakeFormDataService)),
                  len(component_registry))

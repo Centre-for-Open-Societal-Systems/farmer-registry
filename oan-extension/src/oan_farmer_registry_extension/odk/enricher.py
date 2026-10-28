@@ -51,7 +51,7 @@ def replace_files(value, session, actor):
     return value
 
 
-class OANOdkFarmerEnricherService(G2PPayloadEnricherInterface):
+class OdkToFarmerIntakeEnricher(G2PPayloadEnricherInterface):
     def enrich(self, data, session):
         from ..register_domain.models import G2PRegisterFarmer
 
