@@ -9,7 +9,7 @@
       {
         "name": "Stage 1 Officers",
         "stage_order": 1,
-        "mode": "all",
+        "mode": "any-n",
         "on_empty": "block",
         "rules": [
           {
@@ -19,13 +19,22 @@
             },
             "kind": "approver",
             "required": false
+          },
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "admin"
+            },
+            "kind": "approver",
+            "required": false
           }
-        ]
+        ],
+        "mode_value": 1
       },
       {
         "name": "Stage 2 Officers",
         "stage_order": 2,
-        "mode": "all",
+        "mode": "any-n",
         "on_empty": "block",
         "rules": [
           {
@@ -35,8 +44,17 @@
             },
             "kind": "approver",
             "required": false
+          },
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "admin"
+            },
+            "kind": "approver",
+            "required": false
           }
-        ]
+        ],
+        "mode_value": 1
       }
     ]
   },
@@ -50,7 +68,7 @@
       {
         "name": "Stage 1 Officers",
         "stage_order": 1,
-        "mode": "all",
+        "mode": "any-n",
         "on_empty": "block",
         "rules": [
           {
@@ -60,13 +78,22 @@
             },
             "kind": "approver",
             "required": false
+          },
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "admin"
+            },
+            "kind": "approver",
+            "required": false
           }
-        ]
+        ],
+        "mode_value": 1
       },
       {
         "name": "Stage 2 Officers",
         "stage_order": 2,
-        "mode": "all",
+        "mode": "any-n",
         "on_empty": "block",
         "rules": [
           {
@@ -76,8 +103,17 @@
             },
             "kind": "approver",
             "required": false
+          },
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "admin"
+            },
+            "kind": "approver",
+            "required": false
           }
-        ]
+        ],
+        "mode_value": 1
       }
     ]
   },
@@ -91,7 +127,7 @@
       {
         "name": "Stage 1 Officers",
         "stage_order": 1,
-        "mode": "all",
+        "mode": "any-n",
         "on_empty": "block",
         "rules": [
           {
@@ -101,13 +137,22 @@
             },
             "kind": "approver",
             "required": false
+          },
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "admin"
+            },
+            "kind": "approver",
+            "required": false
           }
-        ]
+        ],
+        "mode_value": 1
       },
       {
         "name": "Stage 2 Officers",
         "stage_order": 2,
-        "mode": "all",
+        "mode": "any-n",
         "on_empty": "block",
         "rules": [
           {
@@ -117,8 +162,17 @@
             },
             "kind": "approver",
             "required": false
+          },
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "admin"
+            },
+            "kind": "approver",
+            "required": false
           }
-        ]
+        ],
+        "mode_value": 1
       }
     ]
   },
@@ -132,7 +186,7 @@
       {
         "name": "Stage 1 Officers",
         "stage_order": 1,
-        "mode": "all",
+        "mode": "any-n",
         "on_empty": "block",
         "rules": [
           {
@@ -142,13 +196,22 @@
             },
             "kind": "approver",
             "required": false
+          },
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "admin"
+            },
+            "kind": "approver",
+            "required": false
           }
-        ]
+        ],
+        "mode_value": 1
       },
       {
         "name": "Stage 2 Officers",
         "stage_order": 2,
-        "mode": "all",
+        "mode": "any-n",
         "on_empty": "block",
         "rules": [
           {
@@ -158,8 +221,17 @@
             },
             "kind": "approver",
             "required": false
+          },
+          {
+            "rule_type": "user",
+            "rule_value": {
+              "user_id": "admin"
+            },
+            "kind": "approver",
+            "required": false
           }
-        ]
+        ],
+        "mode_value": 1
       }
     ]
   }

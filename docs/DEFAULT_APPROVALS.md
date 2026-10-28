@@ -1,20 +1,30 @@
 # OpenG2P default approvals
 
-The user deferred custom/geographic approvals on 27 October 2026. Farmer
-already inherits the published native Farmer example configuration: two
-sequential AWE stages, both `mode=all` and `on_empty=block`, assigned to
-`alex.carter` then `nina.patel`. Native self/repeat restriction defaults are
-`false`. Configure actual reviewers later through standard AWE administration.
+Farmer uses the published native Farmer example configuration under OAN's own
+`.default` policy keys: two sequential AWE stages with `on_empty=block`. Since
+28 October 2026 each stage is completed by one decision (`mode=any-n`,
+`mode_value=1`) from either the named officer or `admin`: stage 1 lists
+`alex.carter` and `admin`, stage 2 lists `nina.patel` and `admin`. Native
+self/repeat restrictions stay `false`, so `admin` may decide both stages. The
+same shape is seeded in the Crop Sown and Livestock registries, including their
+Farmer-reference policies, so every registry approves the same way.
 
 The restored database contains extra rules on the old native policy keys;
 ordinary insert-only seeding would retain them. OAN therefore publishes the
-same native default stages under new `.default` keys and resets the four
-stable future-request binding IDs. Old policies/rules and pending tasks remain.
+default stages under the `.default` keys and resets the four stable
+future-request binding IDs. Old policies/rules and pending tasks remain.
 The seed image replaces only the three example-policy SQL files with OAN's
 default metadata; native callback registration and seeding machinery remain.
 
-No geographic AWE service, upstream source, user/role grant, existing request/task
-or decision is changed. Domain and Farmer-reference dependency approvals in the receiving
-registries remain separate; this request does not enable automatic approval.
-The source check verifies the native configuration directly. No live reset
-or deployment is claimed by this document.
+Databases seeded before 28 October hold the eight `.default` stages with
+`mode=all`. `50_either_officer_or_admin.sql` moves exactly those stages, by
+id, to `any-n`/1 in place and adds the `admin` rules through the ordinary
+insert-only rule file; policy keys, stage ids, rule ids and bindings do not
+change, and the statement is a no-op once applied. Open tasks keep their
+policy.
+
+No geographic AWE service, upstream source, user/role grant, existing
+request/task or decision is changed. Domain and Farmer-reference dependency
+approvals in the receiving registries remain separate; this does not enable
+automatic approval. The source check (`test/unit/test_default_approvals.py`)
+verifies the configuration directly.

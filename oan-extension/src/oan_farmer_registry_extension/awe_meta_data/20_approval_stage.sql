@@ -1,6 +1,7 @@
 -- OpenG2P native default stages under clean keys; old policies/tasks remain intact.
+-- Each stage is satisfied by one decision (any-n, 1): the named officer or admin.
 INSERT INTO public.approval_stage (id,policy_id,stage_order,name,mode,mode_value,sla_hours,parallel_group,skip_if,on_empty,on_breach,escalation_rules_json,created_at,updated_at)
-SELECT v.id,p.id,v.stage_order,v.name,'all',CAST(NULL AS integer),CAST(NULL AS integer),CAST(NULL AS integer),'null','block',CAST(NULL AS integer),'null',NOW(),NOW()
+SELECT v.id,p.id,v.stage_order,v.name,'any-n',1,CAST(NULL AS integer),CAST(NULL AS integer),'null','block',CAST(NULL AS integer),'null',NOW(),NOW()
 FROM (VALUES
 ('5016cdbc-e2e2-53e2-a45e-eafc1ae9ea87','registry.change_request.farmer.default',1,'Stage 1 Officers'),
 ('3a336a03-a850-5b67-8c56-9700e3c176f8','registry.change_request.farmer.default',2,'Stage 2 Officers'),
