@@ -140,6 +140,16 @@ WHERE "tab_section_id" IN (
 AND EXISTS (SELECT 1 FROM "public"."g2p_register_ui_tab_sections" o
             WHERE o."tab_section_id" = 'oan_' || "g2p_register_ui_tab_sections"."tab_section_id");
 
+-- One id-authentication section on the farmer's record: OAN's Fayda
+-- verification near the top, after the identity. Upstream's ID Authentication
+-- section further down calls register/authenticate-registrant, which the
+-- platform does not serve (it serves registry/authenticate_registrant), so it
+-- is detached once OAN's is attached.
+DELETE FROM "public"."g2p_register_ui_tab_sections"
+WHERE "tab_section_id" = 'f81b17d9-35af-4d72-8ca7-3f9be1ca7c5b'  -- farmer tab: ID authentication
+  AND EXISTS (SELECT 1 FROM "public"."g2p_register_ui_tab_sections"
+              WHERE "tab_section_id" = 'oan_farmer_identity_verification_register');
+
 DELETE FROM "public"."g2p_intake_form_ui_tab_sections"
 WHERE "tab_section_id" IN (
   'tab_section_1',                         -- household lookup (with the household-head question)
