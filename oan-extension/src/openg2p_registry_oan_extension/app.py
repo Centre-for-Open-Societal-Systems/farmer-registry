@@ -45,6 +45,7 @@ class Initializer(FarmerInitializer):
             from .schema_compat import migrate_existing_schema
 
             await migrate_existing_schema(dbengine.get())
+            await fill_derived_columns()
 
         asyncio.run(migrate())
 
@@ -80,6 +81,29 @@ async def add_oan_columns() -> None:
                         _logger.info("Adding column %s.%s", table.name, column.name)
                         await conn.execute(text(
                             f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {column_ddl(column, engine.dialect)}'))
+
+
+async def fill_derived_columns() -> None:
+    """Fill search_text and record_name on farmer rows saved without them.
+
+    Rows saved through the OAN subclasses before their listeners were
+    registered (register_domain/models) have both columns NULL, which hides
+    them from the register list. Only rows with a NULL search_text are
+    touched, so this is a no-op once they are filled.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .register_domain.models import _populate_derived_columns
+
+    async with AsyncSession(dbengine.get(), expire_on_commit=False) as session:
+        for cls in (_oan_models.G2PRegisterFarmer, _oan_models.G2PIntakeFormFarmer):
+            rows = (await session.execute(select(cls).where(cls.search_text.is_(None)))).scalars().all()
+            for row in rows:
+                _populate_derived_columns(None, None, row)
+            if rows:
+                _logger.info("Filled search_text on %d %s rows", len(rows), cls.__tablename__)
+        await session.commit()
 
 
 def column_ddl(column, dialect) -> str:
