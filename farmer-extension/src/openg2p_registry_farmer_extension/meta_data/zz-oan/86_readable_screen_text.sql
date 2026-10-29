@@ -34,11 +34,11 @@ SET "core_translation" = (COALESCE("core_translation"::jsonb, '{}'::jsonb) ||
  "created_by": "Created by",
  "credential_type": "Credential type",
  "decision_action": "Decision action",
- "dedup_result_id": "Dedup result ID",
+ "dedup_result_id": "Duplicate check result ID",
  "document_icon_alt": "Document icon",
  "draft_submissions": "Draft submissions",
  "edit_image": "Edit image",
- "enriched_message": "Enriched message",
+ "enriched_message": "Message with added details",
  "export_again": "Export again",
  "export_history": "Export history",
  "export_records": "Export records",
@@ -70,7 +70,7 @@ SET "core_translation" = (COALESCE("core_translation"::jsonb, '{}'::jsonb) ||
  "raw_message": "Raw message",
  "record_access_denied": "Record access denied",
  "register_possible_duplicates": "Register possible duplicates",
- "registryGen2": "Registry gen 2",
+ "registryGen2": "Registry",
  "retry_export": "Retry export",
  "search_change_requests": "Search change requests",
  "search_form_submissions": "Search in form submissions",
@@ -94,8 +94,6 @@ SET "core_translation" = (COALESCE("core_translation"::jsonb, '{}'::jsonb) ||
  "view_queue": "View queue",
  "register_form_submissions": "{subject} - form submissions",
  "register_intake_form": "{subject} - intake form",
- "common.remove": "Remove",
- "common.select": "Select",
  "kind": "Task type"
 }'::jsonb)::json
 WHERE "language_code" = 'en';
@@ -108,12 +106,12 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "rule_fayda_missing": "{label}: answered Yes, but no {fayda} is entered. Enter the {fayda}, or answer No.",
  "rule_location": "{label}: the place chosen is not in the Master Data list. Choose the region, zone, woreda and kebele again.",
  "upstream_link_not_found": "{register} not found. Check the {register_lower} ID.",
- "region_name": "Region name",
- "zone_name": "Zone name",
- "woreda_name": "Woreda name",
- "kebele_name": "Kebele name",
- "farmer_phones": "Farmer phones",
- "fr_farmer_phone_numbers": "Farmer phone numbers",
+ "region_name": "Region",
+ "zone_name": "Zone",
+ "woreda_name": "Woreda",
+ "kebele_name": "Kebele",
+ "farmer_phones": "Phone numbers",
+ "fr_farmer_phone_numbers": "Phone numbers",
  "fr_farmer_reg_ids": "Farmer identification",
  "farmer_documents": "Documents",
  "farmer_socio_economic_health": "Socio-economic and health",
@@ -170,3 +168,35 @@ UPDATE "public"."g2p_intake_form_definitions" SET "form_description" = 'Farmer r
 WHERE "form_id" = 'a1a4d25a-1cd4-4356-abac-8782382649';
 UPDATE "public"."g2p_intake_form_definitions" SET "form_description" = 'Household registration'
 WHERE "form_id" = '9055ab43-c85d-4833-bd00-ca657bb72650';
+
+-- The household-member selects (prefix, relationship to the head) showed the
+-- stored code (MR, SPOUSE) because their label key was value_code. They show
+-- Master Data's display text now; the value key, and so what is stored, stays
+-- value_code. Any section is searched for such a select by its list, so the
+-- sections OAN builds from these are covered too.
+CREATE OR REPLACE FUNCTION pg_temp.oan_code_label(node jsonb)
+RETURNS jsonb LANGUAGE plpgsql AS $fn$
+DECLARE
+  result jsonb;
+BEGIN
+  IF jsonb_typeof(node) = 'array' THEN
+    SELECT COALESCE(jsonb_agg(pg_temp.oan_code_label(value) ORDER BY ord), '[]'::jsonb)
+      INTO result FROM jsonb_array_elements(node) WITH ORDINALITY AS a(value, ord);
+  ELSIF jsonb_typeof(node) = 'object' THEN
+    SELECT COALESCE(jsonb_object_agg(key, pg_temp.oan_code_label(value)), '{}'::jsonb)
+      INTO result FROM jsonb_each(node);
+    IF node #>> '{params,attribute_id}' IN ('PREFIX', 'RELATIONSHIP_TO_HEAD')
+       AND node->>'labelKey' = 'value_code' THEN
+      result := jsonb_set(result, '{labelKey}', '"value_display"');
+    END IF;
+  ELSE
+    result := node;
+  END IF;
+  RETURN result;
+END $fn$;
+
+UPDATE "public"."g2p_register_sections"
+SET "section_ui_schema" = pg_temp.oan_code_label("section_ui_schema"::jsonb)
+WHERE "section_ui_schema"::text LIKE '%"labelKey": "value_code"%'
+  AND ("section_ui_schema"::text LIKE '%"attribute_id": "PREFIX"%'
+       OR "section_ui_schema"::text LIKE '%"attribute_id": "RELATIONSHIP_TO_HEAD"%');

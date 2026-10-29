@@ -44,7 +44,7 @@ LANDS = {"panels": [{"panels": [{"widgets": [
 
 RULES = widget_rules.collect_rules([(FARMER, PERSONAL), (LAND, LANDS)])
 MESSAGES = {"ethiopic_script_only": "Use Ethiopic (Ge'ez) script", "first_name_amh": "First Name (Amharic)",
-            "estimated_age": "Estimated Age", "has_national_id": "Has National ID", "birth_date": "Birth Date",
+            "estimated_age": "Estimated Age", "has_national_id": "Has a Fayda ID", "birth_date": "Birth Date",
             "disabled": "Has Disability"}
 
 
@@ -109,7 +109,7 @@ def test_a_pattern_python_cannot_compile_is_skipped():
 def test_a_yes_no_question_takes_only_yes_or_no():
     assert widget_rules.check_record({"has_national_id": True}, RULES[FARMER], MESSAGES) == []
     assert widget_rules.check_record({"has_national_id": "maybe"}, RULES[FARMER], MESSAGES) == [
-        "Has National ID: answer Yes or No."]
+        "Has a Fayda ID: answer Yes or No."]
 
 
 def test_a_whole_number_is_required_where_the_format_says_integer():
@@ -137,7 +137,7 @@ def test_an_api_select_is_not_checked_here():
 
 def test_messages_can_be_reworded_per_language():
     words = {**MESSAGES, "rule_boolean": "{label}: choose Yes or No"}
-    assert widget_rules.check_record({"has_national_id": 3}, RULES[FARMER], words) == ["Has National ID: choose Yes or No"]
+    assert widget_rules.check_record({"has_national_id": 3}, RULES[FARMER], words) == ["Has a Fayda ID: choose Yes or No"]
 
 
 def test_numbers_sent_as_text_become_numbers():

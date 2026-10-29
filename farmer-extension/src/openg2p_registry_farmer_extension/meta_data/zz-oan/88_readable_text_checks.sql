@@ -148,10 +148,10 @@ BEGIN
     'view_queue',
     'register_form_submissions',
     'register_intake_form',
-    'common.remove',
-    'common.select',
-    'kind')
-    AND k.value ~ '^[A-Z][a-z]+( (of|to|in|at|by|and|or|the|[A-Z][a-z]+))* [A-Z][a-z]+';
+    'kind',
+    'registryGen2'
+    )
+    AND k.value ~ '[^ ] [A-Z][a-z]';
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'Platform screen text is in Title Case: %', found;
   END IF;
@@ -159,7 +159,7 @@ BEGIN
   SELECT string_agg(c, ', ') INTO found
   FROM unnest(ARRAY['MALE', 'FEMALE', 'SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED', 'NEVER_ATTEND',
                     'PRIMARY', 'SECONDARY', 'TERTIARY', 'HIGHER_EDUCATION', 'MR', 'MRS', 'MS', 'DR', 'MISS',
-                    'DRAFT', 'FINAL', 'REJECTED', 'STAFF_PORTAL']) c
+                    'NON_FORMAL', 'DRAFT', 'FINAL', 'REJECTED', 'STAFF_PORTAL']) c
   WHERE NOT EXISTS (SELECT 1 FROM "public"."registry_languages" l
                     WHERE l."is_default" AND COALESCE(NULLIF(l."domain_translation"::jsonb ->> c, ''), '') <> '');
   IF found IS NOT NULL THEN
@@ -171,5 +171,13 @@ BEGIN
   WHERE s.section_ui_schema::text ~ '"(widget-label|search_placeholder|select_record_label)": "(Parent|Search parent[.]*|Select [Pp]arent)"';
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'A land lookup still says Parent: %', found;
+  END IF;
+
+  SELECT string_agg(s.section_id, ', ') INTO found
+  FROM "public"."g2p_register_sections" s
+  WHERE s.section_ui_schema::text ~ '"attribute_id": "(PREFIX|RELATIONSHIP_TO_HEAD)"[^{}]*\}[^{}]*"labelKey": "value_code"'
+     OR s.section_ui_schema::text ~ '"labelKey": "value_code"[^{}]*"params": \{"attribute_id": "(PREFIX|RELATIONSHIP_TO_HEAD)"';
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'A select shows the stored code instead of its display text: %', found;
   END IF;
 END $$;
