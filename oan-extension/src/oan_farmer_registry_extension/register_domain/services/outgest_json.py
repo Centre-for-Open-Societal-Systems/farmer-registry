@@ -32,7 +32,8 @@ from openg2p_registry_core.services.g2p_register_hierarchical_service import (
 )
 from pydantic_core import to_jsonable_python
 
-from .direct_approval import DirectApprovalClosed
+# Absolute: tests load this file by path, with no parent package.
+from oan_farmer_registry_extension.register_domain.services.direct_approval import DirectApprovalClosed
 
 
 class JsonSafeHierarchyService(G2PRegisterHierarchicalService):
