@@ -67,3 +67,11 @@ def test_the_fourth_pass_labels_say_what_the_field_holds():
     assert block["total_land_crop_sharing_area"] == "Crop-sharing or other land (ha)"
     assert block["Intake Form"] == "Intake form"
     assert "Household scores" in _LABELS
+
+
+def test_code_texts_match_the_pack():
+    block = json.loads(re.search(r"'([{]\n.*?\n[}])'::jsonb", _LABELS, re.S).group(1))
+    assert block["BASIC"] == "Basic education"
+    assert block["INTERMEDIARY"] == "Intermediate (middle school)"
+    assert block["CROP_SHARE"] == "Sharecropper"
+    assert block["SELF"] == "Head of household"

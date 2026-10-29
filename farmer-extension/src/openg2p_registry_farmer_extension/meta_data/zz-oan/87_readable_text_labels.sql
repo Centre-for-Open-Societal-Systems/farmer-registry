@@ -15,7 +15,11 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "farmer_document": "Farmer or cooperative membership document",
  "total_land_crop_sharing_area": "Crop-sharing or other land (ha)",
  "Intake Form": "Intake form",
- "skipped": "Not needed (decided by another approver)"
+ "skipped": "Not needed (decided by another approver)",
+ "BASIC": "Basic education",
+ "INTERMEDIARY": "Intermediate (middle school)",
+ "CROP_SHARE": "Sharecropper",
+ "SELF": "Head of household"
 }'::jsonb)::json
 WHERE "language_code" = 'en';
 
@@ -27,8 +31,17 @@ WHERE "language_code" = 'en';
 --   land roll-up counts every parcel that is not OWNER or TENANT here), so the
 --   label says "or other land".
 -- "Intake Form": the record history's source column prints this stored value.
+-- BASIC, INTERMEDIARY, CROP_SHARE, SELF: the codes the register tables and cards print,
+--   worded as the ETH-OAN pack's display text (openg2p-data #7). BASIC is only the
+--   education level in this registry (nothing here renders MOBILE_PHONE_TYPE), so
+--   the shared code key is safe.
 -- skipped: a task decided by another approver, so this one is not needed.
 
 -- The navigation entry and breadcrumb for the score register.
 UPDATE "public"."g2p_register_definitions" SET "register_subject" = 'Household scores'
 WHERE "register_id" = 'a1a4d25a-1cd4-4356-abac-638239923092';
+
+-- The household member list's relationship filter carries literal option text.
+UPDATE "public"."g2p_register_schemas"
+SET "filter_schema" = replace("filter_schema"::jsonb::text, '"label": "Self"', '"label": "Head of household"')::json
+WHERE "register_id" = '52979fdd-220c-48dd-8de0-0a434e786427';
