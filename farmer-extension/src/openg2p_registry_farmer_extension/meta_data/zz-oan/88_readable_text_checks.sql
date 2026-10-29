@@ -1,4 +1,9 @@
--- Fails the seed when text staff read looks like a code.
+-- Flags text staff read that looks like a code.
+--
+-- This is advisory at run time: the db-seed entrypoint does not stop on a
+-- failed statement, so a RAISE EXCEPTION here is only logged. The metadata
+-- replay in ci/validation/check_native_metadata.py runs every file with
+-- ON_ERROR_STOP=1, so there it fails the build.
 --
 -- Covers every section a tab or an intake form shows: each label, placeholder,
 -- help text, section title, validation message and choice is resolved the way

@@ -276,4 +276,4 @@ migrations, not configuration: retire them once every environment has applied th
 The db-seed image carries configuration only. The OAN theme (palette, background images,
 logo) and the sample data are checked out from COSS `openg2p-data` at one pinned
 `OPENG2P_DATA_REF`; `scripts/themes/build_theme_sql.py farmer` renders the theme into
-`zz-oan/90_oan_theme.sql`. The factory `OpenG2P-theme` row is inserted with `ON CONFLICT DO NOTHING`.
+`zz-oan/90_oan_theme.sql`. The factory `OpenG2P-theme` row stays as OpenG2P ships it.

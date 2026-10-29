@@ -4,10 +4,9 @@ from pathlib import Path
 
 from openg2p_fastapi_common.context import component_registry, get_async_session_maker
 from openg2p_registry_core.controller_services import G2PAweProxyControllerService
+from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryException
 from openg2p_registry_core.helpers import AWEClientError, AweHelper
 from sqlalchemy import text
-
-from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryException
 
 from .awe_error_message import awe_error_message
 from .awe_task_scope import ScopedAweTasksMixin

@@ -28,7 +28,7 @@ COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql
 # the ETH-OAN pack's farm facts (samples/farms.json) and the OAN theme. The sample
 # people come from Master Data's API.
 ARG OPENG2P_DATA_REPO=https://github.com/Centre-for-Open-Societal-Systems/openg2p-data.git
-ARG OPENG2P_DATA_REF=dc7e7bf69087b4684a3608fdd4bf98100aab77a8
+ARG OPENG2P_DATA_REF=34b239463cc38af8c028428df1eb52d786cc14c2
 RUN rm -rf /openg2p-data && mkdir -p /openg2p-data && cd /openg2p-data \
     && git init -q && git remote add origin ${OPENG2P_DATA_REPO} \
     && git fetch -q --depth 1 origin ${OPENG2P_DATA_REF} && git checkout -q FETCH_HEAD \
