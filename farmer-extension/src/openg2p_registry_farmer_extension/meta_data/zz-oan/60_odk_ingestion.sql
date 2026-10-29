@@ -3,7 +3,7 @@
 -- The connector (openg2p-connector-service) polls ODK Central and posts each
 -- submission to the Partner API as
 --
---   POST /partner/ingest_data?data_model=FARMER_ODK_MODEL
+--   POST /partner/ingest_data?data_model=ODK_TO_FARMER_INTAKE
 --   {"header":  {"message_id": ..., "sender_id": <partner id>, "signature": ...},
 --    "message": {"payload": {<the ODK submission, repeat groups expanded>}}}
 --
@@ -15,15 +15,14 @@
 -- onto the form's sections, odk_to_farmer_intake.j2 hands those sections to the
 -- worker, and the intake goes for approval.
 --
--- The connector names the data model by its mnemonic, FARMER_ODK_MODEL, which
--- its configuration and partner registration carry; the platform resolves the
--- row by that mnemonic. The row ids are this registry's own and are named after
--- the flow, odk_to_farmer_intake. Every row is upserted on its fixed id, so a
--- re-run changes nothing.
+-- The connector names the data model by its mnemonic, ODK_TO_FARMER_INTAKE,
+-- which its configuration carries; the platform resolves the row by that
+-- mnemonic. The mnemonic and the row ids both name the flow: ODK to Farmer
+-- intake. Every row is upserted on its fixed id, so a re-run changes nothing.
 
 INSERT INTO "public"."data_models" ("data_model_id","data_model_mnemonic","pattern_for_data_model","response_template_document_id","is_active") VALUES
 -- The DCI commons response template answers the connector.
-('odk_to_farmer_intake','FARMER_ODK_MODEL','$.body.header.sender_id=>^.*$','1f0953d4-f0fb-4336-a126-4d0519a74ffc',TRUE)
+('odk_to_farmer_intake','ODK_TO_FARMER_INTAKE','$.body.header.sender_id=>^.*$','1f0953d4-f0fb-4336-a126-4d0519a74ffc',TRUE)
 ON CONFLICT ("data_model_id") DO UPDATE SET "data_model_mnemonic" = EXCLUDED."data_model_mnemonic", "pattern_for_data_model" = EXCLUDED."pattern_for_data_model", "response_template_document_id" = EXCLUDED."response_template_document_id", "is_active" = EXCLUDED."is_active";
 
 INSERT INTO "public"."incoming_model_key_paths" ("key_path_id","data_model_id","key_path_for_message_id","key_path_for_sender","key_path_for_signature","key_path_for_signature_payload","is_list","key_path_for_list_elements") VALUES
