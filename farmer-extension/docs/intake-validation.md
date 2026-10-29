@@ -15,7 +15,8 @@ message a user gets. The rule this document holds the form to:
 | Staff UI (OAN widgets) | file type and size, photo type and size, slots per document category, map pin inside Ethiopia | `ui/staff-ui/overrides/src/oan/widgets/` | under the widget, `documents_*`, `farmer_photo_*`, `geo_point_*` |
 | Server, OAN widget rules | the same metadata rules again, plus the value's **kind** (yes/no, whole number, number, date, static choice) and **required table columns** | `register_domain/services/widget_rules.py` | `rule_*` keys, REQ-VAL-001 |
 | Server, farmer extension | domain rules (dates not in the future, age vs birth date, household roster, duplicates) | upstream `farmer-extension` (never changed) | reworded by `register_domain/services/upstream_messages.py`, `upstream_*` keys, REQ-VAL-001 |
-| Server, OAN submit (whole form) | every section's required fields, evaluated with the UI's show/hide/require rules, including sections never opened; required document categories; the household (picked **or** new, roster) | `register_domain/services/form_integrity.py`, `household_intake.py` | one list, `<Section>: <Field> is required. Open <Section>, fill it in and save, then submit again.` (`form_*`, `household_both`, `household_none`) |
+| Server, OAN save (per section) | the required fields of the section being saved, merged with what the submission already stores for it, evaluated with the UI's show/hide/require rules; a required table needs a row, each row its required columns | `register_domain/services/required_fields.py`, `required_intake.py` | one sentence per section, `<Section>: fill in <Field>, <Field>` |
+| Server, OAN submit (whole form) | every section's required fields, including sections never opened, on every channel (web, ODK, partner); required documents; the household (picked **or** new, roster) | `register_domain/services/required_intake.py`, `household_intake.py` | one list, `<Section>: fill in <Field>, <Field>; <Section>: add <Document>` (`household_both`, `household_none`) |
 | Server, OAN Fayda ID | the FIN/FAN is not held by another register record or by another submitted form waiting for approval (section save, change request, submit) | `register_domain/services/form_integrity.py` | `fayda_fin_registered`, `fayda_fin_pending`: names the holder and the record |
 | Server, OAN person names | the farmer's and household members' names take letters (any script, Ge'ez included), spaces, apostrophes and hyphens, at most 100 characters, the rule Crop applies; from every source (web, ODK, partner). The widgets carry the same rule as one pattern | `register_domain/name_rules.py`, `derivations.py`, `odk/transform.py`; pattern in `19_name_rules.sql` | `name_letters_only`; "First Name: use letters only (spaces, apostrophes and hyphens allowed)" |
 | Server, registry core | file bytes against the documents profile; MDS codes (`REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES`) | upstream core | core's own text for files (see [Files](#files-and-documents)); OAN wording for codes (`attribute_messages.py`) |
@@ -154,11 +155,16 @@ must be changed together.
 ## Functional analysis
 
 **Save per section.** Each section saves on its own and is checked on its own.
-A section's fields that are required are enforced by the UI only, because
-whether they apply depends on conditions the UI evaluates and on sections the
-user has not reached yet. Table rows are whole records, so their required
-columns are enforced by the server too, for new rows and for any row that
-sends a required column blank.
+`widget-required` in the section metadata is the single source of truth for
+what must be filled: the UI marks the field, and the server refuses the save of
+a section that still has a required field empty, counting what the submission
+already stores for it (the UI omits untouched fields). A field hidden by a
+show/hide condition is not required; a `require` condition makes a field
+required while it matches. A list section needs a row only when its table
+widget is itself `widget-required`; every row must carry its required columns.
+Submit checks every section the same way, including sections never opened, for
+web, ODK and partner intakes alike. An incomplete ODK or partner intake is
+refused with the same sentence, which the ingestion row records.
 
 **Household.** The farmer form carries Household Information and Household
 Members. Parent links are resolved by upstream within the submission: with one
