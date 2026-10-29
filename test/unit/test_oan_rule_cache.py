@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SERVICES = ROOT / "oan-extension/src/oan_farmer_registry_extension/register_domain/services"
+SERVICES = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/register_domain/services"
 
 
 def loader():

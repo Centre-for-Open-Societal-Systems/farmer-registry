@@ -1,22 +1,5 @@
-from .g2p_farmer_enricher_services import (
-    G2PDciFarmerCreateEnricherService,
-    G2PDciFarmerUpdateEnricherService,
-    G2PDciFarmerDeleteEnricherService,
-    G2PSpdciFarmerCreateEnricherService,
-    G2PSpdciFarmerUpdateEnricherService,
-    G2PSpdciFarmerDeleteEnricherService,
-    G2PUndpFarmerCreateEnricherService,
-    G2PUndpFarmerUpdateEnricherService,
-    G2PUndpFarmerDeleteEnricherService
-)
-from .g2p_household_member_enricher_services import (
-    G2PDciHouseholdMemberCreateEnricherService,
-    G2PDciHouseholdMemberUpdateEnricherService,
-    G2PDciHouseholdMemberDeleteEnricherService,
-    G2PSpdciHouseholdMemberCreateEnricherService,
-    G2PSpdciHouseholdMemberUpdateEnricherService,
-    G2PSpdciHouseholdMemberDeleteEnricherService,
-    G2PUndpHouseholdMemberCreateEnricherService,
-    G2PUndpHouseholdMemberUpdateEnricherService,
-    G2PUndpHouseholdMemberDeleteEnricherService
-)
+# Everything the farmer extension provides, then OAN's additions below. Core
+# resolves classes by name on this module, so a name defined here wins.
+from openg2p_registry_farmer_extension.openg2p_farmer.ingestion_pipeline.enricher_services import *
+
+from ...odk.enricher import OdkToFarmerIntakeEnricher

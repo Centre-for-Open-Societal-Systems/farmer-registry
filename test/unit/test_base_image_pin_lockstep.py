@@ -2,9 +2,8 @@
 
 A variant extends ONE registry-platform version, used two ways:
   * the Docker base images — `ARG BASE_IMAGE_VERSION=<v>` in every docker/*/Dockerfile
-    whose FROM is a platform image (`openg2p/openg2p-registry-<role>`); the farmer
-    parents (`openg2p/openg2p-farmer-registry-<role>`) carry their own pin, reviewed
-    by ci/validation/check_release_pins.py
+    whose FROM is a platform image (`openg2p/openg2p-registry-<role>`); the four
+    Python/seed parents are also reviewed by ci/validation/check_release_pins.py
   * the Helm chart — the `openg2p-registry` dependency `version:` in Chart.yaml
 
 If these drift, the sanity image is built FROM one base while the chart deploys
@@ -71,11 +70,11 @@ def test_chart_dependency_lock_matches_the_pinned_platform():
     assert "https://openg2p.github.io/openg2p-helm" in lock.read_text()
 
 
-def test_native_farmer_parent_and_central_platform_source_contract():
+def test_image_parents_and_central_platform_source_contract():
     import importlib.util
     path = REPO / "ci/validation/check_release_pins.py"
     spec = importlib.util.spec_from_file_location("release_pins", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     result = module.check(REPO)
-    assert result["numeric_version_equality_required"] is False
+    assert result["image_parent"] == result["platform"]

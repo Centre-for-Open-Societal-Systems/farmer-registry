@@ -102,7 +102,7 @@ pipeline {
         stage('Deploy (package)') {
             when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION != 'publish-only' } } }
             steps {
-                stash name: 'dev-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,test/runtime/**,service-outcomes/**,oan-extension/**,farmer-extension/**,ui/staff-ui/overrides/**,docker/**,test/sanity/**', excludes: 'helm/**/charts/**,**/__pycache__/**,**/.pytest_cache/**', useDefaultExcludes: false
+                stash name: 'dev-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,test/runtime/**,service-outcomes/**,farmer-extension/**,ui/staff-ui/overrides/**,docker/**,test/sanity/**', excludes: 'helm/**/charts/**,**/__pycache__/**,**/.pytest_cache/**', useDefaultExcludes: false
             }
         }
         stage('Deploy (registry)') {

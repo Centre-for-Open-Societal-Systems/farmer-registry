@@ -31,10 +31,18 @@ jobs:
           tags: registry/${{ matrix.component }}:ci
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
-      - name: Installed OAN extension regression checks
+      - name: Platform entry points load the Farmer extension
+        if: contains(fromJSON('["staff-api", "partner-api", "celery"]'), matrix.component)
+        run: |
+          roles=${{ matrix.component }}
+          [ "$roles" = celery ] && roles="celery-worker celery-beat"
+          for role in $roles; do
+            docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python registry/${{ matrix.component }}:ci /repo/ci/validation/check_image_boot.py "$role"
+          done
+      - name: Installed Farmer extension regression checks
         if: matrix.component == 'staff-api'
         run: |
-          docker run --rm -v "$PWD:/repo:ro" -w /repo/oan-extension -e PYTHONPATH=/repo/oan-extension/tests --entrypoint sh registry/staff-api:ci -c 'pip install --quiet pytest==8.4.2 && python -m pytest -q -p no:cacheprovider tests'
+          docker run --rm -v "$PWD:/repo:ro" -w /repo/farmer-extension -e PYTHONPATH=/repo/farmer-extension/tests --entrypoint sh registry/staff-api:ci -c 'pip install --quiet pytest==8.4.2 && python -m pytest -q -p no:cacheprovider tests'
       - name: Native DDL, metadata replay and reporting preservation
         if: matrix.component == 'staff-api'
         env:

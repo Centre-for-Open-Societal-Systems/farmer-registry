@@ -5,7 +5,7 @@ Chart descriptions and portal-rendered Markdown remain beside their consumers
 because they are application/build inputs.
 
 Repository tests live in `test/` (`unit`, `integration`, `runtime`, `sanity`);
-the extension's own tests stay in `oan-extension/tests/`. Runtime tests execute
+the extension's own tests stay in `farmer-extension/tests/`. Runtime tests execute
 in built application images and the sanity suite in the sanity-tests image.
 Ordinary pytest runs only the offline unit tests. Performance tooling lives only
 under `performance-testing/`; its run outputs are not committed.

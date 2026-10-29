@@ -5,7 +5,7 @@ import yaml
 ROOT=Path(__file__).resolve().parents[2]
 
 def test_oan_reseed_enables_source_without_resetting_native_topic_checkpoint():
-    source=(ROOT/'oan-extension/src/oan_farmer_registry_extension/meta_data/50_outgestion.sql').read_text(encoding='utf-8').replace('"public".','')
+    source=(ROOT/'farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/50_outgestion.sql').read_text(encoding='utf-8').replace('"public".','')
     db=sqlite3.connect(':memory:')
     db.create_function('NOW',0,lambda:'2026-10-25T00:00:00')
     for table,columns in re.findall(r'INSERT INTO\s+"([a-z0-9_]+)"\s*\((.*?)\)\s*VALUES',source,re.S|re.I):

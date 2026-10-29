@@ -1,29 +1,27 @@
 {
-  "farmerParentVersion": "1.2.1-rc.192",
   "platformVersion": "1.2.2-rc.557",
   "parents": {
     "staff-api": {
       "dockerfile": "docker/staff-api/Dockerfile",
-      "repository": "openg2p/openg2p-farmer-registry-staff-api"
+      "repository": "openg2p/openg2p-registry-staff-api"
     },
     "partner-api": {
       "dockerfile": "docker/partner-api/Dockerfile",
-      "repository": "openg2p/openg2p-farmer-registry-partner-api"
+      "repository": "openg2p/openg2p-registry-partner-api"
     },
     "celery": {
       "dockerfile": "docker/celery/Dockerfile",
-      "repository": "openg2p/openg2p-farmer-registry-celery"
+      "repository": "openg2p/openg2p-registry-celery"
     },
     "db-seed": {
       "dockerfile": "docker/db-seed/Dockerfile",
-      "repository": "openg2p/openg2p-farmer-registry-db-seed"
+      "repository": "openg2p/openg2p-registry-db-seed"
     }
   },
   "observedInstalledPackages": {
     "openg2p-registry-core": "1.2.1",
     "openg2p-registry-celery-worker": "1.2.1",
-    "openg2p-registry-farmer-extension": "1.0.3"
+    "openg2p-registry-farmer-extension": "1.0.3+oan.1"
   },
-  "observationRun": "40274592646",
   "nativeWorkerSaveAcceptance": "REQUIRED; distribution versions alone are not ABI proof"
 }

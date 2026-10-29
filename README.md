@@ -16,11 +16,11 @@ The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`)
 
 | Path | Purpose |
 | --- | --- |
-| `oan-extension/` | OAN models, registered services, metadata, ODK enrichment and reporting, with its tests |
-| `farmer-extension/` | Upstream Farmer domain reference, retained for standard extension composition |
+| `farmer-extension/` | The Farmer extension, `openg2p_registry_farmer_extension`: OpenG2P's Farmer extension (`openg2p_farmer/`, unchanged) with the OAN models, services, metadata (`meta_data/zz-oan/`), ODK enrichment and reporting on top, with its tests |
+| `sample-farmer-extension/` | OpenG2P's Farmer extension as published, for comparison on upgrades; never built |
 | `ui/staff-ui/overrides/` | Registered OAN widgets and supported source overlays |
-| `docker/<component>/Dockerfile` | Images extending the published Farmer runtime: staff-api, partner-api, celery, staff-ui, db-seed, sanity-tests |
-| `docker/db-seed/` | The OAN seed: metadata layer, and sample farmers from the ETH-OAN pack in [openg2p-data](https://github.com/Centre-for-Open-Societal-Systems/openg2p-data) |
+| `docker/<component>/Dockerfile` | Images built FROM the registry platform images with the Farmer extension installed: staff-api, partner-api, celery, staff-ui, db-seed, sanity-tests |
+| `docker/db-seed/` | The seed: OpenG2P's Farmer seed scripts (`openg2p/`, unchanged), the extension's metadata, and sample farmers from the ETH-OAN pack in [openg2p-data](https://github.com/Centre-for-Open-Societal-Systems/openg2p-data) |
 | `helm/` | Environment overlays read by `ci/deploy`, plus the Farmer chart sources |
 | `ci/`, `Jenkinsfile` | Jenkins delivery, source and native metadata checks |
 | `integrations/` | Registry connector adapters |

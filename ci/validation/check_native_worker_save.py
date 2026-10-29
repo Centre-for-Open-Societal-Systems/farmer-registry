@@ -304,7 +304,7 @@ def run():
             raise RuntimeError("Owned PostgreSQL did not become ready")
         native("ddl", database)
         files = []
-        for package in ("farmer-extension/src/openg2p_registry_farmer_extension", "oan-extension/src/oan_farmer_registry_extension"):
+        for package in ("farmer-extension/src/openg2p_registry_farmer_extension",):
             files += sorted((ROOT / package / "meta_data").rglob("*.sql"))
         for path in files:
             command("docker", "exec", "-i", db, "psql", "-X", "-U", "postgres", "-d", "native_worker_save", "-v", "ON_ERROR_STOP=1", data=path.read_bytes())

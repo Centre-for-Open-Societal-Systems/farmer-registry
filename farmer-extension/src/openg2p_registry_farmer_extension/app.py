@@ -1,4 +1,3 @@
-# ruff: noqa: E402
 import asyncio
 import logging
 
@@ -6,93 +5,114 @@ from .config import Settings
 
 _config = Settings.get_config()
 
-from openg2p_fastapi_common.app import Initializer as BaseInitializer
-from openg2p_registry_core.app import Initializer as CoreInitializer
-from openg2p_fastapi_common.context import component_registry
-from openg2p_registry_core.services.intake_form_data_service import G2PIntakeFormDataService
+from openg2p_fastapi_common.context import dbengine
+from openg2p_registry_farmer_extension.openg2p_farmer.app import Initializer as FarmerInitializer
+from sqlalchemy import text
 
-from .register_domain.models import (
-    G2PRegisterFarmer, G2PRegisterHistoryFarmer,
-    G2PRegisterHousehold, G2PRegisterHistoryHousehold,
-    G2PRegisterHouseholdMember, G2PRegisterHistoryHouseholdMember,
-    G2PRegisterCrop, G2PRegisterHistoryCrop,
-    G2PRegisterLand, G2PRegisterHistoryLand,
-    G2PRegisterFarmInputs, G2PRegisterHistoryFarmInputs,
-    G2PRegisterLivestock, G2PRegisterHistoryLivestock,
-    G2PRegisterMembershipDetails, G2PRegisterHistoryMembershipDetails,
-    G2PIntakeFormHousehold, G2PIntakeFormFarmer, G2PIntakeFormHouseholdMember,
-    G2PIntakeFormCrop, G2PIntakeFormLand, G2PIntakeFormFarmInputs, 
-    G2PIntakeFormLivestock, G2PIntakeFormMembershipDetails,
-)
-from .register_domain.services import (
-    G2PFarmerIntakeFormDataService,
-    G2PRegisterDomainServiceFarmer,
-    G2PRegisterDomainServiceHousehold,
-    G2PRegisterDomainServiceHouseholdMember,
-)
+# The farmer initializer migrates its mapped classes directly, so the OAN
+# columns must be appended to them before any migration runs.
+from .register_domain import models as _oan_models
 
 _logger = logging.getLogger(_config.logging_default_logger_name)
 
-
-def _install_component_override(instance, base_cls) -> None:
-    """Place `instance` before every other registered `base_cls` component."""
-    registry = component_registry
-    if instance in registry:
-        registry.remove(instance)
-    first = next((i for i, c in enumerate(registry) if isinstance(c, base_cls)), len(registry))
-    registry.insert(first, instance)
+# OAN registers, in parent-before-child order: (register, history, intake form).
+OAN_REGISTERS: list[tuple] = [
+    (_oan_models.G2PRegisterFarmerPhone, _oan_models.G2PRegisterHistoryFarmerPhone, _oan_models.G2PIntakeFormFarmerPhone),
+]
 
 
-class Initializer(BaseInitializer):
+class Initializer(FarmerInitializer):
+    """The farmer extension's initializer, then OAN's registers."""
+
     def initialize(self, **kwargs):
-        super().initialize()
-        CoreInitializer().initialize()
+        super().initialize(**kwargs)
+        from .runtime import install
 
-        # Override the platform intake data service (adds the Household finalize
-        # roster check). get_component() returns the FIRST registered instance of
-        # the class, and the API main constructs the core initializer before this
-        # one, so the subclass has to be moved ahead of the core instance.
-        _install_component_override(G2PFarmerIntakeFormDataService(), G2PIntakeFormDataService)
-
-        G2PRegisterDomainServiceFarmer()
-        G2PRegisterDomainServiceHousehold()
-        G2PRegisterDomainServiceHouseholdMember()
+        install()
 
     def migrate_database(self, args):
+        super().migrate_database(args)
+        # The farmer migration ran in its own event loop, which is closed now, and
+        # the pooled connections belong to it. Drop them without closing them.
+        dbengine.get().sync_engine.dispose(close=False)
 
         async def migrate():
-            _logger.info("Migrating extensions database")
+            _logger.info("Migrating OAN registers")
+            for classes in OAN_REGISTERS:
+                for cls in classes:
+                    await cls.create_migrate()
+            await add_oan_columns()
+            from .schema_compat import migrate_existing_schema
 
-            await G2PRegisterHousehold.create_migrate()
-            await G2PRegisterHistoryHousehold.create_migrate()
-            await G2PIntakeFormHousehold.create_migrate()
-
-            await G2PRegisterHouseholdMember.create_migrate()
-            await G2PRegisterHistoryHouseholdMember.create_migrate()
-            await G2PIntakeFormHouseholdMember.create_migrate()
-
-            await G2PRegisterFarmer.create_migrate()
-            await G2PRegisterHistoryFarmer.create_migrate()
-            await G2PIntakeFormFarmer.create_migrate()
-
-            await G2PRegisterMembershipDetails.create_migrate()
-            await G2PRegisterHistoryMembershipDetails.create_migrate()
-            await G2PIntakeFormMembershipDetails.create_migrate()
-
-            await G2PRegisterLand.create_migrate()
-            await G2PRegisterHistoryLand.create_migrate()
-            await G2PIntakeFormLand.create_migrate()
-
-            await G2PRegisterFarmInputs.create_migrate()
-            await G2PRegisterHistoryFarmInputs.create_migrate()
-            await G2PIntakeFormFarmInputs.create_migrate()
-
-            await G2PRegisterCrop.create_migrate()
-            await G2PRegisterHistoryCrop.create_migrate()
-            await G2PIntakeFormCrop.create_migrate()
-
-            await G2PRegisterLivestock.create_migrate()
-            await G2PRegisterHistoryLivestock.create_migrate()
-            await G2PIntakeFormLivestock.create_migrate()
+            await migrate_existing_schema(dbengine.get())
+            await fill_derived_columns()
 
         asyncio.run(migrate())
+
+
+async def add_oan_columns() -> None:
+    """Add the columns OAN maps on the farmer tables that an existing table lacks.
+
+    create_all creates missing tables only, so a field added after a registry
+    was first migrated (register_domain/fields.py, or core's registrant
+    authentication mixin on the Farmer register) would otherwise be mapped but
+    absent, and every query of that register would fail. Columns are only
+    added, never changed or dropped.
+    """
+    from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import (
+        models as farmer_models,
+    )
+    from sqlalchemy import inspect as sa_inspect
+
+    from .register_domain.fields import OAN_FIELDS
+
+    engine = dbengine.get()
+    async with engine.begin() as conn:
+        for mnemonic in OAN_FIELDS:
+            for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm"):
+                table = getattr(farmer_models, f"{prefix}{mnemonic}").__table__
+                present = await conn.run_sync(
+                    lambda sconn, name=table.name: {c["name"] for c in sa_inspect(sconn).get_columns(name)}
+                    if sa_inspect(sconn).has_table(name) else None)
+                if present is None:
+                    continue
+                for column in table.c:
+                    if column.name not in present:
+                        _logger.info("Adding column %s.%s", table.name, column.name)
+                        await conn.execute(text(
+                            f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {column_ddl(column, engine.dialect)}'))
+
+
+async def fill_derived_columns() -> None:
+    """Fill search_text and record_name on farmer rows saved without them.
+
+    Rows saved through the OAN subclasses before their listeners were
+    registered (register_domain/models) have both columns NULL, which hides
+    them from the register list. Only rows with a NULL search_text are
+    touched, so this is a no-op once they are filled.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .register_domain.models import _populate_derived_columns
+
+    async with AsyncSession(dbengine.get(), expire_on_commit=False) as session:
+        for cls in (_oan_models.G2PRegisterFarmer, _oan_models.G2PIntakeFormFarmer):
+            rows = (await session.execute(select(cls).where(cls.search_text.is_(None)))).scalars().all()
+            for row in rows:
+                _populate_derived_columns(None, None, row)
+            if rows:
+                _logger.info("Filled search_text on %d %s rows", len(rows), cls.__tablename__)
+        await session.commit()
+
+
+def column_ddl(column, dialect) -> str:
+    """The type, and the NOT NULL DEFAULT a non-nullable column with a scalar
+    default needs so the rows already in the table get a value."""
+    ddl = column.type.compile(dialect=dialect)
+    default = column.default
+    if not column.nullable and default is not None and getattr(default, "is_scalar", False):
+        value = default.arg
+        literal = "true" if value is True else "false" if value is False else repr(value)
+        ddl += f" NOT NULL DEFAULT {literal}"
+    return ddl
