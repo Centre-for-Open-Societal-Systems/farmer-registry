@@ -22,16 +22,22 @@ PEM = KEY.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.
 PUB = KEY.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
 
 
+STORED = {"registry_signature": {"key_pem": PEM, "key_id": "livestock-lookup-ed25519-test", "algorithm": "EdDSA"}}
+
+
 class Connector:
-    def __init__(self, transport="websub", **cfg):
-        self.transport_type, self._cfg = transport, cfg
+    def __init__(self, transport="websub", secrets=None, **cfg):
+        self.transport_type, self._cfg, self._secrets = transport, cfg, secrets
         self.g2p_sender_id, self.g2p_register_mnemonic = "Live_stock_partner_internal", "Farmer"
 
     def get_source_config(self):
         return self._cfg
 
+    def get_auth_secrets(self):
+        return self._secrets or {}
 
-@pytest.fixture(autouse=True)
+
+@pytest.fixture
 def signing_env(monkeypatch):
     monkeypatch.setenv("CONNECTOR_REGISTRY_SIGNATURE_KEY_PEM", PEM)
     monkeypatch.setenv("CONNECTOR_REGISTRY_SIGNATURE_KEY_ID", "livestock-lookup-ed25519-test")
@@ -56,7 +62,7 @@ def test_hook_wraps_the_published_ingestion_service():
 
 def test_signature_equals_the_scheme_the_registry_verifies_today():
     data = {"event_type": "farmer_reference.changed.v1", "farmer_id": "FR-245216494759", "fayda_fan_id": "9988998899889988"}
-    env = svc()._wrap_in_g2p_envelope(Connector(sign_registry_payload=True), data, "evt-1")
+    env = svc()._wrap_in_g2p_envelope(Connector(secrets=STORED, sign_registry_payload=True), data, "evt-1")
     assert env["header"]["signature_algorithm"] == "EdDSA"
     assert env["header"]["signature"] == crop_d0cd4f9_signature(env["message"]["payload"])
     protected, empty, sig = env["header"]["signature"].split(".")
@@ -72,15 +78,32 @@ def test_unsigned_connector_keeps_the_published_envelope():
     assert env["header"]["signature"] == "stub-sig" and env["header"]["signature_algorithm"] == "none"
 
 
-def test_signing_without_key_fails_closed(monkeypatch):
-    monkeypatch.delenv("CONNECTOR_REGISTRY_SIGNATURE_KEY_PEM")
+def test_key_from_environment_when_the_connector_holds_none(signing_env):
+    env = svc()._wrap_in_g2p_envelope(Connector(sign_registry_payload=True), {"a": 1}, "evt-4")
+    assert env["header"]["signature"] == crop_d0cd4f9_signature(env["message"]["payload"])
+
+
+def test_stored_key_wins_over_environment(monkeypatch):
+    monkeypatch.setenv("CONNECTOR_REGISTRY_SIGNATURE_KEY_PEM", "not a key")
+    monkeypatch.setenv("CONNECTOR_REGISTRY_SIGNATURE_KEY_ID", "other")
+    env = svc()._wrap_in_g2p_envelope(Connector(secrets=STORED, sign_registry_payload=True), {"a": 1}, "evt-5")
+    assert env["header"]["signature"] == crop_d0cd4f9_signature(env["message"]["payload"])
+
+
+def test_odk_credentials_sit_beside_the_signing_key():
+    secrets = {"email": "odk@example.org", "password": "x", **STORED}
+    env = svc()._wrap_in_g2p_envelope(Connector("odk_central", secrets=secrets, sign_registry_payload=True), {"a": 1}, "evt-6")
+    assert env["header"]["signature_algorithm"] == "EdDSA"
+
+
+def test_signing_without_key_fails_closed():
     with pytest.raises(ValueError, match="not configured"):
         svc()._wrap_in_g2p_envelope(Connector(sign_registry_payload=True), {"a": 1}, "evt-3")
 
 
 def test_prewrapped_payload_is_refused_by_a_signing_connector():
     with pytest.raises(ValueError, match="Prewrapped"):
-        svc()._wrap_in_g2p_envelope(Connector(sign_registry_payload=True), {"header": {"sender_id": "x"}}, None)
+        svc()._wrap_in_g2p_envelope(Connector(secrets=STORED, sign_registry_payload=True), {"header": {"sender_id": "x"}}, None)
 
 
 def test_websub_content_string_is_read_before_data_path():

@@ -24,7 +24,7 @@ def install(IngestionService=None) -> None:
         if sign and isinstance(data.get("header"), dict) and data["header"].get("sender_id"):
             raise ValueError("Prewrapped payloads are not accepted by a signing connector")
         envelope = wrap(self, connector, data, *args, **kwargs)
-        return registry_signature.sign_envelope(envelope) if sign else envelope
+        return registry_signature.sign_envelope(connector, envelope) if sign else envelope
 
     for f in (_extract_envelope, _wrap_in_g2p_envelope):
         setattr(f, _MARK, True)
