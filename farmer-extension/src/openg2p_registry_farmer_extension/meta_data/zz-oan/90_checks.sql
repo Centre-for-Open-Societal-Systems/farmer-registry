@@ -373,6 +373,11 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'A choice list is written in the registry metadata; every dropdown comes from Master Data';
   END IF;
+  IF EXISTS (SELECT 1 FROM "public"."g2p_register_sections"
+             WHERE section_id = 'farmer_identity_verification'
+               AND section_ui_schema::text LIKE '%"foundationalId"%') THEN
+    RAISE EXCEPTION 'The Fayda ID is shown in Identity; the verification box must not show it a second time';
+  END IF;
   IF EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections"
              WHERE section_id = 'farmer_identity_verification') THEN
     RAISE EXCEPTION 'Record verification must not be on the intake form; core authenticates register records';
