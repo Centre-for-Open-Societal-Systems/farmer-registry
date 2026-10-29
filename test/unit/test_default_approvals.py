@@ -41,7 +41,7 @@ def test_each_stage_is_completed_by_the_named_officer_or_admin():
     assert "'all'" not in stage_sql and stage_sql.count("'any-n',1,") == 1
     for key in KEYS:
         for order, user in ((1, "alex.carter"), (2, "nina.patel")):
-            assert re.search(re.escape("'" + key + "'") + rf",{order},'Stage {order} Officers'", stage_sql)
+            assert re.search(re.escape("'" + key + "'") + rf",{order},'Stage {order} officers'", stage_sql)
             named = '{"user_id": "' + user + '"}'
             assert re.search(re.escape("'" + key + "'") + rf",{order},'" + re.escape(named), rule_sql)
             assert re.search(re.escape("'" + key + "'") + rf",{order},'" + re.escape(ADMIN_RULE), rule_sql)
