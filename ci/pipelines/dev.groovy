@@ -90,6 +90,16 @@ pipeline {
                             --query 'imageDetails[0].imageDigest' --output text)
                           printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
                         done
+                        # The connector image (not a registry component, so not in registry-images.tsv).
+                        extension="$ECR_REPOSITORY/registry-connector-extension"
+                        aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$extension" > /dev/null 2>&1 ||
+                          aws ecr create-repository --region "$AWS_REGION" --repository-name "$extension" > /dev/null
+                        docker tag "coss-ci/registry-connector-extension:$IMAGE_TAG" "$ECR_REGISTRY/$extension:$IMAGE_TAG"
+                        docker push "$ECR_REGISTRY/$extension:$IMAGE_TAG"
+                        digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$extension" \
+                          --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+                        printf 'registry-connector-extension\t%s\t%s\n' "$ECR_REGISTRY/$extension:$IMAGE_TAG" "$digest" > service-outcomes/registry-connector-extension.tsv
+                        echo "registry-connector-extension: $ECR_REGISTRY/$extension:$IMAGE_TAG@$digest"
                         docker run --rm --network none --user "$(id -u):$(id -g)" \
                           -e DELIVERY_ACTION \
                           -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT \
