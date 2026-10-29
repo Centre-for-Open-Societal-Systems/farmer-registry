@@ -29,6 +29,9 @@ class Initializer(FarmerInitializer):
         from .runtime import install
 
         install()
+        from .awe_proxy import install as install_scoped_awe_tasks
+
+        install_scoped_awe_tasks()
 
     def migrate_database(self, args):
         super().migrate_database(args)
