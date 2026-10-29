@@ -71,10 +71,13 @@ BEGIN
     RAISE EXCEPTION 'OAN attachments not named <tab>__<section>: %', found;
   END IF;
 
-  -- Ingestion and outgestion rows: readable ids; the mnemonics, event type
-  -- and topic name the connector and the subscribers use are unchanged.
+  -- Ingestion and outgestion rows: readable ids, and the ODK data model is
+  -- named after its flow; nothing is left under its earlier name or id.
   IF NOT EXISTS (SELECT 1 FROM "public"."data_models"
-                 WHERE data_model_id = 'odk_to_farmer_intake' AND data_model_mnemonic = 'FARMER_ODK_MODEL')
+                 WHERE data_model_id = 'odk_to_farmer_intake' AND data_model_mnemonic = 'ODK_TO_FARMER_INTAKE')
+     OR EXISTS (SELECT 1 FROM "public"."data_models" WHERE data_model_mnemonic = 'FARMER_ODK_MODEL')
+     OR EXISTS (SELECT 1 FROM "public"."incoming_raw_data" WHERE data_model_id = 'FARMER_ODK_MODEL')
+     OR EXISTS (SELECT 1 FROM "public"."incoming_classified_data" WHERE data_model_id = 'FARMER_ODK_MODEL')
      OR NOT EXISTS (SELECT 1 FROM "public"."incoming_model_key_paths"
                     WHERE key_path_id = 'odk_to_farmer_intake_key_path' AND data_model_id = 'odk_to_farmer_intake')
      OR NOT EXISTS (SELECT 1 FROM "public"."incoming_model_semantic_patterns"

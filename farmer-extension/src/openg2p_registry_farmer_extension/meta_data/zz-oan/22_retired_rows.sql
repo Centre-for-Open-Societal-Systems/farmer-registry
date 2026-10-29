@@ -109,8 +109,12 @@ WHERE "tab_section_id" IN (
   'tab_section_12', 'tab_section_13', 'tab_section_14');
 
 -- ODK ingestion rows under their earlier ids, now odk_to_farmer_intake_*
--- (60_odk_ingestion.sql). The connector's data model mnemonic,
--- FARMER_ODK_MODEL, is unchanged; only the row ids move.
+-- (60_odk_ingestion.sql). Submissions received under the earlier data model
+-- id move with it, so the history stays under the current model.
+UPDATE "public"."incoming_raw_data" SET "data_model_id" = 'odk_to_farmer_intake'
+WHERE "data_model_id" = 'FARMER_ODK_MODEL';
+UPDATE "public"."incoming_classified_data" SET "data_model_id" = 'odk_to_farmer_intake'
+WHERE "data_model_id" = 'FARMER_ODK_MODEL';
 DELETE FROM "public"."incoming_templates" WHERE "template_id" = 'IN-TMPL-ODK';
 DELETE FROM "public"."g2p_registry_documents" WHERE "document_id" = 'farmer-odk-tmpl-doc';
 DELETE FROM "public"."incoming_model_semantic_patterns" WHERE "semantic_pattern_id" = 'farmer_odk_semantic_pattern';

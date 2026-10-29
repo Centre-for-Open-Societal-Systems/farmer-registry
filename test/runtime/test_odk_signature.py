@@ -27,7 +27,7 @@ class SignatureRuntime(unittest.IsolatedAsyncioTestCase):
         controller.request_response_helper = SimpleNamespace(construct_http_request=AsyncMock(return_value={}))
         controller.g2p_ingest_controller_service = SimpleNamespace(ingest_data=AsyncMock(side_effect=HTTPException(401, "Invalid Farmer ODK message signature")))
         with self.assertRaises(HTTPException) as caught:
-            await controller.ingest_data(object(), "FARMER_ODK_MODEL")
+            await controller.ingest_data(object(), "ODK_TO_FARMER_INTAKE")
         self.assertEqual(caught.exception.status_code, 401)
 
     async def test_retry_returns_existing_correlation_without_duplicate_intake(self):
@@ -44,7 +44,7 @@ class SignatureRuntime(unittest.IsolatedAsyncioTestCase):
              patch.object(service, "_get_data_model", AsyncMock(return_value=model)), \
              patch.object(service, "_match_model_signature_pattern", AsyncMock(return_value=(SimpleNamespace(partner_id="farmer-partner"), "verified", {}, SimpleNamespace(is_list=False)))), \
              patch.object(service, "_match_message_id_pattern", return_value="synthetic"):
-            result = await service.ingest_data("FARMER_ODK_MODEL", envelope)
+            result = await service.ingest_data("ODK_TO_FARMER_INTAKE", envelope)
         self.assertEqual(result, ("original-correlation", None))
         session.commit.assert_not_awaited()
         self.assertIn("pg_advisory_xact_lock", str(session.execute.call_args_list[0].args[0]))

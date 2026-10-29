@@ -1,6 +1,6 @@
 # Farmer ODK ingestion through the native intake flow
 
-The signed FARMER_ODK_MODEL envelope and connector IDs are preserved. OAN uses registered ingestion/intake subclasses and the documented synchronous payload-enricher interface; no platform worker or compiled UI is patched.
+The signed ODK_TO_FARMER_INTAKE envelope and connector IDs are preserved. OAN uses registered ingestion/intake subclasses and the documented synchronous payload-enricher interface; no platform worker or compiled UI is patched.
 
 The enricher validates and stores every embedded File as a registry document in the worker transaction, gives each land its own native UUID and resolves a known household through its approved head's ODK Farmer ID. The pure mapper prepares the 16 section mnemonics returned by current intake metadata; the native Jinja template serializes those sections. Child crop/livestock/input rows use an explicit land link, including nested repeats. Ambiguous legacy global repeats with several lands are rejected with a correction message. Names, demographics, household-head answers, counts, member relationships, geography, membership and agricultural fields remain subject to native/domain validation.
 
