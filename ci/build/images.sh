@@ -23,6 +23,14 @@ done
 OAN_WORKER_SAVE_TEST_IMAGE="coss-ci/celery:$tag" python3 ci/validation/check_native_worker_save.py
 docker build -f docker/sanity-tests/Dockerfile -t "coss-ci/sanity-tests:$tag" .
 
+# The connector image every registry runs: OpenG2P's published connector plus
+# openg2p_registry_connector_extension (integrations/registry-connector-extension),
+# with the extension's tests run inside it.
+docker build -t "coss-ci/registry-connector-extension:$tag" integrations/registry-connector-extension
+docker run --rm -u 0 -v "$PWD/integrations/registry-connector-extension:/ext:ro" -w /ext -e PYTHONDONTWRITEBYTECODE=1 \
+  --entrypoint sh "coss-ci/registry-connector-extension:$tag" -c \
+  'pip install --quiet --no-cache-dir --root-user-action=ignore pytest==8.4.2 && python -m pytest -q -p no:cacheprovider tests'
+
 # The extension's tests, against the platform it is installed on. They read
 # upstream UI files from the repository, so the whole tree is mounted.
 for component in staff-api; do
