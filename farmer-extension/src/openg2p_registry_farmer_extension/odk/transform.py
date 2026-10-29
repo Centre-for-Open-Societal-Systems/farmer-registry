@@ -6,6 +6,8 @@ location codes are invented when a submission omits them.
 """
 import json
 
+from ..register_domain.name_rules import name_problems
+
 SECTIONS = ("farmer_household_lookup", "farmer_identity", "farmer_name",
     "farmer_personal_details", "farmer_photo", "farmer_phones",
     "farmer_socio_economic_health", "household_information", "hh_members",
@@ -155,6 +157,12 @@ def intake_sections(d):
         "enumerator_user_id":str(survey.get("enumerator_id") or system.get("submitterId") or ""),
         "data_collection_date":day(survey.get("survey_start") or system.get("submissionDate"))})]
     language = code(locale.get("language"), LANGUAGES)
+    names = {"first_name":first,"middle_name":middle,"last_name":last,
+        "first_name_local":personal.get("first_name_other") or personal.get("first_name_amharic"),
+        "middle_name_local":personal.get("father_name_other") or personal.get("father_name_amharic"),
+        "last_name_local":personal.get("grandfather_name_other") or personal.get("grandfather_name_amharic")}
+    if problems := name_problems(names):
+        raise ValueError("ODK name: " + "; ".join(problems))
     output[SECTIONS[2]] = [clean({"first_name":first,"middle_name":middle,"last_name":last,
         "first_name_local":personal.get("first_name_other") or personal.get("first_name_amharic"),
         "middle_name_local":personal.get("father_name_other") or personal.get("father_name_amharic"),
