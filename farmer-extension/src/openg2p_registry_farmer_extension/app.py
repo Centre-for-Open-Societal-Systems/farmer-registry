@@ -32,6 +32,9 @@ class Initializer(FarmerInitializer):
         from .awe_proxy import install as install_scoped_awe_tasks
 
         install_scoped_awe_tasks()
+        from .history_change_request_source import install as install_history_change_request_source
+
+        install_history_change_request_source()
 
     def migrate_database(self, args):
         super().migrate_database(args)
