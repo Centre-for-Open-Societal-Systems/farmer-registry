@@ -14,6 +14,7 @@ check is skipped with a warning, so an outage never blocks a save.
 This module has no framework imports at load time, so it can be tested alone.
 """
 
+import asyncio
 import logging
 import time
 
@@ -27,6 +28,7 @@ CHOICES = {
 }
 
 _TTL_SECONDS = 300
+MAX_LISTED = 10
 _cache: dict = {}
 
 
@@ -48,8 +50,11 @@ def choice_problems(record: dict, say, lists: dict[str, dict[str, str]]) -> list
             continue
         if value.strip() in choices:
             continue
-        problems.append(say("rule_choice", label=say.text(label_key, label),
-                            choices=", ".join(str(text) for text in choices.values())))
+        shown = [str(text) for text in choices.values()]
+        listed = ", ".join(shown[:MAX_LISTED])
+        if len(shown) > MAX_LISTED:
+            listed += f" and {len(shown) - MAX_LISTED} more"
+        problems.append(say("rule_choice", label=say.text(label_key, label), choices=listed))
     return problems
 
 
@@ -89,37 +94,58 @@ def _client():
     return MasterDataClient.get_component() or MasterDataClient()
 
 
-async def master_data_lists(attributes) -> dict[str, dict[str, str]]:
-    """{list: {code: text shown}} for the lists, from Master Data (cached five
-    minutes). A list that cannot be read is left out."""
-    now = time.monotonic()
-    lists = {}
+# Master Data is read for a person who is waiting. A read is given a few
+# seconds; after the first failure the rest of the call is skipped, and the
+# failure is remembered for a minute so the next saves do not each wait.
+READ_SECONDS = 3.0
+DOWN_SECONDS = 60.0
+_down_until = 0.0
+
+
+def _is_down() -> bool:
+    return time.monotonic() < _down_until
+
+
+def _mark_down(what: str, error) -> None:
+    global _down_until
+    _down_until = time.monotonic() + DOWN_SECONDS
+    _logger.warning("%s skipped: Master Data could not be read in time (%s)", what, error or "timeout")
+
+
+async def _fetch_lists(attributes, now) -> None:
     for attribute in attributes:
         hit = _cache.get(attribute)
         if hit and now < hit[0]:
-            lists[attribute] = hit[1]
             continue
-        try:
-            payload = await _client()._post(
-                "/attributes/get_attribute_values", payload={"attribute_id": attribute},
-                pagination={"current_page": 1, "page_size": 1000})
-        except Exception as error:
-            _logger.warning("Choice check skipped for %s: Master Data could not be read (%s)", attribute, error)
-            continue
+        payload = await _client()._post(
+            "/attributes/get_attribute_values", payload={"attribute_id": attribute},
+            pagination={"current_page": 1, "page_size": 1000})
         rows = payload.get("attribute_values") if isinstance(payload, dict) else payload
         found = {row["value_code"]: row.get("value_display") or row["value_code"]
                  for row in rows or [] if isinstance(row, dict) and row.get("value_code")}
         _cache[attribute] = (now + _TTL_SECONDS, found)
-        lists[attribute] = found
-    return lists
+
+
+async def master_data_lists(attributes) -> dict[str, dict[str, str]]:
+    """{list: {code: text shown}} for the lists, from Master Data (cached five
+    minutes). Lists that cannot be read are left out."""
+    now = time.monotonic()
+    if not _is_down():
+        try:
+            await asyncio.wait_for(_fetch_lists(attributes, now), READ_SECONDS)
+        except Exception as error:  # includes the timeout
+            _mark_down("Choice check", error)
+    return {a: _cache[a][1] for a in attributes if a in _cache and now < _cache[a][0]}
 
 
 async def known_location_ids() -> set[str] | None:
     """Every location id Master Data holds, or None when it cannot be read."""
+    if _is_down():
+        return None
     try:
-        return set(await _client()._load_geo_index())
+        return set(await asyncio.wait_for(_client()._load_geo_index(), READ_SECONDS))
     except Exception as error:
-        _logger.warning("Location check skipped: Master Data could not be read (%s)", error)
+        _mark_down("Location check", error)
         return None
 
 

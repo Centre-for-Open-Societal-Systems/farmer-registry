@@ -77,7 +77,7 @@ class _reworded:
             # only when this module knows the message, otherwise unchanged.
             plain = reword(error.message, self.messages)
             if plain != error.message:
-                validation_error(plain)
+                raise G2PRegistryException(code=error.code, message=plain) from error
         return False
 
 

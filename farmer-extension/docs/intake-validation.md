@@ -83,7 +83,7 @@ Messages are the English defaults.
 | Rule | Where | Message |
 | --- | --- | --- |
 | number required on every row | API | "Phone number: a row has no number. Enter the number, or remove the row." |
-| country is the 2-letter country code (`ET`) or a dialing code (`+251`, `251`); `ETH` is refused | API | "Country code: ETH is not a country code. Enter the 2-letter country code, for example ET, or the dialing code, for example +251." |
+| country is the 2-letter country code (`ET`) or a dialing code (`+251`, `251`); the legacy `ETH` is read as `ET`; anything else is refused | API | "Country code: Ethiopia is not a country code. Enter the 2-letter country code, for example ET, or the dialing code, for example +251." |
 | a valid Ethiopian mobile number: optional `+251`, `251` or `0`, then nine digits starting with 9 or 7 (`19_phone_rules.sql`; `90_checks.sql` runs the pattern) | UI, API | "Phone Number: Enter an Ethiopian mobile number, for example 0912345678 or +251912345678" · "Phone number: 0912… is not a phone number. Enter it as 0912345678 or +251912345678." |
 | no duplicates; one primary | API | "Phone number: the same number is listed twice. Keep one row for it and remove the other." · "Primary: more than one number is marked primary. Tick Primary for one number only." |
 

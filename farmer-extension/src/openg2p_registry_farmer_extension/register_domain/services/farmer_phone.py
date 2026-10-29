@@ -42,6 +42,11 @@ class FarmerPhoneService(Derivations, G2PRegisterDomainService):
                 continue
             if is_blank(record.get("country_code")):
                 record["country_code"] = "ET"
+            if str(record["country_code"]).strip().upper() == "ETH":
+                # Earlier versions stored ETH (and the ODK template still sends
+                # it): the same country as ET, kept readable for rows and
+                # pending change requests that carry it.
+                record["country_code"] = "ET"
             if not valid_country_code(record["country_code"]):
                 validation_error(
                     f"Country code: {str(record['country_code']).strip()} is not a country code. Enter the "

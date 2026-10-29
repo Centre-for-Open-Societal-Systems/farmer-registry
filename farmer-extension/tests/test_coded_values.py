@@ -36,6 +36,7 @@ LISTS = {
 @pytest.fixture(autouse=True)
 def _clean_cache():
     coded_values._cache.clear()
+    coded_values._down_until = 0.0
 
 
 # --- gender, language, marital status ------------------------------------------
@@ -153,3 +154,50 @@ def test_the_unknown_kebele_is_refused_end_to_end(monkeypatch):
     problems = asyncio.run(coded_values.coded_value_problems(
         [{"geo_lowest_level_value_id": "ET04010101"}, {"geo_lowest_level_value_id": "ET99999999"}], SAY))
     assert len(problems) == 1 and problems[0].startswith("Location:")
+
+
+# --- Master Data slow or down ---------------------------------------------------
+
+
+def test_the_first_failure_stops_the_other_reads_and_is_remembered(monkeypatch):
+    client = _Client(fail=True)
+    monkeypatch.setattr(coded_values, "_client", lambda: client)
+    record = {"gender": "XYZ", "language_spoken": "??", "marital_status": "??"}
+    assert asyncio.run(coded_values.coded_value_problems([record], SAY)) == []
+    assert client.calls == 1  # not one call per list
+    assert asyncio.run(coded_values.coded_value_problems([record], SAY)) == []
+    assert client.calls == 1  # the next save does not wait again
+
+
+def test_a_read_that_takes_too_long_is_given_up(monkeypatch):
+    class Slow(_Client):
+        async def _post(self, *args, **kwargs):
+            self.calls += 1
+            await asyncio.sleep(5)
+
+        async def _load_geo_index(self):
+            await asyncio.sleep(5)
+
+    client = Slow()
+    monkeypatch.setattr(coded_values, "_client", lambda: client)
+    monkeypatch.setattr(coded_values, "READ_SECONDS", 0.05)
+    problems = asyncio.run(coded_values.coded_value_problems(
+        [{"gender": "XYZ", "geo_lowest_level_value_id": "ET99"}], SAY))
+    assert problems == [] and client.calls == 1
+
+
+def test_master_data_is_read_again_once_the_failure_has_aged(monkeypatch):
+    client = _Client(rows=_rows())
+    monkeypatch.setattr(coded_values, "_client", lambda: client)
+    coded_values._down_until = 1e12
+    assert asyncio.run(coded_values.coded_value_problems([{"gender": "XYZ"}], SAY)) == []
+    coded_values._down_until = 0.0
+    assert asyncio.run(coded_values.coded_value_problems([{"gender": "XYZ"}], SAY)) == [
+        "Gender: choose one of Male, Female."]
+
+
+def test_a_long_list_is_cut_after_ten_choices():
+    lists = {"LANGUAGE": {f"L{n}": f"Language {n}" for n in range(1, 14)}}
+    (problem,) = coded_values.choice_problems({"language_spoken": "??"}, SAY, lists)
+    assert problem.startswith("Farmer's language: choose one of Language 1, Language 2,")
+    assert problem.endswith("Language 10 and 3 more.")

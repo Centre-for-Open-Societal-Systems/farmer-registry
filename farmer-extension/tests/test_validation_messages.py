@@ -42,10 +42,24 @@ def test_a_valid_phone_row_is_accepted_with_either_country_form():
     assert rows[0]["phone_e164"] == "+251912345678" and rows[1]["phone_e164"] == "+251922345678"
 
 
-def test_the_three_letter_country_code_is_refused_with_the_fix():
+def test_the_legacy_three_letter_country_code_is_read_as_ethiopia():
+    # Earlier versions stored ETH, and the ODK template still sends it: a row
+    # or a pending change request that carries it is kept working.
+    rows = [{"phone_number": "0912000300", "country_code": "ETH"}]
+    _run(FarmerPhoneService().validate_domain_attributes(rows))
+    assert rows[0]["country_code"] == "ET" and rows[0]["phone_e164"] == "+251912000300"
+
+
+def test_a_legacy_row_is_derived_again_without_refusal():
+    rows = [{"internal_record_id": "p-1", "phone_number": "912000300", "country_code": "ETH"}]
+    _run(FarmerPhoneService().derive(rows))
+    assert rows[0]["country_code"] == "ET"
+
+
+def test_a_country_that_is_not_a_country_code_is_refused_with_the_fix():
     assert _refused(FarmerPhoneService().validate_domain_attributes(
-        [{"phone_number": "0912000300", "country_code": "ETH"}])) == (
-        "Country code: ETH is not a country code. Enter the 2-letter country code, for example ET, "
+        [{"phone_number": "0912000300", "country_code": "Ethiopia"}])) == (
+        "Country code: Ethiopia is not a country code. Enter the 2-letter country code, for example ET, "
         "or the dialing code, for example +251.")
 
 
@@ -94,7 +108,10 @@ def _saving(monkeypatch, message):
 
 
 def test_a_save_with_an_unknown_household_says_so_in_plain_words(monkeypatch):
-    assert _refused(_saving(monkeypatch, RAW)) == "Household not found. Check the household ID."
+    with pytest.raises(G2PRegistryException) as error:
+        _run(_saving(monkeypatch, RAW))
+    assert error.value.message == "Household not found. Check the household ID."
+    assert error.value.code == G2PRegistryErrorCodes.INVALID_REQUEST.value[1]
 
 
 def test_a_save_error_that_is_not_a_known_message_is_left_as_it_is(monkeypatch):
