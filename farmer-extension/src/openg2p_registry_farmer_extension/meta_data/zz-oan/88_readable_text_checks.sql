@@ -57,3 +57,119 @@ BEGIN
     RAISE EXCEPTION 'A register description is a placeholder or a code';
   END IF;
 END $$;
+
+
+-- The platform screen text overridden in 86_readable_screen_text.sql stays in
+-- sentence case, the codes staff see in lists and dropdowns have display text,
+-- and the land lookups no longer say "Parent".
+DO $$
+DECLARE
+  found text;
+BEGIN
+  SELECT string_agg(k.key || '=' || k.value, '; ') INTO found
+  FROM "public"."registry_languages" l
+  CROSS JOIN LATERAL jsonb_each_text(l."core_translation"::jsonb) k
+  WHERE l."is_default"
+    AND k.key IN (
+    'access_denied',
+    'application_reference',
+    'approval_status',
+    'approved_at',
+    'approved_by',
+    'assignee_name',
+    'attached_documents',
+    'change_request',
+    'change_requests',
+    'tasks_cr',
+    'clear_all',
+    'completed_at',
+    'cr_possible_duplicates',
+    'create_new_submission',
+    'created_at',
+    'created_by',
+    'credential_type',
+    'decision_action',
+    'dedup_result_id',
+    'document_icon_alt',
+    'draft_submissions',
+    'edit_image',
+    'enriched_message',
+    'export_again',
+    'export_history',
+    'export_records',
+    'finalised_at',
+    'form_details',
+    'form_status',
+    'form_submissions',
+    'go_back',
+    'import_file',
+    'import_successful',
+    'incoming_messages',
+    'tasks_intake',
+    'intake_forms',
+    'intake_possible_duplicates',
+    'know_more',
+    'last_approved_by',
+    'last_updated_by',
+    'match_score',
+    'my_profile',
+    'approval_tasks',
+    'new_and_old_values',
+    'new_intake',
+    'no_change_request',
+    'no_tab_section',
+    'no_version_history',
+    'outgoing_messages',
+    'pending_requests',
+    'pending_submissions',
+    'raw_message',
+    'record_access_denied',
+    'register_possible_duplicates',
+    'retry_export',
+    'search_change_requests',
+    'search_form_submissions',
+    'search_messages',
+    'search_approval_tasks',
+    'search_registers',
+    'select_date',
+    'select_operator',
+    'select_section',
+    'select_version',
+    'export_start',
+    'total_versions',
+    'transformed_message',
+    'updated_at',
+    'upload_file',
+    'verification_result',
+    'verify_credential',
+    'version_history',
+    'view_less',
+    'view_more',
+    'view_queue',
+    'register_form_submissions',
+    'register_intake_form',
+    'common.remove',
+    'common.select',
+    'kind')
+    AND k.value ~ '^[A-Z][a-z]+( (of|to|in|at|by|and|or|the|[A-Z][a-z]+))* [A-Z][a-z]+';
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Platform screen text is in Title Case: %', found;
+  END IF;
+
+  SELECT string_agg(c, ', ') INTO found
+  FROM unnest(ARRAY['MALE', 'FEMALE', 'SINGLE', 'MARRIED', 'DIVORCED', 'WIDOWED', 'SEPARATED', 'NEVER_ATTEND',
+                    'PRIMARY', 'SECONDARY', 'TERTIARY', 'HIGHER_EDUCATION', 'MR', 'MRS', 'MS', 'DR', 'MISS',
+                    'DRAFT', 'FINAL', 'REJECTED', 'STAFF_PORTAL']) c
+  WHERE NOT EXISTS (SELECT 1 FROM "public"."registry_languages" l
+                    WHERE l."is_default" AND COALESCE(NULLIF(l."domain_translation"::jsonb ->> c, ''), '') <> '');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Codes staff read have no display text: %', found;
+  END IF;
+
+  SELECT string_agg(s.section_id, ', ') INTO found
+  FROM "public"."g2p_register_sections" s
+  WHERE s.section_ui_schema::text ~ '"(widget-label|search_placeholder|select_record_label)": "(Parent|Search parent[.]*|Select [Pp]arent)"';
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'A land lookup still says Parent: %', found;
+  END IF;
+END $$;

@@ -25,10 +25,10 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "household_members_records": "Household member records",
  "farmer_registry": "Farmer registry",
  "Farmer Registry": "Farmer registry",
- "farmer_ingestion_intake": "Farmer registration form",
- "household_ingestion_intake": "Household registration form",
- "fayda_rid": "Fayda registration ID",
- "fayda_rid_format": "The Fayda registration ID has 29 digits. Enter all 29, digits only, as printed on the registration slip.",
+ "farmer_ingestion_intake": "Farmer registration",
+ "household_ingestion_intake": "Household registration",
+ "fayda_rid": "Fayda ID registration number",
+ "fayda_rid_format": "The Fayda ID registration number has 29 digits. Enter all 29, digits only, as printed on the registration slip.",
  "odk_farmer_id": "Survey farmer ID (ODK)",
  "is_psnp_user": "Productive Safety Net Programme beneficiary",
  "is_head": "Head of household",
@@ -119,6 +119,6 @@ UPDATE "public"."g2p_register_definitions" SET "register_description" = 'Fertili
 UPDATE "public"."g2p_register_definitions" SET "register_description" = 'Cooperative and farmer cluster membership' WHERE "register_id" = '495f251c-83a5-4025-a307-1925712c9d0b';
 
 
-UPDATE "public"."g2p_intake_form_definitions" SET "form_description" = 'Farmer registration form' WHERE "form_id" = 'a1a4d25a-1cd4-4356-abac-8782382649';
-UPDATE "public"."g2p_intake_form_definitions" SET "form_description" = 'Household registration form' WHERE "form_id" = '9055ab43-c85d-4833-bd00-ca657bb72650';
+UPDATE "public"."g2p_intake_form_definitions" SET "form_description" = 'Farmer registration' WHERE "form_id" = 'a1a4d25a-1cd4-4356-abac-8782382649';
+UPDATE "public"."g2p_intake_form_definitions" SET "form_description" = 'Household registration' WHERE "form_id" = '9055ab43-c85d-4833-bd00-ca657bb72650';
 UPDATE "public"."g2p_registry_configuration" SET "registry_name" = 'Farmer registry' WHERE "registry_name" = 'Farmer Registry';
