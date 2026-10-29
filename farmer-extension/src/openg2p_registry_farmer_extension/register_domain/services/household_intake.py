@@ -26,10 +26,12 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
 from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.household_submission_validation import (
     validate_household_roster,
 )
+from openg2p_registry_core.errors import G2PRegistryException
 from sqlalchemy import select
 
 from .direct_approval import DirectApprovalClosed
 from .required_fields import RequiredFieldsMixin, unattended
+from .upstream_messages import reword
 
 FARMER_REGISTER_MNEMONIC = "Farmer"
 
@@ -170,11 +172,7 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
             # Left as a draft with the reason, for staff to complete and
             # submit; failing the task would only retry the same form.
             return await self.route_to_review(submission, problems, session)
-        if getattr(register_definition, "register_mnemonic", None) == FARMER_REGISTER_MNEMONIC:
-            await check_farmer_submission(
-                submission.submission_id, session, submission=submission, required=problems)
-        elif problems:
-            validation_error("; ".join(problems))
+        await self.refuse_unsubmittable(submission, register_definition, problems, session)
         if worker:
             # The ingestion worker finalizes without a user; its own client
             # token starts the approval workflow (odk/worker_token.py).
@@ -184,6 +182,37 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
             if token:
                 kwargs["bearer_token"] = token
         return await super().finalize_submission_with_session(submission_id, session, *args, **kwargs)
+
+    async def refuse_unsubmittable(self, submission, register_definition, problems: list[str], session) -> None:
+        """Raise what Submit refuses a form for: the required fields of every
+        section, and for a farmer the Fayda ID and household checks."""
+        if getattr(register_definition, "register_mnemonic", None) == FARMER_REGISTER_MNEMONIC:
+            await check_farmer_submission(
+                submission.submission_id, session, submission=submission, required=problems)
+        elif problems:
+            validation_error("; ".join(problems))
+
+    async def validate_submission_for_approval_with_session(self, submission_id: str, session):
+        """Validate says what Submit will say: the platform's row and link
+        checks, then the same form checks Submit runs (finalize_submission_with_session),
+        so a draft is not reported valid and then refused. The platform's
+        link messages are said in plain words (upstream_messages)."""
+        from openg2p_registry_core.schemas.intake_form import IntakeSubmissionValidationIssue
+
+        result = await super().validate_submission_for_approval_with_session(submission_id, session)
+        messages = await self._messages()
+        for issue in result.issues:
+            issue.message = reword(issue.message, messages)
+        submission = await self._get_submission_or_error(submission_id, session)
+        register_definition = await self._get_register_definition(submission.register_id, session)
+        try:
+            await self.refuse_unsubmittable(
+                submission, register_definition, await self.required_problems_for(submission, session), session)
+        except G2PRegistryException as error:
+            result.issues.append(IntakeSubmissionValidationIssue(
+                code="SUBMISSION_INCOMPLETE", message=error.message or str(error)))
+        result.is_valid = not result.issues
+        return result
 
     # The ingestion worker creates ODK intakes as "system"; record the ODK
     # collector instead (odk/actor.py). Every other caller is unchanged.
@@ -228,6 +257,12 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
             return await super().save_intake_form_submission_with_session(
                 submission_id, section_id, payload, section_register_id, form_id,
                 register_id, created_by, session, documents=documents)
+        except G2PRegistryException:
+            # Core's raw parent-link text (an unknown household) said plainly.
+            from . import _reworded
+
+            async with _reworded(await self._messages()):
+                raise
         finally:
             current_intake.reset(token)
             unattended.reset(gate)

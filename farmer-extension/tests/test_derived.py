@@ -115,3 +115,17 @@ def test_local_name_in_a_latin_language_is_kept_as_typed():
 def test_local_name_needs_its_language():
     problem, = derived.local_name_problems({"language_spoken": None, "first_name_local": "Caaltuu"})
     assert problem.startswith("Farmer's language: the name is entered in the farmer's language, but no language is chosen")
+
+
+@pytest.mark.parametrize("code", ["ET", "et", "KE", "+251", "251", "1"])
+def test_a_phone_country_is_a_country_code_or_a_dialing_code(code):
+    assert derived.valid_country_code(code)
+
+
+@pytest.mark.parametrize("code", ["ETH", "Ethiopia", "+", "+25100", "E1", "E"])
+def test_a_three_letter_or_malformed_country_is_not_one(code):
+    assert not derived.valid_country_code(code)
+
+
+def test_the_ethiopian_dialing_code_reads_an_ethiopian_number():
+    assert derived.normalize_phone("0912345678", "+251") == ("912345678", "+251912345678")

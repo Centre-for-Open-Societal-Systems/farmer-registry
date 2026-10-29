@@ -70,6 +70,8 @@ REWORDED: list[tuple[str, str, str]] = [
     ("upstream_member_genders", r"Members entered: (\S+) male / (\S+) female, but the household says (\S+) male / (\S+) female",
      ("Household members: {1} male and {2} female are entered, but the household says {3} male and {4} "
      "female. Correct the members' gender or the household's counts so they match.")),
+    ("upstream_link_not_found", r"link_internal_record_id '[^']*' does not exist in register '(\w+)'",
+     "{register} not found. Check the {register_lower} ID."),
     ("upstream_option", r"(\w+) must be one of (.+)",
      "{label}: not one of the choices. Pick one from the list."),
     ("upstream_whole_number", r"(.+?) must be a whole number",
@@ -81,6 +83,11 @@ REWORDED: list[tuple[str, str, str]] = [
 _COMPILED = [(key, re.compile(pattern), text) for key, pattern, text in REWORDED]
 _MDS_OPTION = re.compile(
     r'''record \d+: (\w+)=('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*") is not a value of (\S+) \(permitted: [^)]*\)''')
+
+
+def _words(name: str) -> str:
+    """A register mnemonic as words: FarmerPhone -> farmer phone."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name.strip()).lower()
 
 
 def _label(name: str, messages: dict[str, str]) -> str:
@@ -119,6 +126,8 @@ def reword(message: str, messages: dict[str, str] | None = None) -> str:
         params = {
             "label": _label(groups[0], messages) if groups else "",
             "fields": ", ".join(_label(f, messages) for f in groups[0].split(",")) if groups else "",
+            "register": _words(groups[0]).capitalize() if groups else "",
+            "register_lower": _words(groups[0]) if groups else "",
         }
         try:
             return template.format(*([match.group(0), *groups]), **params)
