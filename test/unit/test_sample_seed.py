@@ -124,7 +124,7 @@ def test_seed_image_takes_farm_samples_only_from_openg2p_data_at_a_pinned_commit
     assert len(ref) == 40, "pin a commit, not a branch"
     assert not (ROOT / "docker/db-seed/seed-data").exists()
     overlay = (ROOT / "helm/environments/dev/farmer-samples.yaml").read_text()
-    assert "loadSampleData: true" in overlay
+    assert "loadSampleData: false" in overlay
 
 
 def test_staging_never_loads_samples():
@@ -132,7 +132,7 @@ def test_staging_never_loads_samples():
     deployment = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(deployment)
     assert deployment.samples_overlay("staging") == {}
-    assert deployment.samples_overlay("dev")["registry"]["dbSeed"]["loadSampleData"] is True
+    assert deployment.samples_overlay("dev")["registry"]["dbSeed"]["loadSampleData"] is False
 
 
 def test_login_prepares_the_sample_approvers_only_when_keycloak_refuses(loader, monkeypatch):

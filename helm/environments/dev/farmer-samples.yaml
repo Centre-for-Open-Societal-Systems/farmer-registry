@@ -1,9 +1,11 @@
-# Sample data on the dev environment: the country pack's sample people (ETH-OAN samples/
-# in openg2p-data, served by Master Data) registered as Farmers in their
-# households through intake and AWE approval, with their farm facts from the
-# pack's samples/farms.json (docker/db-seed/load_sample_data.py). Idempotent per
-# person, so every upgrade only adds what is missing. Merged over saved release
-# values by ci/deploy/deployment.py for dev only; staging never loads samples.
+# Sample data on the dev environment is off. The pack's 21 sample people are already
+# registered on New Dev, and the OAN loader (docker/db-seed/load_sample_data.py)
+# changed Keycloak on every upgrade where the approvers' password login was refused:
+# it re-enabled direct access grants on the release staff client and reset the
+# sample approvers' passwords. Sample data comes only from openg2p-data, and every
+# register change goes through an approval task, so the loader stays off until the
+# db-seed cleanup removes it. Merged over saved release values by
+# ci/deploy/deployment.py for dev only; staging never loads samples.
 registry:
   dbSeed:
-    loadSampleData: true
+    loadSampleData: false
