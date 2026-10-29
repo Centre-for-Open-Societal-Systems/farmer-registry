@@ -7,7 +7,7 @@
 -- The OAN-owned sections, by id (10, 12, 15 and 18_*.sql). Session-local.
 CREATE OR REPLACE FUNCTION pg_temp.oan_section_ids() RETURNS text[] LANGUAGE sql IMMUTABLE AS $$
   SELECT ARRAY[
-    'farmer_identity', 'farmer_identity_verification', 'farmer_name', 'farmer_personal_details',
+    'farmer_identity', 'farmer_identity_verification', 'farmer_personal_details',
     'farmer_socio_economic_health', 'farmer_location', 'farmer_photo', 'farmer_phones', 'farmer_documents',
     'farmer_household_lookup', 'household_information', 'farmer_membership', 'farmer_lands',
     'farmer_land_summary', 'farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake',
@@ -160,10 +160,13 @@ DECLARE
 BEGIN
   SELECT string_agg(f, ', ') INTO missing
   FROM (VALUES
-    ('farmer_name', 'first_name_local'),
-    ('farmer_name', 'last_name_local'),
-    ('farmer_name', 'language_spoken'),
+    ('farmer_personal_details', 'first_name'),
+    ('farmer_personal_details', 'first_name_local'),
+    ('farmer_personal_details', 'last_name_local'),
+    ('farmer_personal_details', 'language_spoken'),
     ('farmer_personal_details', 'birth_date'),
+    ('farmer_personal_details', 'marital_status'),
+    ('farmer_personal_details', 'education_level'),
     ('farmer_photo', 'farmer-photo'),
     ('farmer_socio_economic_health', 'is_psnp_user'),
     ('farmer_membership', 'primary_commodity'),
@@ -177,7 +180,6 @@ BEGIN
     ('farmer_household_lookup', 'is_household_head'),
     ('household_information', 'father_included'),
     ('farmer_location', 'farmer_geo_point'),
-    ('farmer_location', 'local_language'),
     ('farmer_location', 'farmer_geo_hierarchy'),
     ('farmer_photo', 'enumerator-position'),
     ('farmer_lands', 'certificate_storage_id'),
@@ -226,7 +228,7 @@ BEGIN
   END IF;
 
   SELECT string_agg(section_id, ', ') INTO missing
-   FROM (VALUES ('farmer_identity'), ('farmer_name'), ('farmer_personal_details'),
+   FROM (VALUES ('farmer_identity'), ('farmer_personal_details'),
                 ('farmer_socio_economic_health'),
                ('farmer_membership'), ('farmer_lands'), ('farmer_livestock'),
                ('farmer_farm_inputs'), ('farmer_household_lookup'), ('household_information'),
@@ -238,7 +240,7 @@ BEGIN
   END IF;
 
   SELECT string_agg(section_id, ', ') INTO missing
-   FROM (VALUES ('farmer_identity'), ('farmer_name'), ('farmer_personal_details'),
+   FROM (VALUES ('farmer_identity'), ('farmer_personal_details'),
                 ('farmer_socio_economic_health'),
                ('farmer_membership'), ('farmer_lands'), ('farmer_livestock_intake'),
                ('farmer_farm_inputs_intake'), ('farmer_photo'),
@@ -299,7 +301,6 @@ BEGIN
   SELECT string_agg(tab_id || ':' || section_id, ', ') INTO missing
   FROM (VALUES
     ('farmer_farmer_tab', 'farmer_identity'),
-    ('farmer_farmer_tab', 'farmer_name'),
     ('farmer_farmer_tab', 'farmer_personal_details')
   ) e(tab_id, section_id)
   WHERE NOT EXISTS (
@@ -313,7 +314,6 @@ BEGIN
   SELECT string_agg(tab_id || ':' || section_id, ', ') INTO missing
   FROM (VALUES
     ('a1a4d25a-1cd4-4356-abac-72482721', 'farmer_identity'),
-    ('a1a4d25a-1cd4-4356-abac-72482721', 'farmer_name'),
     ('a1a4d25a-1cd4-4356-abac-72482721', 'farmer_personal_details')
   ) e(tab_id, section_id)
   WHERE NOT EXISTS (
@@ -326,7 +326,7 @@ BEGIN
 
   SELECT string_agg(section_mnemonic, ', ') INTO missing
   FROM "public"."g2p_register_sections"
-  WHERE section_id IN ('farmer_identity', 'farmer_name', 'farmer_personal_details')
+  WHERE section_id IN ('farmer_identity', 'farmer_personal_details')
   GROUP BY section_mnemonic
   HAVING count(*) > 1;
   IF missing IS NOT NULL THEN
@@ -393,12 +393,11 @@ BEGIN
     FROM (
       SELECT
         max(section_order) FILTER (WHERE section_id = 'farmer_identity') AS identity_order,
-        max(section_order) FILTER (WHERE section_id = 'farmer_name') AS name_order,
         max(section_order) FILTER (WHERE section_id = 'farmer_personal_details') AS details_order
       FROM "public"."g2p_register_ui_tab_sections"
       WHERE tab_id = 'farmer_farmer_tab'
     ) o
-    WHERE NOT (identity_order < name_order AND name_order < details_order)
+    WHERE NOT (identity_order < details_order)
   ) THEN
     RAISE EXCEPTION 'Farmer register Personal Information sections are out of order';
   END IF;
@@ -408,13 +407,12 @@ BEGIN
     FROM (
       SELECT
         max(section_order) FILTER (WHERE section_id = 'farmer_identity') AS identity_order,
-        max(section_order) FILTER (WHERE section_id = 'farmer_name') AS name_order,
         max(section_order) FILTER (WHERE section_id = 'farmer_personal_details') AS details_order,
         max(section_order) FILTER (WHERE section_id = 'farmer_photo') AS photo_order
       FROM "public"."g2p_intake_form_ui_tab_sections"
       WHERE tab_id = 'a1a4d25a-1cd4-4356-abac-72482721'
     ) o
-    WHERE NOT (identity_order < name_order AND name_order < details_order AND details_order < photo_order)
+    WHERE NOT (identity_order < details_order AND details_order < photo_order)
   ) THEN
     RAISE EXCEPTION 'Farmer intake Personal Information sections are out of order before photo';
   END IF;
@@ -474,5 +472,40 @@ BEGIN
      OR '  ' ~ (w #>> '{widget-data-validation,pattern}');
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'Name widgets must carry the name rule (19_name_rules.sql): %', found;
+  END IF;
+END $$;
+
+-- Personal information is one section: the Name section and the second
+-- language question are retired (12_form_sections.sql, 22_retired_rows.sql),
+-- and no widget id is used twice inside the merged section.
+DO $$
+DECLARE
+  found text;
+BEGIN
+  IF EXISTS (SELECT 1 FROM "public"."g2p_register_sections" WHERE "section_id" = 'farmer_name')
+     OR EXISTS (SELECT 1 FROM "public"."g2p_register_ui_tab_sections" WHERE "section_id" = 'farmer_name')
+     OR EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections" WHERE "section_id" = 'farmer_name') THEN
+    RAISE EXCEPTION 'The Name section is retired; it is part of farmer_personal_details';
+  END IF;
+
+  SELECT string_agg(widget_id, ', ') INTO found
+  FROM (
+    SELECT w->>'widget-id' AS widget_id
+    FROM "public"."g2p_register_sections" s,
+         jsonb_path_query(s.section_ui_schema, 'strict $.**') w
+    WHERE s.section_id = 'farmer_personal_details'
+      AND jsonb_typeof(w) = 'object' AND w ? 'widget' AND w ? 'widget-id'
+    GROUP BY w->>'widget-id' HAVING count(*) > 1
+  ) d;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Personal information repeats a widget id: %', found;
+  END IF;
+
+  SELECT string_agg(DISTINCT s.section_id, ', ') INTO found
+  FROM "public"."g2p_register_sections" s
+  WHERE s.section_id = ANY (pg_temp.oan_section_ids())
+    AND jsonb_path_exists(s.section_ui_schema, 'lax $.** ? (@."widget-id" == "local_language")');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'The second language question is retired; the farmer has one language: %', found;
   END IF;
 END $$;

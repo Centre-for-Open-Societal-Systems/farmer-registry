@@ -1,8 +1,9 @@
 -- Put the OAN sections where the upstream ones were, on the register tabs and
 -- the intake form, then detach the upstream sections from those places. The
--- Farmer Personal Information replacement is split into identity, name and
--- personal-details sections; all three stay adjacent before the photo/location
--- sections.
+-- Farmer Personal Information replacement is two sections, as upstream has it:
+-- identity, then one personal information section (the names, the language,
+-- gender, birth date, age, marital status and education); both stay adjacent
+-- before the photo/location sections.
 --
 -- An OAN attachment is named after where it is and what it shows: on a
 -- register tab <tab_id>__<section_id> (farmer_farmer_tab__farmer_identity), on
@@ -41,9 +42,10 @@ ON CONFLICT ("tab_section_id") DO UPDATE SET
   "register_id" = EXCLUDED."register_id", "tab_id" = EXCLUDED."tab_id",
   "section_id" = EXCLUDED."section_id", "section_order" = EXCLUDED."section_order";
 
--- Split Personal Information into three adjacent sections, with the Fayda
--- verification of the record (18_identity_verification.sql) right after the
--- identity. The UI section-id is rewritten in 12_form_sections.sql because
+-- Split Personal Information into identity and personal information, with the
+-- Fayda verification of the record (18_identity_verification.sql) right after
+-- the identity. The earlier farmer_name section is merged into personal
+-- information (21_renamed_section_data.sql, 22_retired_rows.sql). The UI section-id is rewritten in 12_form_sections.sql because
 -- MultiSectionAccordionForms matches saves by UI section-id; copied upstream
 -- ids would collide.
 INSERT INTO "public"."g2p_register_ui_tab_sections" ("tab_section_id", "register_id", "tab_id", "section_id", "section_order")
@@ -51,8 +53,7 @@ SELECT v.tab_section_id, t.register_id, t.tab_id, v.section_id, t.section_order 
 FROM "public"."g2p_register_ui_tab_sections" t
 JOIN (VALUES
   ('farmer_farmer_tab__farmer_identity_verification', 'farmer_identity_verification', 1),
-  ('farmer_farmer_tab__farmer_name', 'farmer_name', 2),
-  ('farmer_farmer_tab__farmer_personal_details', 'farmer_personal_details', 3)
+  ('farmer_farmer_tab__farmer_personal_details', 'farmer_personal_details', 2)
 ) v(tab_section_id, section_id, order_offset) ON true
 JOIN "public"."g2p_register_sections" s ON s.section_id = v.section_id
 WHERE t.tab_section_id = 'farmer_farmer_tab__farmer_identity'
@@ -85,8 +86,7 @@ INSERT INTO "public"."g2p_intake_form_ui_tab_sections" ("tab_section_id", "tab_i
 SELECT v.tab_section_id, t.tab_id, v.section_id, t.section_order + v.order_offset
 FROM "public"."g2p_intake_form_ui_tab_sections" t
 JOIN (VALUES
-  ('farmer_intake__farmer_name', 'farmer_name', 1),
-  ('farmer_intake__farmer_personal_details', 'farmer_personal_details', 2)
+  ('farmer_intake__farmer_personal_details', 'farmer_personal_details', 1)
 ) v(tab_section_id, section_id, order_offset) ON true
 JOIN "public"."g2p_register_sections" s ON s.section_id = v.section_id
 WHERE t.tab_section_id = 'farmer_intake__farmer_identity'

@@ -40,29 +40,29 @@ SUBMISSION = {
 def test_master_data_codes_pass_through_unchanged():
     out = intake_sections(SUBMISSION)
     assert out[SECTIONS[2]][0]["language_spoken"] == "AFAAN_OROMO"
-    assert out[SECTIONS[3]][0]["gender"] == "FEMALE"
-    assert out[SECTIONS[3]][0]["marital_status"] == "MARRIED"
-    assert out[SECTIONS[3]][0]["farming_type"] == "MIXED"
-    assert out[SECTIONS[6]][0]["education_level"] == "CAN_READ_AND_WRITE"
-    assert out[SECTIONS[6]][0]["income_sources"] == ["SOI_CROP_PRODUCTION", "SOI_LIVESTOCK_PRODUCTION"]
-    assert out[SECTIONS[10]][0]["land_ownership_type"] == "OWNER"
-    crop = out[SECTIONS[11]][0]
+    assert out[SECTIONS[2]][0]["gender"] == "FEMALE"
+    assert out[SECTIONS[2]][0]["marital_status"] == "MARRIED"
+    assert out[SECTIONS[2]][0]["farming_type"] == "MIXED"
+    assert out[SECTIONS[5]][0]["education_level"] == "CAN_READ_AND_WRITE"
+    assert out[SECTIONS[5]][0]["income_sources"] == ["SOI_CROP_PRODUCTION", "SOI_LIVESTOCK_PRODUCTION"]
+    assert out[SECTIONS[9]][0]["land_ownership_type"] == "OWNER"
+    crop = out[SECTIONS[10]][0]
     assert (crop["commodity"], crop["season"]) == ("CROP_BREAD_WHEAT", "SEASON_MEHER")
-    inputs = out[SECTIONS[12]][0]
+    inputs = out[SECTIONS[11]][0]
     # The form asks the crops' water source once, for the holding's inputs row.
     assert inputs["water_sources"] == ["WS_RAINFED", "WS_IRRIGATION_SURFACE"]
     assert inputs["machinery_types"] == ["MACH_TRACTOR", "MACH_SPRAYER"]
     assert inputs["finance_access_types"] == ["LOAN", "SAVING"]
     assert inputs["livestock_water_sources"] == ["WS_SURFACE_WATER"]
-    assert out[SECTIONS[13]][0]["livestock_type"] == "LSTK_GOAT"
-    assert out[SECTIONS[14]][0]["farmer_cluster_role"] == "LEAD"
-    assert out[SECTIONS[14]][0]["primary_commodity"] == "CROP_TEFF"
-    assert out[SECTIONS[15]][0]["identity_document_type"] == "KEBELE_WOREDA_ID"
-    assert out[SECTIONS[8]][1]["relationship_to_the_head"] == "CHILD"
+    assert out[SECTIONS[12]][0]["livestock_type"] == "LSTK_GOAT"
+    assert out[SECTIONS[13]][0]["farmer_cluster_role"] == "LEAD"
+    assert out[SECTIONS[13]][0]["primary_commodity"] == "CROP_TEFF"
+    assert out[SECTIONS[14]][0]["identity_document_type"] == "KEBELE_WOREDA_ID"
+    assert out[SECTIONS[7]][1]["relationship_to_the_head"] == "CHILD"
 
 
 def test_pack_geography_codes_become_the_location_hierarchy():
-    location = intake_sections(SUBMISSION)[SECTIONS[9]][0]
+    location = intake_sections(SUBMISSION)[SECTIONS[8]][0]
     assert location["geo_lowest_level_value_id"] == "ET04080101"
     hierarchy = __import__("json").loads(location["geo_code_hierarchy_json"])["hierarchy"]
     assert [(h["level_mnemonic"], h["level_value_id"]) for h in hierarchy] == [

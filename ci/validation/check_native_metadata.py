@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # The OAN-owned sections (meta_data/10, 12, 15 and 18_*.sql); 90_checks.sql
 # holds the same list.
 OAN_SECTIONS = frozenset((
-    'farmer_identity', 'farmer_identity_verification', 'farmer_name', 'farmer_personal_details',
+    'farmer_identity', 'farmer_identity_verification', 'farmer_personal_details',
     'farmer_socio_economic_health', 'farmer_location', 'farmer_photo', 'farmer_phones', 'farmer_documents',
     'farmer_household_lookup', 'household_information', 'farmer_membership', 'farmer_lands',
     'farmer_land_summary', 'farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake',

@@ -14,8 +14,10 @@ BEGIN
   FOR pair IN SELECT * FROM (VALUES
       ('oan_farmer_personal_identification',   'farmer_identity'),
       ('oan_farmer_identity_verification',     'farmer_identity_verification'),
-      ('oan_farmer_name',                      'farmer_name'),
+      ('oan_farmer_name',                      'farmer_personal_details'),
       ('oan_farmer_personal_details',          'farmer_personal_details'),
+      -- The name section is merged into personal information.
+      ('farmer_name',                          'farmer_personal_details'),
       ('oan_farmer_socio_economic_and_health', 'farmer_socio_economic_health'),
       ('oan_farmer_location',                  'farmer_location'),
       ('oan_farmer_photo',                     'farmer_photo'),

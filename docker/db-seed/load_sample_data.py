@@ -62,7 +62,7 @@ DIAL_CODE = {"ET": "+251"}
 HOUSEHOLD_SECTIONS = ("household_information", "household_household_household_member_section_02")
 # Sections of the farmer form, in the order the staff portal saves them.
 FARMER_SECTIONS = (
-    "farmer_household_lookup", "farmer_identity", "farmer_name", "farmer_personal_details", "farmer_phones",
+    "farmer_household_lookup", "farmer_identity", "farmer_personal_details", "farmer_phones",
     "farmer_socio_economic_health", *HOUSEHOLD_SECTIONS, "farmer_location", "farmer_lands",
     "farmer_crops_intake", "farmer_farm_inputs_intake", "farmer_livestock_intake", "farmer_membership",
     "farmer_documents",
@@ -226,10 +226,10 @@ def plan(people: list[dict], households: list[dict], farms: dict, geo: Geography
                 "farmer_household_lookup": [{"internal_record_id": farmer_id, "is_household_head": m is head}],
                 "farmer_identity": [{"internal_record_id": farmer_id, "has_national_id": bool(m.get("national_id")),
                                      "foundational_id": m.get("national_id")}],
-                "farmer_name": [{"internal_record_id": farmer_id, "first_name": first, "middle_name": middle,
-                                 "last_name": last, "language_spoken": farmer.get("language_spoken")}],
-                "farmer_personal_details": [{"internal_record_id": farmer_id, "gender": m.get("gender"),
-                                             "birth_date": m.get("birth_date"),
+                "farmer_personal_details": [{"internal_record_id": farmer_id, "first_name": first,
+                                             "middle_name": middle, "last_name": last,
+                                             "language_spoken": farmer.get("language_spoken"),
+                                             "gender": m.get("gender"), "birth_date": m.get("birth_date"),
                                              "marital_status": m.get("marital_status"),
                                              "education_level": m.get("education_level")}],
                 "farmer_phones": [{"internal_record_id": new_id(), "link_internal_record_id": farmer_id,

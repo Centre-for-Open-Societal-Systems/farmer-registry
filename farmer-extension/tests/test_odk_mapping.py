@@ -33,11 +33,11 @@ def test_prepared_sections_render_as_native_json_with_mds_codes_and_exact_roster
     sections = intake_sections(example())
     template = Environment(undefined=StrictUndefined).from_string((ROOT/"src/openg2p_registry_farmer_extension/templates/odk_to_farmer_intake.j2").read_text())
     assert json.loads(template.render(expanded={"oan_intake_sections":sections})) == sections
-    assert set(sections) == set(SECTIONS) and len(SECTIONS) == 16
+    assert set(sections) == set(SECTIONS) and len(SECTIONS) == 15
     assert sections['farmer_identity'][0]['foundational_id'] == '001234567890'
     assert sections['farmer_phones'][0]['country_code'] == 'ET'
     assert sections['farmer_phones'][0]['phone_number'] == '911000001'
-    assert sections['farmer_name'][0]['language_spoken'] == 'AFAAN_OROMO'
+    assert sections['farmer_personal_details'][0]['language_spoken'] == 'AFAAN_OROMO'
     socio = sections['farmer_socio_economic_health'][0]
     assert socio['education_level'] == 'CAN_READ_AND_WRITE'
     assert socio['source_of_income'] == 'SOI_CROP_PRODUCTION'
