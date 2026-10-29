@@ -39,3 +39,17 @@ RUN rm -rf /openg2p-data && mkdir -p /openg2p-data && cd /openg2p-data \
 # Platform images after rc.557 ship it as /seed/mds_client.py; drop this copy
 # when the platform pin moves past it.
 COPY --chmod=755 docker/db-seed/mds_client.py docker/db-seed/load_sample_data.py /seed/
+
+# OAN theme: the staff-portal theme (palette and background image) is data in
+# openg2p-data (themes/oan_theme). Render this registry's entry into the seed
+# tree; it runs after the registry configuration and points it at oan_theme.
+# The ref is a commit SHA; move the repository to the COSS copy once merged there.
+ARG OAN_THEME_DATA_REPO=https://github.com/asmitonweb/openg2p-data.git
+ARG OAN_THEME_DATA_REF=3c44950dac7d7752054057d1f3500784af596c10
+RUN mkdir -p /tmp/oan-theme-data /seed/meta_data/zz-oan \
+ && cd /tmp/oan-theme-data \
+ && git init -q \
+ && git fetch -q --depth 1 "${OAN_THEME_DATA_REPO}" "${OAN_THEME_DATA_REF}" \
+ && git checkout -q FETCH_HEAD \
+ && python3 scripts/themes/build_theme_sql.py farmer > /seed/meta_data/zz-oan/90_oan_theme.sql \
+ && cd / && rm -rf /tmp/oan-theme-data
