@@ -29,6 +29,8 @@ docker build -f docker/registry-connector/Dockerfile -t "coss-ci/registry-connec
 docker run --rm -u 0 -v "$PWD/docker/registry-connector:/ext:ro" -w /ext -e PYTHONDONTWRITEBYTECODE=1 \
   --entrypoint sh "coss-ci/registry-connector:$tag" -c \
   'pip install --quiet --no-cache-dir --root-user-action=ignore pytest==8.4.2 && python -m pytest -q -p no:cacheprovider tests'
+# The connector admin UI: the published UI behind the staff login (docker/registry-connector-ui).
+docker build -f docker/registry-connector-ui/Dockerfile -t "coss-ci/registry-connector-ui:$tag" .
 
 # The extension's tests, against the platform it is installed on. They read
 # upstream UI files from the repository, so the whole tree is mounted.

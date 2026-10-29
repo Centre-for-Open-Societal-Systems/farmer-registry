@@ -11,5 +11,8 @@ RUN site=$(python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
     && cp /tmp/registry-connector-extension/openg2p_registry_connector_extension.pth "$site/" \
     && rm -rf /tmp/registry-connector-extension \
     && python -c "from openg2p_connector_service.services.ingestion_service import IngestionService as S; assert getattr(S._wrap_in_g2p_envelope, '_openg2p_registry_connector_extension', False)"
+# Admin access settings (admin_auth). The published chart passes no extra environment, so
+# they are baked; CONNECTOR_ADMIN_AUTH_* variables override them where a deployment can set them.
+COPY docker/registry-connector/admin-auth.json /etc/openg2p-registry-connector-extension/admin-auth.json
 USER connector
 # Build context = repo root, like the other docker/<component> images.

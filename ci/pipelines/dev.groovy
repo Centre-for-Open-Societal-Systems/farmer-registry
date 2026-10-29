@@ -90,17 +90,20 @@ pipeline {
                             --query 'imageDetails[0].imageDigest' --output text)
                           printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
                         done
-                        # The connector image (docker/registry-connector) is not a registry
-                        # component, so it gets its own outcome file, not registry-images.tsv.
-                        extension="$ECR_REPOSITORY/registry-connector"
-                        aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$extension" > /dev/null 2>&1 ||
-                          aws ecr create-repository --region "$AWS_REGION" --repository-name "$extension" > /dev/null
-                        docker tag "coss-ci/registry-connector:$IMAGE_TAG" "$ECR_REGISTRY/$extension:$IMAGE_TAG"
-                        docker push "$ECR_REGISTRY/$extension:$IMAGE_TAG"
-                        digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$extension" \
-                          --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
-                        printf 'registry-connector\t%s\t%s\n' "$ECR_REGISTRY/$extension:$IMAGE_TAG" "$digest" > service-outcomes/registry-connector.tsv
-                        echo "registry-connector: $ECR_REGISTRY/$extension:$IMAGE_TAG@$digest"
+                        # The connector images (docker/registry-connector, docker/registry-connector-ui) are
+                        # not registry components, so they get their own outcome file, not registry-images.tsv.
+                        : > service-outcomes/registry-connector.tsv
+                        for component in registry-connector registry-connector-ui; do
+                          repository="$ECR_REPOSITORY/$component"
+                          aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$repository" > /dev/null 2>&1 ||
+                            aws ecr create-repository --region "$AWS_REGION" --repository-name "$repository" > /dev/null
+                          docker tag "coss-ci/$component:$IMAGE_TAG" "$ECR_REGISTRY/$repository:$IMAGE_TAG"
+                          docker push "$ECR_REGISTRY/$repository:$IMAGE_TAG"
+                          digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" \
+                            --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
+                          printf '%s\t%s\t%s\n' "$component" "$ECR_REGISTRY/$repository:$IMAGE_TAG" "$digest" >> service-outcomes/registry-connector.tsv
+                          echo "$component: $ECR_REGISTRY/$repository:$IMAGE_TAG@$digest"
+                        done
                         docker run --rm --network none --user "$(id -u):$(id -g)" \
                           -e DELIVERY_ACTION \
                           -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT \
