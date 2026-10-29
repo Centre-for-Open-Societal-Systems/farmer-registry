@@ -33,8 +33,13 @@ The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`)
 Sample data lives only in [openg2p-data](https://github.com/Centre-for-Open-Societal-Systems/openg2p-data).
 The db-seed image's sample loader (`docker/db-seed/load_sample_data.py`, run only with
 `LOAD_SAMPLE_DATA=true`) reads the sample people from Master Data's API and their farm facts
-from the ETH-OAN pack, as the OpenG2P docs describe. No environment enables it
-(`ci/deploy/deployment.py` rejects `LOAD_SAMPLE_DATA`, `LOAD_GEO_DATA` and `LOAD_IMAGES`).
+from the ETH-OAN pack. It enters each person as a farmer intake and approves it like any other:
+stage 1 as `alex.carter`, stage 2 as `nina.patel`, signed in through the staff portal's sign-in
+with the chart's sample-user password (`global.aweApproverUserPassword`); never the password grant,
+never a Keycloak change. Besides the chart's intake-seed settings it needs `STAFF_IAM_URL` and the
+`MDS_*` client settings on the db-seed Job. No environment enables it (`ci/deploy/deployment.py`
+rejects `LOAD_SAMPLE_DATA`, `LOAD_GEO_DATA` and `LOAD_IMAGES`); New Dev already holds the 21 sample
+farmers, entered and approved the same way.
 
 Helm ownership is centralized in
 [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm).
