@@ -52,6 +52,15 @@ run against the published runtime in CI. See [the documentation index](docs/READ
 [native ODK intake](docs/odk-native-intake.md) and
 [dev delivery](docs/dev-farmer-first.md).
 
+CI / CD Build
+
+Following are the images which are created by the CI / CD pipeline from this repo
+1. Celery image - pulled from the openg2p RP
+2. DB seed image - created from openg2p-data repo
+3. partner-api image - pulled from the openg2p RP
+4. staff-api image
+5. staff-ui image
+
 Local acceptance runs serially: Commons + Farmer + Crop, then Commons + Farmer +
 Livestock. Existing dev and staging deployments are unchanged by publication
 of this candidate.
