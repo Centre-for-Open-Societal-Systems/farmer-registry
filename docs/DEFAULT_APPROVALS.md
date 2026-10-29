@@ -28,3 +28,18 @@ request/task or decision is changed. Domain and Farmer-reference dependency
 approvals in the receiving registries remain separate; this does not enable
 automatic approval. The source check (`test/unit/test_default_approvals.py`)
 verifies the configuration directly.
+
+## No approval outside a task
+
+Core also exposes two staff calls that apply a change on one user's say-so,
+without an approval task: `/intake-form-data/approve_intake_form_submission`
+(`intakeSubmission:approve`, held by Intake Validator and Technical
+Administrator) and `/change-requests/approve_change_request` plus
+`/change-requests/approve_change_request_for_core_data`
+(`changeRequest:approve`, held by Technical Administrator). The role catalog
+is registered by the platform chart and is not changed here, so
+`direct_approval.py` (in the OAN package) refuses both service calls for every caller, `admin`
+included. Decisions made in an approval task are unaffected: the workflow
+engine's signed decision reaches `approve_submission_with_session` and
+`approve_change_request_from_awe_webhook`, which the guard does not touch.
+`reject` calls and the verification calls stay available.
