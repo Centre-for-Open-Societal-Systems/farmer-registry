@@ -232,7 +232,7 @@ def test_a_farmer_with_has_national_id_and_no_fayda_id_is_refused(monkeypatch):
     service = _farmer_service(monkeypatch, GENDERS)
     message = _refused(service.validate_domain_attributes(
         [{"first_name": "Abebe", "last_name": "Kebede", "has_national_id": True, "foundational_id": ""}]))
-    assert message.startswith("Has national ID: answered Yes, but no Fayda ID is entered.")
+    assert message.startswith("Has a Fayda ID: answered Yes, but no Fayda ID (FAN or FIN) is entered.")
 
 
 def test_a_farmer_with_an_unknown_kebele_is_refused(monkeypatch):

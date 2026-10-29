@@ -70,8 +70,8 @@ def fayda_problem(record: dict, say) -> str | None:
         return None
     if "foundational_id" not in record and record.get("internal_record_id"):
         return None
-    return say("rule_fayda_missing", label=say.text("has_national_id", "Has national ID"),
-               fayda=say.text("foundational_id", "Fayda ID"))
+    return say("rule_fayda_missing", label=say.text("has_national_id", "Has a Fayda ID"),
+               fayda=say.text("foundational_id", "Fayda ID (FAN or FIN)"))
 
 
 def location_problem(record: dict, say, known: set[str] | None) -> str | None:

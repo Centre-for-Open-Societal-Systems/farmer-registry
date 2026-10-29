@@ -10,8 +10,9 @@
 -- the staff UI resolves it (the language's domain translation, then core's,
 -- else the string itself) and must not hold an underscore or be an
 -- ALL-CAPS code. The document slots (identity_document_1 and the like) are
--- storage keys that the documents widget never shows; its title is checked
--- instead. The search and filter schemas get the same test.
+-- storage keys that the form does not show; they are translated for the record's
+-- document list and history, and checked near the end of this file. The search
+-- and filter schemas get the same test.
 
 DO $$
 DECLARE
@@ -179,5 +180,41 @@ BEGIN
      OR s.section_ui_schema::text ~ '"labelKey": "value_code"[^{}]*"params": \{"attribute_id": "(PREFIX|RELATIONSHIP_TO_HEAD)"';
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'A select shows the stored code instead of its display text: %', found;
+  END IF;
+
+  -- The document slot labels, the two upload-widget words and the task and
+  -- approval history words each have English text, and none keeps an old name.
+  SELECT string_agg(k, ', ' ORDER BY k) INTO found
+  FROM (SELECT p || '_document_' || n AS k
+        FROM unnest(ARRAY['identity', 'bank', 'land', 'representative', 'farmer', 'other']) p,
+             generate_series(1, 5) n
+        UNION ALL
+        SELECT unnest(ARRAY['approver', 'skipped', 'request_created', 'request_approved', 'stage_started',
+                            'stage_completed', 'in_review', 'completed'])) w(k)
+  WHERE NOT EXISTS (SELECT 1 FROM "public"."registry_languages" l
+                    WHERE l."is_default" AND COALESCE(NULLIF(l."domain_translation"::jsonb ->> k, ''), '') <> '');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'No English display text for: %', found;
+  END IF;
+
+  SELECT string_agg(k, ', ') INTO found
+  FROM unnest(ARRAY['common.remove', 'common.select']) k
+  WHERE NOT EXISTS (SELECT 1 FROM "public"."registry_languages" l
+                    WHERE l."is_default" AND COALESCE(NULLIF(l."core_translation"::jsonb ->> k, ''), '') <> '');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'No English platform text for: %', found;
+  END IF;
+
+  SELECT string_agg(t.k || '=' || t.v, '; ') INTO found
+  FROM "public"."registry_languages" l,
+       LATERAL (SELECT e.key AS k, e.value AS v FROM jsonb_each_text(l."domain_translation"::jsonb) e) t
+  WHERE l."is_default"
+    AND ((t.k IN ('disabled', 'is_diseased', 'size_of_group', 'is_primary', 'location_hierarchy', 'plus_code',
+                  'computation_scores', 'household_computation_scores')
+          AND t.v IN ('Disabled', 'Diseased', 'Size of group', 'Primary', 'Location hierarchy', 'Plus code',
+                      'Computation scores'))
+         OR t.v ~* 'fayda credential');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'A label still has its unclear or inconsistent wording: %', found;
   END IF;
 END $$;

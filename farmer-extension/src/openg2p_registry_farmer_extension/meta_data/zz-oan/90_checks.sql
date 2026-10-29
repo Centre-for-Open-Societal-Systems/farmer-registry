@@ -516,7 +516,7 @@ BEGIN
 END $$;
 
 -- Every label in Personal information is a key that has English text, and the
--- Fayda ID label is the neutral "Fayda ID" (the field takes a FIN or a FAN).
+-- Fayda ID label names both forms (the field takes a FAN or a FIN).
 DO $$
 DECLARE
   found text;
@@ -535,8 +535,8 @@ BEGIN
   END IF;
 
   IF EXISTS (SELECT 1 FROM "public"."registry_languages" l
-             WHERE l."is_default" AND l."domain_translation"::jsonb ->> 'fayda_fin' IS DISTINCT FROM 'Fayda ID') THEN
-    RAISE EXCEPTION 'The Fayda ID label must read "Fayda ID"';
+             WHERE l."is_default" AND l."domain_translation"::jsonb ->> 'fayda_fin' IS DISTINCT FROM 'Fayda ID (FAN or FIN)') THEN
+    RAISE EXCEPTION 'The Fayda ID label must read "Fayda ID (FAN or FIN)"';
   END IF;
 END $$;
 
