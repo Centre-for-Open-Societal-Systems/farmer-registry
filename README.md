@@ -20,7 +20,7 @@ The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`)
 | `sample-farmer-extension/` | OpenG2P's Farmer extension as published, for comparison on upgrades; never built |
 | `ui/staff-ui/overrides/` | Registered OAN widgets and supported source overlays |
 | `docker/<component>/Dockerfile` | Images built FROM the registry platform images with the Farmer extension installed: staff-api, partner-api, celery, staff-ui, db-seed, sanity-tests |
-| `docker/db-seed/` | The seed: OpenG2P's Farmer seed scripts (`openg2p/`, unchanged), the extension's metadata, and sample farmers from the ETH-OAN pack in [openg2p-data](https://github.com/Centre-for-Open-Societal-Systems/openg2p-data) |
+| `docker/db-seed/` | The seed image: the registry platform's db-seed with the Farmer extension's metadata, approval policy, templates and reporting views |
 | `helm/` | Environment overlays read by `ci/deploy`, plus the Farmer chart sources |
 | `ci/`, `Jenkinsfile` | Jenkins delivery, source and native metadata checks |
 | `integrations/` | Registry connector adapters |
@@ -30,9 +30,9 @@ The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`)
 | `scripts/` | `bump-rp-version.sh`, `uninstall-registry.sh`, doc-link check and live operations tools |
 | `docs/` | Current guides |
 
-Sample data lives only in openg2p-data: the db-seed image takes the pack's
-`samples/farms.json` at a pinned commit, and Master Data serves the pack's sample
-people and households. The dev environment loads them (`helm/environments/dev/farmer-samples.yaml`).
+Sample data lives only in [openg2p-data](https://github.com/Centre-for-Open-Societal-Systems/openg2p-data).
+The db-seed image carries no sample loader, and no environment enables one
+(`ci/deploy/deployment.py` rejects `LOAD_SAMPLE_DATA`, `LOAD_GEO_DATA` and `LOAD_IMAGES`).
 
 Helm ownership is centralized in
 [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm).

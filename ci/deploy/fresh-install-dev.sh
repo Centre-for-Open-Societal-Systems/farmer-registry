@@ -190,6 +190,10 @@ for component in staff-portal-api partner-api staff-portal-ui celery-worker cele
 done
 kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
   python3 - < scripts/operations/commons/check_geo_schema.py
+# The seed applies metadata with ON_ERROR_STOP=0; fail the delivery if OAN's checks do not hold.
+CHECKS=farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/90_checks.sql
+python3 scripts/operations/commons/check_seed_metadata.py "$CHECKS" |
+  kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- python3 -
 
 # The partner API's DCI response-signing public key (chart dciSigning hook), for
 # the consuming registries' chart values; the private key never leaves the Secret.

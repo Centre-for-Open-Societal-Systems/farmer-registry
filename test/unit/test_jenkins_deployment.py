@@ -284,23 +284,13 @@ def test_wrong_image_commit_is_rejected(release):
         deployment.validate(before, after, ECR, TAG)
 
 
-@pytest.mark.parametrize("loader", ["LOAD_GEO_DATA", "LOAD_IMAGES"])
+@pytest.mark.parametrize("loader", ["LOAD_GEO_DATA", "LOAD_SAMPLE_DATA", "LOAD_IMAGES"])
 def test_demo_seed_is_rejected(release, loader):
     before, after = release
     seed = next(d for d in after if d["metadata"]["name"] == "farmer-registry-db-seed")
     deployment.pod(seed)["containers"][0]["env"].append({"name": loader, "value": "true"})
     with pytest.raises(ValueError, match="loader"):
         deployment.validate(before, after, ECR, TAG)
-
-
-def test_no_environment_may_enable_the_sample_loader(release):
-    before, after = release
-    seed = next(d for d in after if d["metadata"]["name"] == "farmer-registry-db-seed")
-    deployment.pod(seed)["containers"][0]["env"].append({"name": "LOAD_SAMPLE_DATA", "value": "true"})
-    with pytest.raises(ValueError, match="LOAD_SAMPLE_DATA"):
-        deployment.validate(before, after, ECR, TAG)
-    assert deployment.allowed_loaders("dev") == set()
-    assert deployment.allowed_loaders("staging") == set()
 
 
 def test_dashboard_image_is_not_silently_upgraded(release):

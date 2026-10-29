@@ -29,9 +29,9 @@ The deployed dev register page requests `page_size: 20`. That is the number of r
 
 The staging 500-row seed remains present. The remaining staging rows are reported only as an aggregate; their origin was not classified by this check. Intake and history are separate tables and are excluded from registered-farmer totals.
 
-The dev environment's sample farmers come from the ETH-OAN country pack: `docker/db-seed/load_sample_data.py` registers its 21 people in their 6 households through intake and approval, with farm facts from the pack's `samples/farms.json` in openg2p-data. Nothing in this repository is a sample population source.
+Sample farmers come only from the ETH-OAN country pack in openg2p-data. The db-seed image carries no sample loader; nothing in this repository is a sample population source.
 
-Deployment preparation disables geography, image and bulk fixture loading; sample loading is on for the dev environment only (`helm/environments/dev/farmer-samples.yaml`). This merge does not reload 500 people, truncate a register or reconcile existing Farmer locations. Expanding the dev demo population is a separate explicit data operation, with canonical geography and duplicate handling, rather than an automatic deployment hook.
+Deployment preparation disables geography, sample, image and bulk fixture loading on every environment. This merge does not reload 500 people, truncate a register or reconcile existing Farmer locations. Expanding the dev demo population is a separate explicit data operation, with canonical geography and duplicate handling, rather than an automatic deployment hook.
 
 ## Staging deployment prerequisites still outstanding
 
