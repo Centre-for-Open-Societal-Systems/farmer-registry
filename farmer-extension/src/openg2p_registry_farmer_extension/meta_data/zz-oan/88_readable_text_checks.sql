@@ -217,4 +217,43 @@ BEGIN
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'A label still has its unclear or inconsistent wording: %', found;
   END IF;
+
+  -- Fourth pass: each label reads as what the field holds, and none keeps its
+  -- old wording.
+  SELECT string_agg(k, ', ' ORDER BY k) INTO found
+  FROM (VALUES
+    ('other_land_owner', 'Another land owner in the household'),
+    ('enumerator_accuracy', 'Enumerator GPS accuracy (metres)'),
+    ('enumerator_altitude', 'Enumerator altitude (metres)'),
+    ('farmer_document', 'Farmer or cooperative membership document'),
+    ('total_land_crop_sharing_area', 'Crop-sharing or other land (ha)'),
+    ('Intake Form', 'Intake form'),
+    ('skipped', 'Not needed (decided by another approver)'),
+    ('BASIC', 'Basic education'),
+    ('INTERMEDIARY', 'Intermediate (middle school)'),
+    ('CROP_SHARE', 'Sharecropper'),
+    ('SELF', 'Head of household')) AS want(k, v)
+  WHERE NOT EXISTS (SELECT 1 FROM "public"."registry_languages" l
+                    WHERE l."is_default" AND l."domain_translation"::jsonb ->> want.k = want.v);
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'A label does not have its plain wording: %', found;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM "public"."registry_languages" l
+             WHERE l."is_default"
+               AND l."domain_translation"::jsonb ->> 'required_household_fields' ~* '(^| )other land owner|size of group') THEN
+    RAISE EXCEPTION 'The required household fields message still uses an old field name';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM "public"."g2p_register_schemas" d
+             WHERE d."register_id" = '52979fdd-220c-48dd-8de0-0a434e786427'
+               AND d."filter_schema"::jsonb::text LIKE '%"label": "Self"%') THEN
+    RAISE EXCEPTION 'The relationship filter still lists the head as Self';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM "public"."g2p_register_definitions" r
+             WHERE r."register_id" = 'a1a4d25a-1cd4-4356-abac-638239923092'
+               AND r."register_subject" IS DISTINCT FROM 'Household scores') THEN
+    RAISE EXCEPTION 'The score register must be named Household scores';
+  END IF;
 END $$;

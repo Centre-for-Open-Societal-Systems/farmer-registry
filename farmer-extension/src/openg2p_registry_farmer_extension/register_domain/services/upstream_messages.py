@@ -56,7 +56,7 @@ REWORDED: list[tuple[str, str, str]] = [
     ("upstream_relationship_option", r"relationship_to_the_head must be one of (.+)",
      "Relationship to the head: not one of the choices. Pick one from the list."),
     ("upstream_other_land_owner", r"other_land_owner must be Yes or No",
-     "Other land owner: answer Yes or No."),
+     "Another land owner in the household: answer Yes or No."),
     ("upstream_duplicate_commodity", r"Duplicate commodity entries are not allowed",
      "Crops: the same crop is listed twice. Keep one row per crop and remove the other."),
     ("upstream_duplicate_livestock", r"Duplicate livestock_type entries are not allowed",

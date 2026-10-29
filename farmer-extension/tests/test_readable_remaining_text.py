@@ -53,3 +53,25 @@ def test_task_and_history_words_are_sentence_case():
     for key, text in {"approver": "Approval", "skipped": "Skipped", "request_created": "Request created",
                       "stage_completed": "Stage completed"}.items():
         assert domain[key] == text
+
+
+_LABELS = (Path(__file__).resolve().parents[1]
+           / "src/openg2p_registry_farmer_extension/meta_data/zz-oan/87_readable_text_labels.sql").read_text(encoding="utf-8")
+
+
+def test_the_fourth_pass_labels_say_what_the_field_holds():
+    block = json.loads(re.search(r"'([{]\n.*?\n[}])'::jsonb", _LABELS, re.S).group(1))
+    assert block["other_land_owner"] == "Another land owner in the household"
+    assert block["enumerator_accuracy"] == "Enumerator GPS accuracy (metres)"
+    assert block["farmer_document"] == "Farmer or cooperative membership document"
+    assert block["total_land_crop_sharing_area"] == "Crop-sharing or other land (ha)"
+    assert block["Intake Form"] == "Intake form"
+    assert "Household scores" in _LABELS
+
+
+def test_code_texts_match_the_pack():
+    block = json.loads(re.search(r"'([{]\n.*?\n[}])'::jsonb", _LABELS, re.S).group(1))
+    assert block["BASIC"] == "Basic education"
+    assert block["INTERMEDIARY"] == "Intermediate (middle school)"
+    assert block["CROP_SHARE"] == "Sharecropper"
+    assert block["SELF"] == "Head of household"
