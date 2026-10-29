@@ -429,7 +429,7 @@ def main() -> None:
     parser.add_argument("--media", type=Path, default=MEDIA)
     parser.add_argument("--coops-source", type=Path, default=COOPS_SOURCE, help="the v3 cooperative list, keyed by v3 region number")
     parser.add_argument("--coops-out", type=Path, default=COOPS_TARGET)
-    parser.add_argument("--version", default="2026.10.30")
+    parser.add_argument("--version", default="2026.10.31")
     args = parser.parse_args()
     print(json.dumps(build(args.source, args.pack, args.out, args.media, args.version, args.geography, args.coops_source, args.coops_out), indent=2, ensure_ascii=False))
 
