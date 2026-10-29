@@ -104,6 +104,10 @@ WHERE "language_code" = 'en';
 UPDATE "public"."registry_languages"
 SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) ||
 '{
+ "rule_choice": "{label}: choose one of {choices}.",
+ "rule_fayda_missing": "{label}: answered Yes, but no {fayda} is entered. Enter the {fayda}, or answer No.",
+ "rule_location": "{label}: the place chosen is not in the Master Data list. Choose the region, zone, woreda and kebele again.",
+ "upstream_link_not_found": "{register} not found. Check the {register_lower} ID.",
  "region_name": "Region name",
  "zone_name": "Zone name",
  "woreda_name": "Woreda name",
