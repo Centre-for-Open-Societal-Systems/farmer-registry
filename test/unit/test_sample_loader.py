@@ -131,8 +131,11 @@ def test_each_person_is_one_farmer_intake_heads_first_with_their_household(loade
 def test_the_farmer_sections_carry_the_person_and_their_farm(loader):
     head = plan(loader)[0]
     s, farmer_id = head["sections"], head["farmer_id"]
-    assert s["farmer_name"] == [{"internal_record_id": farmer_id, "first_name": "Given1", "middle_name": "Father1",
-                                 "last_name": "Assefa", "language_spoken": "TIGRINYA"}]
+    person = s["farmer_personal_details"][0]
+    assert {k: person[k] for k in ("internal_record_id", "first_name", "middle_name", "last_name", "language_spoken")} == {
+        "internal_record_id": farmer_id, "first_name": "Given1", "middle_name": "Father1",
+        "last_name": "Assefa", "language_spoken": "TIGRINYA"}
+    assert "farmer_name" not in s
     assert s["farmer_identity"][0]["foundational_id"] == "502628318720"
     assert s["farmer_phones"][0]["phone_number"] == "0941923320"
     assert s["farmer_location"][0]["geo_code_hierarchy_json"]["hierarchy"][-1]["level_value_id"] == "ET01010102"

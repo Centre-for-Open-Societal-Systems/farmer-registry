@@ -67,7 +67,7 @@ UPDATE g2p_register_sections SET section_ui_schema = pg_temp.oan_multi_choice(
     section_ui_schema::jsonb,'{"source_of_income":"income_sources","water_source":"water_sources",
     "livestock_water_source":"livestock_water_sources","machinery_type":"machinery_types"}'::jsonb)
 WHERE section_id IN (
-  'farmer_identity', 'farmer_identity_verification', 'farmer_name', 'farmer_personal_details',
+  'farmer_identity', 'farmer_identity_verification', 'farmer_personal_details',
   'farmer_socio_economic_health', 'farmer_location', 'farmer_photo', 'farmer_phones', 'farmer_documents',
   'farmer_household_lookup', 'household_information', 'farmer_membership', 'farmer_lands',
   'farmer_land_summary', 'farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake',

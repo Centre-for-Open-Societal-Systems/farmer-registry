@@ -10,6 +10,7 @@ WITH oan (language_code, labels) AS (
     "farmer_identity": "Identity",
     "farmer_name": "Name",
     "farmer_personal_details": "Personal Details",
+    "farmer_personal_information": "Personal information",
     "first_name_eng": "First Name (English)",
     "fathers_name_eng": "Father''s Name (English)",
     "grandfathers_name_eng": "Grandfather''s Name (English)",

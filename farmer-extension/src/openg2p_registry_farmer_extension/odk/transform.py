@@ -9,7 +9,7 @@ import json
 # Absolute: tests load this file by path, with no parent package.
 from openg2p_registry_farmer_extension.register_domain.name_rules import name_problems
 
-SECTIONS = ("farmer_household_lookup", "farmer_identity", "farmer_name",
+SECTIONS = ("farmer_household_lookup", "farmer_identity",
     "farmer_personal_details", "farmer_photo", "farmer_phones",
     "farmer_socio_economic_health", "household_information", "hh_members",
     "farmer_location", "farmer_lands", "farmer_crops_intake",
@@ -149,7 +149,7 @@ def intake_sections(d):
     reference = d.get("farmer_reference_id_section") or d.get("farmer_reference_id") or {}
     reference = reference.get("farmer_reference_id") if isinstance(reference, dict) else reference
     output = {key: [] for key in SECTIONS}
-    output[SECTIONS[4]] = [{}]
+    output[SECTIONS[3]] = [{}]
     output[SECTIONS[0]] = [clean({"is_household_head":is_head,"link_internal_record_id":household_id})]
     output[SECTIONS[1]] = [clean({"foundational_id":fin,"rid":national.get("national_rid"),
         "odk_farmer_id":reference,"has_national_id":boolean(national.get("national_id")),
@@ -164,19 +164,21 @@ def intake_sections(d):
         "last_name_local":personal.get("grandfather_name_other") or personal.get("grandfather_name_amharic")}
     if problems := name_problems(names):
         raise ValueError("ODK name: " + "; ".join(problems))
+    # One personal information section: the names, the language and the
+    # personal details travel in a single row.
     output[SECTIONS[2]] = [clean({"first_name":first,"middle_name":middle,"last_name":last,
         "first_name_local":personal.get("first_name_other") or personal.get("first_name_amharic"),
         "middle_name_local":personal.get("father_name_other") or personal.get("father_name_amharic"),
         "last_name_local":personal.get("grandfather_name_other") or personal.get("grandfather_name_amharic"),
-        "language_spoken":language,"local_language":code(locale.get("local_language"), LANGUAGES)})]
-    output[SECTIONS[3]] = [clean({"gender":gender,"birth_date":day(personal.get("date_of_birth")),
+        "language_spoken":language,"local_language":code(locale.get("local_language"), LANGUAGES),
+        "gender":gender,"birth_date":day(personal.get("date_of_birth")),
         "birth_date_ec":day(personal.get("date_of_birth_ec")),"estimated_age":personal.get("age"),
         "marital_status":code(socio.get("marital_status")),"has_personal_phone":boolean(personal.get("has_personal_phone") or personal.get("phone_number")),
         "farming_type":code(personal.get("farming_type"), {"CROP_FARMING":"CROP","LIVESTOCK_FARMING":"LIVESTOCK","MIXED_FARMING":"MIXED"}),
         "emails":[{"address":str(personal["email"]).strip(),"is_primary":True}] if personal.get("email") else None})]
     photo = (d.get("farmer_photo_section") or {}).get("farmer_photo") or personal.get("farmer_photo") or d.get("farmer_photo")
     if photo:
-        output[SECTIONS[4]] = [{"record_image_document_id":photo}]
+        output[SECTIONS[3]] = [{"record_image_document_id":photo}]
     for key, kind in (("primary_phone_number","PRIMARY"),("secondary_phone_number","SECONDARY"),("other_phone_number","OTHER")):
         phone = str(personal.get(key) or "").strip().replace(" ", "").replace("-", "")
         if phone.startswith("+251"):
@@ -184,8 +186,8 @@ def intake_sections(d):
         elif phone.startswith("251"):
             phone = phone[3:]
         if phone:
-            output[SECTIONS[5]].append({"phone_number":phone,"phone_type":kind,"country_code":"ET","is_primary":kind=="PRIMARY"})
-    output[SECTIONS[6]] = [clean({"education_level":code(socio.get("education_level"),{"READ_WRITE":"CAN_READ_AND_WRITE"}),
+            output[SECTIONS[4]].append({"phone_number":phone,"phone_type":kind,"country_code":"ET","is_primary":kind=="PRIMARY"})
+    output[SECTIONS[5]] = [clean({"education_level":code(socio.get("education_level"),{"READ_WRITE":"CAN_READ_AND_WRITE"}),
         "income_sources":codes(socio.get("income_source"),INCOME),
         "source_of_income":single(codes(socio.get("income_source"),INCOME)),
         "source_of_income_other":socio.get("other_income_source"),
@@ -213,18 +215,18 @@ def intake_sections(d):
         if members:
             heads = [m for m in members if m.get("is_head")]
             head_name = full_name if is_head else " ".join(str(heads[0].get(k) or "") for k in ("first_name","middle_name","last_name")).strip() if heads else questions.get("household_head_name")
-            output[SECTIONS[7]] = [clean({"household_head":head_name,"size_of_group":len(members),
+            output[SECTIONS[6]] = [clean({"household_head":head_name,"size_of_group":len(members),
                 "number_of_male_members":sum(m.get("gender")=="MALE" for m in members),
                 "number_of_female_members":sum(m.get("gender")=="FEMALE" for m in members),
                 "other_land_owner":any((m.get("hh_member_land_info") or {}).get("hh_member_land_info_repeat") for m in raw_members),
                 "other_farmer_in_household":boolean(((d.get("other_farmers_in_hh") or {}).get("other_farmers_in_hh_section") or d.get("other_farmers_in_hh") or {}).get("additional_farmers")),
                 "father_included":boolean(questions.get("father_included")),"mother_included":boolean(questions.get("mother_included"))})]
-    output[SECTIONS[8]] = members
+    output[SECTIONS[7]] = members
     gps = d.get("farmer_location") or d.get("location") or {}
-    output[SECTIONS[9]] = [location(locale, gps.get("location") if isinstance(gps,dict) else gps)]
+    output[SECTIONS[8]] = [location(locale, gps.get("location") if isinstance(gps,dict) else gps)]
     lands = rows((d.get("land_info") or {}).get("land_info_repeat")) or rows(d.get("land_info_repeat"))
     for land in lands:
-        output[SECTIONS[10]].append(clean({"internal_record_id":land.get("oan_land_id"),"land_id":land.get("land_id"),
+        output[SECTIONS[9]].append(clean({"internal_record_id":land.get("oan_land_id"),"land_id":land.get("land_id"),
             "land_ownership_type":code(land.get("land_ownership")),"land_size":number(land.get("total_land_area") or land.get("land_area")),
             "unit":code(land.get("land_unit") or "HECTARE"),"certificate_storage_id":land.get("land_certificate"),
             "land_kebele":land.get("land_kebele"),"farming_type":code(land.get("farming_type") or personal.get("farming_type"),
@@ -255,7 +257,7 @@ def intake_sections(d):
         if item:
             input_rows.append(dict(item, **link))
     for crop in crop_rows:
-        output[SECTIONS[11]].append(clean({"link_internal_record_id":child_land(crop,lands),
+        output[SECTIONS[10]].append(clean({"link_internal_record_id":child_land(crop,lands),
             "commodity":code(crop.get("crop_name_rep") or crop.get("crop_name"),CROPS,"CROP_"),
             "planted_date":day(crop.get("crop_date")),"season":code(crop.get("crop_season"),prefix="SEASON_"),
             "water_sources":codes(crop.get("crop_water_source"),WATER),
@@ -277,23 +279,23 @@ def intake_sections(d):
             access_to_finance=boolean(farm_inputs.get("access_to_finance") or farm_inputs.get("finance_access")),finance_access_types=codes(farm_inputs.get("finance_access_type") or farm_inputs.get("finance")),
             finance_access_type=single(codes(farm_inputs.get("finance_access_type") or farm_inputs.get("finance"))),
             irrigation_type=code(farm_inputs.get("irrigation_type")))
-        output[SECTIONS[12]].append(clean(record))
+        output[SECTIONS[11]].append(clean(record))
     for animal in animal_rows:
-        output[SECTIONS[13]].append(clean({"link_internal_record_id":child_land(animal,lands),
+        output[SECTIONS[12]].append(clean({"link_internal_record_id":child_land(animal,lands),
             "livestock_type":code(animal.get("animal_rep") or animal.get("animal"),prefix="LSTK_"),
             "head_count":int(animal["num_animals"]) if animal.get("num_animals") not in (None,"") else None,
             "water_sources":codes(animal.get("livestock_water_source"),WATER),
             "livestock_system":code(animal.get("livestock_system")),"gender":code(animal.get("gender")),
             "season":code(animal.get("season"),prefix="SEASON_"),"collected_date":day(animal.get("collected_date")),
             "body_condition":code(animal.get("body_condition")),"production_type":code(animal.get("production_type"))}))
-    output[SECTIONS[14]] = [clean({"is_primary_cooperative_member":boolean(membership.get("primary_cooperative")),
+    output[SECTIONS[13]] = [clean({"is_primary_cooperative_member":boolean(membership.get("primary_cooperative")),
         "primary_cooperative_name":membership.get("other_primary_cooperative") if str(membership.get("name_of_primary_cooperative", "")).lower()=="other" else membership.get("name_of_primary_cooperative"),
         "is_cooperative_union_member":boolean(membership.get("coop_union")),"cooperative_union_name":membership.get("other_coop_union") if str(membership.get("name_of_coop_union") or membership.get("name_of_union") or "").lower()=="other" else membership.get("name_of_coop_union") or membership.get("name_of_union"),
         "is_farmer_cluster_member":boolean(membership.get("farmer_cluster")),"farmer_cluster_role":code(membership.get("farmer_role")),
         "primary_commodity":code(membership.get("primary_commodity"),CROPS,"CROP_")})]
     doc = national.get("identity_document") or national.get("identity_document_image")
     doc_type = code(national.get("identity_document_type"))
-    output[SECTIONS[15]] = [clean({"identity_document_type":doc_type})]
+    output[SECTIONS[14]] = [clean({"identity_document_type":doc_type})]
     if doc:
-        output[SECTIONS[15]][0]["oan_documents"] = {SECTIONS[15]:{"identity_document_1":doc}}
+        output[SECTIONS[14]][0]["oan_documents"] = {SECTIONS[14]:{"identity_document_1":doc}}
     return output

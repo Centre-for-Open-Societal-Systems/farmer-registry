@@ -73,6 +73,15 @@ WHERE "section_id" IN (
 DELETE FROM "public"."g2p_register_schemas" WHERE "register_id" = 'd2a7c3e4-5b6f-4a8e-9c1d-2e3f4a5b6c7d';
 DELETE FROM "public"."g2p_register_definitions" WHERE "register_id" = 'd2a7c3e4-5b6f-4a8e-9c1d-2e3f4a5b6c7d';
 
+-- The Name section, merged into personal information (12_form_sections.sql):
+-- its attachments on the farmer record and on the intake form, then the
+-- section itself. Data saved under it moves in 21_renamed_section_data.sql.
+DELETE FROM "public"."g2p_register_ui_tab_sections"
+WHERE "tab_section_id" IN ('farmer_farmer_tab__farmer_name');
+DELETE FROM "public"."g2p_intake_form_ui_tab_sections"
+WHERE "tab_section_id" IN ('farmer_intake__farmer_name');
+DELETE FROM "public"."g2p_register_sections" WHERE "section_id" IN ('farmer_name');
+
 -- The enumerator, consent-request and consent-receipt tabs of the earlier
 -- farmer form, and the retired "Farmer Web Intake" form with its nine tabs.
 -- Their sections stay on the farmer record's own tabs where upstream puts them.
