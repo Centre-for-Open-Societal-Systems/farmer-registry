@@ -33,6 +33,28 @@ source auth strategies ignore this key, so ODK credentials can sit beside it:
 - A signing connector with no key fails the delivery, so it never sends an unsigned message.
 - The environment variables `CONNECTOR_REGISTRY_SIGNATURE_KEY_PEM`, `_KEY_ID` and `_ALGORITHM` are a fallback. The published chart cannot set them.
 
+**Admin access.** The published API and UI have no login. `admin_auth` follows the OpenG2P
+service pattern (Keycloak `staff` realm; a confidential client defines the admin client role;
+tokens are validated via JWKS), as the Consent Manager and AWE do:
+
+| Route | Access |
+| --- | --- |
+| `/health*`, `/metrics`, `/webhook*` | Open. Webhooks are verified by each connector's verifier; the hub delivers in-cluster. |
+| `/metadata/admin-auth` | Open: the UI's login settings. |
+| Everything else (`/connectors`, `/runs`, `/dlq`, `/metadata`, `/docs`, `/openapi.json`) | Bearer token from the issuer with client role `REGISTRY_CONNECTOR_ADMIN` on client `registry-connector`. No token or an invalid one is 401, no role is 403. |
+
+Settings come from `CONNECTOR_ADMIN_AUTH_ISSUER`, `_JWKS_URL`, `_CLIENT_ID`, `_ROLE` and
+`_UI_CLIENT_ID`, else from `admin-auth.json` (baked at
+`/etc/openg2p-registry-connector-extension/admin-auth.json`, because the published chart passes
+no extra environment). Without an issuer the protected routes answer 503, never open. The
+Keycloak clients, the role and its mappings (`admin` user, the client's service account) are
+provisioned by keycloak-init in oan-helm.
+
+`docker/registry-connector-ui` is the published UI behind the same login (keycloak-js, public
+client `registry-connector-ui`): it signs in, refuses a user without the role, and adds the
+bearer token to the UI's API calls. Scripts calling the API use a client-credentials token of
+the `registry-connector` service account.
+
 **Shared code.** The same code is in livestock-registry and cropsown-registry under
 `docker/registry-connector/`. Change all three together.
 
