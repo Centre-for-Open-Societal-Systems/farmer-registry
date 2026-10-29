@@ -69,7 +69,7 @@ union parent is not a region of the geography. A row whose region has no match i
 and listed in the build report (none are, against the ETH-OAN pack). The animal, number of
 animals and livestock water source questions are required for mixed farmers as well as
 livestock farmers, for the farmer and for household members. Output:
-`odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.31`;
+`odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.31.1`;
 `test/unit/test_odk_mds_form.py` checks the build against a small pack and
 `farmer-extension/tests/test_odk_mds_codes.py` the transform's pass-through.
 
