@@ -28,6 +28,8 @@ from openg2p_registry_farmer_extension.register_domain.services.household_submis
 )
 from sqlalchemy import select
 
+from .direct_approval import DirectApprovalClosed
+
 FARMER_REGISTER_MNEMONIC = "Farmer"
 
 MESSAGES = {
@@ -149,7 +151,7 @@ def check_farmer_household(farmers: list, household, members: list, messages: di
     validate_household_roster(household, members)
 
 
-class HouseholdCheckedIntakeFormDataService(G2PFarmerIntakeFormDataService):
+class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, G2PFarmerIntakeFormDataService):
     """The farmer extension's intake service, with the farmer household check."""
 
     async def finalize_submission_with_session(self, submission_id: str, session, *args, **kwargs):

@@ -32,6 +32,9 @@ from openg2p_registry_core.services.g2p_register_hierarchical_service import (
 )
 from pydantic_core import to_jsonable_python
 
+# Absolute: tests load this file by path, with no parent package.
+from oan_farmer_registry_extension.register_domain.services.direct_approval import DirectApprovalClosed
+
 
 class JsonSafeHierarchyService(G2PRegisterHierarchicalService):
     async def enrich_record_hierarchy(
@@ -45,7 +48,7 @@ class JsonSafeHierarchyService(G2PRegisterHierarchicalService):
         return to_jsonable_python(result)
 
 
-class JsonSafeOutgestChangeRequestService(G2PRegisterChangeRequestService):
+class JsonSafeOutgestChangeRequestService(DirectApprovalClosed, G2PRegisterChangeRequestService):
     async def _fanout_outgest_for_change_request(self, change_request, session):
         definition, register_class, _ = await self._get_register_class_and_schema(
             change_request.register_id, session
