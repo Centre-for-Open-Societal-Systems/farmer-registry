@@ -20,7 +20,7 @@
 # farmer images and the openg2p-registry chart dependency.
 #
 # Build context = repo root.
-ARG BASE_IMAGE_VERSION=1.2.2-rc.557
+ARG BASE_IMAGE_VERSION=1.2.2-rc.614
 FROM openg2p/openg2p-registry-sanity-tests:${BASE_IMAGE_VERSION}
 
 COPY test/sanity/sanity/fixtures.py                /app/sanity/fixtures.py

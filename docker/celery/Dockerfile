@@ -1,7 +1,7 @@
 # The registry platform's celery image with the Farmer extension installed, as
 # OpenG2P's registry repositories build theirs. Build from the repository root:
 #   docker build -f docker/celery/Dockerfile .
-ARG BASE_IMAGE_VERSION=1.2.2-rc.557
+ARG BASE_IMAGE_VERSION=1.2.2-rc.614
 FROM openg2p/openg2p-registry-celery:${BASE_IMAGE_VERSION}
 
 # Selects this registry's domain extension; the platform publishes it as

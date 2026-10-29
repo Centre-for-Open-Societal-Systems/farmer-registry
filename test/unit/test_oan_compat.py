@@ -118,7 +118,7 @@ def test_main_verifies_package_and_keeps_jobs_unless_chart_only(tmp_path, monkey
     calls = []
     def verify(path):
         calls.append(path)
-        return {'version': '1.0.0-dev.18'}
+        return {'version': '1.0.0-dev.19'}
     monkeypatch.setattr(oan_compat, 'verify', verify)
     for mode in ('false', 'true'):
         monkeypatch.setenv('OAN_CHART_ONLY', mode)

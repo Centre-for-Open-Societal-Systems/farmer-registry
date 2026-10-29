@@ -1,5 +1,5 @@
 {
-  "platformVersion": "1.2.2-rc.557",
+  "platformVersion": "1.2.2-rc.614",
   "parents": {
     "staff-api": {
       "dockerfile": "docker/staff-api/Dockerfile",
