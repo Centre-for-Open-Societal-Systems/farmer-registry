@@ -29,7 +29,7 @@ The deployed dev register page requests `page_size: 20`. That is the number of r
 
 The staging 500-row seed remains present. The remaining staging rows are reported only as an aggregate; their origin was not classified by this check. Intake and history are separate tables and are excluded from registered-farmer totals.
 
-Sample farmers come only from the ETH-OAN country pack in openg2p-data. The db-seed image carries no sample loader; nothing in this repository is a sample population source.
+Sample farmers come only from the ETH-OAN country pack in openg2p-data. The db-seed image's sample loader reads them from Master Data and the pack (off on every environment); nothing in this repository is a sample population source.
 
 Deployment preparation disables geography, sample, image and bulk fixture loading on every environment. This merge does not reload 500 people, truncate a register or reconcile existing Farmer locations. Expanding the dev demo population is a separate explicit data operation, with canonical geography and duplicate handling, rather than an automatic deployment hook.
 
