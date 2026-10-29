@@ -29,7 +29,7 @@ WITH sections (section_id, section_register_id, mnemonic, description, is_list, 
              "widget-data-placeholder": "0912345678", "widget-data-validation": {"maxLength": 20}},
             {"widget": "text", "column-key": "country_code", "widget-type": "input", "widget-label": "country_code",
              "widget-readonly": false, "widget-data-path": "country_code", "widget-data-placeholder": "ET",
-             "widget-data-validation": {"maxLength": 3}},
+             "widget-data-validation": {"maxLength": 4}},
             {"widget": "boolean", "column-key": "is_primary", "widget-type": "input", "widget-label": "is_primary",
              "widget-readonly": false, "widget-data-path": "is_primary"}]}]}]}]}'),
 
