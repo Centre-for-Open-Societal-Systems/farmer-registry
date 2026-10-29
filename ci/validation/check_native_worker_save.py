@@ -141,7 +141,7 @@ async def save_probe(Engine, task):
         classified = SimpleNamespace(register_id=binding[0], intake_form_id=binding[1], partner_id=None)
         sections = await task._get_ordered_form_sections(classified.intake_form_id, session)
         expect([s.section_mnemonic for s in sections], list(SECTIONS), "ordered native section binding")
-        finance_section = next(section for section in sections if section.section_mnemonic == SECTIONS[12])
+        finance_section = next(section for section in sections if section.section_mnemonic == SECTIONS[SECTIONS.index("farmer_farm_inputs_intake")])
         seeded_rules = collect_rules((section.section_register_id, section.section_ui_schema) for section in sections)
         finance_rule = seeded_rules.get(finance_section.section_register_id, {}).get("finance_access_types")
         farm_inputs_service = G2PRegisterDomainFactory.get_component().get_domain_service("FarmInputs")
@@ -172,7 +172,7 @@ async def save_probe(Engine, task):
             source = fixture(document_id)
             data = intake_sections(source)
             if scenario == "invalid_parent":
-                data[SECTIONS[11]][1]["link_internal_record_id"] = str(uuid.uuid4())
+                data["farmer_crops_intake"][1]["link_internal_record_id"] = str(uuid.uuid4())
             transformed = task._validate_transformed_data_json(classified, SimpleNamespace(transformed_data_json=data), sections)
             submission_id = await task._create_submission_async(classified, session)
             try:
@@ -208,7 +208,7 @@ async def save_probe(Engine, task):
                 expect((inputs.water_sources, inputs.livestock_water_sources), (["WS_RAINFED", "WS_IRRIGATION_GROUND"], ["WS_WELL_GROUND", "WS_SURFACE_WATER"]), "crop and livestock water multi-choice preservation")
                 expect((inputs.machinery_type, inputs.finance_access_type, animal.head_count), (None, None, 2), "no invented singular choices and livestock count")
                 expect([(d.document_id, d.label) for d in docs], [(document_id, "identity_document_1")], "scoped identity attachment and unrelated-document exclusion")
-                doc_section = next(s.section_id for s in sections if s.section_mnemonic == SECTIONS[15])
+                doc_section = next(s.section_id for s in sections if s.section_mnemonic == SECTIONS[SECTIONS.index("farmer_documents")])
                 expect(docs[0].section_id, doc_section, "identity attachment section")
                 services = importlib.import_module("openg2p_registry_extensions.register_domain.services")
                 expect(len(services._cache["rules"]) > 0, True, "OAN rule metadata loaded by actual native save")
