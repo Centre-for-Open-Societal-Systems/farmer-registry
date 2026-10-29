@@ -56,7 +56,6 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "fayda_fin": "Fayda ID (FAN or FIN)",
  "foundational_id": "Fayda ID (FAN or FIN)",
  "FAYDA": "Fayda ID (FAN or FIN)",
- "fayda_fin_format": "Enter the Fayda ID as a 12-digit FIN or a 16-digit FAN, using digits only. Verification is optional; upload ID evidence for approval.",
  "disabled": "Has a disability",
  "is_diseased": "Affected by disease or pests",
  "size_of_group": "Household size",

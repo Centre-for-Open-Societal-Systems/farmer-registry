@@ -10,8 +10,9 @@
 -- the staff UI resolves it (the language's domain translation, then core's,
 -- else the string itself) and must not hold an underscore or be an
 -- ALL-CAPS code. The document slots (identity_document_1 and the like) are
--- storage keys that the documents widget never shows; its title is checked
--- instead. The search and filter schemas get the same test.
+-- storage keys that the form does not show; they are translated for the record's
+-- document list and history, and checked near the end of this file. The search
+-- and filter schemas get the same test.
 
 DO $$
 DECLARE
@@ -183,10 +184,13 @@ BEGIN
 
   -- The document slot labels, the two upload-widget words and the task and
   -- approval history words each have English text, and none keeps an old name.
-  SELECT string_agg(k, ', ') INTO found
-  FROM unnest(ARRAY['identity_document_1', 'bank_document_1', 'land_document_1', 'representative_document_1',
-                    'farmer_document_1', 'other_document_1', 'identity_document_5', 'other_document_5',
-                    'approver', 'skipped', 'request_created', 'stage_completed']) k
+  SELECT string_agg(k, ', ' ORDER BY k) INTO found
+  FROM (SELECT p || '_document_' || n AS k
+        FROM unnest(ARRAY['identity', 'bank', 'land', 'representative', 'farmer', 'other']) p,
+             generate_series(1, 5) n
+        UNION ALL
+        SELECT unnest(ARRAY['approver', 'skipped', 'request_created', 'request_approved', 'stage_started',
+                            'stage_completed', 'in_review', 'completed'])) w(k)
   WHERE NOT EXISTS (SELECT 1 FROM "public"."registry_languages" l
                     WHERE l."is_default" AND COALESCE(NULLIF(l."domain_translation"::jsonb ->> k, ''), '') <> '');
   IF found IS NOT NULL THEN

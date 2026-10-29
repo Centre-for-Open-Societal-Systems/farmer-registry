@@ -25,7 +25,8 @@
 -- ("widget-variant": "oan-documents"), which lists the category's files and
 -- adds a new one to the first free slot, and the others render nothing
 -- ("oan-document-slot"). Upload, storage and reload stay upstream's. The slot
--- labels are keys, not translated, so they read back to the same field.
+-- labels are keys (translated to plain text, for example "Identity document 1",
+-- in 87_readable_remaining_text.sql), so they read back to the same field.
 -- The kind of document in each category is a Master Data list of the country
 -- pack (ETH-OAN: IDENTITY_DOCUMENT_TYPE, BANK_DOCUMENT_TYPE, LAND_DOCUMENT_TYPE,
 -- REPRESENTATIVE_DOCUMENT_TYPE, FARMER_DOCUMENT_TYPE, DOCUMENT_PURPOSE), like
