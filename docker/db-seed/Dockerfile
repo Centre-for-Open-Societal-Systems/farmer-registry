@@ -18,11 +18,11 @@ COPY farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data/ /seed
 
 # Templates are uploaded with LOAD_TEMPLATES=true under their file names
 # (*.j2 directly in /seed/templates). The DCI response is the Farmer template
-# plus OAN's block (templates/parts/), so it follows the Farmer template.
+# plus OAN's block (templates/blocks/), so it follows the Farmer template.
 COPY farmer-extension/src/openg2p_registry_farmer_extension/templates/ /seed/templates/
 COPY docker/db-seed/build_dci_template.py /oan/build_dci_template.py
 RUN python3 /oan/build_dci_template.py /seed/templates/openg2p_farmer_to_dci.json.j2 \
-        /seed/templates/parts/farmer_reference_block.j2 /seed/templates/farmer_dci_search_response.j2
+        /seed/templates/blocks/farmer_reference_block.j2 /seed/templates/farmer_dci_search_response.j2
 
 COPY farmer-extension/reporting/ /seed/oan-reporting/
 COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql

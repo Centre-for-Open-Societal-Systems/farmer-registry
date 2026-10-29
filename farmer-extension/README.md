@@ -22,7 +22,7 @@ name on these modules. `__init__.py` makes the platform's
 | `register_domain/services/` | the farmer domain services, each extended with the derived values (`derivations.py`) and the section widgets' value rules (`widget_rules.py`); the FarmerPhone service |
 | `app.py` | the farmer initializer, plus migration of OAN registers |
 | `openg2p_farmer/` | OpenG2P's Farmer extension code, unchanged |
-| `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `zz-oan/` (applied after the Farmer tree) and OAN's templates; `templates/parts/` holds the block built into the DCI response |
+| `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `zz-oan/` (applied after the Farmer tree) and OAN's templates; `templates/blocks/` holds the block built into the DCI response |
 | `tests/` | `uv run --no-project --with pytest pytest farmer-extension/tests` |
 
 Images are built FROM the registry platform images (`docker/<component>/Dockerfile`).
