@@ -19,16 +19,16 @@ MAX_LENGTH = 100
 
 # field -> the name as the form calls it
 NAME_LABELS = {
-    "first_name": "First Name",
-    "middle_name": "Father's Name",
-    "last_name": "Grandfather's Name",
-    "first_name_local": "First Name (own language)",
-    "middle_name_local": "Father's Name (own language)",
-    "last_name_local": "Grandfather's Name (own language)",
+    "first_name": "First name (English)",
+    "middle_name": "Father's name (English)",
+    "last_name": "Grandfather's name (English)",
+    "first_name_local": "First name (farmer's language)",
+    "middle_name_local": "Father's name (farmer's language)",
+    "last_name_local": "Grandfather's name (farmer's language)",
 }
 
-MESSAGE = "{label}: use letters only (spaces, apostrophes and hyphens allowed)"
-MESSAGE_TOO_LONG = "{label}: too long. Enter at most {max} characters"
+MESSAGE = "{label}: use letters only (spaces, apostrophes and hyphens allowed)."
+MESSAGE_TOO_LONG = "{label}: too long. Enter at most {max} characters."
 
 
 def name_issue(value) -> str | None:

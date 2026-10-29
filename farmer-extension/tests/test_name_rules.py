@@ -119,11 +119,11 @@ def test_server_rejects_blank_names_but_the_record_check_leaves_them_to_the_form
 
 def test_message_is_readable():
     assert name_rules.name_problems({"first_name": "E2E Test"}) == [
-        "First Name: use letters only (spaces, apostrophes and hyphens allowed)"]
+        "First name (English): use letters only (spaces, apostrophes and hyphens allowed)."]
     assert name_rules.name_problems({"middle_name_local": "Abebe1", "last_name": "Kebede"}) == [
-        "Father's Name (own language): use letters only (spaces, apostrophes and hyphens allowed)"]
+        "Father's name (farmer's language): use letters only (spaces, apostrophes and hyphens allowed)."]
     assert name_rules.name_problems({"last_name": "a" * 101}) == [
-        "Grandfather's Name: too long. Enter at most 100 characters"]
+        "Grandfather's name (English): too long. Enter at most 100 characters."]
     assert name_rules.name_problems({"first_name": "Abebe", "last_name_local": "ቀበደ"}) == []
 
 

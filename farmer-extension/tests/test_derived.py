@@ -105,7 +105,7 @@ def test_farmer_search_text_is_ids_and_names_only():
 def test_local_name_in_a_geez_language_must_be_geez():
     assert derived.local_name_problems({"language_spoken": "AMHARIC", "first_name_local": "አበበ"}) == []
     problem, = derived.local_name_problems({"language_spoken": "TIGRINYA", "first_name_local": "Abebe"})
-    assert problem.startswith("First Name (own language): Tigrinya is written in Ethiopic (Ge'ez) script")
+    assert problem.startswith("First name (farmer's language): Tigrinya is written in Ethiopic (Ge'ez) script")
 
 
 def test_local_name_in_a_latin_language_is_kept_as_typed():
@@ -114,4 +114,4 @@ def test_local_name_in_a_latin_language_is_kept_as_typed():
 
 def test_local_name_needs_its_language():
     problem, = derived.local_name_problems({"language_spoken": None, "first_name_local": "Caaltuu"})
-    assert problem.startswith("Farmer's Language: the name is entered in the farmer's language, but no language is chosen")
+    assert problem.startswith("Farmer's language: the name is entered in the farmer's language, but no language is chosen")

@@ -35,7 +35,7 @@ def test_core_attribute_problems_join_without_splitting_quoted_values():
 def test_core_missing_master_data_is_actionable():
     text = "Attribute validation is enabled, but Master Data has no attribute values configured"
     assert reword(text) == upstream_messages.MDS_UNAVAILABLE
-    assert "Retry" in reword(text) and "support" in reword(text)
+    assert "Try again" in reword(text) and "support" in reword(text)
 
 
 def test_core_mds_transport_failure_does_not_expose_transport_details():
@@ -88,7 +88,7 @@ def test_every_upstream_message_is_reworded_or_already_says_what_to_do():
 
 def test_a_reworded_message_names_the_field_and_the_fix():
     assert reword("birth_date must not be in the future") == (
-        "Birth Date: the date is in the future. Enter the real birth date, today or earlier.")
+        "Birth date: the date is in the future. Enter the real birth date, today or earlier.")
 
 
 def test_a_field_named_in_the_message_is_shown_by_its_label():
@@ -99,9 +99,9 @@ def test_a_field_named_in_the_message_is_shown_by_its_label():
 
 
 def test_missing_household_fields_are_listed_by_label():
-    words = {"size_of_group": "Household Size", "headship_type": "Headship Type"}
+    words = {"size_of_group": "Size of group", "headship_type": "Headship type"}
     assert reword("Required household fields missing: size_of_group, headship_type", words) == (
-        "Household: Household Size, Headship Type are empty. Fill them in before submitting.")
+        "Household: Size of group, Headship type are empty. Fill them in before submitting.")
 
 
 def test_a_language_rewords_by_key():
@@ -122,5 +122,5 @@ def test_every_entry_has_a_unique_key_and_a_valid_pattern():
 
 def test_the_member_count_message_keeps_its_numbers():
     assert reword("Members entered: 2 male / 1 female, but the household says 1 male / 2 female") == (
-        "Household Members: 2 male and 1 female are entered, but the household says 1 male and 2 female. "
+        "Household members: 2 male and 1 female are entered, but the household says 1 male and 2 female. "
         "Correct the members' gender or the household's counts so they match.")
