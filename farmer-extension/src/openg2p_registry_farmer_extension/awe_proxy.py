@@ -7,6 +7,9 @@ from openg2p_registry_core.controller_services import G2PAweProxyControllerServi
 from openg2p_registry_core.helpers import AWEClientError, AweHelper
 from sqlalchemy import text
 
+from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryException
+
+from .awe_error_message import awe_error_message
 from .awe_task_scope import ScopedAweTasksMixin
 
 _logger = logging.getLogger("oan-awe-task-scope")
@@ -17,6 +20,23 @@ class ScopedAweProxyControllerService(ScopedAweTasksMixin, G2PAweProxyController
 
     def _awe_helper(self):
         return AweHelper.get_component()
+
+    @staticmethod
+    def _wrap_awe_error(exc):
+        """The approval service's failure, said in words a person can act on.
+
+        The platform prefixes the error name and passes the service's raw reply
+        on, which can be JSON or an internal address. A reply that already
+        reads as a sentence is kept; anything else becomes a message that says
+        what to do, and the reply goes to the log.
+        """
+        _logger.warning("Approval service error %s (HTTP %s): %s", exc.error_code, exc.status_code, exc.message)
+        if exc.error_code == "AWE-007":
+            return G2PAweProxyControllerService._wrap_awe_error(exc)
+        return G2PRegistryException(
+            code=G2PRegistryErrorCodes.AWE_REQUEST_FAILED.value[1],
+            message=awe_error_message(exc.status_code, exc.message),
+        )
 
     async def _call_awe(self, call):
         try:

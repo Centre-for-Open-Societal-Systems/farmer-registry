@@ -153,9 +153,9 @@ def normalize_phone(number, country_code=None) -> tuple[str | None, str | None]:
 ETHIOPIC_SCRIPT_LANGUAGES = {"AMHARIC": "Amharic", "TIGRINYA": "Tigrinya"}
 _ETHIOPIC_NAME = re.compile(r"^[ሀ-፿ⶀ-⷟꬀-꬯ ]+$")
 LOCAL_NAME_LABELS = {
-    "first_name_local": "First Name",
-    "middle_name_local": "Father's Name",
-    "last_name_local": "Grandfather's Name",
+    "first_name_local": "First name",
+    "middle_name_local": "Father's name",
+    "last_name_local": "Grandfather's name",
 }
 
 
@@ -165,14 +165,14 @@ def local_name_problems(record: dict) -> list[str]:
     if "language_spoken" in record and not record.get("language_spoken") and any(
         str(record.get(field) or "").strip() for field in LOCAL_NAME_LABELS
     ):
-        return [("Farmer's Language: the name is entered in the farmer's language, but no language is chosen. "
-                 "Choose the language it is written in")]
+        return [("Farmer's language: the name is entered in the farmer's language, but no language is chosen. "
+                 "Choose the language it is written in.")]
     language = ETHIOPIC_SCRIPT_LANGUAGES.get(record.get("language_spoken") or "")
     if not language:
         return []
     return [
-        f"{label} (own language): {language} is written in Ethiopic (Ge'ez) script, and \"{value}\" is not. "
-        "Type the name in Ge'ez letters, or choose the farmer's language again"
+        f"{label} (farmer's language): {language} is written in Ethiopic (Ge'ez) script, and \"{value}\" is not. "
+        "Type the name in Ge'ez letters, or choose the farmer's language again."
         for field, label in LOCAL_NAME_LABELS.items()
         if (value := str(record.get(field) or "").strip()) and not _ETHIOPIC_NAME.match(value)
     ]
