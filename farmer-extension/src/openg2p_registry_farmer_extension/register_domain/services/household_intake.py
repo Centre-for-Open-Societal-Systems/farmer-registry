@@ -29,6 +29,7 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.h
 from sqlalchemy import select
 
 from .direct_approval import DirectApprovalClosed
+from .required_intake import RequiredFieldsMixin
 
 FARMER_REGISTER_MNEMONIC = "Farmer"
 
@@ -151,8 +152,15 @@ def check_farmer_household(farmers: list, household, members: list, messages: di
     validate_household_roster(household, members)
 
 
-class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, G2PFarmerIntakeFormDataService):
-    """The farmer extension's intake service, with the farmer household check."""
+class HouseholdCheckedIntakeFormDataService(
+    RequiredFieldsMixin, DirectApprovalClosed, G2PFarmerIntakeFormDataService
+):
+    """The farmer extension's intake service, with the farmer household check
+    and the required fields of every section (required_intake.py)."""
+
+    # A farmer who picked a registered household does not enter one: the
+    # household sections of the form are left empty.
+    picked_parent_skips = {FARMER_REGISTER_MNEMONIC: frozenset({"Household", "HouseholdMember"})}
 
     async def finalize_submission_with_session(self, submission_id: str, session, *args, **kwargs):
         submission = await self._get_submission_or_error(submission_id, session)
@@ -231,13 +239,14 @@ async def check_farmer_submission(submission_id: str, session, submission=None) 
     members = await rows(G2PIntakeFormHouseholdMember)
     _, _, messages = await _load()
     if submission is not None:
-        # Every section of the form, then the Fayda ID against other farmers
-        # (form_integrity.py), in one message.
-        from .form_integrity import check_fayda_id_unique, check_form_complete
+        # The Fayda ID against other farmers (form_integrity.py) and the head
+        # of the household, in one message. The required fields of every
+        # section are checked before this (required_intake.py).
+        from .form_integrity import check_fayda_id_unique
         from .widget_rules import _Say
 
         farmer = farmers[0] if farmers else None
-        problems = await check_form_complete(submission, submission.register_id, farmer, session, messages)
+        problems = []
         if farmer is not None:
             label = _Say(messages).label("foundational_id", "foundational_id")
             held = await check_fayda_id_unique(farmer, label, session, messages, submission_id=submission_id)
