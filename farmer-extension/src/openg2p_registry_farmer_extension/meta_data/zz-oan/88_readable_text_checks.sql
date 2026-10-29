@@ -180,4 +180,37 @@ BEGIN
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'A select shows the stored code instead of its display text: %', found;
   END IF;
+
+  -- The document slot labels, the two upload-widget words and the task and
+  -- approval history words each have English text, and none keeps an old name.
+  SELECT string_agg(k, ', ') INTO found
+  FROM unnest(ARRAY['identity_document_1', 'bank_document_1', 'land_document_1', 'representative_document_1',
+                    'farmer_document_1', 'other_document_1', 'identity_document_5', 'other_document_5',
+                    'approver', 'skipped', 'request_created', 'stage_completed']) k
+  WHERE NOT EXISTS (SELECT 1 FROM "public"."registry_languages" l
+                    WHERE l."is_default" AND COALESCE(NULLIF(l."domain_translation"::jsonb ->> k, ''), '') <> '');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'No English display text for: %', found;
+  END IF;
+
+  SELECT string_agg(k, ', ') INTO found
+  FROM unnest(ARRAY['common.remove', 'common.select']) k
+  WHERE NOT EXISTS (SELECT 1 FROM "public"."registry_languages" l
+                    WHERE l."is_default" AND COALESCE(NULLIF(l."core_translation"::jsonb ->> k, ''), '') <> '');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'No English platform text for: %', found;
+  END IF;
+
+  SELECT string_agg(t.k || '=' || t.v, '; ') INTO found
+  FROM "public"."registry_languages" l,
+       LATERAL (SELECT e.key AS k, e.value AS v FROM jsonb_each_text(l."domain_translation"::jsonb) e) t
+  WHERE l."is_default"
+    AND ((t.k IN ('disabled', 'is_diseased', 'size_of_group', 'is_primary', 'location_hierarchy', 'plus_code',
+                  'computation_scores', 'household_computation_scores')
+          AND t.v IN ('Disabled', 'Diseased', 'Size of group', 'Primary', 'Location hierarchy', 'Plus code',
+                      'Computation scores'))
+         OR t.v ~* 'fayda credential');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'A label still has its unclear or inconsistent wording: %', found;
+  END IF;
 END $$;

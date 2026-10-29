@@ -125,7 +125,7 @@ def test_has_national_id_with_a_fayda_id_is_accepted():
 ])
 def test_has_national_id_without_a_fayda_id_is_refused(record):
     assert coded_values.fayda_problem(record, SAY) == (
-        "Has national ID: answered Yes, but no Fayda ID is entered. Enter the Fayda ID, or answer No.")
+        "Has a Fayda ID: answered Yes, but no Fayda ID (FAN or FIN) is entered. Enter the Fayda ID (FAN or FIN), or answer No.")
 
 
 def test_a_partial_update_that_does_not_carry_the_fayda_id_is_not_judged():

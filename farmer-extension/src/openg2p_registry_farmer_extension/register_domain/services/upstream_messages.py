@@ -36,13 +36,13 @@ REWORDED: list[tuple[str, str, str]] = [
     ("upstream_poverty_score", r"poverty_score must be between 0 and 100 when provided",
      "Poverty score: must be from 0 to 100. Enter a score in that range or leave it empty."),
     ("upstream_size_of_group", r"size_of_group must be at least 1",
-     "Size of group: must be at least 1. Count the head and every member living in the household."),
+     "Household size: must be at least 1. Count the head and every member living in the household."),
     ("upstream_children", r"number_of_children must be between 0 and size_of_group",
-     "Number of children: must be from 0 up to the size of group. Correct the count or the size."),
+     "Number of children: must be from 0 up to the household size. Correct the count or the size."),
     ("upstream_elderly", r"number_of_elderly_members must be between 0 and size_of_group",
-     "Number of elderly members: must be from 0 up to the size of group. Correct the count or the size."),
+     "Number of elderly members: must be from 0 up to the household size. Correct the count or the size."),
     ("upstream_male_female", r"number_of_male_members \+ number_of_female_members must not exceed size_of_group",
-     ("Male and female members: together they are more than the size of group. Correct the counts "
+     ("Male and female members: together they are more than the household size. Correct the counts "
      "or the size.")),
     ("upstream_no_head", r"One household member must be marked as the head \(is_head\)",
      "Household members: no member is marked as the head. Tick Head of household for the head."),

@@ -65,7 +65,7 @@ Messages are the English defaults.
 | Rule | Where | Message |
 | --- | --- | --- |
 | Gender, Farmer's language and Marital status are on their Master Data lists (`GENDER`, `LANGUAGE`, `MARITAL_STATUS`), whether or not core's own check is on. Master Data unreadable: skipped with a logged warning | API (`coded_values.py`) | "Gender: choose one of Male, Female." |
-| Has national ID answered Yes has a Fayda ID in the same record | API | "Has national ID: answered Yes, but no Fayda ID is entered. Enter the Fayda ID, or answer No." |
+| Has a Fayda ID answered Yes has a Fayda ID (FAN or FIN) in the same record | API | "Has a Fayda ID: answered Yes, but no Fayda ID (FAN or FIN) is entered. Enter the Fayda ID (FAN or FIN), or answer No." |
 | the kebele id the location picker saved is a Master Data location | API | "Location: the place chosen is not in the Master Data list. Choose the region, zone, woreda and kebele again." |
 | Validate runs the checks Submit runs (required fields of every section, Fayda ID, household), so a draft Submit refuses is not reported valid | API (`household_intake.py`) | the same text Submit gives |
 | an unknown household id | API | "Household not found. Check the household ID." |
@@ -118,7 +118,7 @@ Messages are the English defaults.
 | Field | Rule | Where | Message |
 | --- | --- | --- | --- |
 | Map pin | inside Ethiopia; fills region → kebele, latitude, longitude, altitude | UI | "The pin is outside the country. Place it where the farmer lives." · "The location could not be filled from the map. Choose it in the location fields." |
-| Location hierarchy | required | UI | upstream "required" |
+| Administrative hierarchy | required | UI | upstream "required" |
 | Latitude / Longitude | −90…90 / −180…180 | UI, API | "Latitude: 100 is too large. Enter 90 or less." |
 | Country Code | 2 capital letters, default ET | UI, API | "Country Code: Enter the 2-letter country code, ET for Ethiopia." |
 | Plus Code | Open Location Code | UI, API | "Plus Code: Enter a valid Plus Code (for example 35AB+14 or 8FVC9G8F+6W)." |
