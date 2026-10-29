@@ -35,6 +35,9 @@ class Initializer(FarmerInitializer):
         from .history_change_request_source import install as install_history_change_request_source
 
         install_history_change_request_source()
+        from .history_without_change_request import install as install_history_without_change_request
+
+        install_history_without_change_request()
 
     def migrate_database(self, args):
         super().migrate_database(args)
