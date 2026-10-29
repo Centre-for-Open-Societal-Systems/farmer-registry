@@ -446,3 +446,30 @@ BEGIN
     RAISE EXCEPTION 'Livestock Count Date widgets must block future dates';
   END IF;
 END $$;
+
+-- Every name widget carries the name rule (19_name_rules.sql): the letters
+-- pattern, the 100-character limit and its message. The pattern is also run
+-- here, so a pattern the database cannot read, or one that lets digits in,
+-- fails the seed.
+DO $$
+DECLARE
+  found text;
+BEGIN
+  SELECT string_agg(DISTINCT s.section_id || '.' || COALESCE(w->>'column-key', w->>'widget-id'), ', ') INTO found
+  FROM public.g2p_register_sections s,
+    jsonb_path_query(s.section_ui_schema,
+      'lax $.** ? (@.widget != null && (@."widget-id" == "first_name" || @."widget-id" == "middle_name" || @."widget-id" == "last_name"
+        || @."widget-id" == "first_name_local" || @."widget-id" == "middle_name_local" || @."widget-id" == "last_name_local"
+        || @."column-key" == "first_name" || @."column-key" == "middle_name" || @."column-key" == "last_name"
+        || @."column-key" == "first_name_local" || @."column-key" == "middle_name_local" || @."column-key" == "last_name_local"))') w
+  WHERE (w #>> '{widget-data-validation,pattern}') IS NULL
+     OR (w #>> '{widget-data-validation,maxLength}') IS DISTINCT FROM '100'
+     OR (w #>> '{widget-data-validation,patternMessage}') IS DISTINCT FROM 'name_letters_only'
+     OR NOT ('Abebe Kebede' ~ (w #>> '{widget-data-validation,pattern}'))
+     OR NOT ('O''Neil' ~ (w #>> '{widget-data-validation,pattern}'))
+     OR 'E2E Test' ~ (w #>> '{widget-data-validation,pattern}')
+     OR '  ' ~ (w #>> '{widget-data-validation,pattern}');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Name widgets must carry the name rule (19_name_rules.sql): %', found;
+  END IF;
+END $$;

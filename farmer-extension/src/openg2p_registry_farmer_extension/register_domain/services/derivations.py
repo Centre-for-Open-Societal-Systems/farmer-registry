@@ -40,6 +40,7 @@ from ..derived import (
     local_name_problems,
     normalize_phone,
 )
+from ..name_rules import NAME_LABELS, name_problems
 
 _logger = logging.getLogger("oan-derivations")
 
@@ -107,7 +108,7 @@ def _farmer_record(record: dict) -> None:
         record.update(geo_names(_json(record.get("geo_code_hierarchy_json"))))
     if "is_household_head" in record:
         record["is_household_head"] = as_bool(record.get("is_household_head"))
-    if problems := local_name_problems(record):
+    if problems := name_problems(record) + local_name_problems(record):
         validation_error("; ".join(problems))
 
 
@@ -357,6 +358,13 @@ class LivestockDerivations(_DatesOnly):
 
 class HouseholdMemberDerivations(_DatesOnly):
     ethiopic_dates = (("birth_date", "birth_date_ec"),)
+
+    async def derive(self, records: list[dict]) -> None:
+        members = {f: NAME_LABELS[f] for f in ("first_name", "middle_name", "last_name")}
+        for record in records:
+            if problems := name_problems(record, members):
+                validation_error("; ".join(problems))
+        await super().derive(records)
 
 
 def _household_record(record: dict) -> None:

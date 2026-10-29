@@ -30,6 +30,7 @@ WITH oan (language_code, labels) AS (
     "farmer_photo_too_large": "The photo is larger than {size} KB after resizing. Choose a smaller image, or take the photo again.",
     "farmer_photo_unreadable": "The image could not be read. Choose another photo, or take it again.",
     "ethiopic_script_only": "Use Ethiopic (Ge''ez) script",
+    "name_letters_only": "Use letters only. Spaces, apostrophes and hyphens are allowed, up to 100 characters. Remove digits and other symbols",
     "is_psnp_user": "PSNP Beneficiary",
     "primary_commodity": "Primary Commodity",
     "land_id": "Land ID",
