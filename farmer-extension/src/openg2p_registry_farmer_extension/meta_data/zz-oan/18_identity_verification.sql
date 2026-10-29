@@ -17,7 +17,6 @@ WITH sections (section_id, mnemonic, description, ui) AS (
         "widget-label": "identity_verification", "widget-readonly": true,
         "widget-data-path": {
           "internalRecordId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.internal_record_id",
-          "foundationalId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.foundational_id",
           "lastAuthenticatedOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authenticated_at",
           "lastAuthenticationStatus": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status",
           "expiryDate": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.authentication_expiry_at"},
