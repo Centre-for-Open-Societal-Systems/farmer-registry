@@ -165,7 +165,7 @@ userinfo and compares `individual_id` with the FIN. Core keeps the sign-in
 transactions in Redis, so the staff API needs
 `REGISTRY_CORE_REGISTRANT_AUTH_REDIS_URL`.
 
-The pinned platform (`1.2.2-rc.557`) calls `get_async_session_maker` in the
+The pinned platform (`1.2.2-rc.614`) calls `get_async_session_maker` in the
 registrant authentication service without importing it;
 `register_domain/services/registrant_auth_compat.py` gives the module that name
 until a platform image does (a no-op then).

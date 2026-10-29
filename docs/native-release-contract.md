@@ -10,7 +10,7 @@ Run `python ci/validation/check_release_pins.py` for a read-only source report.
 [native-release-contract.json](../ci/validation/native-release-contract.json)
 records the four image parents, the registry platform images
 `openg2p/openg2p-registry-{staff-api,partner-api,celery,db-seed}`, at the
-central platform pin 1.2.2-rc.557, and checks their exact ARG/FROM lines and the
+central platform pin 1.2.2-rc.614, and checks their exact ARG/FROM lines and the
 immutable central archive provenance. Existing legacy RP/chart lock checks are
 retained for staging. The separate UI addon pin keeps its own package contract.
 

@@ -1,6 +1,6 @@
 dependencies:
 - name: openg2p-registry
   repository: https://openg2p.github.io/openg2p-helm
-  version: 1.2.2-rc.557
+  version: 1.2.2-rc.614
 digest: sha256:1074ba20f4edda13c5d541993cb7cca846cd8066d8131e104b45b973cafba88d
 generated: "2026-10-25T00:24:11.0851182+05:30"

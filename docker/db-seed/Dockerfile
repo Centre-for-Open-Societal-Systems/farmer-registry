@@ -5,7 +5,7 @@
 # policy, templates and reporting views, and the Farmer sample loader (run only
 # with LOAD_SAMPLE_DATA=true, which no environment enables: ci/deploy/deployment.py).
 # Build from the repository root:  docker build -f docker/db-seed/Dockerfile .
-ARG BASE_IMAGE_VERSION=1.2.2-rc.557
+ARG BASE_IMAGE_VERSION=1.2.2-rc.614
 FROM openg2p/openg2p-registry-db-seed:${BASE_IMAGE_VERSION}
 
 # The platform image ships the reference registry's seed; only Farmer's is applied.

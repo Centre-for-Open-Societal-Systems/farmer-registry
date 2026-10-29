@@ -179,7 +179,7 @@ export default function Home() {
             style={{ backgroundImage: dashboardImage ? `url(${JSON.stringify(dashboardImage)})` : 'none' }}
         >
             <div className="relative">
-                <div className="mx-auto flex max-w-6xl flex-col items-center px-4 sm:px-6 py-8 sm:py-10 lg:py-12 space-y-10 sm:space-y-12 lg:space-y-14">
+                <div className="mx-auto flex w-full max-w-6xl xl:max-w-7xl flex-col items-center px-4 sm:px-6 py-8 sm:py-10 lg:py-12 space-y-10 sm:space-y-12 lg:space-y-14">
 
                     {/* stats cards */}
                     {useStatsCarousel ? (
@@ -212,19 +212,21 @@ export default function Home() {
                         action={activeStatsCard === 'tasks' ? undefined : viewAction}
                         anyOf={activeStatsCard === 'tasks' ? taskSearchAnyOf : undefined}
                         fallback={
-                            <div className="relative border border-primary-second flex h-14 w-4/5 items-center rounded-[10px] bg-neutral-second overflow-visible">
-                                <div className="relative flex items-center w-full h-full">
+                            <div className="relative border border-primary-second flex h-14 w-full min-w-0 md:w-4/5 items-center rounded-[10px] bg-neutral-second overflow-visible">
+                                <div className="relative flex items-center w-full min-w-0 h-full">
                                     <SearchBar
                                         placeholder={searchPlaceholders[activeStatsCard]}
                                         category={selectedRegister}
                                         onSearch={() => { }}
+                                        textClass="text-base sm:text-[20px]"
+                                        iconClassName="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6"
                                     />
                                     <div className="absolute inset-0 z-10 cursor-not-allowed" />
                                 </div>
                             </div>
                         }
                     >
-                        <div className="relative border border-primary-second flex h-14 w-4/5 items-center rounded-[10px] bg-neutral-second overflow-visible">
+                        <div className="relative border border-primary-second flex h-14 w-full min-w-0 md:w-4/5 items-center rounded-[10px] bg-neutral-second overflow-visible">
 
                             {(activeStatsCard === 'registers' || activeStatsCard === 'form-submissions') &&
                                 registerList?.length > 0 && (
@@ -255,6 +257,8 @@ export default function Home() {
                                 placeholder={searchPlaceholders[activeStatsCard]}
                                 category={selectedRegister}
                                 onSearch={handleSearch}
+                                textClass="text-base sm:text-[20px]"
+                                iconClassName="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6"
                             />
                         </div>
                     </Can>

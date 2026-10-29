@@ -2,7 +2,7 @@
 
 The OAN extension adds Farmer, household, land, crop, livestock, membership and
 identity workflows to the published OpenG2P Farmer 1.2 runtime. The candidate
-uses platform **1.2.2-rc.557**. Forms use section schemas, registered widgets,
+uses platform **1.2.2-rc.614**. Forms use section schemas, registered widgets,
 themes and language metadata; behavior uses registered extension services.
 OpenG2P framework and worker sources remain unchanged.
 
