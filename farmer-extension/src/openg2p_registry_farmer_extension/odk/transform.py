@@ -6,7 +6,8 @@ location codes are invented when a submission omits them.
 """
 import json
 
-from ..register_domain.name_rules import name_problems
+# Absolute: tests load this file by path, with no parent package.
+from openg2p_registry_farmer_extension.register_domain.name_rules import name_problems
 
 SECTIONS = ("farmer_household_lookup", "farmer_identity", "farmer_name",
     "farmer_personal_details", "farmer_photo", "farmer_phones",
