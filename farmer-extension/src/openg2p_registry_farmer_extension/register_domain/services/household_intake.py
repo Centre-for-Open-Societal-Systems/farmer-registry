@@ -29,6 +29,7 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.h
 from sqlalchemy import select
 
 from .direct_approval import DirectApprovalClosed
+from .required_fields import RequiredFieldsMixin, unattended
 
 FARMER_REGISTER_MNEMONIC = "Farmer"
 
@@ -151,15 +152,30 @@ def check_farmer_household(farmers: list, household, members: list, messages: di
     validate_household_roster(household, members)
 
 
-class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, G2PFarmerIntakeFormDataService):
-    """The farmer extension's intake service, with the farmer household check."""
+class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFieldsMixin, G2PFarmerIntakeFormDataService):
+    """The farmer extension's intake service, with the farmer household check
+    and the required fields of every registry's form (required_fields.py, ahead
+    of the platform's service so its save check runs before the platform's; the
+    approval guard stays first, test_direct_approval.py)."""
 
     async def finalize_submission_with_session(self, submission_id: str, session, *args, **kwargs):
         submission = await self._get_submission_or_error(submission_id, session)
         register_definition = await self._get_register_definition(submission.register_id, session)
+        from ...odk.actor import ingest_active
+
+        # No user and no token: the ingestion worker (ODK, partners).
+        worker = not args and kwargs.get("bearer_token") is None
+        problems = await self.required_problems_for(submission, session)
+        if problems and (worker or ingest_active()):
+            # Left as a draft with the reason, for staff to complete and
+            # submit; failing the task would only retry the same form.
+            return await self.route_to_review(submission, problems, session)
         if getattr(register_definition, "register_mnemonic", None) == FARMER_REGISTER_MNEMONIC:
-            await check_farmer_submission(submission.submission_id, session, submission=submission)
-        if not args and kwargs.get("bearer_token") is None:
+            await check_farmer_submission(
+                submission.submission_id, session, submission=submission, required=problems)
+        elif problems:
+            validation_error("; ".join(problems))
+        if worker:
             # The ingestion worker finalizes without a user; its own client
             # token starts the approval workflow (odk/worker_token.py).
             from ...odk.worker_token import service_token
@@ -186,8 +202,10 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, G2PFarmerIntak
 
         from openg2p_registry_core.schemas.file_payload import DocumentAttachment
 
-        from ...odk.actor import ingest_actor
+        from ...odk.actor import PLATFORM_ACTOR, ingest_active, ingest_actor
 
+        # What the worker saves is checked whole at finalize (required_fields.py).
+        worker_save = created_by == PLATFORM_ACTOR or ingest_active()
         created_by = await ingest_actor(session, created_by)
         section = await self._get_section_or_error(section_id, session)
         payload = deepcopy(section_payload)
@@ -205,14 +223,16 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, G2PFarmerIntak
         from .intake_context import current_intake
 
         token = current_intake.set((session, submission_id))
+        gate = unattended.set(worker_save)
         try:
             return await super().save_intake_form_submission_with_session(
                 submission_id, section_id, payload, section_register_id, form_id,
                 register_id, created_by, session, documents=documents)
         finally:
             current_intake.reset(token)
+            unattended.reset(gate)
 
-async def check_farmer_submission(submission_id: str, session, submission=None) -> None:
+async def check_farmer_submission(submission_id: str, session, submission=None, required=None) -> None:
     # Lazy: the models import the services package when they load.
     from openg2p_registry_extensions.register_domain.models import (
         G2PIntakeFormFarmer,
@@ -237,7 +257,7 @@ async def check_farmer_submission(submission_id: str, session, submission=None) 
         from .widget_rules import _Say
 
         farmer = farmers[0] if farmers else None
-        problems = await check_form_complete(submission, submission.register_id, farmer, session, messages)
+        problems = list(required) if required is not None else await check_form_complete(submission, session, messages)
         if farmer is not None:
             label = _Say(messages).label("foundational_id", "foundational_id")
             held = await check_fayda_id_unique(farmer, label, session, messages, submission_id=submission_id)

@@ -42,6 +42,12 @@ def collector(classified, enriched) -> str:
     return _text(survey.get("enumerator_name")) or _text(system.get("submitterName")) or PLATFORM_ACTOR
 
 
+def ingest_active() -> bool:
+    """True while the worker is processing an ingest (it saves and finalizes
+    without a person)."""
+    return _ingest_id.get() is not None
+
+
 async def ingest_actor(session, created_by):
     """The creator to record for a submission the worker is creating now."""
     ingest_id = _ingest_id.get()
