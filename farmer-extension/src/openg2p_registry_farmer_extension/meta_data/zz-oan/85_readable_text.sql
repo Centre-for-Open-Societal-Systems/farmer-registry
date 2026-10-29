@@ -52,8 +52,7 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "SOI_GOVERNMENT_NGO_SUPPORT": "Government or non-governmental organisation support",
  "SOI_OTHERS": "Other",
  "OTHERS": "Other",
- "NON_RELATIVE": "Non-relative",
- "INTERMEDIARY": "Intermediate"
+ "NON_RELATIVE": "Non-relative"
 }'::jsonb)::json
 WHERE "language_code" = 'en';
 
