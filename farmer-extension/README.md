@@ -264,3 +264,16 @@ so the approver sees it); a registered household must already name the farmer
 as its head, with no other farmer of it marked head, both at submit and when a
 farmer change request is approved. The message names the change request to
 raise first.
+
+## Data migrations in the metadata layer
+
+`zz-oan/17_multi_choice.sql` (block 1) and `zz-oan/21_renamed_section_data.sql` rewrite
+rows in the register, history and intake tables that earlier seeds wrote. They are data
+migrations, not configuration: retire them once every environment has applied them.
+
+## Seed data lives in openg2p-data
+
+The db-seed image carries configuration only. The OAN theme (palette, background images,
+logo) and the sample data are checked out from COSS `openg2p-data` at one pinned
+`OPENG2P_DATA_REF`; `scripts/themes/build_theme_sql.py farmer` renders the theme into
+`zz-oan/90_oan_theme.sql`. The factory `OpenG2P-theme` row is inserted with `ON CONFLICT DO NOTHING`.

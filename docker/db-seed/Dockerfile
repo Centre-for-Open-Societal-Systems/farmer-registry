@@ -24,8 +24,8 @@ COPY farmer-extension/reporting/ /seed/oan-reporting/
 COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql
 
 # Sample data (LOAD_SAMPLE_DATA=true). The platform image checks out openg2p-data
-# at /openg2p-data; this one checks out our fork at a pinned commit in its place,
-# the source of the ETH-OAN pack's farm facts (samples/farms.json). The sample
+# at /openg2p-data; this one checks out the COSS copy at a pinned commit in its place:
+# the ETH-OAN pack's farm facts (samples/farms.json) and the OAN theme. The sample
 # people come from Master Data's API.
 ARG OPENG2P_DATA_REPO=https://github.com/Centre-for-Open-Societal-Systems/openg2p-data.git
 ARG OPENG2P_DATA_REF=dc7e7bf69087b4684a3608fdd4bf98100aab77a8
@@ -40,16 +40,8 @@ RUN rm -rf /openg2p-data && mkdir -p /openg2p-data && cd /openg2p-data \
 # when the platform pin moves past it.
 COPY --chmod=755 docker/db-seed/mds_client.py docker/db-seed/load_sample_data.py /seed/
 
-# OAN theme: the staff-portal theme (palette and background image) is data in
-# openg2p-data (themes/oan_theme). Render this registry's entry into the seed
-# tree; it runs after the registry configuration and points it at oan_theme.
-# The ref is a commit SHA; move the repository to the COSS copy once merged there.
-ARG OAN_THEME_DATA_REPO=https://github.com/asmitonweb/openg2p-data.git
-ARG OAN_THEME_DATA_REF=3c44950dac7d7752054057d1f3500784af596c10
-RUN mkdir -p /tmp/oan-theme-data /seed/meta_data/zz-oan \
- && cd /tmp/oan-theme-data \
- && git init -q \
- && git fetch -q --depth 1 "${OAN_THEME_DATA_REPO}" "${OAN_THEME_DATA_REF}" \
- && git checkout -q FETCH_HEAD \
- && python3 scripts/themes/build_theme_sql.py farmer > /seed/meta_data/zz-oan/90_oan_theme.sql \
- && cd / && rm -rf /tmp/oan-theme-data
+# OAN theme: the staff-portal theme (palette, background image, logo) is data in
+# openg2p-data (themes/oan_theme), checked out above at the one pinned commit.
+# Render this registry's entry into the seed tree; it sorts after the registry
+# configuration (zz-oan/) and points it at the oan_theme row.
+RUN mkdir -p /seed/meta_data/zz-oan  && cd /openg2p-data  && python3 scripts/themes/build_theme_sql.py farmer > /seed/meta_data/zz-oan/90_oan_theme.sql
