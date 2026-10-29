@@ -124,3 +124,18 @@ def test_the_member_count_message_keeps_its_numbers():
     assert reword("Members entered: 2 male / 1 female, but the household says 1 male / 2 female") == (
         "Household members: 2 male and 1 female are entered, but the household says 1 male and 2 female. "
         "Correct the members' gender or the household's counts so they match.")
+
+
+def test_an_unknown_household_id_says_the_household_was_not_found():
+    text = "link_internal_record_id '00000000-0000-4000-8000-000000000000' does not exist in register 'Household'"
+    assert reword(text) == "Household not found. Check the household ID."
+
+
+def test_an_unknown_parent_of_another_register_names_that_register():
+    assert reword("link_internal_record_id 'x' does not exist in register 'FarmerPhone'") == (
+        "Farmer phone not found. Check the farmer phone ID.")
+
+
+def test_an_unknown_household_message_uses_the_translation():
+    text = "link_internal_record_id 'x' does not exist in register 'Household'"
+    assert reword(text, {"upstream_link_not_found": "No such {register_lower}."}) == "No such household."

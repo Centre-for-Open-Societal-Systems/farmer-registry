@@ -125,6 +125,13 @@ def ethiopic_of(value) -> str | None:
 ETHIOPIA_CALLING_CODE = "251"
 
 
+def valid_country_code(code) -> bool:
+    """A phone row's country: the 2-letter country code (ET) or the dialing
+    code (+251, 251). The 3-letter ETH is neither."""
+    text = str(code or "").strip()
+    return bool(re.fullmatch(r"[A-Za-z]{2}|\+?[0-9]{1,4}", text))
+
+
 def normalize_phone(number, country_code=None) -> tuple[str | None, str | None]:
     """(national number, E.164) for a phone number as typed.
 
@@ -137,7 +144,7 @@ def normalize_phone(number, country_code=None) -> tuple[str | None, str | None]:
     if not raw:
         return None, None
     country = str(country_code or "ET").upper()
-    if country not in ("ET", "ETH"):
+    if country not in ("ET", "ETH", "251", "+251"):
         return raw, raw if raw.startswith("+") else None
     digits = raw.lstrip("+")
     digits = digits.removeprefix(ETHIOPIA_CALLING_CODE)

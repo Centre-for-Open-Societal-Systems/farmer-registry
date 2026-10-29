@@ -60,6 +60,16 @@ Messages are the English defaults.
 | Fayda RID | 29 digits | UI, API | "Fayda RID: The Fayda RID has 29 digits. Enter all 29, numbers only, as printed on the registration slip." |
 | ODK Farmer ID, Pula ID | ≤ 64 | UI, API | "…: too long. Enter at most 64 characters." |
 
+### Master Data values (every channel)
+
+| Rule | Where | Message |
+| --- | --- | --- |
+| Gender, Farmer's language and Marital status are on their Master Data lists (`GENDER`, `LANGUAGE`, `MARITAL_STATUS`), whether or not core's own check is on. Master Data unreadable: skipped with a logged warning | API (`coded_values.py`) | "Gender: choose one of Male, Female." |
+| Has national ID answered Yes has a Fayda ID in the same record | API | "Has national ID: answered Yes, but no Fayda ID is entered. Enter the Fayda ID, or answer No." |
+| the kebele id the location picker saved is a Master Data location | API | "Location: the place chosen is not in the Master Data list. Choose the region, zone, woreda and kebele again." |
+| Validate runs the checks Submit runs (required fields of every section, Fayda ID, household), so a draft Submit refuses is not reported valid | API (`household_intake.py`) | the same text Submit gives |
+| an unknown household id | API | "Household not found. Check the household ID." |
+
 ### Photo
 
 | Rule | Where | Message |
@@ -72,9 +82,10 @@ Messages are the English defaults.
 
 | Rule | Where | Message |
 | --- | --- | --- |
-| number required on every row | API | "Phone Number: a row has no number. Enter the number, or remove the row" |
-| a valid Ethiopian mobile number: optional `+251`, `251` or `0`, then nine digits starting with 9 or 7 (`19_phone_rules.sql`; `90_checks.sql` runs the pattern) | UI, API | "Phone Number: Enter an Ethiopian mobile number, for example 0912345678 or +251912345678" · "Phone Number: 0912… is not a phone number. Enter it as 0912345678 or +251912345678" |
-| no duplicates; one primary | API | "Phone Number: the same number is listed twice. Keep one row for it and remove the other" · "Primary: more than one number is marked primary. Tick Primary for one number only" |
+| number required on every row | API | "Phone number: a row has no number. Enter the number, or remove the row." |
+| country is the 2-letter country code (`ET`) or a dialing code (`+251`, `251`); `ETH` is refused | API | "Country code: ETH is not a country code. Enter the 2-letter country code, for example ET, or the dialing code, for example +251." |
+| a valid Ethiopian mobile number: optional `+251`, `251` or `0`, then nine digits starting with 9 or 7 (`19_phone_rules.sql`; `90_checks.sql` runs the pattern) | UI, API | "Phone Number: Enter an Ethiopian mobile number, for example 0912345678 or +251912345678" · "Phone number: 0912… is not a phone number. Enter it as 0912345678 or +251912345678." |
+| no duplicates; one primary | API | "Phone number: the same number is listed twice. Keep one row for it and remove the other." · "Primary: more than one number is marked primary. Tick Primary for one number only." |
 
 ### Socio-economic and Health
 

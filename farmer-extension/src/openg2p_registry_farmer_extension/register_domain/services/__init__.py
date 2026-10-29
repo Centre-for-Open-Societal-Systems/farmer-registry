@@ -15,6 +15,7 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from .coded_values import coded_value_problems
 from .derivations import DERIVATIONS, Derivations
 from .domain_bounds import check_domain_bounds
 from .household_intake import install_farmer_household_check  # noqa: F401
@@ -67,8 +68,16 @@ class _reworded:
         return self
 
     async def __aexit__(self, kind, error, trace):
-        if isinstance(error, G2PRegistryException) and error.message                 and error.code == G2PRegistryErrorCodes.REQUEST_VALIDATION_ERROR.value[1]:
+        if not (isinstance(error, G2PRegistryException) and error.message):
+            return False
+        if error.code == G2PRegistryErrorCodes.REQUEST_VALIDATION_ERROR.value[1]:
             validation_error(reword(error.message, self.messages))
+        elif error.code == G2PRegistryErrorCodes.INVALID_REQUEST.value[1]:
+            # Core's parent-link errors (an unknown household): reworded
+            # only when this module knows the message, otherwise unchanged.
+            plain = reword(error.message, self.messages)
+            if plain != error.message:
+                validation_error(plain)
         return False
 
 
@@ -80,6 +89,7 @@ class WidgetRuleValidation:
 
     _derive_first = False
     _checks_fayda_id = False
+    _checks_master_data = False
 
     async def validate_domain_attributes(self, records: list[dict]):
         rules, registers, messages = await _load()
@@ -99,6 +109,11 @@ class WidgetRuleValidation:
             problems = [p for record in records for p in check_record(record, field_rules, messages)]
         say = _Say(messages)
         problems += check_domain_bounds(records, self.register_mnemonic(), field_rules, say)
+        if type(self)._checks_master_data:
+            # Gender, language and marital status against their Master Data
+            # lists, the location against Master Data's, and a Fayda ID for
+            # "Has national ID: Yes" (coded_values.py).
+            problems += await coded_value_problems(records, say)
         if not problems and type(self)._checks_fayda_id:
             # The same Fayda ID on another farmer (form_integrity.py), said
             # by the field's label instead of the table's unique constraint.
@@ -128,7 +143,8 @@ def _with_widget_rules(name: str, base: type) -> type:
     derivations = DERIVATIONS.get(name[len(_PREFIX):], Derivations)
     return type(name, (WidgetRuleValidation, derivations, base),
                 {"__module__": __name__, "_upstream_validates": upstream, "_derive_first": True,
-                 "_checks_fayda_id": name == _PREFIX + "Farmer"})
+                 "_checks_fayda_id": name == _PREFIX + "Farmer",
+                 "_checks_master_data": name == _PREFIX + "Farmer"})
 
 
 # One subclass per farmer domain service, under the same name, so every

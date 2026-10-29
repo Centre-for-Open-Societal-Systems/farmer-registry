@@ -53,6 +53,9 @@ MESSAGES = {
     "rule_required": "{label}: this is required. Fill it in on every row before saving.",
     "rule_year_range": "{label}: enter a whole year from 1900 to {year}, or leave it empty.",
     "rule_future_date": "{label}: the date is in the future. Choose today or an earlier date.",
+    "rule_choice": "{label}: choose one of {choices}.",
+    "rule_fayda_missing": "{label}: answered Yes, but no {fayda} is entered. Enter the {fayda}, or answer No.",
+    "rule_location": "{label}: the place chosen is not in the Master Data list. Choose the region, zone, woreda and kebele again.",
 }
 
 _TYPES = {
