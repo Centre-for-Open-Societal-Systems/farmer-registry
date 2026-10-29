@@ -15,7 +15,8 @@ message a user gets. The rule this document holds the form to:
 | Staff UI (OAN widgets) | file type and size, photo type and size, slots per document category, map pin inside Ethiopia | `ui/staff-ui/overrides/src/oan/widgets/` | under the widget, `documents_*`, `farmer_photo_*`, `geo_point_*` |
 | Server, OAN widget rules | the same metadata rules again, plus the value's **kind** (yes/no, whole number, number, date, static choice) and **required table columns** | `register_domain/services/widget_rules.py` | `rule_*` keys, REQ-VAL-001 |
 | Server, farmer extension | domain rules (dates not in the future, age vs birth date, household roster, duplicates) | upstream `farmer-extension` (never changed) | reworded by `register_domain/services/upstream_messages.py`, `upstream_*` keys, REQ-VAL-001 |
-| Server, OAN submit (whole form) | every section's required fields, evaluated with the UI's show/hide/require rules, including sections never opened; required document categories; the household (picked **or** new, roster) | `register_domain/services/form_integrity.py`, `household_intake.py` | one list, `<Section>: <Field> is required. Open <Section>, fill it in and save, then submit again.` (`form_*`, `household_both`, `household_none`) |
+| Server, OAN required fields on save (Next) | the section being saved: every `widget-required` field (and every `require` rule that matches) is filled, evaluated like the UI (hidden fields are never required, the last show/hide wins, conditions may read other registers of the submission); a list section whose table is `widget-required` holds a row; a required document is attached. Applies to every register of every intake form, for a person or an API client. Not applied to the ingestion worker (ODK, partners), which is checked whole at submit. A household section left entirely blank is not refused (the farmer may pick a registered household) | `register_domain/services/required_fields.py` (mixin first in the registered intake service), `form_integrity.py`; the section metadata is the only source | `<Section>: <Field> is required. Fill it in before pressing Next.` (`save_missing`, `save_document_missing`, `save_list_missing`) |
+| Server, OAN required fields on submit (whole form) | every section's required fields over every register the form holds (farmer, membership, household information, document categories) and "at least one row" of a required list section, including sections never opened; a household's sections only once the farmer's form holds a new household (the household check says one of the two is needed). The ingestion worker does not fail: the form is left as a draft with the reason in its remarks for staff to complete | `required_fields.py`, `form_integrity.py`, `household_intake.py` (the household and Fayda ID checks join the same message) | one list, `<Section>: <Field> is required. Open <Section>, fill it in and save, then submit again.` (`form_missing`, `form_document_missing`, `form_list_missing`); the draft's remarks read `Not submitted: required information is missing. ...` (`review_reason`) |
 | Server, OAN Fayda ID | the FIN/FAN is not held by another register record or by another submitted form waiting for approval (section save, change request, submit) | `register_domain/services/form_integrity.py` | `fayda_fin_registered`, `fayda_fin_pending`: names the holder and the record |
 | Server, OAN person names | the farmer's and household members' names take letters (any script, Ge'ez included), spaces, apostrophes and hyphens, at most 100 characters, the rule Crop applies; from every source (web, ODK, partner). The widgets carry the same rule as one pattern | `register_domain/name_rules.py`, `derivations.py`, `odk/transform.py`; pattern in `19_name_rules.sql` | `name_letters_only`; "First Name: use letters only (spaces, apostrophes and hyphens allowed)" |
 | Server, registry core | file bytes against the documents profile; MDS codes (`REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES`) | upstream core | core's own text for files (see [Files](#files-and-documents)); OAN wording for codes (`attribute_messages.py`) |
@@ -72,7 +73,7 @@ Messages are the English defaults.
 | Rule | Where | Message |
 | --- | --- | --- |
 | number required on every row | API | "Phone Number: a row has no number. Enter the number, or remove the row" |
-| a valid Ethiopian number | API | "Phone Number: 0912… is not a phone number. Enter it as 0912345678 or +251912345678" |
+| a valid Ethiopian mobile number: optional `+251`, `251` or `0`, then nine digits starting with 9 or 7 (`19_phone_rules.sql`; `90_checks.sql` runs the pattern) | UI, API | "Phone Number: Enter an Ethiopian mobile number, for example 0912345678 or +251912345678" · "Phone Number: 0912… is not a phone number. Enter it as 0912345678 or +251912345678" |
 | no duplicates; one primary | API | "Phone Number: the same number is listed twice. Keep one row for it and remove the other" · "Primary: more than one number is marked primary. Tick Primary for one number only" |
 
 ### Socio-economic and Health
@@ -154,18 +155,27 @@ must be changed together.
 ## Functional analysis
 
 **Save per section.** Each section saves on its own and is checked on its own.
-A section's fields that are required are enforced by the UI only, because
-whether they apply depends on conditions the UI evaluates and on sections the
-user has not reached yet. Table rows are whole records, so their required
-columns are enforced by the server too, for new rows and for any row that
-sends a required column blank.
+The staff UI saves "Next" as a draft with its required checks off, so the
+server now refuses it: the section's required fields, evaluated with the same
+show/hide/require rules the UI uses, must be filled (`required_fields.py`).
+The ingestion worker (ODK, partners) is the exception: it saves what its source
+holds and is checked whole at submit. Table rows are whole records, so their
+required columns are enforced by the server too, for new rows and for any row
+that sends a required column blank.
 
 **Household.** The farmer form carries Household Information and Household
 Members. Parent links are resolved by upstream within the submission: with one
 household in it, the farmer and the members are attached to it; members need a
 household in the same submission.
 
-**Finalize.** Upstream's whole-household check (members must match the size,
+**Submit.** Every section of the form is checked, over every register it holds
+(`required_fields.py`), so a section never opened, or a register with no
+record at all (a farmer with no membership), cannot reach approval. When the
+ingestion worker submits a form that lacks required fields it leaves the
+submission a draft and writes the reason in its remarks, instead of failing the
+task and retrying the same form; staff open the draft, complete it and submit.
+
+**Finalize (household).** Upstream's whole-household check (members must match the size,
 a head is required) runs at finalize only for household-form submissions. On
 the farmer form the same rules run per save in the members table, which catches
 a wrong head or wrong gender counts, but **a farmer submission can be finalized

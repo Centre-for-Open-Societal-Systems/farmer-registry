@@ -539,3 +539,92 @@ BEGIN
     RAISE EXCEPTION 'The Fayda ID label must read "Fayda ID"';
   END IF;
 END $$;
+
+-- Format rules of the mandatory identifiers, written in the metadata once and
+-- read by the staff UI and the server alike. The patterns are run here, so one
+-- the database cannot read, or one that lets a wrong value in, fails the seed.
+DO $$
+DECLARE
+  found text;
+BEGIN
+  -- Fayda ID: a 12-digit FIN or a 16-digit FAN, digits only.
+  SELECT string_agg(DISTINCT s.section_id, ', ') INTO found
+  FROM public.g2p_register_sections s,
+    jsonb_path_query(s.section_ui_schema, 'lax $.** ? (@."widget-id" == "foundational_id" && @.widget != null)') w
+  WHERE (w #>> '{widget-data-validation,pattern}') IS NULL
+     OR NOT ('123456789012' ~ (w #>> '{widget-data-validation,pattern}'))
+     OR NOT ('1234567890123456' ~ (w #>> '{widget-data-validation,pattern}'))
+     OR '12345678901' ~ (w #>> '{widget-data-validation,pattern}')
+     OR '1234567890123' ~ (w #>> '{widget-data-validation,pattern}')
+     OR '12345678901234567' ~ (w #>> '{widget-data-validation,pattern}')
+     OR '12345678901A' ~ (w #>> '{widget-data-validation,pattern}');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'The Fayda ID must take a 12-digit FIN or a 16-digit FAN only: %', found;
+  END IF;
+
+  -- Phone number: an Ethiopian mobile number (19_phone_rules.sql).
+  SELECT string_agg(DISTINCT s.section_id, ', ') INTO found
+  FROM public.g2p_register_sections s,
+    jsonb_path_query(s.section_ui_schema,
+      'lax $.** ? (@."column-key" == "phone_number" && @.widget == "phone")') w
+  WHERE s.section_id = 'farmer_phones'
+    AND ((w #>> '{widget-data-validation,pattern}') IS NULL
+     OR (w #>> '{widget-data-validation,patternMessage}') IS DISTINCT FROM 'phone_ethiopian_mobile'
+     OR NOT ('0912345678' ~ (w #>> '{widget-data-validation,pattern}'))
+     OR NOT ('+251912345678' ~ (w #>> '{widget-data-validation,pattern}'))
+     OR NOT ('912345678' ~ (w #>> '{widget-data-validation,pattern}'))
+     OR NOT ('0712345678' ~ (w #>> '{widget-data-validation,pattern}'))
+     OR '12345' ~ (w #>> '{widget-data-validation,pattern}')
+     OR 'abcdefghi' ~ (w #>> '{widget-data-validation,pattern}')
+     OR '0812345678' ~ (w #>> '{widget-data-validation,pattern}')
+     OR '09123456789' ~ (w #>> '{widget-data-validation,pattern}'));
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'The phone number must take an Ethiopian mobile number only (19_phone_rules.sql): %', found;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.g2p_register_sections s,
+      jsonb_path_query(s.section_ui_schema, 'lax $.** ? (@."column-key" == "phone_number")') w
+    WHERE s.section_id = 'farmer_phones') THEN
+    RAISE EXCEPTION 'The phone number column is missing from the farmer phone numbers section';
+  END IF;
+END $$;
+
+-- Required fields are enforced by the server from the metadata alone
+-- (register_domain/services/required_fields.py), reading each required widget
+-- at "<register id>.<field>" of its own section's register. A required widget
+-- of an intake form section that points anywhere else would be required in
+-- the browser and never on the server, so none may.
+DO $$
+DECLARE
+  found text;
+BEGIN
+  SELECT string_agg(DISTINCT s.section_id || '.' || COALESCE(w->>'widget-id', w->>'column-key'), ', ') INTO found
+  FROM public.g2p_register_sections s,
+    jsonb_path_query(s.section_ui_schema,
+      'lax $.** ? (@."widget-required" == true && @."widget-id" != null && @.widget != null)') w
+  WHERE s.section_id IN (SELECT section_id FROM public.g2p_intake_form_ui_tab_sections)
+    AND NOT s.is_list
+    AND w->>'widget' NOT IN ('table', 'dialog-table', 'register-lookup', 'parent-lookup', 'display', 'header-section')
+    AND split_part(COALESCE(w #>> '{widget-data-path,value}', w->>'widget-data-path'), '.', 1)
+        IS DISTINCT FROM s.section_register_id;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Required widgets that the server cannot check (their path is not of the section''s register): %', found;
+  END IF;
+
+  -- The fields every farmer must have are required in the metadata.
+  SELECT string_agg(id, ', ') INTO found FROM (VALUES
+      ('farmer_personal_details', 'first_name'), ('farmer_personal_details', 'last_name'),
+      ('farmer_personal_details', 'gender'), ('farmer_personal_details', 'marital_status'),
+      ('farmer_personal_details', 'education_level'),
+      ('farmer_membership', 'is_primary_cooperative_member'), ('farmer_membership', 'is_cooperative_union_member'),
+      ('farmer_membership', 'is_farmer_cluster_member'),
+      ('farmer_socio_economic_health', 'disabled'), ('farmer_location', 'farmer_geo_hierarchy'),
+      ('farmer_documents', 'identity_document_type'), ('farmer_documents', 'identity_document_1')
+    ) r(section_id, widget_id) JOIN LATERAL (SELECT r.section_id || '.' || r.widget_id AS id) i ON true
+  WHERE NOT EXISTS (
+    SELECT 1 FROM public.g2p_register_sections s,
+      jsonb_path_query(s.section_ui_schema, 'lax $.** ? (@."widget-required" == true)') w
+    WHERE s.section_id = r.section_id AND w->>'widget-id' = r.widget_id);
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Fields every farmer must have are not required in the section metadata: %', found;
+  END IF;
+END $$;

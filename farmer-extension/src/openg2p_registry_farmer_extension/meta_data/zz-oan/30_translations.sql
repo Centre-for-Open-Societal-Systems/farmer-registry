@@ -58,6 +58,7 @@ WITH oan (language_code, labels) AS (
     "country_code": "Country Code",
     "is_primary": "Primary",
     "fayda_fin": "Fayda ID",
+    "phone_ethiopian_mobile": "Enter an Ethiopian mobile number, for example 0912345678 or +251912345678",
     "fayda_fin_format": "Enter a 12-digit FIN or a 16-digit FAN, using digits only. Verification is optional; upload ID evidence for approval.",
     "fayda_rid": "Fayda RID",
     "fayda_rid_format": "The Fayda RID has 29 digits. Enter all 29, numbers only, as printed on the registration slip",
