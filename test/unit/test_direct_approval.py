@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-PACKAGE = ROOT / "oan-extension/src/oan_farmer_registry_extension"
+PACKAGE = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension"
 GUARDED = {
     "register_domain/services/household_intake.py": ["HouseholdCheckedIntakeFormDataService"],
     "register_domain/services/outgest_json.py": ["JsonSafeOutgestChangeRequestService"],

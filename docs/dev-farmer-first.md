@@ -43,7 +43,7 @@ again, through Jenkins, and in this order:
    recreates the databases and re-syncs the roles to the kept Secrets, the
    applications migrate the empty schema on start, the post-install hooks run
    the OAN seed (which now fails the job if the forms are wrong; see
-   `oan-extension/src/oan_farmer_registry_extension/meta_data/90_checks.sql`)
+   `farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/90_checks.sql`)
    and the sanity smoke tests.
 
 Everything registered on dev (farmers, households, documents, approvals,

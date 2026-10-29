@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-SPEC = importlib.util.spec_from_file_location('oan_reporting_geo',Path(__file__).resolve().parents[2]/'oan-extension/reporting/sync_geo_levels.py')
+SPEC = importlib.util.spec_from_file_location('oan_reporting_geo',Path(__file__).resolve().parents[2]/'farmer-extension/reporting/sync_geo_levels.py')
 geo = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(geo)
 

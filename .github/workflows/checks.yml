@@ -16,14 +16,14 @@ jobs:
       - run: pip install -r ci/validation/requirements.txt ruff==0.17.2
       - name: Source syntax and inherited delivery boundaries
         run: |
-          python -m ruff check --select E9,F63,F7,F82 oan-extension/src oan-extension/tests
+          python -m ruff check --select E9,F63,F7,F82 farmer-extension/src farmer-extension/tests
           bash ci/validation/validate.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Real ODK signature client against PM contract simulation
         env:
-          PYTHONPATH: oan-extension/src
+          PYTHONPATH: farmer-extension/src
           OAN_ODK_PM_SIMULATION_URL: http://127.0.0.1:49216/pm
           OAN_REPORTING_MDS_SIMULATION_URL: http://127.0.0.1:49216/mds
         run: |
@@ -35,5 +35,5 @@ jobs:
             if curl --fail --silent http://127.0.0.1:49216/pm/health >/dev/null; then break; fi
             sleep 1
           done
-          python -m pytest -q -p no:cacheprovider oan-extension/tests/test_odk_signature_http.py test/unit/test_reporting_geography.py
+          python -m pytest -q -p no:cacheprovider farmer-extension/tests/test_odk_signature_http.py test/unit/test_reporting_geography.py
 

@@ -71,7 +71,7 @@ animals and livestock water source questions are required for mixed farmers as w
 livestock farmers, for the farmer and for household members. Output:
 `odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx`, version `2026.10.30`;
 `test/unit/test_odk_mds_form.py` checks the build against a small pack and
-`oan-extension/tests/test_odk_mds_codes.py` the transform's pass-through.
+`farmer-extension/tests/test_odk_mds_codes.py` the transform's pass-through.
 
 Publish it as a new version of the same `farmer_profile` form (project 1 on
 the dev environment) together with the four geography CSVs and `PrimaryCoopList.csv` as form attachments; the connector and

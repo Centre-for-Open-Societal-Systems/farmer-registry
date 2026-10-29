@@ -12,6 +12,12 @@ for component in staff-api partner-api celery db-seed staff-ui; do
   docker build -f "docker/$component/Dockerfile" -t "coss-ci/$component:$tag" .
 done
 
+# Load each Python image's platform entry point offline, as the image starts it.
+for role in staff-api partner-api celery-worker celery-beat; do
+  image="coss-ci/${role/#celery-*/celery}:$tag"
+  docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python "$image" /repo/ci/validation/check_image_boot.py "$role"
+done
+
 # Exercise real native SAVE (including parent/finance rejection and complete
 # rollback) in the exact Celery image that Jenkins will publish.
 OAN_WORKER_SAVE_TEST_IMAGE="coss-ci/celery:$tag" python3 ci/validation/check_native_worker_save.py
@@ -20,7 +26,7 @@ docker build -f docker/sanity-tests/Dockerfile -t "coss-ci/sanity-tests:$tag" .
 # The extension's tests, against the platform it is installed on. They read
 # upstream UI files from the repository, so the whole tree is mounted.
 for component in staff-api; do
-  docker run --rm -v "$PWD:/repo:ro" -w /repo/oan-extension -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/repo/oan-extension/src:/repo/oan-extension/tests \
+  docker run --rm -v "$PWD:/repo:ro" -w /repo/farmer-extension -e PYTHONDONTWRITEBYTECODE=1 -e PYTHONPATH=/repo/farmer-extension/src:/repo/farmer-extension/tests \
     --entrypoint sh "coss-ci/$component:$tag" -c \
     'pip install --quiet --no-cache-dir pytest==8.4.2 && python -m pytest -q -p no:cacheprovider tests'
 done

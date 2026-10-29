@@ -1,24 +1,24 @@
 # Native Farmer release contract
 
 The legacy RP bump script is fenced on this native OAN candidate, including
-`-n` and automatic latest selection. It cannot update native Farmer parents,
+`-n` and automatic latest selection. It cannot update the image parents,
 their installed ABI and the immutable central chart/profile together. Help is
 still available before tool checks. Nonnative legacy fixtures retain the old
 path; this change does not update a version or mutate staging/local charts.
 
 Run `python ci/validation/check_release_pins.py` for a read-only source report.
 [native-release-contract.json](../ci/validation/native-release-contract.json)
-records four native Farmer image parents at 1.2.1-rc.192 and the independent
-central platform pin 1.2.2-rc.557. It checks exact ARG/FROM repositories and
+records the four image parents, the registry platform images
+`openg2p/openg2p-registry-{staff-api,partner-api,celery,db-seed}`, at the
+central platform pin 1.2.2-rc.557, and checks their exact ARG/FROM lines and the
 immutable central archive provenance. Existing legacy RP/chart lock checks are
-retained for staging and their misleading bump-script failure hints are fixed.
-The separate UI addon pin keeps its own package contract.
+retained for staging. The separate UI addon pin keeps its own package contract.
 
-Hosted worker initialization observed installed registry-core and celery-worker
-distributions 1.2.1 and Farmer extension 1.0.3 in the current native parent.
-These are explicit observed package versions, not values inferred from RC tags.
-The native worker probe checks that package tuple remains unchanged. Farmer
-parent and platform tag numbers must not be treated as equal versions.
+The platform images install registry-core and celery-worker 1.2.1; the Farmer
+extension built here is 1.0.3+oan.1 (OpenG2P's Farmer extension 1.0.3 with the
+OAN layer). These are explicit installed package versions, not values inferred
+from RC tags. The native worker probe checks that package tuple remains
+unchanged.
 
 Package versions alone do not establish ABI compatibility. The native worker
 save/rollback gate is required alongside worker/beat registration, ORM DDL,
