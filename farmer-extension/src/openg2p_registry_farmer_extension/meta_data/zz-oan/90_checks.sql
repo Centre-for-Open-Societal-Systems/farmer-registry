@@ -514,3 +514,28 @@ BEGIN
     RAISE EXCEPTION 'The second language question is retired; the farmer has one language: %', found;
   END IF;
 END $$;
+
+-- Every label in Personal information is a key that has English text, and the
+-- Fayda ID label is the neutral "Fayda ID" (the field takes a FIN or a FAN).
+DO $$
+DECLARE
+  found text;
+BEGIN
+  SELECT string_agg(DISTINCT w->>'widget-label', ', ') INTO found
+  FROM "public"."g2p_register_sections" s,
+       jsonb_path_query(s.section_ui_schema, 'strict $.**') w,
+       "public"."registry_languages" l
+  WHERE s.section_id = 'farmer_personal_details'
+    AND l."is_default"
+    AND jsonb_typeof(w) = 'object' AND w ? 'widget-label'
+    AND COALESCE(NULLIF(l."domain_translation"::jsonb ->> (w->>'widget-label'), ''),
+                 NULLIF(l."core_translation"::jsonb ->> (w->>'widget-label'), '')) IS NULL;
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Personal information labels with no English text: %', found;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM "public"."registry_languages" l
+             WHERE l."is_default" AND l."domain_translation"::jsonb ->> 'fayda_fin' IS DISTINCT FROM 'Fayda ID') THEN
+    RAISE EXCEPTION 'The Fayda ID label must read "Fayda ID"';
+  END IF;
+END $$;
