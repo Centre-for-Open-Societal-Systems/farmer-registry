@@ -2,8 +2,8 @@
 -- oan-extension/templates/, uploaded by the seed with LOAD_TEMPLATES=true).
 --
 -- 1. The DCI search response: the farmer extension's template with the
---    farmer_reference block added (built at image build, build_dci_template.py,
---    into farmer_dci_search_response.j2). Partners read it through the signed,
+--    farmer_reference block added as its last object (farmer_dci_search_response.j2).
+--    Partners read it through the signed,
 --    consent-checked DCI search; the Consent Manager scope "farmer_reference"
 --    releases that block only.
 -- 2. The change notice: on every approved farmer change, outgestion publishes

@@ -22,7 +22,7 @@ name on these modules. `__init__.py` makes the platform's
 | `register_domain/services/` | the farmer domain services, each extended with the derived values (`derivations.py`) and the section widgets' value rules (`widget_rules.py`); the FarmerPhone service |
 | `app.py` | the farmer initializer, plus migration of OAN registers |
 | `openg2p_farmer/` | OpenG2P's Farmer extension code, unchanged |
-| `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `zz-oan/` (applied after the Farmer tree) and OAN's templates; `templates/blocks/` holds the block built into the DCI response |
+| `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `zz-oan/` (applied after the Farmer tree) and OAN's templates (`farmer_dci_search_response.j2` is upstream's DCI template plus OAN's `farmer_reference` block) |
 | `tests/` | `uv run --no-project --with pytest pytest farmer-extension/tests` |
 
 Images are built FROM the registry platform images (`docker/<component>/Dockerfile`).
@@ -83,7 +83,7 @@ registry is the source (`meta_data/50_outgestion.sql`, templates in
 
 | What | How |
 |---|---|
-| Lookup | the signed, consent-checked DCI search on the partner API. Its response is the farmer extension's own template plus a `farmer_reference` block (record id, farmer id, FIN or FAN, approval time, status, names, Amharic names, phone, location). `build_dci_template.py` builds it at image build, so the block follows upstream's template. A Consent Manager policy with scope `farmer_reference` releases that block only |
+| Lookup | the signed, consent-checked DCI search on the partner API. Its response is the farmer extension's own template plus a `farmer_reference` block (record id, farmer id, FIN or FAN, approval time, status, names, Amharic names, phone, location). `templates/farmer_dci_search_response.j2` is upstream's template unchanged with the block as its last object; `test/unit/test_dci_search_response.py` fails when upstream's template changes until it is copied in again. A Consent Manager policy with scope `farmer_reference` releases that block only |
 | Change notice | outgestion publishes `farmer_reference.changed.v1` (event id, farmer id, FIN or FAN; no personal details) to the WebSub topic `oan.farmer-reference.changed.v1` on every approved farmer change; receivers fetch the details through the lookup |
 | Seed | `LOAD_TEMPLATES=true` uploads both templates (`farmer_dci_search_response.j2`, `farmer_reference_changed_v1.j2`); the Farmer register's `outgest_applicable` is on |
 
@@ -199,7 +199,7 @@ OAN's ids name what a row holds or does, without an `oan_` prefix:
 | tab | `farmer_tab_enumerator` |
 | attachment | `<tab_id>__<section_id>` on a register tab, `farmer_intake__<section_id>` and `household_intake__<section_id>` on the intake forms |
 | ODK ingestion | data model `odk_to_farmer_intake` (mnemonic `ODK_TO_FARMER_INTAKE`, which the connector sends), key path `odk_to_farmer_intake_key_path`, pattern `odk_to_farmer_intake_pattern` with the enricher `OdkToFarmerIntakeEnricher`, template `odk_to_farmer_intake_template` and its document `odk_to_farmer_intake_document` (`templates/odk_to_farmer_intake.j2`) |
-| outgestion | `farmer_dci_search_response_document` (`farmer_dci_search_response.j2`, built from `templates/farmer_reference_block.j2`; upstream's `OUT-TMPL-1` points at it), `farmer_reference_changed_v1_template`, `farmer_reference_changed_v1_document` (`templates/farmer_reference_changed_v1.j2`), `farmer_reference_changed_v1_topic`; the data model `FARMER_REFERENCE_CHANGED_V1`, the event type and the topic name are what the subscribers use |
+| outgestion | `farmer_dci_search_response_document` (`farmer_dci_search_response.j2`, the farmer template with OAN's block as its last object; upstream's `OUT-TMPL-1` points at it), `farmer_reference_changed_v1_template`, `farmer_reference_changed_v1_document` (`templates/farmer_reference_changed_v1.j2`), `farmer_reference_changed_v1_topic`; the data model `FARMER_REFERENCE_CHANGED_V1`, the event type and the topic name are what the subscribers use |
 
 The staff UI's own labels are `farmer_photo_*`, `geo_point_*` and `documents_*`;
 the server's messages are `rule_*`, `upstream_*`, `form_*`, `fayda_fin_*` and

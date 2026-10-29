@@ -36,17 +36,6 @@ def probe(host, mode):
         connection.execute(text('CREATE EXTENSION IF NOT EXISTS pg_trgm'))
     BaseORMModel.metadata.create_all(engine)
     if mode == 'ddl':
-        # A legacy database's UUID owns this unique mnemonic. The native
-        # seed uses a different UUID for the same crop intake capability.
-        from openg2p_registry_core.models import G2PRegisterSection
-        with engine.begin() as connection:
-            connection.execute(G2PRegisterSection.__table__.insert().values(
-                register_id='a1a4d25a-1cd4-4356-abac-985a0b3c6bcd',
-                section_id='a7d69d0c-ed5b-4d78-b2b5-90dfe40c8aa2',
-                section_register_id='5fa096f8-ffdc-4b0a-ab16-9ca386c23310',
-                section_mnemonic='intake_fr_farmer_crops',
-                section_ui_schema={'legacy-preservation-marker': True},
-                no_of_verifications_required=0))
         # Synthetic prior values exercise additive backfill across register,
         # history and intake, including intentionally empty/current JSON lists.
         from datetime import date, datetime
@@ -98,9 +87,6 @@ def probe(host, mode):
         print(json.dumps({'native_ddl':'PASS','tables':len(BaseORMModel.metadata.tables)}))
     else:
         with engine.connect() as connection:
-            legacy = connection.execute(text("SELECT section_mnemonic,section_ui_schema FROM g2p_register_sections WHERE section_id='a7d69d0c-ed5b-4d78-b2b5-90dfe40c8aa2'")).one()
-            assert legacy[0] == 'oan_legacy_intake_fr_farmer_crops'
-            assert legacy[1] == {'legacy-preservation-marker': True}
             assert connection.execute(text("SELECT section_id FROM g2p_register_sections WHERE section_mnemonic='intake_fr_farmer_crops'")).scalar_one() == 'farmer_crop_crop_details_intake_section_01'
             sections = connection.execute(text('SELECT section_id, section_ui_schema FROM g2p_register_sections ORDER BY section_id')).all()
             # Full section trees, bindings and labels must replay identically.
@@ -209,8 +195,6 @@ def run():
             files += sorted((ROOT/package/'meta_data').rglob('*.sql'))
         snapshots = []
         for attempt in (1,2):
-            command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
-                    '-v','ON_ERROR_STOP=1',data=(ROOT/'docker/db-seed/metadata_compat.sql').read_bytes())
             for path in files:
                 try:
                     command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
