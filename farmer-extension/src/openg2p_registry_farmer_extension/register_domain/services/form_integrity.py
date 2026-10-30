@@ -237,7 +237,7 @@ def section_fields(schema, register_id: str) -> set[str]:
     worker merges a register's rows by it."""
     found: set[str] = set()
     for widget in _widgets(schema or {}):
-        if widget.get("widget-readonly") or widget.get("widget") in _SKIPPED | {"group"}:
+        if widget.get("widget-readonly") or widget.get("widget") in _SKIPPED | {"group", "id-authentication"}:
             continue
         path = widget.get("widget-data-path")
         for value in (path.values() if isinstance(path, dict) else [path]):
