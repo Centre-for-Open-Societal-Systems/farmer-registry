@@ -6,18 +6,20 @@ These tests flush real rows (sqlite, with the Postgres-only column types
 compiled as JSON) and read back what was stored. They need the platform image.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
 pytest.importorskip("openg2p_registry_core")
 
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import models as native  # noqa: E402
-from openg2p_registry_farmer_extension.register_domain import models as oan  # noqa: E402
-from sqlalchemy import create_engine  # noqa: E402
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID  # noqa: E402
-from sqlalchemy.ext.compiler import compiles  # noqa: E402
-from sqlalchemy.orm import Session, configure_mappers  # noqa: E402
+from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import (
+    models as native,
+)
+from openg2p_registry_farmer_extension.register_domain import models as oan
+from sqlalchemy import create_engine
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import Session, configure_mappers
 
 
 @compiles(JSONB, "sqlite")
@@ -52,7 +54,7 @@ def flushed(db, row):
     # the audit columns are filled by the service in a real save
     for column in ("created_by", "created_at", "last_approved_at", "last_approved_by"):
         if column in row.__table__.c and getattr(row, column) is None:
-            setattr(row, column, datetime.now(timezone.utc) if column.endswith("_at") else "tester")
+            setattr(row, column, datetime.now(UTC) if column.endswith("_at") else "tester")
     db.add(row)
     db.flush()
     db.refresh(row)
