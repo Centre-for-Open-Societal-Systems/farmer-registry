@@ -311,6 +311,9 @@ OWN_LETTERS = "a-zA-Z" + ETHIOPIC + NAME_LETTERS  # Latin (Qubee) or Ge'ez
 EN = "constraint_message::English (en)"
 
 
+EMAIL_RULE = r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+([.][A-Za-z0-9-]+)+$"
+
+
 def _words(letters: str, count: int | None = None) -> str:
     word = f"[{letters}]+"
     return "^" + (" ".join([word] * count) if count else f"{word}( {word})*") + "$"
@@ -345,6 +348,11 @@ def registry_rules() -> dict[str, dict[str, str]]:
         rules[primary] = {"constraint": _phone_rule([]), EN: phone_message}
         rules[other] = {"constraint": _phone_rule([primary]), EN: phone_message}
         rules[f"{prefix}secondary_phone_number"] = {"constraint": _phone_rule([primary, other]), EN: phone_message}
+    # The farmer's email (derived.py EMAIL_PATTERN): the device refuses what
+    # the registry refuses; a bad address that arrives anyway is left out.
+    for name in ("email", "hh_member_email"):
+        rules[name] = {"constraint": f"regex(., '{EMAIL_RULE}') and string-length(.) <= 254",
+                       EN: "Enter an email address like name@example.org."}
     rules["other_member_name_other"] = {
         "constraint": ("(not(selected(${language}, 'TIGRINYA')) or "
                        f"regex(., '{_words(ETHIOPIC, 3)}')) and " f'regex(., "{_words(OWN_LETTERS, 3)}")'),
@@ -522,7 +530,7 @@ def main() -> None:
     parser.add_argument("--media", type=Path, default=MEDIA)
     parser.add_argument("--coops-source", type=Path, default=COOPS_SOURCE, help="the v3 cooperative list, keyed by v3 region number")
     parser.add_argument("--coops-out", type=Path, default=COOPS_TARGET)
-    parser.add_argument("--version", default="2026.10.31.2")
+    parser.add_argument("--version", default="2026.10.31.3")
     args = parser.parse_args()
     print(json.dumps(build(args.source, args.pack, args.out, args.media, args.version, args.geography, args.coops_source, args.coops_out), indent=2, ensure_ascii=False))
 

@@ -5,9 +5,13 @@ Unknown codes stay visible to native validation; no plausible demographics or
 location codes are invented when a submission omits them.
 """
 import json
+import logging
 
 # Absolute: tests load this file by path, with no parent package.
+from openg2p_registry_farmer_extension.register_domain.derived import ingested_email
 from openg2p_registry_farmer_extension.register_domain.name_rules import name_problems
+
+_logger = logging.getLogger(__name__)
 
 SECTIONS = ("farmer_household_lookup", "farmer_identity",
     "farmer_personal_details", "farmer_photo", "farmer_phones",
@@ -164,6 +168,10 @@ def intake_sections(d):
         "last_name_local":personal.get("grandfather_name_other") or personal.get("grandfather_name_amharic")}
     if problems := name_problems(names):
         raise ValueError("ODK name: " + "; ".join(problems))
+    # The email is optional: a bad address is left out, never the section.
+    email = ingested_email(personal.get("email"))
+    if personal.get("email") and not email:
+        _logger.warning("ODK email left out: not an email address")
     # One personal information section: the names, the language and the
     # personal details travel in a single row.
     output[SECTIONS[2]] = [clean({"first_name":first,"middle_name":middle,"last_name":last,
@@ -175,8 +183,7 @@ def intake_sections(d):
         "birth_date_ec":day(personal.get("date_of_birth_ec")),"estimated_age":personal.get("age"),
         "marital_status":code(socio.get("marital_status")),"has_personal_phone":boolean(personal.get("has_personal_phone") or personal.get("phone_number")),
         "farming_type":code(personal.get("farming_type"), {"CROP_FARMING":"CROP","LIVESTOCK_FARMING":"LIVESTOCK","MIXED_FARMING":"MIXED"}),
-        "email":str(personal["email"]).strip() if personal.get("email") else None,
-        "emails":[{"address":str(personal["email"]).strip(),"is_primary":True}] if personal.get("email") else None})]
+        "email":email,"emails":[{"address":email,"is_primary":True}] if email else None})]
     photo = (d.get("farmer_photo_section") or {}).get("farmer_photo") or personal.get("farmer_photo") or d.get("farmer_photo")
     if photo:
         output[SECTIONS[3]] = [{"record_image_document_id":photo}]

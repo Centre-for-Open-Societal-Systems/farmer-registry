@@ -134,8 +134,8 @@ def test_the_ethiopian_dialing_code_reads_an_ethiopian_number():
 def test_email_fills_emails_list():
     record = {"email": " Odk@Example.org "}
     assert derived.sync_email(record) == []
-    assert record["email"] == "Odk@Example.org"
-    assert record["emails"] == [{"address": "Odk@Example.org", "is_primary": True}]
+    assert record["email"] == "odk@example.org"  # stored in lower case
+    assert record["emails"] == [{"address": "odk@example.org", "is_primary": True}]
 
 
 def test_emails_list_fills_email_primary_first():
@@ -161,3 +161,18 @@ def test_record_without_either_is_left_alone():
 @pytest.mark.parametrize("bad", ["abebe", "a@b", "a b@example.org", "@example.org", "a@@example.org", "a@example.org" + "x" * 250])
 def test_bad_email_is_refused_with_message(bad):
     assert derived.sync_email({"email": bad}) == ["Email: enter an address like name@example.org"]
+
+
+def test_an_email_of_254_characters_is_kept_and_255_refused():
+    def address(length):
+        return "a" * (length - len("@example.org")) + "@example.org"
+
+    assert len(address(254)) == 254 and derived.sync_email({"email": address(254)}) == []
+    assert derived.sync_email({"email": address(255)}) == ["Email: enter an address like name@example.org"]
+
+
+def test_an_ingested_email_is_kept_only_when_valid():
+    assert derived.ingested_email(" ODK@Example.org ") == "odk@example.org"
+    assert derived.ingested_email("not an email") is None
+    assert derived.ingested_email("a@b..co") is None
+    assert derived.ingested_email(None) is None

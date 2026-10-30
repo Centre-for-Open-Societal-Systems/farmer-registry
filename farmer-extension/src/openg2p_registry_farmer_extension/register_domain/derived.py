@@ -202,16 +202,30 @@ def email_of(emails) -> str | None:
     return str(entries[0]["address"]).strip() if entries else None
 
 
+def valid_email(address: str) -> bool:
+    return bool(address) and len(address) <= EMAIL_MAX_LENGTH and bool(EMAIL_PATTERN.match(address))
+
+
+def ingested_email(value) -> str | None:
+    """An address from a source (ODK): kept, in lower case, only when valid.
+    The email is optional, so a bad one is left out rather than refusing the
+    personal details section it travels in (required_fields.hold_back)."""
+    address = str(value or "").strip().lower()
+    return address if valid_email(address) else None
+
+
 def sync_email(record: dict) -> list[str]:
     """Keep email and emails in step; the typed email wins when both are given.
 
     Returns the problems with a typed address. A record that carries only the
     emails list (the ODK transform, older rows) gets its email filled in."""
     if "email" in record:
-        address = str(record["email"] or "").strip()
+        # Stored in lower case: the part after @ is case-insensitive, and
+        # every mail system treats the part before it so too.
+        address = str(record["email"] or "").strip().lower()
         record["email"] = address or None
         record["emails"] = [{"address": address, "is_primary": True}] if address else None
-        if address and (len(address) > EMAIL_MAX_LENGTH or not EMAIL_PATTERN.match(address)):
+        if address and not valid_email(address):
             return [EMAIL_MESSAGE]
     elif "emails" in record:
         record["email"] = email_of(record["emails"])
