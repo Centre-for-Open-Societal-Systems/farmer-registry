@@ -230,6 +230,18 @@ def missing_required(
     return list(dict.fromkeys(problems))
 
 
+def section_fields(schema, register_id: str) -> set[str]:
+    """The fields of `register_id` that a section's widgets write (a geo
+    widget writes its value and its hierarchy)."""
+    found: set[str] = set()
+    for widget in _widgets(schema or {}):
+        path = widget.get("widget-data-path")
+        for value in (path.values() if isinstance(path, dict) else [path]):
+            if isinstance(value, str) and value.startswith(register_id + "."):
+                found.add(value.split(".", 1)[1])
+    return found
+
+
 def condition_registers(schema) -> set[str]:
     """The register ids a section's show/hide/require conditions read, so a
     save can look the other registers' values up."""

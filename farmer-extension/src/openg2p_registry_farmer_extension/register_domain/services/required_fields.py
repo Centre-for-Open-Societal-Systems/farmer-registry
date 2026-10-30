@@ -61,14 +61,29 @@ unattended = contextvars.ContextVar("oan_unattended_save", default=False)
 refusals = contextvars.ContextVar("oan_ingest_refusals", default=None)
 
 
-def hold_back(submission_id: str, problem: str) -> bool:
-    """Keep a refusal for the draft's remarks; False outside an ingest task
-    (the caller then raises it as before)."""
+def hold_back(submission_id: str, problem: str, register_id: str | None = None,
+              fields: set[str] | None = None) -> bool:
+    """Keep a refusal for the draft's remarks, once, and the refused section's
+    fields of `register_id`; False outside an ingest task (the caller then
+    raises it as before)."""
     held = refusals.get()
     if held is None:
         return False
-    held.setdefault(str(submission_id), []).append(problem)
+    problems = held.setdefault(str(submission_id), [])
+    if problem not in problems:
+        problems.append(problem)
+    if register_id and fields:
+        held.setdefault(("fields", str(submission_id), register_id), set()).update(fields)
     return True
+
+
+def refused_fields(submission_id: str, register_id: str) -> set[str]:
+    """The fields of a refused section of the same register. The platform
+    carries a register's earlier answers into its later sections, so a later
+    section would be refused for the same answer and lost with it; it is
+    saved without them instead."""
+    held = refusals.get()
+    return set((held or {}).get(("fields", str(submission_id), register_id), set()))
 
 
 def held_back(submission_id: str) -> list[str]:
