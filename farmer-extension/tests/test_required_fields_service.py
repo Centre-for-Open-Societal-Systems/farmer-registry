@@ -403,3 +403,114 @@ def test_a_failure_that_is_not_a_refusal_still_fails_the_worker(monkeypatch, ing
     assert error.value is lookup  # the task retries it, as before
     assert rf.held_back("s-1") == []
     assert session.ended == ["rolled back"]
+
+
+def test_later_sections_of_the_register_survive_a_refused_one(monkeypatch, ingest):
+    """The platform carries a register's earlier answers into its later
+    sections: a refused name must not take the location and documents with it,
+    and the reason is listed once."""
+    service = object.__new__(hi.HouseholdCheckedIntakeFormDataService)
+    submission = SimpleNamespace(submission_id="s-1")
+    schemas = {
+        "personal": {"panels": [{"widgets": [
+            {"widget": "text", "widget-id": "first_name_local", "widget-data-path": f"{FARMER}.first_name_local"}]}]},
+        "location": {"panels": [{"widgets": [
+            {"widget": "geo-hierarchy", "widget-id": "geo", "widget-data-path": {
+                "value": f"{FARMER}.geo_lowest_level_value_id", "hierarchy": f"{FARMER}.geo_code_hierarchy_json"}}]}]},
+        "documents": {"panels": [{"widgets": [
+            {"widget": "select", "widget-id": "identity_document_type", "widget-data-path": f"{FARMER}.identity_document_type"}]}]},
+    }
+    saved = []
+
+    async def passthrough(session, created_by):
+        return created_by
+
+    async def section(section_id, session):
+        return SimpleNamespace(section_mnemonic=section_id, section_ui_schema=schemas[section_id])
+
+    async def platform_save(self, submission_id, section_id, payload, *args, **kwargs):
+        if any(record.get("first_name_local") == "Tsegay" for record in payload):
+            hi.validation_error(REFUSED_NAME)
+        saved.append((section_id, sorted(payload[0])))
+        return submission
+
+    async def get_submission(submission_id, session):
+        return submission
+
+    async def no_messages():
+        return {}
+
+    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
+    monkeypatch.setattr(service, "_get_submission_or_error", get_submission, raising=False)
+    monkeypatch.setattr(service, "_messages", no_messages, raising=False)
+    monkeypatch.setattr(hi.G2PFarmerIntakeFormDataService, "save_intake_form_submission_with_session",
+                        platform_save, raising=False)
+    record = {"internal_record_id": "r-1", "first_name_local": "Tsegay"}
+    for section_id, answers in (("personal", {}), ("location", {"geo_lowest_level_value_id": "ET01010101"}),
+                                ("documents", {"identity_document_type": "FAYDA"})):
+        record = {**record, **answers}  # what the worker merges into each later section
+        _run(service.save_intake_form_submission_with_session(
+            "s-1", section_id, [dict(record)], FARMER, "form", FARMER, "system", _Savepoints()))
+    assert saved == [
+        ("location", ["geo_lowest_level_value_id", "internal_record_id"]),
+        ("documents", ["geo_lowest_level_value_id", "identity_document_type", "internal_record_id"])]
+    assert rf.held_back("s-1") == [REFUSED_NAME]
+
+
+REFUSED_NAME = "First name (farmer's language): Tigrinya is written in Ethiopic (Ge'ez) script, and \"Tsegay\" is not."
+
+
+def test_a_reason_is_kept_once(ingest):
+    assert rf.hold_back("s-2", REFUSED) and rf.hold_back("s-2", REFUSED)
+    assert rf.held_back("s-2") == [REFUSED]
+
+
+def test_a_section_writes_only_its_editable_input_fields():
+    from openg2p_registry_farmer_extension.register_domain.services.form_integrity import section_fields
+
+    schema = {"panels": [{"widgets": [
+        {"widget": "text", "widget-id": "name", "widget-data-path": f"{FARMER}.first_name_local"},
+        {"widget": "text", "widget-id": "shown", "widget-readonly": True, "widget-data-path": f"{FARMER}.record_name"},
+        {"widget": "header-section", "widget-id": "header", "widget-data-path": f"{FARMER}.record_name"},
+        {"widget": "id-authentication", "widget-id": "fayda", "widget-data-path": f"{FARMER}.internal_record_id"},
+        {"widget": "text", "widget-id": "row", "widget-data-path": f"{FARMER}.internal_record_id"},
+        {"widget": "text", "widget-id": "land", "widget-data-path": f"{LAND}.land_id"}]}]}
+    assert section_fields(schema, FARMER) == {"first_name_local"}
+    assert section_fields(None, FARMER) == set()
+
+
+def test_a_refused_child_section_leaves_the_root_register_untouched(ingest):
+    assert rf.hold_back("s-3", REFUSED, LAND, {"land_id"})
+    assert rf.refused_fields("s-3", LAND) == {"land_id"}
+    assert rf.refused_fields("s-3", FARMER) == set()
+
+
+def test_a_person_saving_strips_nothing_and_is_refused(monkeypatch, ingest):
+    rf.hold_back("s-1", REFUSED, FARMER, {"first_name"})
+    service = object.__new__(hi.HouseholdCheckedIntakeFormDataService)
+    seen = []
+
+    async def passthrough(session, created_by):
+        return created_by
+
+    async def section(section_id, session):
+        return SimpleNamespace(section_mnemonic="personal")
+
+    async def platform_save(self, submission_id, section_id, payload, *args, **kwargs):
+        seen.append(dict(payload[0]))
+        hi.validation_error(REFUSED)
+
+    async def no_messages():
+        return {}
+
+    monkeypatch.setattr(rf.RequiredFieldsMixin, "refuse_missing_on_save", lambda *a, **k: asyncio.sleep(0))
+    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
+    monkeypatch.setattr(service, "_messages", no_messages, raising=False)
+    monkeypatch.setattr(hi.G2PFarmerIntakeFormDataService, "save_intake_form_submission_with_session",
+                        platform_save, raising=False)
+    with pytest.raises(G2PRegistryException):
+        _run(service.save_intake_form_submission_with_session(
+            "s-1", "personal", [{"first_name": "Abebe"}], FARMER, "form", FARMER, "alex", _Savepoints()))
+    assert seen == [{"first_name": "Abebe"}]

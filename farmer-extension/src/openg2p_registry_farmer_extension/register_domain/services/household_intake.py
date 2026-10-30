@@ -30,7 +30,7 @@ from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryExcep
 from sqlalchemy import select
 
 from .direct_approval import DirectApprovalClosed
-from .required_fields import RequiredFieldsMixin, held_back, hold_back, unattended
+from .required_fields import RequiredFieldsMixin, held_back, hold_back, refused_fields, unattended
 from .upstream_messages import reword
 
 FARMER_REGISTER_MNEMONIC = "Farmer"
@@ -259,6 +259,11 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
         if attachments:
             documents = list(documents or []) + [DocumentAttachment(document_id=document_id, label=label)
                 for label, document_id in attachments.items()]
+        if worker_save and submission_id:
+            dropped = refused_fields(submission_id, section_register_id)
+            for record in payload:
+                for field in dropped:
+                    record.pop(field, None)
         from .intake_context import current_intake
 
         token = current_intake.set((session, submission_id))
@@ -287,8 +292,11 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
                 # error, never a lookup or database failure the task retries):
                 # the section is not saved and the reason goes in the draft's
                 # remarks at finalize.
+                from .form_integrity import section_fields
+
+                own = section_fields(getattr(section, "section_ui_schema", None), section_register_id)
                 if not (worker_save and submission_id and plain.code in _REFUSALS
-                        and hold_back(submission_id, plain.message or str(plain))):
+                        and hold_back(submission_id, plain.message or str(plain), section_register_id, own)):
                     raise
                 return await self._get_submission_or_error(submission_id, session)
         finally:
