@@ -102,6 +102,7 @@ CR_SEARCH_PAGE_SIZE = int(os.environ.get("CR_SEARCH_PAGE_SIZE", "20"))
 # Tabs that only offer unmapped sections are skipped.
 CR_FIELD_BY_SECTION = {
     "01425f4e-720e-4a4e-a0db-73f371ae2a07": "functional_record_id",  # fr_farmer_header (CORE section)
+    "farmer_header": "functional_record_id",  # OAN copy of the farmer header
     "farmer_farmer_personal_identification_section_01": "middle_name",
     "farmer_farmer_socio_economic_and_health_section_04": "source_of_income_other",
     "farmer_farmer_location_section_03": "address_line_1",
