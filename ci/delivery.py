@@ -3,14 +3,16 @@
 DELIVERY_ACTION selects what a build does. publish-only builds and pushes the
 images. deploy upgrades the existing dev release with them. fresh-install
 rebuilds dev from an empty database with the same images and chart
-(ci/deploy/fresh-install-dev.sh).
+(ci/deploy/fresh-install-dev.sh). connector-plan and connector-upgrade build
+no images and only touch the farmer-registry-connector release
+(ci/connector/upgrade-farmer-connector.sh).
 """
 import json
 import os
 from pathlib import Path
 import sys
 
-ACTIONS = ("publish-only", "deploy", "fresh-install")
+ACTIONS = ("publish-only", "deploy", "fresh-install", "connector-plan", "connector-upgrade")
 
 
 def action(environment):

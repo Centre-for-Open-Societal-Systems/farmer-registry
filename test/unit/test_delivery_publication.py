@@ -95,12 +95,33 @@ def test_every_cluster_or_optional_stage_requires_explicit_deploy():
         assert "not { changeRequest() }" in definition
     publication = pipeline.split("stage('Publish')", 1)[1].split("steps {", 1)[0]
     assert "branch 'develop'" in publication and "not { changeRequest() }" in publication
-    assert "DELIVERY_ACTION" not in publication
+    # Publication is only skipped for the connector-only actions, never selected by deploy actions.
+    assert publication.count("DELIVERY_ACTION") == 1
+    assert "!(env.DELIVERY_ACTION in ['connector-plan', 'connector-upgrade'])" in publication
     assert "COORDINATE_SERVICES', defaultValue: false" in pipeline
     assert "ci-output/native-worker-save/**" in pipeline
     assert "check_native_worker_save.py" in (ROOT / "ci/build/images.sh").read_text()
-    assert "choices: ['publish-only', 'deploy', 'fresh-install']" in pipeline
+    assert "choices: ['publish-only', 'deploy', 'fresh-install', 'connector-plan', 'connector-upgrade']" in pipeline
     assert "RESET_ACTION" not in pipeline
+
+
+def test_connector_actions_build_nothing_and_run_only_the_connector_script():
+    pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
+    build = pipeline.split("stage('Build')", 1)[1].split("steps {", 1)[0]
+    assert "!(env.DELIVERY_ACTION in ['connector-plan', 'connector-upgrade'])" in build
+    stage = pipeline.split("stage('Upgrade connector (dev)')", 1)[1].split("post {", 1)[0]
+    head = stage.split("steps {", 1)[0]
+    assert "env.DELIVERY_ACTION in ['connector-plan', 'connector-upgrade']" in head
+    assert "branch 'develop'" in head and "not { changeRequest() }" in head
+    plan, upgrade = stage.split("} else {", 1)
+    assert "PLAN_ONLY=1 bash ci/connector/upgrade-farmer-connector.sh" in plan
+    assert "farmer-new-dev-backup-ssh" not in plan
+    assert "farmer-new-dev-backup-ssh" in upgrade and "PLAN_ONLY" not in upgrade
+    assert delivery.action({"DELIVERY_ACTION": "connector-plan"}) == "connector-plan"
+    assert delivery.action({"DELIVERY_ACTION": "connector-upgrade"}) == "connector-upgrade"
+    for bad in ("connector", "connector-rollback"):
+        with pytest.raises(ValueError):
+            delivery.action({"DELIVERY_ACTION": bad})
 
 
 def test_fresh_install_runs_only_its_own_script_with_the_backup_key():
