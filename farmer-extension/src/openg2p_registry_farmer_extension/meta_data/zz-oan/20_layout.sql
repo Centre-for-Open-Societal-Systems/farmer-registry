@@ -107,6 +107,7 @@ INSERT INTO "public"."g2p_register_ui_tab_sections" ("tab_section_id", "register
 SELECT v.tab_section_id, 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', v.tab_id, v.section_id, v.section_order
 FROM (VALUES
   ('farmer_farmer_tab__farmer_phones', 'farmer_farmer_tab', 'farmer_phones', 14),
+  ('farmer_farmer_tab__farmer_email', 'farmer_farmer_tab', 'farmer_email', 15),
   ('farmer_land_tab__farmer_land_summary', 'farmer_land_tab', 'farmer_land_summary', 5),
   ('farmer_tab_enumerator__farmer_enumerator', 'farmer_tab_enumerator', 'farmer_enumerator', 10)
 ) v(tab_section_id, tab_id, section_id, section_order)
@@ -116,13 +117,14 @@ ON CONFLICT ("tab_section_id") DO UPDATE SET
   "register_id" = EXCLUDED."register_id", "tab_id" = EXCLUDED."tab_id",
   "section_id" = EXCLUDED."section_id", "section_order" = EXCLUDED."section_order";
 
--- And on the intake form: phones after the photo. The enumerator and the land
+-- And on the intake form: phones after the photo, then the email address. The enumerator and the land
 -- totals are not asked; they are derived. The household link on the intake
 -- form stays upstream's until OpenG2P's design for it is agreed, so the
 -- household-head question is on the register only.
 INSERT INTO "public"."g2p_intake_form_ui_tab_sections" ("tab_section_id", "tab_id", "section_id", "section_order")
 SELECT v.tab_section_id, 'a1a4d25a-1cd4-4356-abac-72482721', v.section_id, v.section_order
-FROM (VALUES ('farmer_intake__farmer_phones', 'farmer_phones', 27)) v(tab_section_id, section_id, section_order)
+FROM (VALUES ('farmer_intake__farmer_phones', 'farmer_phones', 27),
+             ('farmer_intake__farmer_email', 'farmer_email', 28)) v(tab_section_id, section_id, section_order)
 JOIN "public"."g2p_register_sections" s ON s.section_id = v.section_id
 ON CONFLICT ("tab_section_id") DO UPDATE SET
   "tab_id" = EXCLUDED."tab_id", "section_id" = EXCLUDED."section_id", "section_order" = EXCLUDED."section_order";

@@ -185,6 +185,39 @@ def local_name_problems(record: dict) -> list[str]:
     ]
 
 
+# The farmer's email is one address typed in one box (email); core's contact
+# helper and the ODK transform use the emails list. The pattern is the one in
+# the farmer_email section's widget-data-validation (15_sections.sql).
+EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+([.][A-Za-z0-9-]+)+$")
+EMAIL_MAX_LENGTH = 254
+EMAIL_MESSAGE = "Email: enter an address like name@example.org"
+
+
+def email_of(emails) -> str | None:
+    """The primary address of an emails list, else its first one."""
+    if not isinstance(emails, list):
+        return None
+    entries = [e for e in emails if isinstance(e, dict) and str(e.get("address") or "").strip()]
+    entries.sort(key=lambda e: not e.get("is_primary"))
+    return str(entries[0]["address"]).strip() if entries else None
+
+
+def sync_email(record: dict) -> list[str]:
+    """Keep email and emails in step; the typed email wins when both are given.
+
+    Returns the problems with a typed address. A record that carries only the
+    emails list (the ODK transform, older rows) gets its email filled in."""
+    if "email" in record:
+        address = str(record["email"] or "").strip()
+        record["email"] = address or None
+        record["emails"] = [{"address": address, "is_primary": True}] if address else None
+        if address and (len(address) > EMAIL_MAX_LENGTH or not EMAIL_PATTERN.match(address)):
+            return [EMAIL_MESSAGE]
+    elif "emails" in record:
+        record["email"] = email_of(record["emails"])
+    return []
+
+
 # What a user types to find a farmer: the ids, and the names in each language
 # (the middle name is the father's). search_text is indexed and matched as one
 # string, so anything else (gender, education, dates, coordinates) is left to

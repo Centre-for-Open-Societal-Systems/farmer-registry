@@ -175,6 +175,7 @@ def intake_sections(d):
         "birth_date_ec":day(personal.get("date_of_birth_ec")),"estimated_age":personal.get("age"),
         "marital_status":code(socio.get("marital_status")),"has_personal_phone":boolean(personal.get("has_personal_phone") or personal.get("phone_number")),
         "farming_type":code(personal.get("farming_type"), {"CROP_FARMING":"CROP","LIVESTOCK_FARMING":"LIVESTOCK","MIXED_FARMING":"MIXED"}),
+        "email":str(personal["email"]).strip() if personal.get("email") else None,
         "emails":[{"address":str(personal["email"]).strip(),"is_primary":True}] if personal.get("email") else None})]
     photo = (d.get("farmer_photo_section") or {}).get("farmer_photo") or personal.get("farmer_photo") or d.get("farmer_photo")
     if photo:

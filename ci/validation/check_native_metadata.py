@@ -22,7 +22,7 @@ OAN_SECTIONS = frozenset((
     'farmer_socio_economic_health', 'farmer_location', 'farmer_photo', 'farmer_phones', 'farmer_documents',
     'farmer_household_lookup', 'household_information', 'farmer_membership', 'farmer_lands',
     'farmer_land_summary', 'farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake',
-    'farmer_farm_inputs', 'farmer_farm_inputs_intake', 'farmer_enumerator'))
+    'farmer_farm_inputs', 'farmer_farm_inputs_intake', 'farmer_enumerator', 'farmer_email'))
 
 
 def probe(host, mode):

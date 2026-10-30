@@ -33,6 +33,9 @@ OAN_FIELDS: dict[str, dict[str, tuple]] = {
         "middle_name_local": (String, str),
         "last_name_local": (String, str),
         "local_name_from_fayda": (Boolean, bool),
+        # The farmer's email address, typed in one box; derived.sync_email keeps
+        # upstream's emails list (what notifications and Fayda read) in step.
+        "email": (String, str),
         # Productive Safety Net Programme beneficiary.
         "is_psnp_user": (Boolean, bool),
         # Ethiopian calendar twin of birth_date, derived from it.

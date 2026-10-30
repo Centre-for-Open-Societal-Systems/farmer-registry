@@ -2,6 +2,7 @@
 -- them.
 --
 --   farmer_phones         the farmer's phone numbers (FarmerPhone)
+--   farmer_email          the farmer's email address, beside the phone numbers
 --   farmer_land_summary   the farmer's land totals, derived, read only
 --   farmer_enumerator     who collected the record, where and when, read
 --                         only: filled from the submission and the
@@ -35,6 +36,16 @@ WITH sections (section_id, section_register_id, mnemonic, description, is_list, 
             {"widget": "select", "column-key": "is_primary", "widget-type": "input", "widget-label": "is_primary",
              "widget-readonly": false, "widget-data-path": "is_primary",
              "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}}]}]}]}]}'),
+
+  ('farmer_email', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'farmer_email', 'Farmer email address', false, 0,
+   '{"section-id": "farmer_email", "section-title": "farmer_email", "section-editable": true,
+     "panels": [{"panel-id": "farmer_email_row", "panel-orientation": "horizontal", "panels": [
+       {"panel-id": "farmer_email_col_1", "panel-column-span": 3, "panel-orientation": "vertical", "widgets": [
+         {"widget": "text", "widget-id": "email", "widget-type": "input", "widget-label": "email",
+          "widget-readonly": false, "widget-required": false, "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.email",
+          "widget-data-placeholder": "name@example.org",
+          "widget-data-validation": {"pattern": "^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+([.][A-Za-z0-9-]+)+$",
+                                     "patternMessage": "email_format", "maxLength": 254}}]}]}]}'),
 
   ('farmer_land_summary', 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd', 'farmer_land_summary', 'Farmer land totals', false, 0,
    '{"section-id": "farmer_land_summary", "section-title": "land_summary", "section-editable": false,
