@@ -101,3 +101,49 @@ UPDATE g2p_register_sections s SET section_ui_schema=jsonb_set(s.section_ui_sche
 WHERE s.section_id IN ('farmer_farm_inputs','farmer_farm_inputs_intake') AND NOT EXISTS (
   SELECT 1 FROM jsonb_array_elements(s.section_ui_schema::jsonb #> '{panels,0,panels,0,widgets,0,widget-data-columns}') w
   WHERE w->>'column-key'='finance_access_types');
+
+-- Table column order and column wording. This runs after every file that adds
+-- or converts a column of these tables (10, 15 and the multi-choice columns
+-- above), so the order below is the order staff read. A column that is not
+-- listed keeps its place after the listed ones. Display only: no column key,
+-- data path or stored value changes.
+--
+--   farmer_lands        the parcel's Land ID first, then what kind of land and
+--                       how big (size, unit, hectares), then its use and history.
+--                       Soil fertility reads the SOIL_FERTILITY Master Data list;
+--                       rows already hold its codes (SF_HIGH, SF_MEDIUM, SF_LOW).
+--   farmer_farm_inputs  each "used" answer is followed by its amount; water,
+--                       machinery and finance are grouped. The water source
+--                       here is asked about irrigation, and the livestock water
+--                       source is also a column of the livestock tables, so the
+--                       farm-input one says where it comes from.
+CREATE OR REPLACE FUNCTION pg_temp.oan_table_columns(section_ids text[], column_order text[], patches jsonb)
+RETURNS void LANGUAGE sql AS $$
+  UPDATE "public"."g2p_register_sections" s
+  SET "section_ui_schema" = jsonb_set(s."section_ui_schema"::jsonb, '{panels,0,panels,0,widgets,0,widget-data-columns}', (
+    SELECT jsonb_agg(CASE WHEN patches ? (c ->> 'column-key') THEN c || (patches -> (c ->> 'column-key')) ELSE c END
+                     ORDER BY COALESCE(array_position(column_order, c ->> 'column-key'), 1000 + ord))
+    FROM jsonb_array_elements(s."section_ui_schema"::jsonb #> '{panels,0,panels,0,widgets,0,widget-data-columns}')
+         WITH ORDINALITY x(c, ord)))
+  WHERE s."section_id" = ANY (section_ids)
+    AND jsonb_typeof(s."section_ui_schema"::jsonb #> '{panels,0,panels,0,widgets,0,widget-data-columns}') = 'array';
+$$;
+
+SELECT pg_temp.oan_table_columns(
+  ARRAY['farmer_lands'],
+  ARRAY['land_id', 'land_ownership_type', 'land_size', 'unit', 'area_in_hectare', 'soil_fertility',
+        'current_land_use', 'farming_type', 'year_of_acquisition', 'means_of_acquisition', 'land_kebele',
+        'certificate_storage_id', 'remark'],
+  '{"unit": {"widget-label": "land_size_unit"},
+    "soil_fertility": {"widget": "select",
+      "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "SOIL_FERTILITY"},
+                             "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"}}}'::jsonb);
+
+SELECT pg_temp.oan_table_columns(
+  ARRAY['farmer_farm_inputs', 'farmer_farm_inputs_intake'],
+  ARRAY['link_internal_record_id', 'fertilizer_use', 'amount_fertilizer_utilized', 'pesticide_use',
+        'amount_pesticide_utilized', 'insecticide_use', 'amount_insecticide_utilized', 'improved_seed_use',
+        'amount_improved_seed_utilized', 'water_sources', 'irrigation_type', 'access_to_machinery',
+        'machinery_types', 'access_to_finance', 'finance_access_types', 'livestock_water_sources'],
+  '{"water_sources": {"widget-label": "farm_input_water_source"},
+    "livestock_water_sources": {"widget-label": "farm_input_livestock_water_source"}}'::jsonb);

@@ -48,10 +48,10 @@ WITH additions (upstream_section_id, section_id, path, items) AS (
   ('farmer_household_lookup_section_01',
    'farmer_household_lookup',
    '{panels,0,panels,0,widgets}'::text[],
-   '[{"widget": "select", "widget-id": "is_household_head", "widget-type": "input", "widget-label": "is_household_head",
+   '[{"widget": "boolean", "widget-id": "is_household_head", "widget-type": "input", "widget-label": "is_household_head",
       "widget-readonly": false, "widget-required": false,
       "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.is_household_head",
-      "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}}]'::jsonb),
+      "widget-data-format": {"allowUnset": false, "booleanControlType": "radio", "booleanRepresentation": "yes-no"}}]'::jsonb),
 
   -- Livestock tables: gender, condition and production, when the count was
   -- taken and in which season, and disease.
@@ -85,8 +85,10 @@ shared_columns (section_id, items) AS (
      {"widget": "select", "column-key": "is_diseased", "widget-type": "input", "widget-label": "is_diseased",
       "widget-readonly": false, "widget-data-path": "is_diseased",
       "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}},
-     {"widget": "text", "column-key": "disease_type", "widget-type": "input", "widget-label": "disease_type",
-      "widget-readonly": false, "widget-data-path": "disease_type", "widget-data-validation": {"maxLength": 100},
+     {"widget": "select", "column-key": "disease_type", "widget-type": "input", "widget-label": "disease_type",
+      "widget-readonly": false, "widget-data-path": "disease_type",
+      "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "LIVESTOCK_DISEASE"},
+                             "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"},
       "widget-data-options": {"actions": [
         {"action": "show", "condition": {"field": "is_diseased", "value": true, "operator": "equals"}}]}}]'::jsonb) c(cols)
   UNION ALL
@@ -106,7 +108,7 @@ shared_columns (section_id, items) AS (
     SELECT jsonb_agg(jsonb_build_object(
       'widget', 'number', 'column-key', amount, 'widget-type', 'input', 'widget-label', amount,
       'widget-readonly', false, 'widget-data-path', amount,
-      'widget-data-format', jsonb_build_object('allowSigned', false, 'numericType', 'decimal', 'decimalPlaces', 3,
+      'widget-data-format', jsonb_build_object('allowSigned', false, 'numericType', 'decimal', 'decimalPlaces', 2,
                                                'decimalSeparator', '.', 'thousandSeparator', ','),
       'widget-data-validation', jsonb_build_object('min', 0),
       'widget-data-options', jsonb_build_object('actions', jsonb_build_array(

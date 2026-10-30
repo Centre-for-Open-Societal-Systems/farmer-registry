@@ -26,6 +26,13 @@ BEGIN
       result := jsonb_set(result, '{widget-data-format}',
         COALESCE(result->'widget-data-format', '{}'::jsonb) || '{"dateConstraint":"past-only"}'::jsonb);
     END IF;
+    -- A table prints these two dates in the Ethiopian calendar they are
+    -- entered in. The table formats a cell with the format's dateFormat and
+    -- calendar (registry-widgets utils/formatting.ts, utils/calendarDates.ts).
+    IF node->>'column-key' IN ('planted_date', 'collected_date') THEN
+      result := jsonb_set(result, '{widget-data-format}',
+        COALESCE(result->'widget-data-format', '{}'::jsonb) || '{"dateFormat":"DD/MM/YYYY","calendar":"ethiopian"}'::jsonb);
+    END IF;
   ELSE
     result := node;
   END IF;

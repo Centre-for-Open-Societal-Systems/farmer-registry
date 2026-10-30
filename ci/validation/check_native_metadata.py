@@ -136,13 +136,15 @@ def probe(host, mode):
                 assert section_id in bound, (section_id, 'household section is not bound')
                 found = {w.get('widget-id') or w.get('column-key') for w in widgets(section_map[section_id])}
                 assert fields <= found, (section_id, fields-found)
-            # Every dropdown reads Master Data; a static list is only ever a yes/no.
+            # Every dropdown reads Master Data; a static list is only ever a yes/no,
+            # except a read-only display of a derived code (the land summary's ownership).
             for section_id, schema in sections:
                 if section_id not in OAN_SECTIONS:
                     continue
                 for w in widgets(schema):
                     source = w.get('widget-data-source') or {}
-                    if w.get('widget') in ('select', 'multi-select') and source.get('type') == 'static':
+                    if (w.get('widget') in ('select', 'multi-select') and source.get('type') == 'static'
+                            and not w.get('widget-readonly')):
                         values = {type(o.get('value')) for o in source.get('options', [])}
                         assert values <= {bool}, (section_id, w.get('widget-id') or w.get('column-key'), 'choice list inside the registry')
                     if w.get('widget') in ('select', 'multi-select') and source.get('type') == 'api':
