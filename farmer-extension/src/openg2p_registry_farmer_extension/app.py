@@ -55,6 +55,7 @@ class Initializer(FarmerInitializer):
 
             await migrate_existing_schema(dbengine.get())
             await fill_derived_columns()
+            await rename_records()
 
         asyncio.run(migrate())
 
@@ -113,6 +114,49 @@ async def fill_derived_columns() -> None:
             if rows:
                 _logger.info("Filled search_text on %d %s rows", len(rows), cls.__tablename__)
         await session.commit()
+
+
+async def rename_records() -> None:
+    """Give the rows saved before the readable names the name they now get.
+
+    record_name is stored when a row is saved, so every farmer and child row
+    keeps the name it was saved with (the father's name missing, raw codes)
+    until it is saved again. This recomposes it for the register, history and
+    intake form rows of the registers in record_names.COMPOSERS. A row is changed only
+    when its stored name differs from the composed one, so this is a no-op once
+    they agree and safe to run on every start. History rows are renamed too:
+    they are snapshots, but the name is a title and not part of the record.
+    """
+    from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import models as farmer_models
+    from sqlalchemy import bindparam, inspect as sa_inspect, update
+
+    from .register_domain.record_names import COMPOSERS, compose
+
+    engine = dbengine.get()
+    mnemonics = [m for m in COMPOSERS if m != "FarmerPhone"]
+    tables = [
+        (m, getattr(farmer_models, f"{prefix}{m}").__table__)
+        for m in mnemonics
+        for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm")
+    ] + [("FarmerPhone", getattr(_oan_models, f"{prefix}FarmerPhone").__table__)
+         for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm")]
+    async with engine.begin() as conn:
+        for mnemonic, table in tables:
+            exists = await conn.run_sync(lambda sconn, name=table.name: sa_inspect(sconn).has_table(name))
+            if not exists or "record_name" not in table.c or not table.primary_key.columns:
+                continue
+            keys = list(table.primary_key.columns)
+            changes = []
+            for row in (await conn.execute(table.select())).mappings():
+                name = compose(mnemonic, dict(row))
+                if name and name != row["record_name"]:
+                    changes.append({**{f"pk_{k.name}": row[k.name] for k in keys}, "new_name": name})
+            if changes:
+                statement = update(table).values(record_name=bindparam("new_name")).where(
+                    *[k == bindparam(f"pk_{k.name}") for k in keys])
+                for start in range(0, len(changes), 500):
+                    await conn.execute(statement, changes[start:start + 500])
+                _logger.info("Renamed %d rows of %s", len(changes), table.name)
 
 
 def column_ddl(column, dialect) -> str:

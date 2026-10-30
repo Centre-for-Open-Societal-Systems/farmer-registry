@@ -41,7 +41,7 @@ def test_oan_subclasses_fill_search_text_and_record_name_like_native_rows():
         oan._populate_derived_columns(None, None, row)
         for value in ('FR-123456789012', '502628318720', 'Berhanu', 'Abebe', 'Kebede'):
             assert value in row.search_text
-        assert row.record_name
+        assert row.record_name == 'Berhanu Abebe Kebede'
 
 
 def test_registering_the_listeners_again_adds_nothing():
@@ -49,3 +49,13 @@ def test_registering_the_listeners_again_adds_nothing():
     before = len(list(dispatch))
     oan._listen_like_core(oan.G2PRegisterFarmer)
     assert len(list(dispatch)) == before
+
+
+def test_child_rows_are_named_from_their_values_after_core_names_them():
+    """Core joins every class's name fields, so the readable name is set after it."""
+    row = native.G2PRegisterLand(land_size=1.25, unit='HECTARE', current_land_use='GRAZING')
+    oan._set_readable_record_name(row, 'Land')
+    assert row.record_name == '1.25 Hectare, Grazing'
+    for mnemonic in oan.READABLE_NAME_REGISTERS:
+        for prefix in ('G2PRegister', 'G2PIntakeForm'):
+            assert getattr(native, f'{prefix}{mnemonic}').__mapper__.dispatch.before_insert

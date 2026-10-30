@@ -20,6 +20,7 @@ from .derivations import DERIVATIONS, Derivations
 from .domain_bounds import check_domain_bounds
 from .household_intake import install_farmer_household_check  # noqa: F401
 from .registrant_auth_compat import install_registrant_auth_compat  # noqa: F401
+from ..record_names import compose
 from .farmer_phone import FarmerPhoneService
 from .upstream_messages import reword
 from .widget_rules import Rules, _Say, check_record, collect_rules, normalize_record
@@ -138,10 +139,21 @@ class WidgetRuleValidation:
 _PREFIX = "G2PRegisterDomainService"
 
 
+class ReadableRecordName:
+    """The record name composed from the row's own values (record_names.py);
+    the farmer extension's name stays the fallback for a row naming nothing."""
+
+    def construct_record_name(self, payload: dict, extra: list[str] | None = None) -> str:
+        name = compose(self.register_mnemonic(), payload)
+        if not name:
+            return super().construct_record_name(payload, extra)
+        return " ".join([*(str(item).strip() for item in extra or [] if str(item).strip()), name])
+
+
 def _with_widget_rules(name: str, base: type) -> type:
     upstream = base.validate_domain_attributes is not G2PRegisterDomainService.validate_domain_attributes
     derivations = DERIVATIONS.get(name[len(_PREFIX):], Derivations)
-    return type(name, (WidgetRuleValidation, derivations, base),
+    return type(name, (ReadableRecordName, WidgetRuleValidation, derivations, base),
                 {"__module__": __name__, "_upstream_validates": upstream, "_derive_first": True,
                  "_checks_fayda_id": name == _PREFIX + "Farmer",
                  "_checks_master_data": name == _PREFIX + "Farmer"})
