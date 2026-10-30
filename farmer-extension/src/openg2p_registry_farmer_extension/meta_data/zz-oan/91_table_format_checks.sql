@@ -117,8 +117,9 @@ BEGIN
 
   -- Labels staff read.
   SELECT string_agg(t.k, ', ') INTO found FROM (VALUES
-    ('phone_number_international', 'Phone number (international)'), ('land_size_unit', 'Land size unit'),
-    ('farm_input_water_source', 'Water source for irrigation'),
+    ('phone_number_international', 'Phone number (international)'), ('land_size_unit', 'Land size unit'), ('livestock_sex', 'Sex'),
+    ('phone_country_code', 'Phone country (2-letter code)'),
+    ('irrigation_water_source', 'Water source for irrigation'),
     ('farm_input_livestock_water_source', 'Livestock water source (farm input)'),
     ('amount_fertilizer_utilized', 'Amount of fertilizer used (kg)'),
     ('amount_pesticide_utilized', 'Amount of pesticide used (litres)'),

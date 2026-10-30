@@ -65,7 +65,7 @@ WITH additions (upstream_section_id, section_id, path, items) AS (
 ),
 shared_columns (section_id, items) AS (
   SELECT section_id, cols FROM (VALUES ('farmer_livestock'), ('farmer_livestock_intake')) s(section_id),
-  LATERAL (SELECT '[{"widget": "select", "column-key": "gender", "widget-type": "input", "widget-label": "gender",
+  LATERAL (SELECT '[{"widget": "select", "column-key": "gender", "widget-type": "input", "widget-label": "livestock_sex",
       "widget-readonly": false, "widget-data-path": "gender",
       "widget-data-source": {"type": "api", "method": "POST", "params": {"attribute_id": "GENDER"}, "service": "attributes", "endpoint": "values", "labelKey": "value_display", "valueKey": "value_code"}},
      {"widget": "select", "column-key": "body_condition", "widget-type": "input", "widget-label": "body_condition",

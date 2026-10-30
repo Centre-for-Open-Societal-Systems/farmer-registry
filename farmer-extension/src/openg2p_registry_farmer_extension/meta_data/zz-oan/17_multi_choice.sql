@@ -145,5 +145,5 @@ SELECT pg_temp.oan_table_columns(
         'amount_pesticide_utilized', 'insecticide_use', 'amount_insecticide_utilized', 'improved_seed_use',
         'amount_improved_seed_utilized', 'water_sources', 'irrigation_type', 'access_to_machinery',
         'machinery_types', 'access_to_finance', 'finance_access_types', 'livestock_water_sources'],
-  '{"water_sources": {"widget-label": "farm_input_water_source"},
+  '{"water_sources": {"widget-label": "irrigation_water_source"},
     "livestock_water_sources": {"widget-label": "farm_input_livestock_water_source"}}'::jsonb);
