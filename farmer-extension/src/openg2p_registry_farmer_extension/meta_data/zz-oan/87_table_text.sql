@@ -12,7 +12,7 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "irrigation_water_source": "Water source for irrigation",
  "farm_input_livestock_water_source": "Livestock water source (farm input)",
  "livestock_sex": "Sex",
- "phone_country_code": "Phone country (2-letter code)",
+ "phone_country_code": "Phone country code",
  "amount_fertilizer_utilized": "Amount of fertilizer used (kg)",
  "amount_pesticide_utilized": "Amount of pesticide used (litres)",
  "amount_insecticide_utilized": "Amount of insecticide used (litres)",
@@ -32,4 +32,4 @@ WHERE "language_code" = 'en';
 --   seed, litres for pesticide and insecticide) until the data owner confirms.
 -- livestock_sex: the animal's sex; the livestock tables no longer share the
 --   farmer's "gender" key.
--- phone_country_code: the 2-letter country of the phone number, not a dialling code.
+-- phone_country_code: the phone number's country, as a 2-letter code or a dialling code such as +251.

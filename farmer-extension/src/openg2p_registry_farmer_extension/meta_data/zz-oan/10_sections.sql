@@ -108,7 +108,7 @@ shared_columns (section_id, items) AS (
     SELECT jsonb_agg(jsonb_build_object(
       'widget', 'number', 'column-key', amount, 'widget-type', 'input', 'widget-label', amount,
       'widget-readonly', false, 'widget-data-path', amount,
-      'widget-data-format', jsonb_build_object('allowSigned', false, 'numericType', 'decimal', 'decimalPlaces', 2,
+      'widget-data-format', jsonb_build_object('allowSigned', false, 'numericType', 'decimal', 'decimalPlaces', 3,
                                                'decimalSeparator', '.', 'thousandSeparator', ','),
       'widget-data-validation', jsonb_build_object('min', 0),
       'widget-data-options', jsonb_build_object('actions', jsonb_build_array(

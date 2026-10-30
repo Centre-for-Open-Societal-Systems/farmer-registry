@@ -363,13 +363,13 @@ BEGIN
   END IF;
   -- Every dropdown's options come from Master Data (widget-data-source type
   -- "api", service "attributes"); a yes/no is a boolean, not a list. The one
-  -- exception is a read-only display of a code the server derives (the land
+  -- exception is the display of a code the server derives (the land
   -- summary's ownership: OWNER, TENANT or HYBRID), which nobody chooses.
   IF EXISTS (
     SELECT 1 FROM "public"."g2p_register_sections", jsonb_path_query(section_ui_schema, 'strict $.**') w
     WHERE section_id = ANY (pg_temp.oan_section_ids())
       AND jsonb_typeof(w) = 'object' AND w->>'widget' IN ('select', 'multi-select')
-      AND COALESCE((w->>'widget-readonly')::boolean, false) = false
+      AND NOT (section_id = 'farmer_land_summary' AND w->>'widget-id' = 'land_ownership')
       AND w->'widget-data-source'->>'type' = 'static'
       AND EXISTS (SELECT 1 FROM jsonb_array_elements(w->'widget-data-source'->'options') o
                   WHERE jsonb_typeof(o->'value') <> 'boolean')
