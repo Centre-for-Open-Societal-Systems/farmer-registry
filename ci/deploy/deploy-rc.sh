@@ -109,6 +109,9 @@ if ! helm upgrade "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
   -f "$STATE/values.yaml" "${UPGRADE_FLAGS[@]}" \
   > "$STATE/upgrade.log" 2>&1; then
   echo "Registry Helm upgrade failed (mode: $MODE). Inspect Helm history and seed/sanity pod logs with the deployment credentials." >&2
+  if [[ "$MODE" == normal && "$DELIVERY_ENVIRONMENT" == dev ]]; then
+    echo 'The atomic upgrade has put the previous revision back (see the newest "rollback" row in the history below). A rollback restores the chart and values; it does not undo what hooks wrote to a database.' >&2
+  fi
   guard diagnose "$STATE/upgrade.log" || echo 'Could not classify the private Helm error log.' >&2
   # Print status only; manifests and raw seed logs may contain credentials/data.
   helm history "$HELM_RELEASE" -n "$HELM_NAMESPACE" --max 3 || true

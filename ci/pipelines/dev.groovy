@@ -13,10 +13,12 @@ pipeline {
         HELM_RELEASE = 'farmer-registry'
         HELM_NAMESPACE = 'farmer'
         KUBECONFIG_CREDENTIAL = 'farmer-dev-kubeconfig'
+        // GitHub App credential (username + installation token) with Contents and Pull requests write on this repository.
+        PIN_PR_CRED_ID = 'oan-ci-app'
     }
     parameters {
-        choice(name: 'DELIVERY_ACTION', choices: ['publish-only', 'deploy', 'fresh-install'],
-            description: 'publish-only builds and pushes the images. deploy upgrades the existing dev release with them. fresh-install backs up the dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all dev farmer data is lost; Commons is untouched).')
+        choice(name: 'DELIVERY_ACTION', choices: ['deploy', 'fresh-install'],
+            description: 'Leave on deploy: every develop build publishes the images and upgrades the existing dev release with them (the pinned chart, the live values), and Helm rolls back to the previous revision if the upgrade fails. fresh-install backs up the dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all dev farmer data is lost; Commons is untouched).')
         booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
             description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
         booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
@@ -36,8 +38,8 @@ pipeline {
                     }
                     env.IMAGE_TAG = commit.take(12)
                     env.SOURCE_COMMIT = commit
-                    // Branch-index builds may not yet have the new parameters.
-                    // Resolve that case to publication, never cluster mutation.
+                    // Branch-index builds may not yet have the parameter definition, and a build started
+                    // before this change still offers the retired publish-only choice: both mean deploy.
                     env.DELIVERY_ACTION = sh(returnStdout: true,
                         script: 'python3 ci/delivery.py action').trim()
                 }
@@ -217,6 +219,29 @@ pipeline {
                         }
                     }
                     archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('Propose chart pin update') {
+            // Last stage: when oan-helm main has a newer Farmer chart than ci/deploy/oan-chart.json, open a pull
+            // request to develop that moves the pin. It never deploys and never pushes to develop; a person merges
+            // it, and the next develop build deploys it. A failure here marks this stage UNSTABLE and never fails the build.
+            when {
+                beforeAgent true
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' } }
+            }
+            agent { label 'vpn-agent2' }
+            options { timeout(time: 10, unit: 'MINUTES') }
+            steps {
+                checkout scm
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    withCredentials([usernamePassword(credentialsId: "${PIN_PR_CRED_ID}", usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                        sh '''
+                            set -eu
+                            docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                            VALIDATION_IMAGE="coss-ci/validation:$IMAGE_TAG" python3 ci/deploy/propose_pin_pr.py
+                        '''
+                    }
                 }
             }
         }

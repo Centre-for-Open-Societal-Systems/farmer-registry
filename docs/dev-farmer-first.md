@@ -6,19 +6,45 @@ Livestock, Commons, the connector and the dashboard releases are separate.
 Staging is outside this document.
 
 Every build validates the source, builds the six images and, on `develop`,
-publishes them to ECR under the checked-out commit tag. What happens next is the
-`DELIVERY_ACTION` parameter (trigger a deploy with
-`buildWithParameters?DELIVERY_ACTION=deploy`):
+publishes them to ECR under the checked-out commit tag. Then the same build
+upgrades the existing dev release with them: there is no button for a normal
+deploy. `DELIVERY_ACTION` stays only to choose the rare rebuild:
 
 | Action | Effect |
 | --- | --- |
-| `publish-only` (default) | Images published; the live release is untouched. |
-| `deploy` | `ci/deploy/deploy-dev.sh` upgrades the existing release with this build's images and the chart pinned in `ci/deploy/oan-chart.json`. Values come from the live release; private values stay out of artifacts. |
-| `fresh-install` | `ci/deploy/fresh-install-dev.sh` rebuilds the dev environment from an empty database. |
+| `deploy` (default) | `ci/deploy/deploy-dev.sh` upgrades the existing release with this build's images and the chart pinned in `ci/deploy/oan-chart.json`. Values come from the live release; private values stay out of artifacts. If the upgrade or its hooks fail, Helm puts the previous revision back (`--atomic`), the build fails, and the next build starts from the working release. A rollback restores the chart and values, not data that hooks wrote to a database. |
+| `fresh-install` | `ci/deploy/fresh-install-dev.sh` rebuilds the dev environment from an empty database. Deliberate only. |
+
+A branch-index build, or one started before this change, resolves an empty or
+retired `publish-only` value to `deploy`. A release left in the `failed` state is
+recovered by the next build without the automatic rollback (it would restore an
+older revision over database changes the failed one already made).
 
 The chart is published by [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm);
 `oan-chart.json` pins its version and SHA-256, and `deploy-rc.sh` refuses any
-other archive. Changing the pin is a reviewed commit.
+other archive. The pin moves in a reviewed pull request that the build opens
+itself (next section).
+
+## Chart pin updates
+
+The last stage of a successful `deploy` build (`Propose chart pin update`) runs
+`ci/deploy/propose_pin_pr.py`. It compares the pin with the newest Farmer chart on
+the head of oan-helm `main`:
+
+- same chart: "up to date", nothing happens;
+- newer chart, same platform: it writes the new pin on a branch
+  `bot/oan-chart-pin-<version>-<sha8>`, verifies the archive and runs the pin tests in
+  the validation container, and opens a pull request to `develop`. Merging it is the
+  deploy of the new chart; the PR text says what to read first;
+- newer chart with another platform version: reported, nothing proposed (the images,
+  `oan_compat.py` and the chart dependency must move with it; see
+  `ci/deploy/bump_pin.py --help`);
+- an older chart, or a different archive for the same version: refused.
+
+It needs the Jenkins credential `oan-ci-app` (GitHub App, Contents and Pull requests
+write on this repository). Without it the stage is UNSTABLE and the build still passes.
+By hand: `python3 ci/deploy/bump_pin.py --latest` (dry run) or `<commit> --write`.
+The staging pin (`oan-chart-staging.json`) is never touched by this stage.
 
 ## Fresh install
 

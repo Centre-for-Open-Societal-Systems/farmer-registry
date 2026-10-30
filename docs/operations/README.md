@@ -21,10 +21,11 @@ pull requests validate without publishing or deploying.
 
 Use the [develop-to-staging merge handoff](merge-develop-staging.md) for the migration PR, promotion sequence, seeded-farmer counts and remaining staging cutover gates.
 
-Merged develop builds validate, build six Registry images and publish them
-commit-tagged (`DELIVERY_ACTION=publish-only`, the default). Choosing
-`deploy` additionally upgrades the existing release with them; `fresh-install`
-rebuilds the dev environment from an empty database (see [dev delivery](../dev-farmer-first.md)).
+Merged develop builds validate, build six Registry images, publish them
+commit-tagged and upgrade the existing dev release with them; Helm restores the
+previous revision if that fails. `fresh-install` (`DELIVERY_ACTION`) rebuilds the
+dev environment from an empty database (see [dev delivery](../dev-farmer-first.md)),
+which also describes the automatic chart-pin pull request.
 Registry failures are fatal. Available Farmer add-ons release independently;
 their failures mark Jenkins unstable. Missing branches or application files
 preserve existing deployments.
