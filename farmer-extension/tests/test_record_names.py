@@ -78,8 +78,13 @@ def test_unknown_register_composes_nothing():
 def test_readable_name_replaces_the_value_and_keeps_an_application_reference():
     row = {"land_size": 3, "unit": "HECTARE", "application_reference": "APP-1"}
     assert names.readable_name("Land", row, "3 HECTARE") == "3 Hectare"
-    assert names.readable_name("Land", row, "3 HECTARE APP-1") == "3 Hectare APP-1"
+    assert names.readable_name("Land", row, "3 HECTARE", intake=True) == "3 Hectare APP-1"
+    assert names.readable_name("Land", {"land_size": 3, "unit": "HECTARE"}, "x", intake=True) == "3 Hectare"
     assert names.readable_name("Land", {}, "Land") == "Land"
+
+
+def test_search_text_replaces_the_name_not_a_part_of_the_functional_id():
+    assert names.renamed_search_text("FR-AB AB cat", "AB", "Abebe") == "FR-AB Abebe cat"
 
 
 def test_search_text_follows_the_new_name():

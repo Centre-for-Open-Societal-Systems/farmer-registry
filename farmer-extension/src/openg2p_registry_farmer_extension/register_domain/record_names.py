@@ -136,17 +136,18 @@ def compose(mnemonic: str, payload: dict) -> str:
     return composer(payload).strip() if composer else ""
 
 
-def readable_name(mnemonic: str, payload: dict, value):
+def readable_name(mnemonic: str, payload: dict, value, intake: bool = False):
     """The name to store for a row being given `value` as its record name.
 
-    The composed name replaces `value`. An intake form's name carries the
-    application reference core appends; it is kept when `value` had it.
+    The composed name replaces `value`. An intake form's name ends with its
+    application reference (core's construct_intake_record_name), which the
+    composed name gets when the row has one.
     """
     name = compose(mnemonic, payload)
     if not name:
         return value
     reference = _text(payload.get("application_reference"))
-    if reference and reference in _text(value) and reference not in name:
+    if intake and reference and reference not in name:
         name = f"{name} {reference}"
     return name
 
@@ -161,6 +162,9 @@ def renamed_search_text(search_text, old_name, new_name):
     if not search_text:
         return search_text
     old = _text(old_name)
-    if old and old in search_text:
-        return search_text.replace(old, new_name, 1)
+    at = search_text.rfind(old) if old else -1
+    if at >= 0:
+        # the last occurrence: core puts the record name after the functional
+        # id, which the name could otherwise match inside
+        return search_text[:at] + new_name + search_text[at + len(old):]
     return f"{search_text} {new_name}"

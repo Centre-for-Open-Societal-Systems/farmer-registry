@@ -91,8 +91,6 @@ def test_a_row_naming_nothing_keeps_the_platforms_name(session):
     assert flushed(session, native.G2PRegisterLand()) == "Land"
 
 
-def test_an_intake_form_name_set_with_its_application_reference_keeps_it(session):
-    """The service sets construct_intake_record_name's value, reference included."""
+def test_a_flushed_intake_form_keeps_its_application_reference(session):
     form = native.G2PIntakeFormLand(land_size=3, unit="HECTARE", application_reference="APP-1")
-    form.record_name = "3 HECTARE AGRICULTURAL APP-1"
-    assert form.record_name == "3 Hectare APP-1"
+    assert flushed(session, form) == "3 Hectare APP-1"

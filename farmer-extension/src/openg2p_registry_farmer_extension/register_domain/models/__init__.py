@@ -1,5 +1,7 @@
 # Everything the farmer extension provides, then OAN's additions below. Core
 # resolves classes by name on this module, so a name defined here wins.
+import logging
+
 from openg2p_registry_core.models import G2PRegisterAuthentication
 from openg2p_registry_core.models.g2p_register import _populate_record_name, _populate_search_text
 from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import models as _farmer
@@ -15,6 +17,9 @@ from .farmer_phone import (  # noqa: F401  re-exported for core
     G2PRegisterFarmerPhone,
     G2PRegisterHistoryFarmerPhone,
 )
+
+
+_logger = logging.getLogger("oan-record-names")
 
 
 def _add_oan_columns() -> None:
@@ -98,7 +103,7 @@ for _cls in (G2PRegisterFarmer, G2PIntakeFormFarmer):
 READABLE_NAME_REGISTERS = ("Farmer", "Land", "Crop", "Livestock", "MembershipDetails", "FarmInputs")
 
 
-def _readable_name_interceptor(mnemonic: str):
+def _readable_name_interceptor(mnemonic: str, intake: bool):
     def intercept(target, value, old, initiator):
         """Hand back the readable name whatever the name being set.
 
@@ -111,8 +116,10 @@ def _readable_name_interceptor(mnemonic: str):
         and keeps core's name for a row that names nothing.
         """
         try:
-            return readable_name(mnemonic, target.to_dict(), value)
-        except Exception:  # an unloaded attribute must never fail a save
+            return readable_name(mnemonic, target.to_dict(), value, intake)
+        except Exception as error:  # an unloaded attribute must never fail a save
+            _logger.warning("Keeping the record name of %s %s: %s", type(target).__name__,
+                            getattr(target, "__dict__", {}).get("internal_record_id"), error)
             return value
 
     return intercept
@@ -123,7 +130,7 @@ for _mnemonic in READABLE_NAME_REGISTERS:
         event.listen(
             getattr(_farmer, f"{_prefix}{_mnemonic}").record_name,
             "set",
-            _readable_name_interceptor(_mnemonic),
+            _readable_name_interceptor(_mnemonic, _prefix == "G2PIntakeForm"),
             retval=True,
             propagate=True,
         )
