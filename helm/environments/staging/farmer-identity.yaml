@@ -1,29 +1,22 @@
-# Merge over the protected installed values. Storage, routes, callback URLs and
-# Secret references come from that release, not a copy of development values.
+# Staging counterpart of ../dev/farmer-identity.yaml: the same OAN chart values with the staging
+# hosts (base domain oanstaging.com, no .development label). Merged over the reviewed environment
+# values by ci/deploy/deployment.py; do not install this file by itself. Commons IAM's provider 1
+# must be configured for this SAME realm by its owning release.
 global:
   keycloakBaseUrl: https://keycloak.oanstaging.com
   keycloakRealm: staff
   keycloakIssuerUrl: https://keycloak.oanstaging.com/realms/staff
 registry:
-  # Retain setup Jobs for the entire Helm wait, including image pulls. A 100s
-  # TTL removed completed Jobs while Helm was still waiting during cutover.
-  postgres-init:
-    job:
-      ttlSecondsAfterFinished: 3600
-  keycloak-init:
-    job:
-      ttlSecondsAfterFinished: 3600
-  idgenerator:
-    postgres-init:
-      job:
-        ttlSecondsAfterFinished: 3600
-    idGenerator:
-      image:
-        repository: openg2p/openg2p-id-generator
-        tag: 1.1.2@sha256:72e0b84b14b54aefc399104ad10139ea8b7ac1592cdde47ba15589a4c478945e
+  staffUi:
+    iamPublicUrl: https://staff-iam.oanstaging.com
+    envVars:
+      IAM_URL: https://staff-iam.oanstaging.com
+      KEYCLOAK_LOGOUT_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/logout
+      LOGIN_PROVIDER_ID: '1'
   staffApi:
     envVars:
       REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_ID: farmer-registry-staff-portal
+      REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL: http://commons-services-iam-staff-portal-api.commons.svc.cluster.local
       REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
       REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
     envVarsFrom:
@@ -35,6 +28,7 @@ registry:
   partnerApi:
     envVars:
       REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_ID: farmer-registry-staff-portal
+      # Staging never accepts unsigned partner traffic; the pipeline checks this is rendered.
       REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED: 'true'
       REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
       REGISTRY_PARTNER_API_KEYMANAGER_AUTH_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token

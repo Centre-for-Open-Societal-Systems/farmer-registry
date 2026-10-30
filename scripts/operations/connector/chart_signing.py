@@ -23,6 +23,18 @@ EXTRA = '''{{- if .Values.cossSigning.enabled }}
 - name: CONNECTOR_CELERY_QUEUE
   value: {{ .Values.cossQueue | quote }}
 {{- end }}
+{{- with .Values.adminAuth }}
+- name: CONNECTOR_ADMIN_AUTH_ISSUER
+  value: {{ required "adminAuth.issuer is required" .issuer | quote }}
+- name: CONNECTOR_ADMIN_AUTH_JWKS_URL
+  value: {{ required "adminAuth.jwksUrl is required" .jwksUrl | quote }}
+- name: CONNECTOR_ADMIN_AUTH_CLIENT_ID
+  value: {{ required "adminAuth.clientId is required" .clientId | quote }}
+- name: CONNECTOR_ADMIN_AUTH_ROLE
+  value: {{ required "adminAuth.role is required" .role | quote }}
+- name: CONNECTOR_ADMIN_AUTH_UI_CLIENT_ID
+  value: {{ required "adminAuth.uiClientId is required" .uiClientId | quote }}
+{{- end }}
 '''
 
 

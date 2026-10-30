@@ -30,7 +30,36 @@ OMITTABLE = {
 }
 
 
-def render(documents, values):
+def seed_environment(result, values):
+    """Add dbSeed.envVars / dbSeed.envVarsFrom to the db-seed Job.
+
+    The platform chart's Job template renders no free-form environment, so these values
+    never reach the Job on their own. Only literals and Secret references are added; a
+    name the Job already sets is never overridden.
+    """
+    config = values.get('registry', {}).get('dbSeed', {})
+    additions = []
+    for name, value in (config.get('envVars') or {}).items():
+        if value is not None:
+            additions.append({'name': name, 'value': str(value)})
+    for name, value in (config.get('envVarsFrom') or {}).items():
+        if value is not None:
+            additions.append({'name': name, 'valueFrom': value})
+    if not additions:
+        return
+    jobs = [d for d in result if d.get('kind') == 'Job' and d['metadata']['name'] == RELEASE + '-db-seed']
+    if len(jobs) != 1:
+        raise ValueError('db-seed Job required to carry dbSeed environment')
+    containers = [c for c in pod(jobs[0]).get('containers', []) if c['name'] == 'db-seed']
+    if len(containers) != 1:
+        raise ValueError('db-seed container required')
+    present = {e['name'] for e in containers[0].setdefault('env', [])}
+    if any(a['name'] in present for a in additions):
+        raise ValueError('dbSeed environment would override the Job environment')
+    containers[0]['env'].extend(additions)
+
+
+def render(documents, values, environment=None):
     result = copy.deepcopy(documents)
     resources = index(result)
     for resource in result:
@@ -47,19 +76,30 @@ def render(documents, values):
         for container in pod(resource).get('containers', []) + pod(resource).get('initContainers', []):
             if 'env' in container:
                 container['env'] = [entry for entry in container['env'] if entry['name'] not in omitted]
+    if environment == 'staging':
+        seed_environment(result, values)
     return result
 
 
+# The corrections above were reviewed against this platform; another one needs a new review.
+REVIEWED_PLATFORMS = {'1.2.2-rc.614'}
+# Environments that render the OAN chart, each into namespace farmer.
+ENVIRONMENTS = ('dev', 'staging')
+
+
 def main():
-    if (os.environ.get('DELIVERY_ENVIRONMENT'), os.environ.get('HELM_NAMESPACE'),
-            os.environ.get('HELM_RELEASE')) != ('dev', 'farmer', RELEASE):
-        raise ValueError('OAN compatibility renderer requires dev/farmer')
+    environment = os.environ.get('DELIVERY_ENVIRONMENT')
+    if (environment not in ENVIRONMENTS or os.environ.get('HELM_NAMESPACE') != 'farmer'
+            or os.environ.get('HELM_RELEASE') != RELEASE):
+        raise ValueError('OAN compatibility renderer requires dev/farmer or staging/farmer')
     pin = verify(os.environ['OAN_CHART_ARCHIVE'])
-    if pin['version'] != profile()['version']:
+    if pin.get('environment') != environment:
+        raise ValueError('Compatibility renderer pin belongs to another environment')
+    if pin['version'] != profile(environment)['version'] or pin['platformVersion'] not in REVIEWED_PLATFORMS:
         raise ValueError('Compatibility corrections require review for another chart')
     values = load(os.environ['OAN_VALUES_FILE'])
     docs = [doc for doc in yaml.safe_load_all(sys.stdin) if isinstance(doc, dict)]
-    docs = render(docs, values)
+    docs = render(docs, values, environment)
     if os.environ.get('OAN_CHART_ONLY', 'false') == 'true':
         docs = [doc for doc in docs if doc.get('kind') != 'Job']
     sys.stdout.write(yaml.safe_dump_all(docs, sort_keys=False))

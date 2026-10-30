@@ -46,9 +46,9 @@ def test_staging_credentials_use_dedicated_secrets_and_reject_dev_namespace():
     def staging(namespace):
         return subprocess.run(["helm", "template", "farmer-connector-credentials", str(CHART),
                                "-n", namespace, "-f", str(values)], capture_output=True, text=True, timeout=60)
-    result = staging("far")
+    result = staging("farmer")
     assert result.returncode == 0
     items = list(yaml.safe_load_all(result.stdout))
-    assert {item["metadata"]["name"] for item in items} == {"farmer-connector-v2-far-db", "farmer-connector-v2-far-signing"}
-    assert all(item["metadata"]["namespace"] == "far" for item in items)
-    assert staging("farmer").returncode != 0
+    assert {item["metadata"]["name"] for item in items} == {"farmer-connector-v2-staging-db", "farmer-connector-v2-staging-signing"}
+    assert all(item["metadata"]["namespace"] == "farmer" for item in items)
+    assert staging("far").returncode != 0

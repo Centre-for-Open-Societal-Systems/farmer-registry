@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -54,6 +55,16 @@ def evidence(monkeypatch):
             "registry": {"registry": ECR, "sourceCommit": SHA, "images": images}}
 
 
+@pytest.fixture
+def oan_evidence(evidence):
+    """Evidence of the OAN install in namespace farmer: no baseline release, so no baseline fields."""
+    record = copy.deepcopy(evidence)
+    record.update(namespace="farmer", platform=staging.pinned_platform())
+    for field in staging.BASELINE_FIELDS:
+        del record[field]
+    return record
+
+
 def verify(tmp_path, record, now=NOW):
     path = tmp_path / "evidence.json"
     path.write_text(json.dumps(record))
@@ -72,20 +83,66 @@ def test_safe_promotion_record_does_not_export_unknown_private_fields(tmp_path, 
     assert "synthetic-private-value" not in json.dumps(record["registry"])
 
 
-def test_actual_cli_rejects_unverified_template_and_accepts_recorded_staging_status(tmp_path, evidence):
+def test_actual_cli_rejects_unverified_template_and_accepts_recorded_staging_status(tmp_path, oan_evidence):
     path, status = tmp_path / "rehearsal.json", tmp_path / "status.json"
     created = subprocess.run([sys.executable, str(ROOT / "ci/deploy/staging.py"), "template", str(path)], capture_output=True, text=True)
     assert created.returncode == 0
     template = json.loads(path.read_text())
-    status.write_text(json.dumps({"name": "farmer-registry", "namespace": "far", "version": 36, "info": {"status": "deployed"}}))
+    assert template["namespace"] == "farmer" and template["platform"] == "1.2.2-rc.614"
+    assert not set(staging.BASELINE_FIELDS) & set(template)
+    status.write_text(json.dumps({"name": "farmer-registry", "namespace": "farmer", "version": 3, "info": {"status": "deployed"}}))
     env = dict(os.environ, DELIVERY_ENVIRONMENT="staging", STAGING_EVIDENCE_FILE=str(path), SOURCE_COMMIT=SHA)
     command = [sys.executable, str(ROOT / "ci/deploy/deployment.py"), "upgrade-mode", str(status)]
     assert subprocess.run(command, env=env, capture_output=True, text=True).returncode == 1
-    evidence.update(deliveryHash=template["deliveryHash"], verifiedAt=datetime.now(timezone.utc).isoformat())
-    path.write_text(json.dumps(evidence))
+    oan_evidence.update(deliveryHash=template["deliveryHash"], verifiedAt=datetime.now(timezone.utc).isoformat())
+    path.write_text(json.dumps(oan_evidence))
     accepted = subprocess.run(command, env=env, capture_output=True, text=True)
     assert accepted.returncode == 0, accepted.stderr
-    assert accepted.stdout == "normal\n"
+    assert accepted.stdout.strip() == "normal"
+
+
+def test_oan_evidence_reads_the_platform_from_the_pin_and_needs_no_baseline(tmp_path, oan_evidence):
+    assert staging.pinned_platform() == "1.2.2-rc.614"
+    record = verify(tmp_path, oan_evidence)
+    assert not set(staging.BASELINE_FIELDS) & set(record)
+    assert record["registry"]["images"]["staff-api"]["digest"] == DIGEST
+
+
+@pytest.mark.parametrize("field,value", [("platform", "1.2.2-rc.544"), ("platform", "0.0.0"), ("namespace", "far"),
+    ("namespace", "commons"), ("environment", "dev"), ("deliveryHash", "0" * 64)])
+def test_oan_evidence_rejects_other_platform_namespace_environment_or_delivery(tmp_path, oan_evidence, field, value):
+    oan_evidence[field] = value
+    with pytest.raises(ValueError):
+        verify(tmp_path, oan_evidence)
+
+
+@pytest.mark.parametrize("hours", [-1, 25])
+def test_oan_evidence_keeps_the_freshness_rule(tmp_path, oan_evidence, hours):
+    with pytest.raises(ValueError):
+        verify(tmp_path, oan_evidence, NOW + timedelta(hours=hours))
+
+
+def test_oan_evidence_keeps_image_digests_and_backup_hashes(tmp_path, oan_evidence):
+    oan_evidence["registry"]["images"]["celery"]["digest"] = "latest"
+    with pytest.raises(ValueError):
+        verify(tmp_path, oan_evidence)
+    oan_evidence["registry"]["images"]["celery"]["digest"] = DIGEST
+    oan_evidence["backups"]["registry"] = "short"
+    with pytest.raises(ValueError):
+        verify(tmp_path, oan_evidence)
+
+
+def test_oan_cutover_needs_maintenance_a_fresh_final_backup_and_the_oan_release(tmp_path, oan_evidence):
+    record = verify(tmp_path, oan_evidence)
+    status = {"name": "farmer-registry", "namespace": "farmer", "version": 1, "info": {"status": "deployed"}}
+    values = {"global": {"registryDB": "farmer_registry"}}
+    staging.cutover(record, status, values, [], NOW)
+    with pytest.raises(ValueError, match="Fresh"):
+        staging.cutover(record, status, values, [], NOW + timedelta(hours=2))
+    with pytest.raises(ValueError, match="OAN release"):
+        staging.cutover(record, dict(status, namespace="far"), values, [], NOW)
+    with pytest.raises(ValueError, match="database"):
+        staging.cutover(record, status, {"global": {"registryDB": "farmer_registry_far"}}, [], NOW)
 
 
 def test_duplicate_environment_entries_cannot_hide_disabled_verification():
@@ -167,12 +224,12 @@ def test_credential_namespace_server_and_connector_resources_are_paired(environm
     with pytest.raises(ValueError): delivery.validate_cluster(environment, config["kubeconfigCredential"], context)
     settings = {"namespace": config["namespace"], "database": config["connectorDatabase"], "queue": config["connectorQueue"]}
     delivery.connector_settings(environment, settings)
-    for field, wrong in (("namespace", other["namespace"]), ("database", other["connectorDatabase"]), ("queue", other["connectorQueue"])):
+    for field, wrong in (("namespace", "far"), ("database", other["connectorDatabase"] + "_other"), ("queue", other["connectorQueue"] + "-other")):
         with pytest.raises(ValueError): delivery.connector_settings(environment, dict(settings, **{field: wrong}))
 
 
 def workload(kind, suffix, image):
-    return {"kind": kind, "metadata": {"name": "farmer-registry-" + suffix, "namespace": "far"},
+    return {"kind": kind, "metadata": {"name": "farmer-registry-" + suffix, "namespace": "farmer"},
             "spec": {"selector": {"matchLabels": {"app": suffix}}, "template": {"spec": {
                 "containers": [{"name": "app", "image": image, "env": []}]}}}}
 
@@ -181,12 +238,13 @@ def release_manifests(evidence):
     before, after = [], []
     images = evidence["registry"]["images"]
     for _, (kind, suffix, name) in deployment.COMPONENTS.items():
-        old = workload(kind, suffix, "previous")
+        old = workload(kind, suffix, images[name]["repository"] + ":" + "0" * 12)
         before.append(old)
         new = copy.deepcopy(old)
         container = deployment.pod(new)["containers"][0]
         container["image"] = images[name]["repository"] + ":" + images[name]["tag"] + "@" + DIGEST
-        container["env"] = [deployment.env_entry(k, v) for k, v in deployment.identity_env(suffix, "staging").items()]
+        rendered = {**deployment.identity_env(suffix, "staging"), **deployment.location_env(suffix, "staging"), **deployment.outgestion_env(suffix, "staging")}
+        container["env"] = [deployment.env_entry(k, v) for k, v in rendered.items()]
         after.append(new)
     return before, after, images
 
@@ -203,7 +261,7 @@ def test_registry_staging_upgrade_pins_all_digests_and_enforces_signing(evidence
 @pytest.mark.parametrize("fault", [None, "missing", "wrong-image", "changed-env"])
 def test_optional_public_ui_must_survive_with_its_config_and_accepted_image(evidence, fault):
     before, after, images = release_manifests(evidence)
-    old = workload("Deployment", "staff-portal-ui-public", "previous")
+    old = workload("Deployment", "staff-portal-ui-public", images["staff-ui"]["repository"] + ":" + "0" * 12)
     deployment.pod(old)["containers"][0]["env"] = [{"name": "COOKIE_DOMAIN", "value": ".oanstaging.com"}]
     before.append(old)
     new = copy.deepcopy(old)
@@ -228,34 +286,25 @@ def test_preparation_preserves_staging_database_and_awe_callback(evidence):
     with pytest.raises(ValueError): deployment.prepare(values, before, ECR, SHA[:12], environment="dev")
 
 
-@pytest.mark.parametrize("component,suffix,prefix", [
-    ("staffApi", "staff-portal-api", "REGISTRY_STAFF_PORTAL_API"),
-    ("partnerApi", "partner-api", "REGISTRY_PARTNER_API"),
-    ("celeryWorker", "celery-worker", "REGISTRY_CELERY_WORKERS"),
-])
-def test_staging_retains_installed_legacy_mds_secret_references(evidence, component, suffix, prefix):
-    before, _, images = release_manifests(evidence)
-    previous = next(d for d in before if d["metadata"]["name"] == "farmer-registry-" + suffix)
-    reference = {"secretKeyRef": {"name": "existing-mds-db", "key": "password"}}
-    deployment.pod(previous)["containers"][0]["env"] = [
-        {"name": prefix + "_MASTER_DATA_DB_PASSWORD", "valueFrom": reference},
-        {"name": prefix + "_MASTER_DATA_DB_DBNAME", "value": "existing_mds"},
-    ]
+def test_staging_fresh_install_prepares_from_environment_values_with_digests_and_no_demo_data(evidence):
+    images = evidence["registry"]["images"]
     values = {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}
-    prepared = deployment.prepare(values, before, ECR, SHA[:12], environment="staging", images=images)
-    assert prepared["registry"][component]["envVarsFrom"][prefix + "_MASTER_DATA_DB_PASSWORD"] == reference
-    assert prepared["registry"][component]["envVars"][prefix + "_MASTER_DATA_DB_DBNAME"] == "existing_mds"
-    assert "registry" not in values
-
-
-def test_staging_retains_installed_ui_options(evidence):
-    before, _, images = release_manifests(evidence)
-    ui = next(d for d in before if d["metadata"]["name"].endswith("-staff-portal-ui"))
-    deployment.pod(ui)["containers"][0]["env"] = [
-        {"name": "PAGE_SIZE", "value": "25"}, {"name": "PARTNER_IMPORT_EXPORT_ENABLE", "value": "true"}]
-    prepared = deployment.prepare({"global": {"registryHostname": "farmer-registry.oanstaging.com"}},
-                                  before, ECR, SHA[:12], environment="staging", images=images)
-    assert prepared["registry"]["staffUi"]["envVars"] == {"PAGE_SIZE": "25", "PARTNER_IMPORT_EXPORT_ENABLE": "true"}
+    prepared = deployment.prepare(values, [], ECR, SHA[:12], environment="staging", images=images, fresh=True)
+    assert prepared["registry"]["staffApi"]["image"]["tag"] == SHA[:12] + "@" + DIGEST
+    seed = prepared["registry"]["dbSeed"]
+    assert seed["loadSampleData"] is False and seed["loadGeoData"] is False and seed["loadImages"] is False
+    assert seed["intakeSeed"]["enabled"] is False
+    assert prepared["global"]["keycloakIssuerUrl"] == "https://keycloak.oanstaging.com/realms/staff"
+    assert prepared["registrantAuth"]["esignetBaseUrl"] == "https://esignet.oanstaging.com"
+    assert "development" not in yaml.safe_dump(prepared)
+    with pytest.raises(ValueError):
+        deployment.prepare(values, [workload("Deployment", "staff-portal-api", "x")], ECR, SHA[:12], environment="staging", images=images, fresh=True)
+    with pytest.raises(ValueError):
+        deployment.prepare(values, [], ECR, SHA[:12], environment="staging", images=images)
+    with pytest.raises(ValueError):
+        deployment.prepare({"global": {"registryHostname": "other.example"}}, [], ECR, SHA[:12], environment="staging", images=images, fresh=True)
+    with pytest.raises(ValueError):
+        deployment.prepare(values, [], ECR, SHA[:12], environment="staging", fresh=True)
 
 
 def test_persistent_manifest_hash_binds_storage_config_and_routes(baseline):
@@ -267,13 +316,18 @@ def test_persistent_manifest_hash_binds_storage_config_and_routes(baseline):
 
 
 def test_staging_connector_values_never_start_ingestion():
-    values = yaml.safe_load((ROOT / "helm/environments/staging/services/registry-connector.yaml").read_text())
+    values = yaml.safe_load((ROOT / "helm/environments/staging/services/registry-connector.yaml").read_text(encoding="utf-8"))
     delivery.connector_settings("staging", values["_coordination"])
-    assert values["cossQueue"] == "farmer-registry-connector-v2-far"
-    assert values["cossSigning"]["secret"] == "farmer-connector-v2-far-signing"
-    assert values["global"]["connectorDBUser"] == "far_farmer_connector_v2_user"
+    assert values["cossQueue"] == "farmer-registry-connector-v2"
+    assert values["cossSigning"] == {"enabled": True, "partnerId": "farmer-partner",
+        "keyId": "farmer-connector-v2-staging", "secret": "farmer-connector-v2-staging-signing"}
+    assert values["global"]["connectorDB"] == "farmer_connector_v2"
+    assert values["global"]["connectorDBSecret"] == "farmer-connector-v2-staging-db"
+    assert values["global"]["hostname"] == "connector-farmer-registry.oanstaging.com"
+    assert values["adminAuth"]["issuer"] == "https://keycloak.oanstaging.com/realms/staff"
     assert all(values[role]["replicaCount"] == 0 for role in ("api", "worker", "ui"))
     assert values["beat"]["enabled"] is False and values["consumer"]["enabled"] is False
+    assert "development" not in yaml.safe_dump(values) and not re.search(r"[-_]far(?!mer)", yaml.safe_dump(values))
 
 
 def test_staging_scheduler_needs_manual_intake_and_real_submission_acceptance(tmp_path):
@@ -292,18 +346,18 @@ def test_staging_retirement_requires_both_accepted_images_one_scheduler_and_nega
     env = [{"name": key, "value": value} for key, value in {
         "CONNECTOR_REQUIRE_SIGNING": "true", "CONNECTOR_SIGNING_ENABLED": "true",
         "CONNECTOR_SIGNING_ALGORITHM": "RS256", "CONNECTOR_SIGNING_ISSUER": "farmer-partner",
-        "CONNECTOR_SIGNING_KEY_ID": "farmer-connector-v2-far",
-        "CONNECTOR_CELERY_QUEUE": "farmer-registry-connector-v2-far",
-        "CONNECTOR_DB_DBNAME": "farmer_connector_v2_far", "CONNECTOR_DB_USERNAME": "far_farmer_connector_v2_user",
+        "CONNECTOR_SIGNING_KEY_ID": "farmer-connector-v2-staging",
+        "CONNECTOR_CELERY_QUEUE": "farmer-registry-connector-v2",
+        "CONNECTOR_DB_DBNAME": "farmer_connector_v2", "CONNECTOR_DB_USERNAME": "farmer_connector_v2_user",
     }.items()]
     env.extend({"name": key, "valueFrom": {"secretKeyRef": {"name": name, "key": field}}} for key, name, field in (
-        ("CONNECTOR_SIGNING_PRIVATE_KEY_PEM", "farmer-connector-v2-far-signing", "private-key.pem"),
-        ("CONNECTOR_DB_PASSWORD", "farmer-connector-v2-far-db", "password")))
-    new = [{"kind": "Deployment", "metadata": {"name": cutover.NEW + "-" + role, "namespace": "far"},
+        ("CONNECTOR_SIGNING_PRIVATE_KEY_PEM", "farmer-connector-v2-staging-signing", "private-key.pem"),
+        ("CONNECTOR_DB_PASSWORD", "farmer-connector-v2-staging-db", "password")))
+    new = [{"kind": "Deployment", "metadata": {"name": cutover.NEW + "-" + role, "namespace": "farmer"},
             "spec": {"replicas": 1, "template": {"spec": {"containers": [
                 {"name": "app", "image": "fixture/" + role + "@" + DIGEST, "env": [] if role == "ui" else copy.deepcopy(env)}]}}}}
            for role in ("api", "worker", "ui", "beat")]
-    status = {"name": cutover.NEW, "namespace": "far", "version": 7, "info": {"status": "deployed"}}
+    status = {"name": cutover.NEW, "namespace": "farmer", "version": 7, "info": {"status": "deployed"}}
     review = dict.fromkeys((*cutover.ACCEPTANCE, *staging.ACCEPTANCE), True)
     review.update(environment="staging", backupHash="fixture", helmRevision=7, digest=DIGEST, images={"api": DIGEST, "ui": DIGEST})
     if fault == "missing-beat": new.pop()

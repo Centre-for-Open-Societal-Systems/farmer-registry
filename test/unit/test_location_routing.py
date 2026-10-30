@@ -27,7 +27,10 @@ def test_prepare_repairs_saved_dev_routes_and_approved_service_binding(release):
         'secretKeyRef': {'name': 'farmer-registry', 'key': 'farmer-registry-db-user'}}
     assert values == previous
     assert "keycloakBaseUrl" not in prepared["global"]
-    assert deployment.location_overlay("staging") == {}
+    assert deployment.location_overlay("staging-legacy") == {}
+    staged = deployment.location_overlay("staging")
+    assert staged["global"]["masterDataTokenUrl"] == "https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token"
+    assert "development" not in str(staged)
 
 
 def test_guard_allows_only_reviewed_dev_route_changes(release):

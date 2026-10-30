@@ -307,9 +307,12 @@ def test_dev_values_enable_registrant_authentication_with_the_dev_hosts(release)
     assert result["registrantAuth"]["enabled"] is True
     assert result["registrantAuth"]["esignetBaseUrl"] == "https://esignet.development.oanstaging.com"
     assert result["registrantAuth"]["callbackUrl"].endswith("/registrant-auth/callback")
-    assert "registrantAuth" not in deployment.prepare(
+    staged = deployment.prepare(
         {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}, before, ECR, TAG,
         environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
+    assert staged["registrantAuth"]["enabled"] is True
+    assert staged["registrantAuth"]["esignetBaseUrl"] == "https://esignet.oanstaging.com"
+    assert staged["registrantAuth"]["callbackUrl"] == "https://staff-farmer.oanstaging.com/registrant-auth/callback"
 
 
 def test_dev_values_sign_dci_responses_with_the_chart_generated_key(release):
@@ -324,6 +327,8 @@ def test_dev_values_sign_dci_responses_with_the_chart_generated_key(release):
     assert secret == {"name": "farmer-registry-dci-signing", "key": "password"}
     assert [v["secret"]["secretName"] for v in partner["extraVolumes"]] == ["farmer-registry-dci-signing"]
     assert all(m["readOnly"] for m in partner["extraVolumeMounts"])
-    assert "dciSigning" not in deployment.prepare(
+    staged = deployment.prepare(
         {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}, before, ECR, TAG,
         environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
+    assert staged["dciSigning"] == {"enabled": True, "kid": "farmer-registry-dci-rsa"}
+    assert staged["registry"]["partnerApi"]["envVars"]["REGISTRY_PARTNER_API_CRYPTO_SIGNING_KEY_PATH"].startswith("/etc/dci-signing/")

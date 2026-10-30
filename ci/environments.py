@@ -7,14 +7,26 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED = {
     "dev": ("farmer", "farmer-dev-kubeconfig", "farmer-registry-development.oanstaging.com", "https://keycloak-development.oanstaging.com/realms/staff", "farmer-registry-connector"),
-    "staging": ("far", "staging-farmer-kubeconfig", "farmer-registry.oanstaging.com", "https://keycloak.oanstaging.com/realms/staff", "farmer-registry-connector"),
+    # Staging runs the same OAN chart as dev in namespace farmer (fresh install beside the legacy far release).
+    "staging": ("farmer", "staging-farmer-kubeconfig", "farmer-registry.oanstaging.com", "https://keycloak.oanstaging.com/realms/staff", "farmer-registry-connector"),
+    # The legacy in-repo chart release in namespace far. It is no longer deployed by the staging pipeline;
+    # only the retired far tooling (reset, schema probe, rehearsal evidence) still refers to this contract.
+    "staging-legacy": ("far", "staging-farmer-kubeconfig", "farmer-registry.oanstaging.com", "https://keycloak.oanstaging.com/realms/staff", "farmer-registry-connector"),
 }
+# Environments that deploy the pinned OAN chart (ci/deploy/oan-chart*.json).
+OAN_ENVIRONMENTS = ("dev", "staging")
 RESOURCES = {
     "dev": {"registryDatabase": "farmer_registry", "connectorDatabase": "farmer_connector_v2",
             "connectorQueue": "farmer-registry-connector-v2",
             "connectorHostname": "connector-farmer-registry-development.oanstaging.com",
             "apiServers": ["https://13.201.58.55:6443"]},
-    "staging": {"registryDatabase": "farmer_registry_far", "connectorDatabase": "farmer_connector_v2_far",
+    "staging": {"registryDatabase": "farmer_registry", "idGeneratorDatabase": "farmer_registry_idgen",
+                "connectorDatabase": "farmer_connector_v2",
+                "connectorQueue": "farmer-registry-connector-v2",
+                "connectorHostname": "connector-farmer-registry.oanstaging.com",
+                "apiServers": ["https://10.0.1.212:6443", "https://52.66.116.220:6443"],
+                "platform": "1.2.2-rc.614"},
+    "staging-legacy": {"registryDatabase": "farmer_registry_far", "connectorDatabase": "farmer_connector_v2_far",
                 "legacyConnectorDatabase": "farmer_connector_far",
                 "connectorQueue": "farmer-registry-connector-v2-far",
                 "connectorHostname": "connector-farmer-registry.far.staging.openg2p.test",

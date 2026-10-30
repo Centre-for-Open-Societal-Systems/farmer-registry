@@ -71,7 +71,7 @@ def test_apply_is_blocked_by_a_foreign_chart_pin_before_any_cluster_call(tmp_pat
     image = f"123456789012.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/{image_role}:{SHA[:12]}@sha256:{DIGEST}"
     monkeypatch.setattr(sys, "argv", ["rollout", "--image", image, "--commit", SHA, "--output", str(tmp_path / "out.json"), "--apply"])
     monkeypatch.setattr(tool, "command", lambda *a: pytest.fail("Unexpected cluster call"))
-    monkeypatch.setattr(oan_chart, "profile", lambda: {**approved.profile(), "environment": "staging"})
+    monkeypatch.setattr(oan_chart, "profile", lambda *a: {**approved.profile(), "environment": "staging"})
     with pytest.raises(ValueError, match="Deployment blocked"):
         tool.main()
 

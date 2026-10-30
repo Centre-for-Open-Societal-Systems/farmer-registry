@@ -81,10 +81,61 @@ def test_pin_is_the_deployed_dev_chart_without_promotion_flags():
 
 
 def test_deployment_requires_the_dev_pin_for_dev(monkeypatch):
-    original = oan_chart.profile()
+    original = oan_chart.profile('dev')
     oan_chart.require_deployable('dev')
-    with pytest.raises(ValueError, match='Deployment blocked'):
-        oan_chart.require_deployable('staging')
-    monkeypatch.setattr(oan_chart, 'profile', lambda: {**original, 'environment': 'staging'})
+    monkeypatch.setattr(oan_chart, 'profile', lambda environment=None: {**original, 'environment': 'staging'})
     with pytest.raises(ValueError, match='Deployment blocked'):
         oan_chart.require_deployable('dev')
+
+
+def test_staging_pin_is_the_dev_chart_made_for_staging():
+    dev, staging = oan_chart.profile('dev'), oan_chart.profile('staging')
+    assert (staging['environment'], staging['namespace'], staging['release']) == ('staging', 'farmer', 'farmer-registry')
+    # Staging is pinned to oan-helm d7588ad (chart dev.20); dev stays on dev.19. Same chart name and platform.
+    for field in ('name', 'platformVersion'):
+        assert staging[field] == dev[field]
+    assert (staging['version'], staging['platformVersion']) == ('1.0.0-dev.20', '1.2.2-rc.614')
+    assert staging['repository'].split('/')[-3] == staging['values']['commit']
+
+
+def test_staging_is_accepted_and_every_other_environment_rejected():
+    oan_chart.require_deployable('dev')
+    oan_chart.require_deployable('staging')
+    for other in ('staging-legacy', 'production', 'prod', '', 'Staging'):
+        with pytest.raises(ValueError, match='Deployment blocked'):
+            oan_chart.require_deployable(other)
+    with pytest.raises(ValueError):
+        oan_chart.profile('production')
+
+
+def test_pin_environment_must_equal_the_requested_one(monkeypatch):
+    original = oan_chart.profile('staging')
+    monkeypatch.setattr(oan_chart, 'profile', lambda environment=None: {**original, 'environment': 'dev'})
+    with pytest.raises(ValueError, match='Deployment blocked'):
+        oan_chart.require_deployable('staging')
+
+
+def test_profile_follows_the_delivery_environment_variable(monkeypatch):
+    monkeypatch.setenv('DELIVERY_ENVIRONMENT', 'staging')
+    assert oan_chart.profile()['environment'] == 'staging'
+    monkeypatch.delenv('DELIVERY_ENVIRONMENT')
+    assert oan_chart.profile()['environment'] == 'dev'
+
+
+def test_staging_values_are_pinned_by_commit_and_checksum(monkeypatch):
+    url, digest = oan_chart.values_url('staging')
+    assert url.endswith('/' + oan_chart.profile('staging')['values']['commit'] + '/environments/staging/values/farmer.yaml')
+    assert len(digest) == 64
+    unpinned = {**oan_chart.profile('staging'), 'values': {'path': 'environments/staging/values/farmer.yaml', 'commit': '', 'sha256': ''}}
+    monkeypatch.setattr(oan_chart, 'profile', lambda environment=None: unpinned)
+    with pytest.raises(ValueError, match='not pinned'):
+        oan_chart.values_url('staging')
+    pinned = {**unpinned, 'values': {
+        'path': 'environments/staging/values/farmer.yaml', 'commit': 'a' * 40, 'sha256': 'b' * 64}}
+    monkeypatch.setattr(oan_chart, 'profile', lambda environment=None: pinned)
+    url, digest = oan_chart.values_url('staging')
+    assert url == 'https://raw.githubusercontent.com/Centre-for-Open-Societal-Systems/oan-helm/' + 'a' * 40 + '/environments/staging/values/farmer.yaml'
+    assert digest == 'b' * 64
+    pinned['values']['path'] = '../../etc/passwd'
+    with pytest.raises(ValueError, match='not pinned'):
+        oan_chart.values_url('staging')
