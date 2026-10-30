@@ -5,6 +5,7 @@ import ast
 import hashlib
 import importlib.util
 import itertools
+import json
 import sys
 import types
 from datetime import date
@@ -43,6 +44,7 @@ def test_loader_signs_in_like_the_portal_and_never_changes_keycloak():
         assert forbidden not in code, forbidden
     for required in ("/auth/start_authentication_transaction", "kc-form-login", "/auth/callback",
                      "/intake-form-data/finalize_intake_form_submission", "/awe/submit_task_decision",
+                     "/documents/upload_documents",
                      "INTAKE_SEED_APPROVER_1", "INTAKE_SEED_APPROVER_2", "INTAKE_SEED_PASSWORD"):
         assert required in code, required
     imported = {a.name.split(".")[0] for node in ast.walk(ast.parse(source))
@@ -256,3 +258,82 @@ def test_a_member_whose_household_is_not_registered_is_not_entered(loader):
     members_only = [i for i in plan(loader) if not i["is_head"]]
     with pytest.raises(RuntimeError, match="ETH-HH-001 is not in the register"):
         runner(loader, registry, []).run(members_only)
+
+
+class FakeSubmitter:
+    username = "alex.carter"
+
+    def __init__(self):
+        self.saved, self.uploads, self.calls = [], [], []
+
+    def upload_identity_document(self, name):
+        return [{"document_id": f"doc-{name}", "label": "identity_document_1"}]
+
+    def upload_photo(self, individual_id, image):
+        self.uploads.append((individual_id, image))
+        return [{"document_id": f"photo-{individual_id}", "label": "profile image"}]
+
+    def post(self, path, payload):
+        self.calls.append(path)
+        if path.endswith("save_intake_form_submission"):
+            self.saved.append(payload)
+            return {"submission_id": "sub-1"}
+        return {}
+
+
+def submitting(loader, tmp_path, monkeypatch, with_photo=True):
+    photos = tmp_path / "packs" / loader.PACK / "samples" / "photos"
+    photos.mkdir(parents=True)
+    if with_photo:
+        (photos / "ETH-IND-0001.webp").write_bytes(b"RIFF....WEBPVP8 ")
+    monkeypatch.setattr(loader, "OPENG2P_DATA_DIR", tmp_path)
+    sections = {s: "register" for s in loader.FARMER_SECTIONS}
+    run_ = loader.Loader.__new__(loader.Loader)
+    run_.submitter, run_.form_id, run_.register_id, run_.section_registers = FakeSubmitter(), "form", "reg", sections
+    return run_
+
+
+def test_the_farmer_photo_section_is_planned_for_the_farmer(loader):
+    for intake in plan(loader):
+        assert intake["sections"]["farmer_photo"] == [{"internal_record_id": intake["farmer_id"]}]
+    assert loader.FARMER_SECTIONS[-1] == "farmer_photo" and loader.PHOTO_LABEL == "profile image"
+
+
+def test_the_photo_is_uploaded_as_webp_and_saved_with_its_document_id_before_finalize(loader, tmp_path, monkeypatch):
+    run_ = submitting(loader, tmp_path, monkeypatch)
+    intake = plan(loader)[0]
+    assert run_.submit(intake, None) == "sub-1"
+    assert run_.submitter.uploads == [("ETH-IND-0001", b"RIFF....WEBPVP8 ")]
+    photo = [p for p in run_.submitter.saved if p["section_id"] == "farmer_photo"]
+    assert len(photo) == 1
+    assert photo[0]["section_payload"] == [{"internal_record_id": intake["farmer_id"],
+                                            "record_image_document_id": "photo-ETH-IND-0001"}]
+    assert photo[0]["documents"] == [{"document_id": "photo-ETH-IND-0001", "label": "profile image"}]
+    assert run_.submitter.calls[-1].endswith("finalize_intake_form_submission")
+
+
+def test_a_person_without_a_photo_file_is_registered_without_one(loader, tmp_path, monkeypatch):
+    run_ = submitting(loader, tmp_path, monkeypatch, with_photo=False)
+    assert run_.submit(plan(loader)[0], None) == "sub-1"
+    assert run_.submitter.uploads == []
+    assert "farmer_photo" not in [p["section_id"] for p in run_.submitter.saved]
+    assert run_.submitter.calls[-1].endswith("finalize_intake_form_submission")
+
+
+def test_the_photo_upload_is_multipart_webp(loader):
+    sent = []
+    session = loader.StaffSession.__new__(loader.StaffSession)
+    session._send = lambda path, body, ctype: sent.append((path, body, ctype)) or (
+        200, {"response_body": {"response_payload": {"documents": [{"document_id": "d1"}]}}})
+    assert session.upload_photo("ETH-IND-0001", b"IMG") == [{"document_id": "d1", "label": "profile image"}]
+    path, body, ctype = sent[0]
+    assert path == "/documents/upload_documents" and ctype.startswith("multipart/form-data; boundary=")
+    assert b'name="documents"; filename="ETH-IND-0001.webp"' in body and b"Content-Type: image/webp" in body
+
+
+def test_every_pack_sample_person_has_a_photo(loader):
+    pack = loader.OPENG2P_DATA_DIR / "packs" / loader.PACK / "samples"
+    if not (pack / "individuals.json").is_file():
+        pytest.skip("the openg2p-data pack is not checked out here")
+    people = json.loads((pack / "individuals.json").read_text(encoding="utf-8"))
+    assert [p["individual_id"] for p in people if loader.photo_path(p["individual_id"]) is None] == []

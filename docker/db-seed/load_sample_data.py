@@ -19,7 +19,12 @@ The data:
   (/samples, with the MDS_* client-credentials settings), never its database;
 - the registry's own facts about them (grandfather's name, lands, crops,
   livestock, farm inputs, cooperative membership) are the ETH-OAN pack's
-  samples/farms.json, in the openg2p-data checkout this image carries.
+  samples/farms.json, in the openg2p-data checkout this image carries;
+- each person's profile photo is the pack's samples/photos/<individual_id>.webp.
+  It goes in the way the staff portal does it: the image is uploaded through the
+  staff API's document route and the farmer_photo section saves the document id
+  (record_image_document_id), which the approval and ingest carry to the farmer's
+  register row. A person without a photo file is registered without one.
 
 Staff accounts sign in as in the staff portal (staff IAM, then the Keycloak
 login form, then IAM's callback), with the sample users' password the chart
@@ -55,6 +60,7 @@ import mds_client  # noqa: E402  (the registry platform's Master Data client)
 FORM = "farmer_ingestion_intake"
 INTAKE_ARTIFACT = "registry.intake_form"
 IDENTITY_DOCUMENT = "identity_document_1"
+PHOTO_LABEL = "profile image"
 PACK = os.environ.get("SAMPLE_PACK", "ETH-OAN")
 OPENG2P_DATA_DIR = Path(os.environ.get("OPENG2P_DATA_DIR", "/openg2p-data"))
 COUNTRY_CODE = {"ETH": "ET"}
@@ -65,7 +71,7 @@ FARMER_SECTIONS = (
     "farmer_household_lookup", "farmer_identity", "farmer_personal_details", "farmer_phones",
     "farmer_socio_economic_health", *HOUSEHOLD_SECTIONS, "farmer_location", "farmer_lands",
     "farmer_crops_intake", "farmer_farm_inputs_intake", "farmer_livestock_intake", "farmer_membership",
-    "farmer_documents",
+    "farmer_documents", "farmer_photo",
 )
 SAMPLE_PDF = (
     b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
@@ -129,6 +135,12 @@ def local_phone(person: dict) -> str | None:
         return None
     dial = DIAL_CODE.get(COUNTRY_CODE.get(person.get("country") or "ETH", "ET"), "")
     return "0" + e164[len(dial):] if dial and e164.startswith(dial) else e164.lstrip("+")
+
+
+def photo_path(individual_id: str) -> Path | None:
+    """The pack's profile photo of a sample person, or None when the pack has none."""
+    path = OPENG2P_DATA_DIR / "packs" / PACK / "samples" / "photos" / f"{individual_id}.webp"
+    return path if path.is_file() else None
 
 
 def without(row: dict, *keys) -> dict:
@@ -250,6 +262,7 @@ def plan(people: list[dict], households: list[dict], farms: dict, geo: Geography
                 **farm_sections(m, farm, farmer_id, new_id),
                 "farmer_documents": [{"internal_record_id": farmer_id,
                                       "identity_document_type": farmer.get("identity_document_type")}],
+                "farmer_photo": [{"internal_record_id": farmer_id}],
             }
             intakes.append({
                 "individual_id": m["individual_id"], "name": words(first, middle, last),
@@ -355,6 +368,18 @@ class StaffSession:
             raise RuntimeError(f"identity document upload failed ({status}): {header.get('response_error_message')}")
         return [{"document_id": documents[0]["document_id"], "label": IDENTITY_DOCUMENT}]
 
+    def upload_photo(self, individual_id: str, image: bytes) -> list[dict]:
+        boundary = uuid.uuid4().hex
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="documents"; '
+                f'filename="{individual_id}.webp"\r\nContent-Type: image/webp\r\n\r\n').encode() \
+            + image + f"\r\n--{boundary}--\r\n".encode()
+        status, reply = self._send("/documents/upload_documents", body, f"multipart/form-data; boundary={boundary}")
+        documents = ((reply.get("response_body") or {}).get("response_payload") or {}).get("documents") or []
+        if status != 200 or not documents:
+            header = reply.get("response_header") or {}
+            raise RuntimeError(f"photo upload failed ({status}): {header.get('response_error_message')}")
+        return [{"document_id": documents[0]["document_id"], "label": PHOTO_LABEL}]
+
 
 class Registry:
     """The registry database: the form's metadata, who is registered, what was ingested. Reads only."""
@@ -433,6 +458,13 @@ class Loader:
                 rows = [{**rows[0], "link_internal_record_id": household_id}]
             documents = self.submitter.upload_identity_document(intake["individual_id"]) \
                 if section == "farmer_documents" else []
+            if section == "farmer_photo":
+                photo = photo_path(intake["individual_id"])
+                if photo is None:
+                    log(f"    no profile photo for {intake['individual_id']} in the pack; registering without one")
+                    continue
+                documents = self.submitter.upload_photo(intake["individual_id"], photo.read_bytes())
+                rows = [{**rows[0], "record_image_document_id": documents[0]["document_id"]}]
             saved = self.submitter.post("/intake-form-data/save_intake_form_submission", {
                 "submission_id": submission_id, "section_id": section, "section_payload": rows,
                 "section_register_id": self.section_registers[section], "form_id": self.form_id,

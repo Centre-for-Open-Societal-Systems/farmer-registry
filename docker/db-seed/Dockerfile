@@ -25,10 +25,11 @@ COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql
 
 # Sample data (LOAD_SAMPLE_DATA=true). The platform image checks out openg2p-data
 # at /openg2p-data; this one checks out the COSS copy at a pinned commit in its place:
-# the ETH-OAN pack's farm facts (samples/farms.json) and the OAN theme. The sample
+# the ETH-OAN pack's farm facts (samples/farms.json), the sample profile photos
+# (samples/photos/<individual_id>.webp) and the OAN theme. The sample
 # people come from Master Data's API.
 ARG OPENG2P_DATA_REPO=https://github.com/Centre-for-Open-Societal-Systems/openg2p-data.git
-ARG OPENG2P_DATA_REF=34b239463cc38af8c028428df1eb52d786cc14c2
+ARG OPENG2P_DATA_REF=d96b3a7efd64155ccfb86064030c796260bb250b
 RUN rm -rf /openg2p-data && mkdir -p /openg2p-data && cd /openg2p-data \
     && git init -q && git remote add origin ${OPENG2P_DATA_REPO} \
     && git fetch -q --depth 1 origin ${OPENG2P_DATA_REF} && git checkout -q FETCH_HEAD \
