@@ -68,6 +68,8 @@ Run the staging job with `DELIVERY_ACTION=fresh-install`, `DEPLOY_STAGING=true`.
 3. uninstalls the release if present, drops the two databases, runs `helm install` with the post-renderer;
 4. runs the geography schema gate and the seed metadata checks (`90_checks.sql`) against the new release.
 
+Writes made between the pg_dump and `helm uninstall` are lost by design (the databases are dropped), so run the install in a maintenance window with intake closed.
+
 Staging has no automatic Helm rollback. A failed install is diagnosed, then the job is run again.
 
 ## Routine deploy
