@@ -299,6 +299,95 @@ def livestock_for_mixed(survey, columns: dict) -> list[dict]:
     return changed
 
 
+# The registry's rules for an answer, said on the device (Collect and Enketo
+# refuse the answer there). ODK Central does not run these on a submission
+# posted through its API; the registry refuses it then, and the ingested form
+# waits as a draft with the reason (required_fields.py). Enketo's regex is
+# JavaScript's, without Unicode classes, so the scripts are code-point ranges.
+ETHIOPIC = r"\u1200-\u137F"
+NAME_LETTERS = "a-zA-Z" + ETHIOPIC + "'-"  # Latin (Qubee), Ge'ez, apostrophe, hyphen: a double-quoted literal
+EN = "constraint_message::English (en)"
+
+
+def _words(letters: str, count: int | None = None) -> str:
+    word = f"[{letters}]+"
+    return "^" + (" ".join([word] * count) if count else f"{word}( {word})*") + "$"
+
+
+def _phone_rule(earlier: list[str]) -> str:
+    return " and ".join([r"regex(., '^251[79][0-9]{8}$')"] + [f". != ${{{name}}}" for name in earlier])
+
+
+def registry_rules() -> dict[str, dict[str, str]]:
+    """Question name -> the columns it is given (name_rules.py, derived.py,
+    19_phone_rules.sql, farmer_phone.py, the geography's parents)."""
+    rules: dict[str, dict[str, str]] = {}
+    name_message = "Enter letters only, up to 100 characters. For Tigrinya write the name in Ge'ez (Ethiopic) letters."
+    phone_message = ("Enter a mobile number: 251, then 9 or 7, then 8 more digits, for example 251911223344. "
+                     "Do not enter the same number twice.")
+    for prefix, language in (("", "language"), ("hh_member_", "hh_member_language")):
+        tigrinya = f"not(selected(${{{language}}}, 'TIGRINYA'))"
+        for part in ("first", "father", "grandfather"):
+            rules[f"{prefix}{part}_name_english"] = {
+                "constraint": f"regex(., '{_words('a-zA-Z')}') and string-length(.) <= 100",
+                EN: "Enter English letters only, with single spaces between words, up to 100 characters."}
+            rules[f"{prefix}{part}_name_other"] = {
+                "constraint": (f"({tigrinya} or regex(., '{_words(ETHIOPIC)}')) and "
+                               f'regex(., "{_words(NAME_LETTERS)}") and string-length(.) <= 100'),
+                EN: name_message}
+            rules[f"{prefix}{part}_name_amharic"] = {
+                "constraint": f"regex(., '{_words(ETHIOPIC)}') and string-length(.) <= 100",
+                EN: "Enter Amharic (Ethiopic script) letters only, with single spaces between words."}
+        primary, other = f"{prefix}primary_phone_number", f"{prefix}other_phone_number"
+        rules[primary] = {"constraint": _phone_rule([]), EN: phone_message}
+        rules[other] = {"constraint": _phone_rule([primary]), EN: phone_message}
+        rules[f"{prefix}secondary_phone_number"] = {"constraint": _phone_rule([primary, other]), EN: phone_message}
+    rules["other_member_name_other"] = {
+        "constraint": ("(not(selected(${language}, 'TIGRINYA')) or "
+                       f"regex(., '{_words(ETHIOPIC, 3)}')) and " f'regex(., "{_words(NAME_LETTERS, 3)}")'),
+        EN: ("Enter three names separated by single spaces: first name, father's name, grandfather's name. "
+             "For Tigrinya write them in Ge'ez (Ethiopic) letters.")}
+    moved = "Select again: this is not in the place selected above."
+    for level, parent in (("zone", "region"), ("woreda", "zone"), ("kebele", "woreda")):
+        rules[level] = {"constraint": f"count(instance('{level}')/root/item[name=current()][parent=${{{parent}}}]) > 0",
+                        EN: moved}
+    # 238 woredas have no kebele in Master Data's geography.
+    rules["kebele"]["required"] = "count(instance('kebele')/root/item[parent=${woreda}]) > 0"
+    rules["member_reference_id"] = {
+        "constraint": r"regex(., '^[A-Z]{3}-\d{4}-\d{4}-\d{4}-\d{4}-\d{6}$')",
+        EN: ("Enter the Reference ID as 3 uppercase letters, four groups of 4 digits and a final group of 6 digits, "
+             "separated by hyphens, for example ABC-1234-5678-9012-3456-789012.")}
+    rules["land_id"] = {"constraint": "count(../../land_info_repeat[land_id = current()]) = 1",
+                        EN: "Each plot needs a different Land ID."}
+    return rules
+
+
+def apply_registry_rules(survey, columns: dict) -> list[dict]:
+    """Give the questions the registry's rules (registry_rules). A message
+    column of another language that is empty gets the English text."""
+    rules = registry_rules()
+    seen, changed = set(), []
+    others = [key for key in columns if key.startswith("constraint_message::") and key != EN]
+    for row in range(2, survey.max_row + 1):
+        name = survey.cell(row, columns["name"]).value
+        if name not in rules:
+            continue
+        seen.add(name)
+        for column, text in rules[name].items():
+            cell = survey.cell(row, columns[column])
+            if cell.value != text:
+                changed.append({"row": row, "name": name, "column": column, "was": cell.value, "now": text})
+                cell.value = text
+        for column in others:
+            cell = survey.cell(row, columns[column])
+            if not cell.value and EN in rules[name]:
+                cell.value = rules[name][EN]
+    missing = sorted(set(rules) - seen)
+    if missing:
+        raise SystemExit("registry rules for questions the form does not have: " + ", ".join(missing))
+    return changed
+
+
 def write_media(units: dict[str, list[dict]], media: Path) -> dict[str, int]:
     media.mkdir(parents=True, exist_ok=True)
     counts = {}
@@ -399,6 +488,7 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str,
         renames[field] = mapping
     rewritten = rewrite_literals(survey, survey_columns, renames)
     livestock = livestock_for_mixed(survey, survey_columns)
+    rules = apply_registry_rules(survey, survey_columns)
     choice_names: dict[str, set[str]] = {}
     for row in kept:
         choice_names.setdefault(row["list_name"], set()).add(str(row["name"]))
@@ -413,7 +503,7 @@ def build(source: Path, pack: Path, target: Path, media: Path, version: str,
     counts = write_media(units, media)
     return {"source": str(source), "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             "pack": str(pack), "geography": str(geography), "pack_version": json.loads((pack / "manifest.json").read_text(encoding="utf-8")).get("version"),
-            "output": str(target), "version": version, "rewritten_expressions": rewritten, "livestock_for_mixed": livestock,
+            "output": str(target), "version": version, "rewritten_expressions": rewritten, "livestock_for_mixed": livestock, "registry_rules": rules,
             "region_bridge": bridge, "cooperatives_kept": len(coop_rows) if coop_rows is not None else None,
             "unions_kept": len(rekeyed_unions), "left_out": left_out, "media": {level: f"{media / level}.csv" for level in LEVELS},
             "units": counts, "lists": report}
@@ -429,7 +519,7 @@ def main() -> None:
     parser.add_argument("--media", type=Path, default=MEDIA)
     parser.add_argument("--coops-source", type=Path, default=COOPS_SOURCE, help="the v3 cooperative list, keyed by v3 region number")
     parser.add_argument("--coops-out", type=Path, default=COOPS_TARGET)
-    parser.add_argument("--version", default="2026.10.31.1")
+    parser.add_argument("--version", default="2026.10.31.2")
     args = parser.parse_args()
     print(json.dumps(build(args.source, args.pack, args.out, args.media, args.version, args.geography, args.coops_source, args.coops_out), indent=2, ensure_ascii=False))
 

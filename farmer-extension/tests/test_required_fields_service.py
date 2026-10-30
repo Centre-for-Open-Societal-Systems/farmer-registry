@@ -269,3 +269,79 @@ def test_a_save_by_the_worker_skips_the_section_check_and_a_person_does_not(monk
 
     assert save("system") == "saved" and seen == []
     assert save("alex") == "saved" and seen == ["s-1"]
+
+
+REFUSED = "Phone Number: yes is not a phone number. Enter it as 0912345678 or +251912345678"
+
+
+def test_the_worker_lists_a_refused_answer_first_in_the_draft(monkeypatch):
+    service, submission, calls = _service(monkeypatch, MISSING)
+    rf.hold_back("s-1", REFUSED)
+    result = _run(service.finalize_submission_with_session("s-1", _Session()))
+    assert result is submission
+    assert submission.remarks.startswith("Not submitted: some answers were not accepted. Phone Number: yes")
+    assert submission.remarks.index(REFUSED) < submission.remarks.index("Cooperative member is required")
+    assert calls == []
+    assert rf.held_back("s-1") == []  # read once
+
+
+def test_the_worker_leaves_a_form_the_farmer_checks_refuse_as_a_draft(monkeypatch):
+    service, submission, calls = _service(monkeypatch, [])
+
+    async def duplicate(submission_id, session, submission=None, required=None):
+        hi.validation_error("Fayda ID: 123456789012 is already registered to Abebe (FR-1).")
+
+    monkeypatch.setattr(hi, "check_farmer_submission", duplicate)
+    result = _run(service.finalize_submission_with_session("s-1", _Session()))
+    assert result is submission
+    assert "already registered to Abebe" in submission.remarks
+    assert submission.remarks.startswith("Not submitted: some answers were not accepted.")
+    assert calls == []
+
+
+def _refusing_save(monkeypatch):
+    service = object.__new__(hi.HouseholdCheckedIntakeFormDataService)
+    submission = SimpleNamespace(submission_id="s-1")
+
+    async def passthrough(session, created_by):
+        return created_by
+
+    async def section(section_id, session):
+        return SimpleNamespace(section_mnemonic="personal")
+
+    async def platform_save(self, *args, **kwargs):
+        hi.validation_error(REFUSED)
+
+    async def get_submission(submission_id, session):
+        return submission
+
+    async def no_messages():
+        return {}
+
+    monkeypatch.setattr(rf.RequiredFieldsMixin, "refuse_missing_on_save", lambda *a, **k: asyncio.sleep(0))
+    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
+    monkeypatch.setattr(service, "_get_submission_or_error", get_submission, raising=False)
+    monkeypatch.setattr(service, "_messages", no_messages, raising=False)
+    monkeypatch.setattr(hi.G2PFarmerIntakeFormDataService, "save_intake_form_submission_with_session",
+                        platform_save, raising=False)
+
+    def save(created_by):
+        return _run(service.save_intake_form_submission_with_session(
+            "s-1", "personal", [{}], FARMER, "form", FARMER, created_by, None))
+
+    return save, submission
+
+
+def test_a_refused_section_saved_by_the_worker_is_held_back_not_raised(monkeypatch):
+    save, submission = _refusing_save(monkeypatch)
+    assert save("system") is submission
+    assert rf.held_back("s-1") == [REFUSED]
+
+
+def test_a_refused_section_saved_by_a_person_is_still_refused(monkeypatch):
+    save, _ = _refusing_save(monkeypatch)
+    with pytest.raises(G2PRegistryException) as error:
+        save("alex")
+    assert REFUSED in error.value.message
+    assert rf.held_back("s-1") == []

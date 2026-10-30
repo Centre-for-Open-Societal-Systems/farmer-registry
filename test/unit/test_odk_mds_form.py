@@ -187,7 +187,7 @@ def test_the_committed_v4_form_has_no_stale_rule():
     lists = {n: s for n, s in choice_names(book).items() if n in build_mds_form.MDS_LISTS}
     assert build_mds_form.check_literals(book["survey"], survey_columns(book), lists) == []
     settings = {c.value: book["settings"].cell(2, c.column).value for c in book["settings"][1] if c.value}
-    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.10.31.1"
+    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.10.31.2"
 
 
 COOPS = [
@@ -299,3 +299,36 @@ def test_the_committed_cooperative_and_union_lists_use_region_codes():
     column = survey[0].index("required")
     required = {r[1]: r[column] for r in survey[1:] if r[1]}
     assert "'MIXED'" in required["animal"] and "'MIXED'" in required["hh_member_livestock_water_source"]
+
+
+def test_the_build_gives_the_questions_the_registrys_rules(pack, tmp_path):
+    out = tmp_path / "form.xlsx"
+    report = build_mds_form.build(build_mds_form.SOURCE, pack, out, tmp_path / "media", "v")
+    assert {c["name"] for c in report["registry_rules"]} == set(build_mds_form.registry_rules())
+
+
+def test_the_committed_v4_form_carries_the_registrys_rules():
+    book = openpyxl.load_workbook(REPO / "odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx")
+    survey = book["survey"]
+    assert build_mds_form.apply_registry_rules(survey, survey_columns(book)) == []
+
+
+@pytest.mark.parametrize(("value", "tigrinya", "ok"), [
+    ("ገብረ መድህን", True, True), ("E2E", True, False), ("Bu'aa", False, True),
+    ("Abebe1", False, False), ("Ab  be", False, False), ("Tsegay", True, False)])
+def test_an_own_language_name_is_checked_as_the_registry_checks_it(value, tigrinya, ok):
+    import re
+
+    rule = build_mds_form.registry_rules()["first_name_other"]["constraint"]
+    patterns = [p.encode().decode("unicode_escape") for p in re.findall(r"regex\(\., ['\"](.*?)['\"]\)", rule)]
+    passes = (not tigrinya or re.fullmatch(patterns[0], value)) and re.fullmatch(patterns[1], value)
+    assert bool(passes) is ok
+
+
+@pytest.mark.parametrize(("value", "ok"), [("251911223344", True), ("251711223344", True),
+                                          ("251111223344", False), ("yes", False), ("0911223344", False)])
+def test_a_phone_is_a_mobile_number(value, ok):
+    import re
+
+    pattern = re.search(r"'(.*?)'", build_mds_form.registry_rules()["primary_phone_number"]["constraint"]).group(1)
+    assert bool(re.fullmatch(pattern, value)) is ok

@@ -30,7 +30,7 @@ from openg2p_registry_core.errors import G2PRegistryException
 from sqlalchemy import select
 
 from .direct_approval import DirectApprovalClosed
-from .required_fields import RequiredFieldsMixin, unattended
+from .required_fields import RequiredFieldsMixin, held_back, hold_back, unattended
 from .upstream_messages import reword
 
 FARMER_REGISTER_MNEMONIC = "Farmer"
@@ -167,12 +167,20 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
 
         # No user and no token: the ingestion worker (ODK, partners).
         worker = not args and kwargs.get("bearer_token") is None
+        refused = held_back(submission.submission_id)
         problems = await self.required_problems_for(submission, session)
-        if problems and (worker or ingest_active()):
+        if worker or ingest_active():
             # Left as a draft with the reason, for staff to complete and
-            # submit; failing the task would only retry the same form.
-            return await self.route_to_review(submission, problems, session)
-        await self.refuse_unsubmittable(submission, register_definition, problems, session)
+            # submit; failing the task would only retry the same form, and
+            # the ingest's error is seen by no one who can fix it.
+            if refused or problems:
+                return await self.route_to_review(submission, refused + problems, session, refused=bool(refused))
+            try:
+                await self.refuse_unsubmittable(submission, register_definition, problems, session)
+            except G2PRegistryException as error:
+                return await self.route_to_review(submission, [error.message or str(error)], session, refused=True)
+        else:
+            await self.refuse_unsubmittable(submission, register_definition, problems, session)
         if worker:
             # The ingestion worker finalizes without a user; its own client
             # token starts the approval workflow (odk/worker_token.py).
@@ -261,8 +269,16 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
             # Core's raw parent-link text (an unknown household) said plainly.
             from . import _reworded
 
-            async with _reworded(await self._messages()):
-                raise
+            try:
+                async with _reworded(await self._messages()):
+                    raise
+            except G2PRegistryException as plain:
+                if not worker_save or not submission_id:
+                    raise
+                # An ingested answer a rule refuses: the section is not saved
+                # and the reason goes in the draft's remarks at finalize.
+                hold_back(submission_id, plain.message or str(plain))
+                return await self._get_submission_or_error(submission_id, session)
         finally:
             current_intake.reset(token)
             unattended.reset(gate)
