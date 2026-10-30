@@ -42,6 +42,10 @@ MESSAGES = {
     "review_reason": (
         "Not submitted: required information is missing. {problems} Open the draft, complete it and submit."
     ),
+    "review_reason_refused": (
+        "Not submitted: some answers were not accepted. {problems} A section with an answer that was not "
+        "accepted was not saved. Open the draft, enter or correct those answers and submit."
+    ),
     "fayda_fin_registered": (
         "{label}: {fin} is already registered to {name} ({record}). Open that record instead of "
         "registering the farmer again; if the ID was mistyped, correct it."

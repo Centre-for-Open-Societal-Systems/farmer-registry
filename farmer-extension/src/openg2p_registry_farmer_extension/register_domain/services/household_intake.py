@@ -26,14 +26,16 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
 from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.household_submission_validation import (
     validate_household_roster,
 )
-from openg2p_registry_core.errors import G2PRegistryException
+from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryException
 from sqlalchemy import select
 
 from .direct_approval import DirectApprovalClosed
-from .required_fields import RequiredFieldsMixin, unattended
+from .required_fields import RequiredFieldsMixin, held_back, hold_back, unattended
 from .upstream_messages import reword
 
 FARMER_REGISTER_MNEMONIC = "Farmer"
+# The errors a rule raises for an answer (validation_error, core's parent link).
+_REFUSALS = {G2PRegistryErrorCodes.REQUEST_VALIDATION_ERROR.value[1], G2PRegistryErrorCodes.INVALID_REQUEST.value[1]}
 
 MESSAGES = {
     "household_both": (
@@ -167,12 +169,20 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
 
         # No user and no token: the ingestion worker (ODK, partners).
         worker = not args and kwargs.get("bearer_token") is None
+        refused = held_back(submission.submission_id)
         problems = await self.required_problems_for(submission, session)
-        if problems and (worker or ingest_active()):
+        if worker or ingest_active():
             # Left as a draft with the reason, for staff to complete and
-            # submit; failing the task would only retry the same form.
-            return await self.route_to_review(submission, problems, session)
-        await self.refuse_unsubmittable(submission, register_definition, problems, session)
+            # submit; failing the task would only retry the same form, and
+            # the ingest's error is seen by no one who can fix it.
+            if refused or problems:
+                return await self.route_to_review(submission, refused + problems, session, refused=bool(refused))
+            try:
+                await self.refuse_unsubmittable(submission, register_definition, problems, session)
+            except G2PRegistryException as error:
+                return await self.route_to_review(submission, [error.message or str(error)], session, refused=True)
+        else:
+            await self.refuse_unsubmittable(submission, register_definition, problems, session)
         if worker:
             # The ingestion worker finalizes without a user; its own client
             # token starts the approval workflow (odk/worker_token.py).
@@ -254,15 +264,33 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
         token = current_intake.set((session, submission_id))
         gate = unattended.set(worker_save)
         try:
-            return await super().save_intake_form_submission_with_session(
-                submission_id, section_id, payload, section_register_id, form_id,
-                register_id, created_by, session, documents=documents)
+            if not (worker_save and submission_id):
+                return await super().save_intake_form_submission_with_session(
+                    submission_id, section_id, payload, section_register_id, form_id,
+                    register_id, created_by, session, documents=documents)
+            # A rule can refuse a row after earlier rows of the section were
+            # added (core's parent-link check): the savepoint takes the whole
+            # section back, so a refused section leaves nothing behind.
+            async with session.begin_nested():
+                return await super().save_intake_form_submission_with_session(
+                    submission_id, section_id, payload, section_register_id, form_id,
+                    register_id, created_by, session, documents=documents)
         except G2PRegistryException:
             # Core's raw parent-link text (an unknown household) said plainly.
             from . import _reworded
 
-            async with _reworded(await self._messages()):
-                raise
+            try:
+                async with _reworded(await self._messages()):
+                    raise
+            except G2PRegistryException as plain:
+                # An ingested answer a rule refuses (a validation or parent-link
+                # error, never a lookup or database failure the task retries):
+                # the section is not saved and the reason goes in the draft's
+                # remarks at finalize.
+                if not (worker_save and submission_id and plain.code in _REFUSALS
+                        and hold_back(submission_id, plain.message or str(plain))):
+                    raise
+                return await self._get_submission_or_error(submission_id, session)
         finally:
             current_intake.reset(token)
             unattended.reset(gate)

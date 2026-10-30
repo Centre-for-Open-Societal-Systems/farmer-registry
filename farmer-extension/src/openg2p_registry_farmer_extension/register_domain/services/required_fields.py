@@ -16,7 +16,12 @@ the UI's own show/hide/require evaluation (form_integrity.py):
 - The ingestion worker (ODK, partners) saves whatever the source holds and
   finalizes without a person: a form missing required fields is left
   un-submitted as a draft with the reason in its remarks, so staff complete it,
-  instead of failing the worker task again and again.
+  instead of failing the worker task again and again. The same holds for an
+  answer a rule refuses (a name not in Ge'ez script, a phone that is not a
+  phone number, a Fayda ID already registered): ODK Central does not run the
+  form's rules on a submission posted through its API, so the registry is the
+  check. The refused section is not saved, its reason is kept (`hold_back`)
+  and the draft's remarks list it first.
 
 The mixin goes first in the farmer extension's intake service class, the one
 registered as the intake form data service (household_intake.py); there is no
@@ -48,6 +53,28 @@ _logger = logging.getLogger("oan-required-fields")
 # Set around a save made by the ingestion worker (household_intake.py): its
 # source is checked at finalize, where the form is whole.
 unattended = contextvars.ContextVar("oan_unattended_save", default=False)
+
+# What a rule refused while the worker saved an ingest's sections, by
+# submission id (household_intake.py), read at finalize. It lives as long as
+# the ingest task: odk/actor.py sets it when the task starts and drops it when
+# the task ends, so a crashed or retried ingest leaves nothing behind.
+refusals = contextvars.ContextVar("oan_ingest_refusals", default=None)
+
+
+def hold_back(submission_id: str, problem: str) -> bool:
+    """Keep a refusal for the draft's remarks; False outside an ingest task
+    (the caller then raises it as before)."""
+    held = refusals.get()
+    if held is None:
+        return False
+    held.setdefault(str(submission_id), []).append(problem)
+    return True
+
+
+def held_back(submission_id: str) -> list[str]:
+    held = refusals.get()
+    return list((held or {}).get(str(submission_id), []))
+
 
 # Row keys that are not answers.
 _TECHNICAL = {"internal_record_id", "link_internal_record_id", "edit_action", "submission_id", "record_status"}
@@ -113,10 +140,11 @@ class RequiredFieldsMixin:
         """What the submission's whole form lacks (empty when complete)."""
         return await check_form_complete(submission, session, await self._messages())
 
-    async def route_to_review(self, submission, problems: list[str], session):
+    async def route_to_review(self, submission, problems: list[str], session, refused: bool = False):
         """Leave an ingested form un-submitted, with the reason in its
-        remarks, for staff to complete and submit."""
-        reason = _Messages(await self._messages())("review_reason", problems=" ".join(
+        remarks, for staff to complete (or, `refused`, correct) and submit."""
+        key = "review_reason_refused" if refused else "review_reason"
+        reason = _Messages(await self._messages())(key, problems=" ".join(
             p if p.endswith(".") else p + "." for p in problems))
         submission.remarks = reason
         submission.last_updated_at = datetime.now()

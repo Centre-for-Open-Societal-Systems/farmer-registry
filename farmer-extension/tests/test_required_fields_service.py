@@ -265,7 +265,141 @@ def test_a_save_by_the_worker_skips_the_section_check_and_a_person_does_not(monk
 
     def save(created_by):
         return _run(service.save_intake_form_submission_with_session(
-            "s-1", "personal", [{}], FARMER, "form", FARMER, created_by, None))
+            "s-1", "personal", [{}], FARMER, "form", FARMER, created_by, _Savepoints()))
 
     assert save("system") == "saved" and seen == []
     assert save("alex") == "saved" and seen == ["s-1"]
+
+
+REFUSED = "Phone Number: yes is not a phone number. Enter it as 0912345678 or +251912345678"
+
+
+@pytest.fixture
+def ingest():
+    """The refusals of one ingest task, as odk/actor.py starts them."""
+    token = rf.refusals.set({})
+    yield
+    rf.refusals.reset(token)
+
+
+def test_the_worker_lists_a_refused_answer_first_in_the_draft(monkeypatch, ingest):
+    service, submission, calls = _service(monkeypatch, MISSING)
+    assert rf.hold_back("s-1", REFUSED)
+    result = _run(service.finalize_submission_with_session("s-1", _Session()))
+    assert result is submission
+    assert submission.remarks.startswith("Not submitted: some answers were not accepted. Phone Number: yes")
+    assert submission.remarks.index(REFUSED) < submission.remarks.index("Cooperative member is required")
+    assert calls == []
+
+
+def test_outside_an_ingest_task_nothing_is_held_back():
+    assert rf.hold_back("s-1", REFUSED) is False
+    assert rf.held_back("s-1") == []
+
+
+def test_the_ingest_task_starts_and_drops_its_refusals():
+    from openg2p_registry_farmer_extension.odk import actor
+
+    task = SimpleNamespace(name=actor.INGEST_TASK)
+    actor._record_ingest(sender=task, kwargs={"ingest_id": "i-1"})
+    assert rf.hold_back("s-9", REFUSED) and rf.held_back("s-9") == [REFUSED]
+    actor._forget_ingest(sender=task)
+    assert rf.held_back("s-9") == [] and rf.hold_back("s-9", REFUSED) is False
+
+
+def test_the_worker_leaves_a_form_the_farmer_checks_refuse_as_a_draft(monkeypatch):
+    service, submission, calls = _service(monkeypatch, [])
+
+    async def duplicate(submission_id, session, submission=None, required=None):
+        hi.validation_error("Fayda ID: 123456789012 is already registered to Abebe (FR-1).")
+
+    monkeypatch.setattr(hi, "check_farmer_submission", duplicate)
+    result = _run(service.finalize_submission_with_session("s-1", _Session()))
+    assert result is submission
+    assert "already registered to Abebe" in submission.remarks
+    assert submission.remarks.startswith("Not submitted: some answers were not accepted.")
+    assert calls == []
+
+
+def _refusing_save(monkeypatch, failure=None):
+    service = object.__new__(hi.HouseholdCheckedIntakeFormDataService)
+    submission = SimpleNamespace(submission_id="s-1")
+
+    async def passthrough(session, created_by):
+        return created_by
+
+    async def section(section_id, session):
+        return SimpleNamespace(section_mnemonic="personal")
+
+    async def platform_save(self, *args, **kwargs):
+        if failure:
+            raise failure
+        hi.validation_error(REFUSED)
+
+    async def get_submission(submission_id, session):
+        return submission
+
+    async def no_messages():
+        return {}
+
+    monkeypatch.setattr(rf.RequiredFieldsMixin, "refuse_missing_on_save", lambda *a, **k: asyncio.sleep(0))
+    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
+    monkeypatch.setattr(service, "_get_submission_or_error", get_submission, raising=False)
+    monkeypatch.setattr(service, "_messages", no_messages, raising=False)
+    monkeypatch.setattr(hi.G2PFarmerIntakeFormDataService, "save_intake_form_submission_with_session",
+                        platform_save, raising=False)
+
+    session = _Savepoints()
+
+    def save(created_by):
+        return _run(service.save_intake_form_submission_with_session(
+            "s-1", "personal", [{}], FARMER, "form", FARMER, created_by, session))
+
+    return save, submission, session
+
+
+class _Savepoints:
+    """A session whose savepoints record how they ended."""
+
+    def __init__(self):
+        self.ended = []
+
+    def begin_nested(self):
+        session = self
+
+        class _Nested:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, kind, error, trace):
+                session.ended.append("rolled back" if error else "released")
+                return False
+
+        return _Nested()
+
+
+def test_a_refused_section_saved_by_the_worker_is_held_back_not_raised(monkeypatch, ingest):
+    save, submission, session = _refusing_save(monkeypatch)
+    assert save("system") is submission
+    assert rf.held_back("s-1") == [REFUSED]
+    assert session.ended == ["rolled back"]  # the section is taken back whole
+
+
+def test_a_refused_section_saved_by_a_person_is_still_refused(monkeypatch, ingest):
+    save, _, session = _refusing_save(monkeypatch)
+    with pytest.raises(G2PRegistryException) as error:
+        save("alex")
+    assert REFUSED in error.value.message
+    assert rf.held_back("s-1") == []
+    assert session.ended == []  # a person's save is unchanged
+
+
+def test_a_failure_that_is_not_a_refusal_still_fails_the_worker(monkeypatch, ingest):
+    lookup = G2PRegistryException(code="G2P-REG-500", message="Master Data is not reachable")
+    save, _, session = _refusing_save(monkeypatch, failure=lookup)
+    with pytest.raises(G2PRegistryException) as error:
+        save("system")
+    assert error.value is lookup  # the task retries it, as before
+    assert rf.held_back("s-1") == []
+    assert session.ended == ["rolled back"]

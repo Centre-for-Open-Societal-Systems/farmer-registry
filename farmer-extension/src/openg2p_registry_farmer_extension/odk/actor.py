@@ -66,13 +66,19 @@ async def ingest_actor(session, created_by):
 def _record_ingest(sender=None, args=None, kwargs=None, **_):
     if getattr(sender, "name", None) != INGEST_TASK:
         return
+    from ..register_domain.services.required_fields import refusals
+
     ingest_id = (kwargs or {}).get("ingest_id") or (args[0] if args else None)
     _ingest_id.set(ingest_id if isinstance(ingest_id, str) else None)
+    refusals.set({})
 
 
 def _forget_ingest(sender=None, **_):
     if getattr(sender, "name", None) == INGEST_TASK:
+        from ..register_domain.services.required_fields import refusals
+
         _ingest_id.set(None)
+        refusals.set(None)
 
 
 def install() -> None:
