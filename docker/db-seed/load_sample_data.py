@@ -65,6 +65,8 @@ PACK = os.environ.get("SAMPLE_PACK", "ETH-OAN")
 OPENG2P_DATA_DIR = Path(os.environ.get("OPENG2P_DATA_DIR", "/openg2p-data"))
 COUNTRY_CODE = {"ETH": "ET"}
 DIAL_CODE = {"ET": "+251"}
+# Names in the farmer's own script, in the sample's farmer block; the register fields carry the same ids.
+LOCAL_NAME_FIELDS = ("first_name_local", "middle_name_local", "last_name_local")
 HOUSEHOLD_SECTIONS = ("household_information", "household_household_household_member_section_02")
 # Sections of the farmer form, in the order the staff portal saves them.
 FARMER_SECTIONS = (
@@ -241,6 +243,7 @@ def plan(people: list[dict], households: list[dict], farms: dict, geo: Geography
                 "farmer_personal_details": [{"internal_record_id": farmer_id, "first_name": first,
                                              "middle_name": middle, "last_name": last,
                                              "language_spoken": farmer.get("language_spoken"),
+                                             **{key: farmer[key] for key in LOCAL_NAME_FIELDS if farmer.get(key)},
                                              "gender": m.get("gender"), "birth_date": m.get("birth_date"),
                                              "marital_status": m.get("marital_status"),
                                              "education_level": m.get("education_level")}],

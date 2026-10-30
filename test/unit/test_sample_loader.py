@@ -337,3 +337,13 @@ def test_every_pack_sample_person_has_a_photo(loader):
         pytest.skip("the openg2p-data pack is not checked out here")
     people = json.loads((pack / "individuals.json").read_text(encoding="utf-8"))
     assert [p["individual_id"] for p in people if loader.photo_path(p["individual_id"]) is None] == []
+
+
+def test_names_in_the_farmers_script_are_passed_and_empty_ones_skipped(loader):
+    local = {"first_name_local": "በርሃኑ", "middle_name_local": "አበበ", "last_name_local": ""}
+    farms = {**FARMS, "ETH-IND-0001": {**FARMS["ETH-IND-0001"], "farmer": {**FARMER, **local}}}
+    person = plan(loader, farms)[0]["sections"]["farmer_personal_details"][0]
+    assert person["first_name_local"] == "በርሃኑ" and person["middle_name_local"] == "አበበ"
+    assert "last_name_local" not in person
+    plain = plan(loader)[0]["sections"]["farmer_personal_details"][0]
+    assert not any(key.endswith("_local") for key in plain)
