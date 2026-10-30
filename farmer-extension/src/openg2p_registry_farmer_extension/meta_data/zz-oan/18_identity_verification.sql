@@ -14,7 +14,7 @@ WITH sections (section_id, mnemonic, description, ui) AS (
      "section-editable": false, "section-hide-edit-button": true, "section-column-span": 3,
      "panels": [{"panel-id": "farmer_identity_verification_col_1", "panel-orientation": "vertical", "panel-column-span": 3, "widgets": [
        {"widget": "id-authentication", "widget-id": "identity_verification", "widget-type": "group",
-        "widget-label": "identity_verification", "widget-readonly": true,
+        "widget-label": "fayda_verification_status", "widget-readonly": true,
         "widget-data-path": {
           "internalRecordId": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.internal_record_id",
           "lastAuthenticatedOn": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authenticated_at",

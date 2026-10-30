@@ -33,6 +33,22 @@ ON CONFLICT ("register_id") DO UPDATE SET
   "deduplicate_schema" = EXCLUDED."deduplicate_schema", "search_result_schema" = EXCLUDED."search_result_schema",
   "filter_schema" = EXCLUDED."filter_schema";
 
+-- The farmer list starts with the Farmer ID, then the three names the way
+-- staff say them (first name, father's name, grandfather's name), then the
+-- rest of upstream's columns. The base columns are written out on every run,
+-- so the geography columns below are appended once to a known list.
+UPDATE "public"."g2p_register_schemas"
+SET "search_result_schema" = '[
+  {"field_name": "functional_record_id", "display_label": "Farmer ID", "order": 1},
+  {"field_name": "first_name", "display_label": "First name", "order": 2},
+  {"field_name": "middle_name", "display_label": "Father''s name", "order": 3},
+  {"field_name": "last_name", "display_label": "Grandfather''s name", "order": 4},
+  {"field_name": "gender", "display_label": "Gender", "order": 5},
+  {"field_name": "birth_date", "display_label": "Birth date", "order": 6},
+  {"field_name": "marital_status", "display_label": "Marital status", "order": 7},
+  {"field_name": "education_level", "display_label": "Education level", "order": 8}]'::json
+WHERE "register_id" = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
+
 -- The farmer list shows where each farmer lives. The names are derived from
 -- the farmer's location (register_domain/derived.py). Upstream's columns are
 -- kept, and these are appended once.
