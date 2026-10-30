@@ -26,7 +26,7 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
 from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.household_submission_validation import (
     validate_household_roster,
 )
-from openg2p_registry_core.errors import G2PRegistryException
+from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryException
 from sqlalchemy import select
 
 from .direct_approval import DirectApprovalClosed
@@ -34,6 +34,8 @@ from .required_fields import RequiredFieldsMixin, held_back, hold_back, unattend
 from .upstream_messages import reword
 
 FARMER_REGISTER_MNEMONIC = "Farmer"
+# The errors a rule raises for an answer (validation_error, core's parent link).
+_REFUSALS = {G2PRegistryErrorCodes.REQUEST_VALIDATION_ERROR.value[1], G2PRegistryErrorCodes.INVALID_REQUEST.value[1]}
 
 MESSAGES = {
     "household_both": (
@@ -262,9 +264,17 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
         token = current_intake.set((session, submission_id))
         gate = unattended.set(worker_save)
         try:
-            return await super().save_intake_form_submission_with_session(
-                submission_id, section_id, payload, section_register_id, form_id,
-                register_id, created_by, session, documents=documents)
+            if not (worker_save and submission_id):
+                return await super().save_intake_form_submission_with_session(
+                    submission_id, section_id, payload, section_register_id, form_id,
+                    register_id, created_by, session, documents=documents)
+            # A rule can refuse a row after earlier rows of the section were
+            # added (core's parent-link check): the savepoint takes the whole
+            # section back, so a refused section leaves nothing behind.
+            async with session.begin_nested():
+                return await super().save_intake_form_submission_with_session(
+                    submission_id, section_id, payload, section_register_id, form_id,
+                    register_id, created_by, session, documents=documents)
         except G2PRegistryException:
             # Core's raw parent-link text (an unknown household) said plainly.
             from . import _reworded
@@ -273,11 +283,13 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
                 async with _reworded(await self._messages()):
                     raise
             except G2PRegistryException as plain:
-                if not worker_save or not submission_id:
+                # An ingested answer a rule refuses (a validation or parent-link
+                # error, never a lookup or database failure the task retries):
+                # the section is not saved and the reason goes in the draft's
+                # remarks at finalize.
+                if not (worker_save and submission_id and plain.code in _REFUSALS
+                        and hold_back(submission_id, plain.message or str(plain))):
                     raise
-                # An ingested answer a rule refuses: the section is not saved
-                # and the reason goes in the draft's remarks at finalize.
-                hold_back(submission_id, plain.message or str(plain))
                 return await self._get_submission_or_error(submission_id, session)
         finally:
             current_intake.reset(token)

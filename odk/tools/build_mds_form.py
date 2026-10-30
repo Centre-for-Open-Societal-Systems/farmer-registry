@@ -304,8 +304,10 @@ def livestock_for_mixed(survey, columns: dict) -> list[dict]:
 # posted through its API; the registry refuses it then, and the ingested form
 # waits as a draft with the reason (required_fields.py). Enketo's regex is
 # JavaScript's, without Unicode classes, so the scripts are code-point ranges.
-ETHIOPIC = r"\u1200-\u137F"
-NAME_LETTERS = "a-zA-Z" + ETHIOPIC + "'-"  # Latin (Qubee), Ge'ez, apostrophe, hyphen: a double-quoted literal
+ETHIOPIC = r"\u1200-\u135A\u135D-\u135F"  # Ge'ez letters and combining marks; not its punctuation or numerals
+NAME_LETTERS = r"'\u2019-"  # apostrophe, right single quote, hyphen (name_rules.py); an escape, as pyxform turns a typed quote into an apostrophe
+ENGLISH_LETTERS = "a-zA-Z" + NAME_LETTERS
+OWN_LETTERS = "a-zA-Z" + ETHIOPIC + NAME_LETTERS  # Latin (Qubee) or Ge'ez
 EN = "constraint_message::English (en)"
 
 
@@ -329,11 +331,12 @@ def registry_rules() -> dict[str, dict[str, str]]:
         tigrinya = f"not(selected(${{{language}}}, 'TIGRINYA'))"
         for part in ("first", "father", "grandfather"):
             rules[f"{prefix}{part}_name_english"] = {
-                "constraint": f"regex(., '{_words('a-zA-Z')}') and string-length(.) <= 100",
-                EN: "Enter English letters only, with single spaces between words, up to 100 characters."}
+                "constraint": f'regex(., "{_words(ENGLISH_LETTERS)}") and string-length(.) <= 100',
+                EN: "Enter English letters only (an apostrophe or hyphen is allowed), with single spaces "
+                    "between words, up to 100 characters."}
             rules[f"{prefix}{part}_name_other"] = {
                 "constraint": (f"({tigrinya} or regex(., '{_words(ETHIOPIC)}')) and "
-                               f'regex(., "{_words(NAME_LETTERS)}") and string-length(.) <= 100'),
+                               f'regex(., "{_words(OWN_LETTERS)}") and string-length(.) <= 100'),
                 EN: name_message}
             rules[f"{prefix}{part}_name_amharic"] = {
                 "constraint": f"regex(., '{_words(ETHIOPIC)}') and string-length(.) <= 100",
@@ -344,7 +347,7 @@ def registry_rules() -> dict[str, dict[str, str]]:
         rules[f"{prefix}secondary_phone_number"] = {"constraint": _phone_rule([primary, other]), EN: phone_message}
     rules["other_member_name_other"] = {
         "constraint": ("(not(selected(${language}, 'TIGRINYA')) or "
-                       f"regex(., '{_words(ETHIOPIC, 3)}')) and " f'regex(., "{_words(NAME_LETTERS, 3)}")'),
+                       f"regex(., '{_words(ETHIOPIC, 3)}')) and " f'regex(., "{_words(OWN_LETTERS, 3)}")'),
         EN: ("Enter three names separated by single spaces: first name, father's name, grandfather's name. "
              "For Tigrinya write them in Ge'ez (Ethiopic) letters.")}
     moved = "Select again: this is not in the place selected above."

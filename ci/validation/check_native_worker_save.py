@@ -175,17 +175,25 @@ async def save_probe(Engine, task):
                 data["farmer_crops_intake"][1]["link_internal_record_id"] = str(uuid.uuid4())
             transformed = task._validate_transformed_data_json(classified, SimpleNamespace(transformed_data_json=data), sections)
             submission_id = await task._create_submission_async(classified, session)
-            try:
-                await task._save_sections_async(submission_id, classified, sections, transformed, session)
-            except Exception as error:
+            # The ingest task's refusals, as odk/actor.py starts them at task_prerun.
+            fields = services.install_farmer_household_check.__globals__["hold_back"].__globals__
+            fields["refusals"].set({})
+            await task._save_sections_async(submission_id, classified, sections, transformed, session)
+            held = fields["held_back"](submission_id)
+            fields["refusals"].set(None)
+            if scenario == "invalid_parent":
+                # The worker does not fail: the refused crop section is taken
+                # back whole (savepoint) and its reason waits for the draft's
+                # remarks at finalize (required_fields.hold_back).
+                assert len(held) == 1 and "land" in held[0].lower(), "Refusal did not identify the invalid child land: %r" % held
+                crops = list((await session.execute(select(G2PIntakeFormCrop).where(G2PIntakeFormCrop.submission_id == submission_id))).scalars())
+                expect(len(crops), 0, "refused crop section left no rows")
+                lands = list((await session.execute(select(G2PIntakeFormLand).where(G2PIntakeFormLand.submission_id == submission_id))).scalars())
+                expect(len(lands), 2, "sections before the refused one kept")
                 await session.rollback()
-                if scenario == "valid":
-                    raise
-                message = str(getattr(error, "message", error)).lower()
-                assert "land" in message, "Failure did not identify the invalid child land"
-                print(json.dumps({"late_invalid_child_rejected": True, "parent_link_validation_exercised": True, "coded_attribute_validation_exercised": False}), flush=True)
+                print(json.dumps({"late_invalid_child_held_back": True, "parent_link_validation_exercised": True, "coded_attribute_validation_exercised": False}), flush=True)
             else:
-                expect(scenario, "valid", "invalid scenario must be rejected by native save")
+                expect(held, [], "valid scenario refused nothing")
                 async def rows(model):
                     return list((await session.execute(select(model).where(model.submission_id == submission_id))).scalars())
                 farmer, = await rows(G2PIntakeFormFarmer)

@@ -313,22 +313,57 @@ def test_the_committed_v4_form_carries_the_registrys_rules():
     assert build_mds_form.apply_registry_rules(survey, survey_columns(book)) == []
 
 
-@pytest.mark.parametrize(("value", "tigrinya", "ok"), [
-    ("ገብረ መድህን", True, True), ("E2E", True, False), ("Bu'aa", False, True),
-    ("Abebe1", False, False), ("Ab  be", False, False), ("Tsegay", True, False)])
-def test_an_own_language_name_is_checked_as_the_registry_checks_it(value, tigrinya, ok):
+def _passes(name, value, tigrinya=False):
+    """The question's rule, read as Collect and Enketo read it (regex() terms only)."""
     import re
 
-    rule = build_mds_form.registry_rules()["first_name_other"]["constraint"]
-    patterns = [p.encode().decode("unicode_escape") for p in re.findall(r"regex\(\., ['\"](.*?)['\"]\)", rule)]
-    passes = (not tigrinya or re.fullmatch(patterns[0], value)) and re.fullmatch(patterns[1], value)
-    assert bool(passes) is ok
+    rule = build_mds_form.registry_rules()[name]["constraint"]
+    patterns = [p for p in re.findall(r"regex\(\., ['\"](.*?)['\"]\)", rule)]
+    if "TIGRINYA" in rule:
+        script, letters = patterns
+        return bool((not tigrinya or re.fullmatch(script, value)) and re.fullmatch(letters, value)) and len(value) <= 100
+    return all(re.fullmatch(p, value) for p in patterns) and len(value) <= 100
+
+
+GEEZ = "ገብረ መድህን"  # two Ge'ez words
+GEEZ_PUNCTUATION, GEEZ_NUMERAL = "ገብ፡", "ገ፩"
+
+
+@pytest.mark.parametrize("prefix", ["", "hh_member_"])
+@pytest.mark.parametrize(("value", "tigrinya", "ok"), [
+    (GEEZ, True, True), ("E2E", True, False), ("Bu'aa", False, True), ("Tsegay", True, False),
+    ("Abebe1", False, False), ("Ab  be", False, False), (GEEZ_PUNCTUATION, False, False),
+    (GEEZ_NUMERAL, True, False), ("a" * 101, False, False)])
+def test_an_own_language_name_is_checked_as_the_registry_checks_it(prefix, value, tigrinya, ok):
+    assert _passes(prefix + "first_name_other", value, tigrinya) is ok
+
+
+@pytest.mark.parametrize("prefix", ["", "hh_member_"])
+@pytest.mark.parametrize(("value", "ok"), [
+    ("Abebe", True), ("O'Neil", True), ("Mary-Jane", True), ("Bu’aa", True), ("Abebe Kebede", True),
+    ("Abebe  Kebede", False), (" Abebe", False), ("Abebe1", False), ("   ", False), (GEEZ, False),
+    ("a" * 101, False)])
+def test_an_english_name_is_checked_as_the_registry_checks_it(prefix, value, ok):
+    assert _passes(prefix + "father_name_english", value) is ok
+
+
+@pytest.mark.parametrize("prefix", ["", "hh_member_"])
+@pytest.mark.parametrize(("value", "ok"), [
+    (GEEZ, True), ("ገብረ", True), ("Abebe", False), (GEEZ_PUNCTUATION, False), (GEEZ_NUMERAL, False)])
+def test_an_amharic_name_is_in_geez_letters(prefix, value, ok):
+    assert _passes(prefix + "grandfather_name_amharic", value) is ok
 
 
 @pytest.mark.parametrize(("value", "ok"), [("251911223344", True), ("251711223344", True),
                                           ("251111223344", False), ("yes", False), ("0911223344", False)])
-def test_a_phone_is_a_mobile_number(value, ok):
-    import re
+@pytest.mark.parametrize("prefix", ["", "hh_member_"])
+def test_a_phone_is_a_mobile_number(prefix, value, ok):
+    assert _passes(prefix + "primary_phone_number", value) is ok
 
-    pattern = re.search(r"'(.*?)'", build_mds_form.registry_rules()["primary_phone_number"]["constraint"]).group(1)
-    assert bool(re.fullmatch(pattern, value)) is ok
+
+def test_a_later_phone_may_not_repeat_an_earlier_one():
+    rules = build_mds_form.registry_rules()
+    for prefix in ("", "hh_member_"):
+        assert f". != ${{{prefix}primary_phone_number}}" in rules[prefix + "other_phone_number"]["constraint"]
+        secondary = rules[prefix + "secondary_phone_number"]["constraint"]
+        assert f"${{{prefix}primary_phone_number}}" in secondary and f"${{{prefix}other_phone_number}}" in secondary

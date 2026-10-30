@@ -54,18 +54,26 @@ _logger = logging.getLogger("oan-required-fields")
 # source is checked at finalize, where the form is whole.
 unattended = contextvars.ContextVar("oan_unattended_save", default=False)
 
-# Ingested submission id -> what a rule refused while the worker saved its
-# sections (household_intake.py); read once at finalize. The worker handles one
-# ingest at a time, and a retried ingest gets a new submission id.
-_held: dict[str, list[str]] = {}
+# What a rule refused while the worker saved an ingest's sections, by
+# submission id (household_intake.py), read at finalize. It lives as long as
+# the ingest task: odk/actor.py sets it when the task starts and drops it when
+# the task ends, so a crashed or retried ingest leaves nothing behind.
+refusals = contextvars.ContextVar("oan_ingest_refusals", default=None)
 
 
-def hold_back(submission_id: str, problem: str) -> None:
-    _held.setdefault(str(submission_id), []).append(problem)
+def hold_back(submission_id: str, problem: str) -> bool:
+    """Keep a refusal for the draft's remarks; False outside an ingest task
+    (the caller then raises it as before)."""
+    held = refusals.get()
+    if held is None:
+        return False
+    held.setdefault(str(submission_id), []).append(problem)
+    return True
 
 
 def held_back(submission_id: str) -> list[str]:
-    return _held.pop(str(submission_id), [])
+    held = refusals.get()
+    return list((held or {}).get(str(submission_id), []))
 
 
 # Row keys that are not answers.
