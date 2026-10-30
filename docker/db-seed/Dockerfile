@@ -29,7 +29,7 @@ COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql
 # (samples/photos/<individual_id>.webp) and the OAN theme. The sample
 # people come from Master Data's API.
 ARG OPENG2P_DATA_REPO=https://github.com/Centre-for-Open-Societal-Systems/openg2p-data.git
-ARG OPENG2P_DATA_REF=8383e2eb31f96c3e2fa472009abd076adeb44038
+ARG OPENG2P_DATA_REF=db3e2ff6e9cc764648c1348708c37cfec8e941c3
 RUN rm -rf /openg2p-data && mkdir -p /openg2p-data && cd /openg2p-data \
     && git init -q && git remote add origin ${OPENG2P_DATA_REPO} \
     && git fetch -q --depth 1 origin ${OPENG2P_DATA_REF} && git checkout -q FETCH_HEAD \
