@@ -84,6 +84,17 @@ BEGIN
     RAISE EXCEPTION 'A land lookup carries literal English: %', found;
   END IF;
 
+  SELECT string_agg(s.section_id, ', ') INTO found
+  FROM "public"."g2p_register_sections" s
+  WHERE s.section_id IN ('farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake',
+                         'farmer_farm_inputs', 'farmer_farm_inputs_intake')
+    AND NOT (s.section_ui_schema::text LIKE '%"search_land"%'
+             AND s.section_ui_schema::text LIKE '%"select_land"%'
+             AND s.section_ui_schema::text LIKE '%"land"%');
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'A land lookup lacks its translation keys: %', found;
+  END IF;
+
   -- A section title is not also the name of its tab.
   SELECT string_agg(p.title_key, ', ') INTO found
   FROM (VALUES ('farmer_lands', 'farmer_lands_tab'), ('farmer_crops', 'farmer_crops_tab'),

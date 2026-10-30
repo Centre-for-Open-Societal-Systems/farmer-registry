@@ -30,7 +30,7 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "other_document_purpose": "Purpose of other document",
 
  "is_household_head": "Is the farmer the head of the household?",
- "household_lookup_helptext": "Pick the household this farmer belongs to, if it is already registered.",
+ "household_lookup_helptext": "Pick the household this farmer belongs to, if it is already registered. For a new household leave this empty; on the registration form, fill in the household information and household members below.",
  "farmer_household_lookup": "Household link",
 
  "is_primary_cooperative_member": "Member of a primary cooperative",
