@@ -171,11 +171,11 @@ def test_jenkins_transfers_hidden_chart_files_bound_into_the_build_hash():
         assert "scripts/**" in line and "integrations/**" in line and "test/runtime/**" in line
 
 
-def test_staging_components_target_far_without_adopting_the_legacy_connector():
+def test_staging_components_target_farmer_without_adopting_the_legacy_connector():
     dev = coordinator.configuration()
     staging = coordinator.configuration(environment="staging")
     assert all(c["namespace"] == "farmer" for c in dev)
-    assert all(c["namespace"] == "far" for c in staging)
+    assert all(c["namespace"] == "farmer" for c in staging)
     assert [c["release"] for c in dev] == [c["release"] for c in staging]
     assert all(c["release"] != "farmer-connector" for c in staging)
 

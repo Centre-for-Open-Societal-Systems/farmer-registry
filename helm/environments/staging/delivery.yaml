@@ -1,17 +1,19 @@
 # CI environment contract, not a Helm values overlay. Contains no credentials.
+# Staging runs the OAN chart (ci/deploy/oan-chart-staging.json) in namespace farmer,
+# installed fresh beside the legacy release in namespace far.
 environment: staging
-namespace: far
+namespace: farmer
 release: farmer-registry
 kubeconfigCredential: staging-farmer-kubeconfig
 registryHostname: farmer-registry.oanstaging.com
 staffIssuer: https://keycloak.oanstaging.com/realms/staff
 connectorRelease: farmer-registry-connector
-registryDatabase: farmer_registry_far
-connectorDatabase: farmer_connector_v2_far
-legacyConnectorDatabase: farmer_connector_far
-connectorQueue: farmer-registry-connector-v2-far
-connectorHostname: connector-farmer-registry.far.staging.openg2p.test
+registryDatabase: farmer_registry
+idGeneratorDatabase: farmer_registry_idgen
+connectorDatabase: farmer_connector_v2
+connectorQueue: farmer-registry-connector-v2
+connectorHostname: connector-farmer-registry.oanstaging.com
 apiServers:
   - https://10.0.1.212:6443
   - https://52.66.116.220:6443
-platform: 1.2.2-rc.544
+platform: 1.2.2-rc.614

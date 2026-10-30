@@ -1,15 +1,26 @@
 """Verify the approved archive without extracting or resolving dependencies."""
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
 import sys
 import tarfile
 
 import yaml
 
 
-def profile():
-    return json.loads(Path(__file__).with_name('oan-chart.json').read_text(encoding='utf-8'))
+# One pin file per environment. Dev keeps oan-chart.json; the others are oan-chart-<environment>.json.
+ENVIRONMENTS = ('dev', 'staging')
+
+
+def profile(environment=None):
+    """The pin of the requested environment (default: DELIVERY_ENVIRONMENT, else dev)."""
+    environment = environment or os.environ.get('DELIVERY_ENVIRONMENT') or 'dev'
+    if environment not in ENVIRONMENTS:
+        raise ValueError('No OAN chart pin for this environment')
+    name = 'oan-chart.json' if environment == 'dev' else 'oan-chart-%s.json' % environment
+    return json.loads(Path(__file__).with_name(name).read_text(encoding='utf-8'))
 
 
 def verify(path, pin=None):
@@ -33,9 +44,24 @@ def verify(path, pin=None):
 
 
 def require_deployable(environment):
-    pin = profile()
-    if environment != 'dev' or pin.get('environment') != environment:
+    """Only dev and staging deploy the OAN chart, and only with the pin made for that environment."""
+    if environment not in ENVIRONMENTS:
         raise ValueError('Deployment blocked: the pinned OAN chart is for another environment')
+    pin = profile(environment)
+    if pin.get('environment') != environment:
+        raise ValueError('Deployment blocked: the pinned OAN chart is for another environment')
+
+
+def values_url(environment):
+    """The reviewed environment values file of the pinned oan-helm commit, with its checksum."""
+    pin = profile(environment)
+    values = pin.get('values') or {}
+    commit, digest, path = values.get('commit', ''), values.get('sha256', ''), values.get('path', '')
+    base = 'https://raw.githubusercontent.com/Centre-for-Open-Societal-Systems/oan-helm/'
+    if not (re.fullmatch(r'[0-9a-f]{40}', commit) and re.fullmatch(r'[0-9a-f]{64}', digest)
+            and re.fullmatch(r'environments/[a-z]+/values/[a-z-]+\.yaml', path)):
+        raise ValueError('Environment values are not pinned (commit and sha256 required)')
+    return base + commit + '/' + path, digest
 
 
 def defaults(path, pin=None):
@@ -56,6 +82,8 @@ if __name__ == '__main__':
         if sys.argv[1] == 'url':
             pin = profile()
             print(pin['repository'] + pin['name'] + '-' + pin['version'] + '.tgz')
+        elif sys.argv[1] == 'values-url':
+            print('%s %s' % values_url(sys.argv[2]))
         elif sys.argv[1] == 'require-deployable':
             require_deployable(sys.argv[2])
             print('PASS: registry promotion evidence accepted')

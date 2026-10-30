@@ -118,7 +118,7 @@ def test_main_verifies_package_and_keeps_jobs_unless_chart_only(tmp_path, monkey
     calls = []
     def verify(path):
         calls.append(path)
-        return {'version': '1.0.0-dev.19'}
+        return oan_compat.profile('dev')
     monkeypatch.setattr(oan_compat, 'verify', verify)
     for mode in ('false', 'true'):
         monkeypatch.setenv('OAN_CHART_ONLY', mode)
@@ -131,3 +131,64 @@ def test_main_verifies_package_and_keeps_jobs_unless_chart_only(tmp_path, monkey
     monkeypatch.setenv('HELM_NAMESPACE', 'far')
     with pytest.raises(ValueError):
         oan_compat.main()
+
+
+def staging_run(tmp_path, monkeypatch, environment, namespace='farmer', pin_environment='staging'):
+    before, candidate, values = fixture()
+    path = tmp_path / 'values.yaml'
+    path.write_text(yaml.safe_dump(values), encoding='utf-8')
+    for name, value in [('DELIVERY_ENVIRONMENT', environment), ('HELM_NAMESPACE', namespace),
+                        ('HELM_RELEASE', 'farmer-registry'), ('OAN_VALUES_FILE', str(path)),
+                        ('OAN_CHART_ARCHIVE', 'verified-archive'), ('OAN_CHART_ONLY', 'false')]:
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(oan_compat, 'verify', lambda path: oan_compat.profile(pin_environment))
+    monkeypatch.setattr(sys, 'stdin', io.StringIO(yaml.safe_dump_all(candidate)))
+    return before
+
+
+def test_renderer_accepts_staging_in_farmer_with_the_staging_pin(tmp_path, monkeypatch, capsys):
+    before = staging_run(tmp_path, monkeypatch, 'staging')
+    oan_compat.main()
+    assert list(yaml.safe_load_all(capsys.readouterr().out)) == before
+
+
+@pytest.mark.parametrize('environment,namespace,pin', [
+    ('staging', 'far', 'staging'), ('staging', 'commons', 'staging'),
+    ('staging', 'farmer', 'dev'), ('dev', 'farmer', 'staging'),
+    ('staging-legacy', 'far', 'staging'), ('production', 'farmer', 'staging'), ('', 'farmer', 'staging')])
+def test_renderer_rejects_other_environments_namespaces_and_mismatched_pins(tmp_path, monkeypatch, environment, namespace, pin):
+    staging_run(tmp_path, monkeypatch, environment, namespace, pin)
+    with pytest.raises(ValueError):
+        oan_compat.main()
+
+
+def seed_job():
+    return {'kind': 'Job', 'metadata': {'name': 'farmer-registry-db-seed'},
+            'spec': {'template': {'spec': {'containers': [{'name': 'db-seed', 'env': [{'name': 'PGHOST', 'value': 'db'}]}]}}}}
+
+
+SEED_VALUES = {'registry': {'dbSeed': {
+    'envVars': {'COSS_FARMER_SOURCE_ID': 'farmer-registry'},
+    'envVarsFrom': {'APPROVER_RESOLVER_SECRET': {'secretKeyRef': {'name': 'resolver', 'key': 'secret'}}}}}}
+
+
+def test_staging_render_puts_db_seed_values_on_the_seed_job():
+    result = oan_compat.render([seed_job()], SEED_VALUES, 'staging')
+    env = result[0]['spec']['template']['spec']['containers'][0]['env']
+    assert env == [{'name': 'PGHOST', 'value': 'db'},
+                   {'name': 'COSS_FARMER_SOURCE_ID', 'value': 'farmer-registry'},
+                   {'name': 'APPROVER_RESOLVER_SECRET', 'valueFrom': {'secretKeyRef': {'name': 'resolver', 'key': 'secret'}}}]
+
+
+def test_dev_render_is_unchanged_by_db_seed_values():
+    job = seed_job()
+    assert oan_compat.render([job], SEED_VALUES, 'dev') == [job]
+    assert oan_compat.render([job], SEED_VALUES) == [job]
+
+
+def test_db_seed_values_never_override_or_float_without_a_job():
+    with pytest.raises(ValueError, match='override'):
+        oan_compat.render([seed_job()], {'registry': {'dbSeed': {'envVars': {'PGHOST': 'other'}}}}, 'staging')
+    with pytest.raises(ValueError, match='db-seed Job'):
+        oan_compat.render([], SEED_VALUES, 'staging')
+    assert oan_compat.render([seed_job()], {'registry': {'dbSeed': {'envVars': {'X': None}}}}, 'staging') == [seed_job()]

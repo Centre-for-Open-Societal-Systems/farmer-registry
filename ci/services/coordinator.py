@@ -26,7 +26,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ci/services"))
 sys.path.insert(0, str(ROOT / "ci"))
-from environments import connector_settings, validate_cluster
+from environments import connector_settings, namespace as environment_namespace, validate_cluster
 sys.path.insert(0, str(ROOT / "ci/deploy"))
 sys.path.insert(0, str(ROOT / "scripts/operations/connector"))
 MANIFEST = ROOT / "ci/services/catalogue.yaml"
@@ -121,7 +121,7 @@ def configuration(path=MANIFEST, environment="dev"):
     if environment == "staging":
         items = copy.deepcopy(items)
         for item in items:
-            item["namespace"] = "far"
+            item["namespace"] = environment_namespace("staging")
     return items
 
 
@@ -508,17 +508,19 @@ def signing_preparation_before(before, after, environment="dev"):
         "CONNECTOR_SIGNING_PRIVATE_KEY_PEM": {"valueFrom": {"secretKeyRef": {"name": "farmer-connector-v2-signing", "key": "private-key.pem"}}},
     }
     if environment == "staging":
-        expected["CONNECTOR_SIGNING_KEY_ID"] = {"value": "farmer-connector-v2-far"}
-        expected["CONNECTOR_SIGNING_PRIVATE_KEY_PEM"] = {"valueFrom": {"secretKeyRef": {"name": "farmer-connector-v2-far-signing", "key": "private-key.pem"}}}
-        expected["CONNECTOR_CELERY_QUEUE"] = {"value": "farmer-registry-connector-v2-far"}
+        # The reviewed staging values name the isolated database, queue and signing key.
+        reviewed = yaml.safe_load((ROOT / "helm/environments/staging/services/registry-connector.yaml").read_text(encoding="utf-8"))
+        expected["CONNECTOR_SIGNING_KEY_ID"] = {"value": reviewed["cossSigning"]["keyId"]}
+        expected["CONNECTOR_SIGNING_PRIVATE_KEY_PEM"] = {"valueFrom": {"secretKeyRef": {"name": reviewed["cossSigning"]["secret"], "key": "private-key.pem"}}}
+        expected["CONNECTOR_CELERY_QUEUE"] = {"value": reviewed["cossQueue"]}
         for document in after:
             if document["kind"] != "Deployment" or document["metadata"]["name"].endswith("-ui"):
                 continue
             for container in pod(document).get("containers", []):
                 env = {e["name"]: e for e in container.get("env", [])}
-                required = dict(expected, CONNECTOR_DB_DBNAME={"value": "farmer_connector_v2_far"},
-                                CONNECTOR_DB_USERNAME={"value": "far_farmer_connector_v2_user"},
-                                CONNECTOR_DB_PASSWORD={"valueFrom": {"secretKeyRef": {"name": "farmer-connector-v2-far-db", "key": "password"}}})
+                required = dict(expected, CONNECTOR_DB_DBNAME={"value": reviewed["global"]["connectorDB"]},
+                                CONNECTOR_DB_USERNAME={"value": reviewed["global"]["connectorDBUser"]},
+                                CONNECTOR_DB_PASSWORD={"valueFrom": {"secretKeyRef": {"name": reviewed["global"]["connectorDBSecret"], "key": "password"}}})
                 if any(env.get(k) != dict(name=k, **v) for k, v in required.items()):
                     raise ServiceError("staging-connector-isolation-or-signing-mismatch")
     newer = {(d["kind"], d["metadata"]["name"]): d for d in after}
@@ -872,7 +874,7 @@ def main():
                 if acceptance.get("images", {}).get(name) != expected_digests:
                     parser.error("Acceptance does not cover every promoted digest")
                 staging = acceptance.get("staging", {})
-                if (staging.get("namespace") != "far" or
+                if (staging.get("namespace") != environment_namespace("staging") or
                         not re.fullmatch(r"[0-9a-f]{64}", staging.get("connectorChartHash", "")) or
                         not re.fullmatch(r"[0-9a-f]{64}", staging.get("backupHash", ""))):
                     parser.error("Reviewed staging connector chart and final backup required")

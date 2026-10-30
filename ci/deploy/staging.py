@@ -1,5 +1,10 @@
 """Fail closed unless trusted rehearsal evidence covers this exact staging rollout.
 
+Two evidence shapes exist. The OAN shape (namespace farmer, platform read from the staging
+pin ci/deploy/oan-chart-staging.json) is what the staging pipeline deploys. The legacy shape
+(namespace far, platform 1.2.2-rc.544) describes the retired in-repo chart release and keeps
+its baseline revision and baseline content hashes; only the OAN shape drops those fields.
+
 Bind this file through Jenkins staging-farmer-rehearsal, never a build parameter
 or an artifact downloaded from an untrusted PR. Evidence contains no credentials.
 """
@@ -15,6 +20,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ci"))
+sys.path.insert(0, str(ROOT / "ci" / "deploy"))
 from environments import configuration, validate_cluster
 
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -77,9 +83,26 @@ def passed(record, names):
         raise ValueError("Staging evidence has incomplete verification")
 
 
+LEGACY_PLATFORM = "1.2.2-rc.544"
+BASELINE_FIELDS = ("baselineRevision", "valuesHash", "manifestHash", "candidateManifestHash")
+
+
+def oan_record(record):
+    """True for evidence of the OAN chart deployment; False for the legacy far release."""
+    return record.get("namespace") == configuration("staging")["namespace"]
+
+
+def pinned_platform():
+    from oan_chart import profile
+    return profile("staging")["platformVersion"]
+
+
 def evidence(path, source_commit, now=None):
     record = json.loads(Path(path).read_text(encoding="utf-8"))
-    if record.get("environment") != "staging" or record.get("namespace") != "far" or record.get("platform") != "1.2.2-rc.544":
+    oan = oan_record(record)
+    legacy = record.get("namespace") == configuration("staging-legacy")["namespace"]
+    expected_platform = pinned_platform() if oan else LEGACY_PLATFORM
+    if record.get("environment") != "staging" or not (oan or legacy) or record.get("platform") != expected_platform:
         raise ValueError("Staging evidence environment/platform mismatch")
     if not SHA.fullmatch(source_commit) or record.get("deliveryHash") != delivery_hash():
         raise ValueError("Staging delivery changed after rehearsal")
@@ -110,6 +133,11 @@ def evidence(path, source_commit, now=None):
     backups = record.get("backups", {})
     if set(backups) != required_backups or any(not HASH.fullmatch(v) for v in backups.values()):
         raise ValueError("Complete protected staging backup inventory required")
+    if oan:
+        # A fresh install has no baseline release; its content is not rehearsed against one.
+        for field in BASELINE_FIELDS:
+            record.pop(field, None)
+        return record
     if type(record.get("baselineRevision")) is not int or record["baselineRevision"] < 1:
         raise ValueError("Staging baseline revision required")
     if not all(HASH.fullmatch(record.get(k, "")) for k in ("valuesHash", "manifestHash", "candidateManifestHash")):
@@ -123,12 +151,20 @@ def cutover(record, status, values, manifest, now=None):
     final = datetime.fromisoformat(record["finalBackupAt"].replace("Z", "+00:00"))
     if final.tzinfo is None or not timedelta(0) <= current - final <= timedelta(hours=1):
         raise ValueError("Fresh final maintenance backup required")
+    if oan_record(record):
+        # The OAN release is the one the pipeline installed: it must be deployed in its namespace and use its database.
+        if (status.get("name"), status.get("namespace"), status.get("info", {}).get("status")) != (
+                "farmer-registry", configuration("staging")["namespace"], "deployed"):
+            raise ValueError("Staging release is not the deployed OAN release")
+        if values.get("global", {}).get("registryDB") != configuration("staging")["registryDatabase"]:
+            raise ValueError("Staging Registry database mismatch")
+        return
     if (status.get("name"), status.get("namespace"), status.get("version"), status.get("info", {}).get("status")) != (
             "farmer-registry", "far", record["baselineRevision"], "deployed"):
         raise ValueError("Staging release changed after rehearsal")
     if content_hash(values) != record["valuesHash"] or content_hash(manifest) != record["manifestHash"]:
         raise ValueError("Staging values/manifests changed after rehearsal")
-    if values.get("global", {}).get("registryDB") != configuration("staging")["registryDatabase"]:
+    if values.get("global", {}).get("registryDB") != configuration("staging-legacy")["registryDatabase"]:
         raise ValueError("Staging Registry database mismatch")
 
 
@@ -137,9 +173,8 @@ def main():
     if action == "template":
         # False/empty defaults can never authorize deployment. Operators attach
         # measured evidence after rehearsal; this command performs no API calls.
-        record = {"environment": "staging", "namespace": "far", "platform": "1.2.2-rc.544",
+        record = {"environment": "staging", "namespace": configuration("staging")["namespace"], "platform": pinned_platform(),
                   "deliveryHash": delivery_hash(), "verifiedAt": "", "finalBackupAt": "",
-                  "baselineRevision": None, "valuesHash": "", "manifestHash": "", "candidateManifestHash": "",
                   "rehearsal": dict.fromkeys(REHEARSAL, False), "cutover": dict.fromkeys(CUTOVER, False),
                   "backups": dict.fromkeys(("registry", "connector", "helm", "odkFormMedia", "pipelines", "runHistory", "checkpoints"), ""),
                   "registry": {"registry": "", "sourceCommit": "", "images": {
@@ -160,7 +195,7 @@ def main():
         cutover(record, status, values, manifest)
     elif action == "summary":
         Path(args[0]).write_text(json.dumps({k: record[k] for k in (
-            "environment", "namespace", "platform", "deliveryHash", "verifiedAt", "baselineRevision", "registry", "backups")}, indent=2) + "\n")
+            "environment", "namespace", "platform", "deliveryHash", "verifiedAt", "baselineRevision", "registry", "backups") if k in record}, indent=2) + "\n")
     elif action != "verify":
         raise ValueError("Unknown staging evidence operation")
     print("PASS: staging rehearsal " + action)

@@ -1,29 +1,38 @@
 # Paused preparation only; no ODK credentials or private keys belong here.
-# The trusted staging-farmer-dev-acceptance file supplies the final stopped
-# backup hash and rehearsed staging chart hash. Images retain their dev digests.
+# Staging connector for the OAN Farmer release in namespace farmer, beside the legacy far connector,
+# which is not touched. Replicas stay at 0 until the handoff; the trusted staging-farmer-dev-acceptance
+# file supplies the final stopped backup hash and rehearsed staging chart hash.
 _coordination:
-  namespace: far
-  database: farmer_connector_v2_far
+  namespace: farmer
+  database: farmer_connector_v2
   databaseEnv: CONNECTOR_DB_DBNAME
   oldDatabaseEnv: CONNECTOR_DB_DBNAME
-  queue: farmer-registry-connector-v2-far
+  queue: farmer-registry-connector-v2
 fullnameOverride: farmer-registry-connector
-cossQueue: farmer-registry-connector-v2-far
+cossQueue: farmer-registry-connector-v2
 cossSigning:
   enabled: true
   partnerId: farmer-partner
-  keyId: farmer-connector-v2-far
-  secret: farmer-connector-v2-far-signing
+  keyId: farmer-connector-v2-staging
+  secret: farmer-connector-v2-staging-signing
+# Admin access (Keycloak realm staff). The image bakes the New Dev issuer; the chart overlay in
+# scripts/operations/connector/chart_signing.py passes these as CONNECTOR_ADMIN_AUTH_* which the
+# image honours before its baked file.
+adminAuth:
+  issuer: https://keycloak.oanstaging.com/realms/staff
+  jwksUrl: http://commons-keycloak.commons.svc.cluster.local:80/realms/staff/protocol/openid-connect/certs
+  clientId: registry-connector
+  role: REGISTRY_CONNECTOR_ADMIN
+  uiClientId: registry-connector-ui
 global:
-  hostname: connector-farmer-registry.far.staging.openg2p.test
+  hostname: connector-farmer-registry.oanstaging.com
   postgresqlHost: commons-postgresql.commons.svc.cluster.local
   postgresqlPort: 5432
-  connectorDB: farmer_connector_v2_far
-  connectorDBUser: far_farmer_connector_v2_user
-  connectorDBSecret: farmer-connector-v2-far-db
+  connectorDB: farmer_connector_v2
+  connectorDBUser: farmer_connector_v2_user
+  connectorDBSecret: farmer-connector-v2-staging-db
   connectorDBUserPasswordKey: password
-  redisHost: farmer-registry-redis-master
-  redisPort: 6379
+  redisHost: commons-redis-master.commons.svc.cluster.local
   partnerApiService: farmer-registry-partner-api
 imagePullSecrets:
   - name: ecr-pull-secret
@@ -31,7 +40,7 @@ commonEnv:
   CONNECTOR_STORE_RUN_PAYLOADS: 'false'
   CONNECTOR_STRICT_INCREMENTAL: 'true'
   CONNECTOR_FULL_SCAN_ON_INCREMENTAL_UNSUPPORTED: 'false'
-  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry.far.staging.openg2p.test
+  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry.oanstaging.com
 api:
   replicaCount: 0
   autoscaling:
