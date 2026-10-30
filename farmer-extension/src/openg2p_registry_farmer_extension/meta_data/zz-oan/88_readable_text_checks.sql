@@ -223,9 +223,6 @@ BEGIN
   SELECT string_agg(k, ', ' ORDER BY k) INTO found
   FROM (VALUES
     ('other_land_owner', 'Another land owner in the household'),
-    ('enumerator_accuracy', 'Enumerator GPS accuracy (metres)'),
-    ('enumerator_altitude', 'Enumerator altitude (metres)'),
-    ('farmer_document', 'Farmer or cooperative membership document'),
     ('total_land_crop_sharing_area', 'Crop-sharing or other land (ha)'),
     ('Intake Form', 'Intake form'),
     ('skipped', 'Not needed (decided by another approver)'),
