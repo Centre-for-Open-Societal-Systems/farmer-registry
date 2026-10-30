@@ -158,7 +158,7 @@ ON CONFLICT ("section_id") DO UPDATE SET
   "cr_auto_approve_for_partner" = EXCLUDED."cr_auto_approve_for_partner";
 
 -- Farmer photo for the intake form. The register's detail view already has the
--- photo in upstream's header section (fr_farmer_header); the intake form has no
+-- photo in the OAN farmer_header section (11_header_section.sql); the intake form has no
 -- header, so without this a photo could only be added after approval.
 --
 -- The widget is OAN's own (ui/staff-ui/overrides/src/oan/widgets/): one picker

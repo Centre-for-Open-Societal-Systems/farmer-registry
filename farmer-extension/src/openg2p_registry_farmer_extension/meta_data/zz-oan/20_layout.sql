@@ -21,7 +21,8 @@
 -- again right after, only where the OAN row that replaces it is attached.
 
 WITH replaced (upstream_tab_section_id, upstream_section_id, section_id, tab_section_id) AS (
-  VALUES ('a6ab60bd-07be-4237-aefd-7f6e3c1ced4f', 'farmer_farmer_personal_identification_section_01', 'farmer_identity', 'farmer_farmer_tab__farmer_identity'),
+  VALUES ('63ff4361-ad54-4d5a-b475-36d6267281e3', '01425f4e-720e-4a4e-a0db-73f371ae2a07', 'farmer_header', 'farmer_farmer_tab__farmer_header'),
+         ('a6ab60bd-07be-4237-aefd-7f6e3c1ced4f', 'farmer_farmer_personal_identification_section_01', 'farmer_identity', 'farmer_farmer_tab__farmer_identity'),
          ('9a1573a0-6507-47b6-a717-a007435d2c76', 'farmer_farmer_socio_economic_and_health_section_04', 'farmer_socio_economic_health', 'farmer_farmer_tab__farmer_socio_economic_health'),
          ('14691011-f41c-4010-be96-af39207b5fc3', 'farmer_membership_membership_details_01', 'farmer_membership', 'farmer_membership_tab__farmer_membership'),
          ('41a866b7-d301-46e3-8375-17ebb9f0059d', 'farmer_farm_farm_details_section_01', 'farmer_lands', 'farmer_land_tab__farmer_lands'),
@@ -129,6 +130,7 @@ ON CONFLICT ("tab_section_id") DO UPDATE SET
 -- Detach upstream, only where the OAN row that replaces it is attached.
 DELETE FROM "public"."g2p_register_ui_tab_sections" u
 USING (VALUES
+  ('63ff4361-ad54-4d5a-b475-36d6267281e3', 'farmer_farmer_tab__farmer_header'),
   ('a6ab60bd-07be-4237-aefd-7f6e3c1ced4f', 'farmer_farmer_tab__farmer_identity'),
   ('9a1573a0-6507-47b6-a717-a007435d2c76', 'farmer_farmer_tab__farmer_socio_economic_health'),
   ('14691011-f41c-4010-be96-af39207b5fc3', 'farmer_membership_tab__farmer_membership'),
