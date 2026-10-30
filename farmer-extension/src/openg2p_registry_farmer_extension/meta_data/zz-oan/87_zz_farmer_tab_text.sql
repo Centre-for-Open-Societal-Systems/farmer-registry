@@ -15,6 +15,8 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "farmer_header_last_approved_by": "Last approved by",
  "farmer_header_last_approved_on": "Last approved on",
  "birth_date_ec": "Birth date (Ethiopian calendar)",
+  "farmer_map_pin": "Pin on map",
+ "fayda_verification_status": "Verification status",
  "fayda_id_help": "A 12-digit number is a FIN and a 16-digit number is a FAN."
 }'::jsonb)::json
 WHERE "language_code" = 'en';

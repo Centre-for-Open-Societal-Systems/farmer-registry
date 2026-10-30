@@ -282,7 +282,7 @@ form_layout (section_id, upstream_section_id, col, ord, w) AS (
   ('farmer_location', 'farmer_farmer_location_section_03', 2, 7, '{"widget-id": "plus_code"}'),
   ('farmer_location', 'farmer_farmer_location_section_03', 1, 1,
    '{"widget": "oan-geo-point", "widget-id": "farmer_geo_point", "widget-type": "input",
-     "widget-label": "farmer_location", "widget-readonly": false, "widget-required": false,
+     "widget-label": "farmer_map_pin", "widget-readonly": false, "widget-required": false,
      "widget-data-path": {"latitude": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.latitude",
                           "longitude": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.longitude",
                           "altitude": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.altitude",
