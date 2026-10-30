@@ -50,12 +50,3 @@ def test_registering_the_listeners_again_adds_nothing():
     oan._listen_like_core(oan.G2PRegisterFarmer)
     assert len(list(dispatch)) == before
 
-
-def test_child_rows_are_named_from_their_values_after_core_names_them():
-    """Core joins every class's name fields, so the readable name is set after it."""
-    row = native.G2PRegisterLand(land_size=1.25, unit='HECTARE', current_land_use='GRAZING')
-    oan._set_readable_record_name(row, 'Land')
-    assert row.record_name == '1.25 Hectare, Grazing'
-    for mnemonic in oan.READABLE_NAME_REGISTERS:
-        for prefix in ('G2PRegister', 'G2PIntakeForm'):
-            assert getattr(native, f'{prefix}{mnemonic}').__mapper__.dispatch.before_insert

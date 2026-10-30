@@ -7,8 +7,8 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
     validation_error,
 )
 
-from ..record_names import compose
 from ..derived import normalize_phone, valid_country_code
+from ..record_names import compose
 from .derivations import Derivations, refresh_farmer, refresh_farmers_of
 
 

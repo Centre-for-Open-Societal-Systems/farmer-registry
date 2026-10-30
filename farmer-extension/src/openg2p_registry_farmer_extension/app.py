@@ -116,47 +116,81 @@ async def fill_derived_columns() -> None:
         await session.commit()
 
 
+# Rows renamed per transaction
+RENAME_BATCH = 500
+
+
 async def rename_records() -> None:
     """Give the rows saved before the readable names the name they now get.
 
     record_name is stored when a row is saved, so every farmer and child row
     keeps the name it was saved with (the father's name missing, raw codes)
-    until it is saved again. This recomposes it for the register, history and
-    intake form rows of the registers in record_names.COMPOSERS. A row is changed only
-    when its stored name differs from the composed one, so this is a no-op once
-    they agree and safe to run on every start. History rows are renamed too:
-    they are snapshots, but the name is a title and not part of the record.
+    until it is saved again. Run by the staff-api `migrate` command, this
+    recomposes it for the register and history rows of the registers in
+    record_names.COMPOSERS (intake forms are drafts that carry an application
+    reference and are renamed when saved). A row is changed only when its stored
+    name differs from the composed one, so a second run changes nothing. History
+    rows are snapshots, but the name is a title and not part of the record.
+
+    A register's search text holds its record name, so it is updated with it
+    (the farmer's does not hold it). Rows are read in pages of RENAME_BATCH by
+    primary key, selecting only the columns the name uses, and each page is its
+    own transaction. A table that fails is logged and skipped, so a bad row
+    never stops the migration.
     """
     from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import models as farmer_models
-    from sqlalchemy import bindparam, inspect as sa_inspect, update
+    from sqlalchemy import bindparam, select, update
+    from sqlalchemy import inspect as sa_inspect
 
-    from .register_domain.record_names import COMPOSERS, compose
+    from .register_domain.record_names import COMPOSERS, FIELDS, compose, renamed_search_text
 
     engine = dbengine.get()
-    mnemonics = [m for m in COMPOSERS if m != "FarmerPhone"]
     tables = [
-        (m, getattr(farmer_models, f"{prefix}{m}").__table__)
-        for m in mnemonics
-        for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm")
-    ] + [("FarmerPhone", getattr(_oan_models, f"{prefix}FarmerPhone").__table__)
-         for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm")]
-    async with engine.begin() as conn:
-        for mnemonic, table in tables:
-            exists = await conn.run_sync(lambda sconn, name=table.name: sa_inspect(sconn).has_table(name))
-            if not exists or "record_name" not in table.c or not table.primary_key.columns:
-                continue
+        (mnemonic, getattr(farmer_models if mnemonic != "FarmerPhone" else _oan_models, f"{prefix}{mnemonic}").__table__)
+        for mnemonic in COMPOSERS
+        for prefix in ("G2PRegister", "G2PRegisterHistory")
+    ]
+    for mnemonic, table in tables:
+        try:
+            async with engine.connect() as conn:
+                exists = await conn.run_sync(lambda sconn, name=table.name: sa_inspect(sconn).has_table(name))
             keys = list(table.primary_key.columns)
-            changes = []
-            for row in (await conn.execute(table.select())).mappings():
-                name = compose(mnemonic, dict(row))
-                if name and name != row["record_name"]:
-                    changes.append({**{f"pk_{k.name}": row[k.name] for k in keys}, "new_name": name})
-            if changes:
-                statement = update(table).values(record_name=bindparam("new_name")).where(
-                    *[k == bindparam(f"pk_{k.name}") for k in keys])
-                for start in range(0, len(changes), 500):
-                    await conn.execute(statement, changes[start:start + 500])
-                _logger.info("Renamed %d rows of %s", len(changes), table.name)
+            if not exists or "record_name" not in table.c or len(keys) != 1:
+                continue
+            key = keys[0]
+            uses_search_text = "search_text" in table.c and mnemonic != "Farmer"
+            columns = [key, table.c.record_name, *(table.c[f] for f in FIELDS[mnemonic] if f in table.c)]
+            if uses_search_text:
+                columns.append(table.c.search_text)
+            statement = update(table).where(key == bindparam("pk")).values(record_name=bindparam("new_name"))
+            if uses_search_text:
+                statement = statement.values(search_text=bindparam("new_search_text"))
+            last, renamed = None, 0
+            while True:
+                query = select(*columns).order_by(key).limit(RENAME_BATCH)
+                if last is not None:
+                    query = query.where(key > last)
+                async with engine.begin() as conn:
+                    rows = (await conn.execute(query)).mappings().all()
+                    if not rows:
+                        break
+                    last = rows[-1][key.name]
+                    changes = []
+                    for row in rows:
+                        name = compose(mnemonic, dict(row))
+                        if name and name != row["record_name"]:
+                            change = {"pk": row[key.name], "new_name": name}
+                            if uses_search_text:
+                                change["new_search_text"] = renamed_search_text(
+                                    row["search_text"], row["record_name"], name)
+                            changes.append(change)
+                    if changes:
+                        await conn.execute(statement, changes)
+                        renamed += len(changes)
+            if renamed:
+                _logger.info("Renamed %d rows of %s", renamed, table.name)
+        except Exception as error:
+            _logger.warning("Could not rename the rows of %s: %s", table.name, error)
 
 
 def column_ddl(column, dialect) -> str:

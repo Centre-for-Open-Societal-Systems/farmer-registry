@@ -9,7 +9,7 @@ from sqlalchemy.orm import column_property, mapped_column
 
 from ..derived import farmer_search_text
 from ..fields import OAN_FIELDS
-from ..record_names import compose
+from ..record_names import readable_name
 from .farmer_phone import (  # noqa: F401  re-exported for core
     G2PIntakeFormFarmerPhone,
     G2PRegisterFarmerPhone,
@@ -70,23 +70,9 @@ class G2PIntakeFormFarmer(_farmer.G2PIntakeFormFarmer):
         return farmer_search_text(self.to_dict())
 
 
-def _set_readable_record_name(target, mnemonic: str) -> None:
-    """Replace the platform's record name with the one record_names.py composes.
-
-    Core joins what every class in the MRO returns from get_record_name_fields,
-    so a subclass cannot replace the upstream name by overriding it; this runs
-    after core's own listener instead, and keeps core's name for a row that
-    names nothing.
-    """
-    name = compose(mnemonic, target.to_dict())
-    if name:
-        target.record_name = name
-
-
 def _populate_derived_columns(mapper, connection, target) -> None:
     _populate_search_text(target)
     _populate_record_name(target)
-    _set_readable_record_name(target, "Farmer")
 
 
 def _listen_like_core(cls) -> None:
@@ -108,19 +94,36 @@ for _cls in (G2PRegisterFarmer, G2PIntakeFormFarmer):
         _listen_like_core(_cls)
 
 # Registers whose upstream record name is the row's raw codes (or, for Farmer,
-# leaves out the father's name). Rows saved through the native class get the
-# readable name from a listener registered after core's.
+# leaves out the father's name).
 READABLE_NAME_REGISTERS = ("Farmer", "Land", "Crop", "Livestock", "MembershipDetails", "FarmInputs")
 
 
-def _listen_for_readable_name(cls, mnemonic: str) -> None:
-    def set_name(mapper, connection, target) -> None:
-        _set_readable_record_name(target, mnemonic)
+def _readable_name_interceptor(mnemonic: str):
+    def intercept(target, value, old, initiator):
+        """Hand back the readable name whatever the name being set.
 
-    for event_name in ("before_insert", "before_update"):
-        event.listen(cls, event_name, set_name)
+        Core joins what every class in the MRO returns from get_record_name_fields
+        and sets record_name from its own before_insert/before_update listeners,
+        which it registers when mappers are configured (after this module is
+        imported). A listener of ours on those events could therefore run before
+        core's and be overwritten, and a subclass cannot replace the upstream
+        name. Intercepting the value as it is set does not depend on that order,
+        and keeps core's name for a row that names nothing.
+        """
+        try:
+            return readable_name(mnemonic, target.to_dict(), value)
+        except Exception:  # an unloaded attribute must never fail a save
+            return value
+
+    return intercept
 
 
 for _mnemonic in READABLE_NAME_REGISTERS:
     for _prefix in ("G2PRegister", "G2PIntakeForm"):
-        _listen_for_readable_name(getattr(_farmer, f"{_prefix}{_mnemonic}"), _mnemonic)
+        event.listen(
+            getattr(_farmer, f"{_prefix}{_mnemonic}").record_name,
+            "set",
+            _readable_name_interceptor(_mnemonic),
+            retval=True,
+            propagate=True,
+        )

@@ -73,3 +73,16 @@ def test_farm_inputs_name_lists_what_was_used():
 
 def test_unknown_register_composes_nothing():
     assert compose("Household", {"first_name": "A"}) == ""
+
+
+def test_readable_name_replaces_the_value_and_keeps_an_application_reference():
+    row = {"land_size": 3, "unit": "HECTARE", "application_reference": "APP-1"}
+    assert names.readable_name("Land", row, "3 HECTARE") == "3 Hectare"
+    assert names.readable_name("Land", row, "3 HECTARE APP-1") == "3 Hectare APP-1"
+    assert names.readable_name("Land", {}, "Land") == "Land"
+
+
+def test_search_text_follows_the_new_name():
+    assert names.renamed_search_text("FR-1 1 HECTARE GRAZING", "1 HECTARE GRAZING", "1 Hectare, Grazing") == "FR-1 1 Hectare, Grazing"
+    assert names.renamed_search_text("FR-1", "old", "New") == "FR-1 New"
+    assert names.renamed_search_text(None, "old", "New") is None

@@ -55,8 +55,7 @@ def _size(value) -> str:
         return text
     if not number.is_finite():
         return text
-    shown = format(number.normalize(), "f")
-    return shown
+    return format(number.normalize(), "f")
 
 
 def _join(parts, separator=" ") -> str:
@@ -109,6 +108,17 @@ def farm_inputs(payload: dict) -> str:
     return f"Farm inputs ({detail})" if detail else ""
 
 
+# Columns each composer reads
+FIELDS = {
+    "Farmer": ("first_name", "middle_name", "last_name"),
+    "Land": ("land_size", "unit", "current_land_use"),
+    "Crop": ("commodity", "season"),
+    "Livestock": ("livestock_type", "breed"),
+    "MembershipDetails": ("primary_cooperative_name", "cooperative_union_name", "farmer_cluster_role"),
+    "FarmInputs": ("fertilizer_use", "pesticide_use", "insecticide_use", "improved_seed_use", "water_source"),
+    "FarmerPhone": ("phone_type", "phone_number"),
+}
+
 COMPOSERS = {
     "Farmer": farmer,
     "Land": land,
@@ -124,3 +134,33 @@ def compose(mnemonic: str, payload: dict) -> str:
     """The readable name of a row of the register, or "" when it holds nothing to name it by."""
     composer = COMPOSERS.get(mnemonic)
     return composer(payload).strip() if composer else ""
+
+
+def readable_name(mnemonic: str, payload: dict, value):
+    """The name to store for a row being given `value` as its record name.
+
+    The composed name replaces `value`. An intake form's name carries the
+    application reference core appends; it is kept when `value` had it.
+    """
+    name = compose(mnemonic, payload)
+    if not name:
+        return value
+    reference = _text(payload.get("application_reference"))
+    if reference and reference in _text(value) and reference not in name:
+        name = f"{name} {reference}"
+    return name
+
+
+def renamed_search_text(search_text, old_name, new_name):
+    """The search text of a row after its record name changed.
+
+    Core builds search_text from the record name, so the old name is replaced
+    by the new one; a search text that does not hold the old name gets the new
+    one appended. A row without search text is left without.
+    """
+    if not search_text:
+        return search_text
+    old = _text(old_name)
+    if old and old in search_text:
+        return search_text.replace(old, new_name, 1)
+    return f"{search_text} {new_name}"

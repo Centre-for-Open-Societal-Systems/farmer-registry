@@ -15,12 +15,12 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from ..record_names import compose
 from .coded_values import coded_value_problems
 from .derivations import DERIVATIONS, Derivations
 from .domain_bounds import check_domain_bounds
 from .household_intake import install_farmer_household_check  # noqa: F401
 from .registrant_auth_compat import install_registrant_auth_compat  # noqa: F401
-from ..record_names import compose
 from .farmer_phone import FarmerPhoneService
 from .upstream_messages import reword
 from .widget_rules import Rules, _Say, check_record, collect_rules, normalize_record
