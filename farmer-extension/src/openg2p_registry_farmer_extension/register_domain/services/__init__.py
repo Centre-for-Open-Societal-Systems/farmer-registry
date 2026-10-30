@@ -15,6 +15,7 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
+from ..record_names import compose
 from .coded_values import coded_value_problems
 from .derivations import DERIVATIONS, Derivations
 from .domain_bounds import check_domain_bounds
@@ -138,10 +139,21 @@ class WidgetRuleValidation:
 _PREFIX = "G2PRegisterDomainService"
 
 
+class ReadableRecordName:
+    """The record name composed from the row's own values (record_names.py);
+    the farmer extension's name stays the fallback for a row naming nothing."""
+
+    def construct_record_name(self, payload: dict, extra: list[str] | None = None) -> str:
+        name = compose(self.register_mnemonic(), payload)
+        if not name:
+            return super().construct_record_name(payload, extra)
+        return " ".join([*(str(item).strip() for item in extra or [] if str(item).strip()), name])
+
+
 def _with_widget_rules(name: str, base: type) -> type:
     upstream = base.validate_domain_attributes is not G2PRegisterDomainService.validate_domain_attributes
     derivations = DERIVATIONS.get(name[len(_PREFIX):], Derivations)
-    return type(name, (WidgetRuleValidation, derivations, base),
+    return type(name, (ReadableRecordName, WidgetRuleValidation, derivations, base),
                 {"__module__": __name__, "_upstream_validates": upstream, "_derive_first": True,
                  "_checks_fayda_id": name == _PREFIX + "Farmer",
                  "_checks_master_data": name == _PREFIX + "Farmer"})

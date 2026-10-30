@@ -41,7 +41,7 @@ def test_oan_subclasses_fill_search_text_and_record_name_like_native_rows():
         oan._populate_derived_columns(None, None, row)
         for value in ('FR-123456789012', '502628318720', 'Berhanu', 'Abebe', 'Kebede'):
             assert value in row.search_text
-        assert row.record_name
+        assert row.record_name == 'Berhanu Abebe Kebede'
 
 
 def test_registering_the_listeners_again_adds_nothing():
@@ -49,3 +49,4 @@ def test_registering_the_listeners_again_adds_nothing():
     before = len(list(dispatch))
     oan._listen_like_core(oan.G2PRegisterFarmer)
     assert len(list(dispatch)) == before
+

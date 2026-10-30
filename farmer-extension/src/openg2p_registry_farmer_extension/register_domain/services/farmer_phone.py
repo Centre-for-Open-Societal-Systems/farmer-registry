@@ -8,6 +8,7 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
 )
 
 from ..derived import normalize_phone, valid_country_code
+from ..record_names import compose
 from .derivations import Derivations, refresh_farmer, refresh_farmers_of
 
 
@@ -74,4 +75,4 @@ class FarmerPhoneService(Derivations, G2PRegisterDomainService):
         return " ".join([*(extra or []), _join(payload, ("phone_type", "phone_number", "phone_e164"))]).strip()
 
     def construct_record_name(self, payload: dict, extra: list[str] | None = None) -> str:
-        return " ".join([*(extra or []), _join(payload, ("phone_type", "phone_number"))]).strip() or "Phone"
+        return " ".join([*(extra or []), compose("FarmerPhone", payload)]).strip() or "Phone"

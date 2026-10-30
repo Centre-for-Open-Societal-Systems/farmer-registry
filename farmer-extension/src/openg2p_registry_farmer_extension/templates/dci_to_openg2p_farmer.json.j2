@@ -43,7 +43,7 @@
 {
   "farmer_personal_info": [
     {
-      "record_name": "{{ (farmer_name.get('first_name', '') ~ ' ' ~ farmer_name.get('last_name', '')).strip() }}",
+      "record_name": "{{ ([farmer_name.get('first_name', ''), farmer_name.get('middle_name', ''), farmer_name.get('last_name', '')] | select | join(' ')) }}",
       "foundational_id": "{{ farmer_identifier.get('identifier_value', '') }}",
       "first_name": "{{ farmer_name.get('first_name', '') }}",
       "middle_name": "{{ farmer_name.get('middle_name', '') }}",
