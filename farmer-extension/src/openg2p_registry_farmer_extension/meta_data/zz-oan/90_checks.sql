@@ -11,7 +11,7 @@ CREATE OR REPLACE FUNCTION pg_temp.oan_section_ids() RETURNS text[] LANGUAGE sql
     'farmer_socio_economic_health', 'farmer_location', 'farmer_photo', 'farmer_phones', 'farmer_documents',
     'farmer_household_lookup', 'household_information', 'farmer_membership', 'farmer_lands',
     'farmer_land_summary', 'farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake',
-    'farmer_farm_inputs', 'farmer_farm_inputs_intake', 'farmer_enumerator']
+    'farmer_farm_inputs', 'farmer_farm_inputs_intake', 'farmer_enumerator', 'farmer_email']
 $$;
 
 -- Names: an OAN section's id, mnemonic and UI section-id are one string; an
@@ -200,6 +200,7 @@ BEGIN
     ('farmer_documents', 'identity_document_1'),
     ('farmer_documents', 'identity_document_type'),
     ('farmer_phones', 'phone_number'),
+    ('farmer_email', 'email'),
     ('farmer_identity', 'foundational_id'),
     ('farmer_identity', 'rid'),
     ('farmer_identity', 'pula_id'),
@@ -233,7 +234,7 @@ BEGIN
                ('farmer_membership'), ('farmer_lands'), ('farmer_livestock'),
                ('farmer_farm_inputs'), ('farmer_household_lookup'), ('household_information'),
                ('farmer_location'), ('farmer_crops'), ('farmer_phones'),
-               ('farmer_land_summary'), ('farmer_enumerator'), ('farmer_documents')) e(section_id)
+               ('farmer_email'), ('farmer_land_summary'), ('farmer_enumerator'), ('farmer_documents')) e(section_id)
   WHERE NOT EXISTS (SELECT 1 FROM "public"."g2p_register_ui_tab_sections" t WHERE t.section_id = e.section_id);
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'OAN sections not on any register tab: %', missing;
@@ -245,7 +246,7 @@ BEGIN
                ('farmer_membership'), ('farmer_lands'), ('farmer_livestock_intake'),
                ('farmer_farm_inputs_intake'), ('farmer_photo'),
                ('household_information'), ('farmer_location'), ('farmer_crops_intake'),
-               ('farmer_phones'), ('farmer_documents')) e(section_id)
+               ('farmer_phones'), ('farmer_email'), ('farmer_documents')) e(section_id)
   WHERE NOT EXISTS (SELECT 1 FROM "public"."g2p_intake_form_ui_tab_sections" t WHERE t.section_id = e.section_id);
   IF missing IS NOT NULL THEN
     RAISE EXCEPTION 'OAN sections not on the intake form: %', missing;

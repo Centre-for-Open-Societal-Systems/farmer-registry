@@ -185,3 +185,21 @@ def test_distinct_machinery_answers_are_not_guessed_into_one_broader_category():
     row=intake_sections(data)['farmer_farm_inputs_intake'][0]
     assert row['machinery_types']==['MACH_MAIZE_SHELLER','MACH_MULTI_CROP_TRASHER','MACH_RICE_POLISHER','MACH_HARVESTER','MACH_COMBINER']
     assert 'machinery_type' not in row
+
+
+def test_transform_sets_email_and_emails_together():
+    data = example()
+    data["basic_info"]["personal_info"]["email"] = " odk@example.org "
+    person = intake_sections(data)["farmer_personal_details"][0]
+    assert person["email"] == "odk@example.org"
+    assert person["emails"] == [{"address": "odk@example.org", "is_primary": True}]
+    plain = intake_sections(example())["farmer_personal_details"][0]
+    assert "email" not in plain and "emails" not in plain
+
+
+def test_a_bad_odk_email_is_left_out_and_the_personal_details_kept():
+    data = example()
+    data["basic_info"]["personal_info"]["email"] = "odk@@example"
+    person = intake_sections(data)["farmer_personal_details"][0]
+    assert "email" not in person and "emails" not in person
+    assert person["first_name"] and person["gender"]

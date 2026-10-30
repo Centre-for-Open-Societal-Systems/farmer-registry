@@ -187,7 +187,7 @@ def test_the_committed_v4_form_has_no_stale_rule():
     lists = {n: s for n, s in choice_names(book).items() if n in build_mds_form.MDS_LISTS}
     assert build_mds_form.check_literals(book["survey"], survey_columns(book), lists) == []
     settings = {c.value: book["settings"].cell(2, c.column).value for c in book["settings"][1] if c.value}
-    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.10.31.2"
+    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.10.31.3"
 
 
 COOPS = [
@@ -367,3 +367,10 @@ def test_a_later_phone_may_not_repeat_an_earlier_one():
         assert f". != ${{{prefix}primary_phone_number}}" in rules[prefix + "other_phone_number"]["constraint"]
         secondary = rules[prefix + "secondary_phone_number"]["constraint"]
         assert f"${{{prefix}primary_phone_number}}" in secondary and f"${{{prefix}other_phone_number}}" in secondary
+
+
+@pytest.mark.parametrize("name", ["email", "hh_member_email"])
+@pytest.mark.parametrize(("value", "ok"), [("name@example.org", True), ("a.b+c@sub.example.et", True),
+                                          ("a@b..co", False), ("name@", False), ("name example.org", False)])
+def test_an_email_is_checked_as_the_registry_checks_it(name, value, ok):
+    assert _passes(name, value) is ok

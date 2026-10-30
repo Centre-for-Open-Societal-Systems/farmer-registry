@@ -140,7 +140,11 @@ async def save_probe(Engine, task):
         binding = (await session.execute(text("SELECT register_id,intake_form_id FROM incoming_model_semantic_patterns WHERE data_model_id='odk_to_farmer_intake'"))).one()
         classified = SimpleNamespace(register_id=binding[0], intake_form_id=binding[1], partner_id=None)
         sections = await task._get_ordered_form_sections(classified.intake_form_id, session)
-        expect([s.section_mnemonic for s in sections], list(SECTIONS), "ordered native section binding")
+        # The email section is on the form but has no ODK section of its own: the
+        # address travels in the personal details row (email and emails).
+        bound = list(SECTIONS)
+        bound.insert(bound.index("farmer_phones") + 1, "farmer_email")
+        expect([s.section_mnemonic for s in sections], bound, "ordered native section binding")
         finance_section = next(section for section in sections if section.section_mnemonic == SECTIONS[SECTIONS.index("farmer_farm_inputs_intake")])
         seeded_rules = collect_rules((section.section_register_id, section.section_ui_schema) for section in sections)
         finance_rule = seeded_rules.get(finance_section.section_register_id, {}).get("finance_access_types")

@@ -129,3 +129,50 @@ def test_a_three_letter_or_malformed_country_is_not_one(code):
 
 def test_the_ethiopian_dialing_code_reads_an_ethiopian_number():
     assert derived.normalize_phone("0912345678", "+251") == ("912345678", "+251912345678")
+
+
+def test_email_fills_emails_list():
+    record = {"email": " Odk@Example.org "}
+    assert derived.sync_email(record) == []
+    assert record["email"] == "odk@example.org"  # stored in lower case
+    assert record["emails"] == [{"address": "odk@example.org", "is_primary": True}]
+
+
+def test_emails_list_fills_email_primary_first():
+    record = {"emails": [{"address": "a@example.org"}, {"address": "b@example.org", "is_primary": True}]}
+    assert derived.sync_email(record) == []
+    assert record["email"] == "b@example.org"
+    assert derived.email_of([{"address": " "}]) is None
+    assert derived.email_of(None) is None
+
+
+def test_blank_email_clears_emails():
+    record = {"email": "  ", "emails": [{"address": "a@example.org", "is_primary": True}]}
+    assert derived.sync_email(record) == []
+    assert record["email"] is None and record["emails"] is None
+
+
+def test_record_without_either_is_left_alone():
+    record = {"first_name": "Abebe"}
+    assert derived.sync_email(record) == []
+    assert record == {"first_name": "Abebe"}
+
+
+@pytest.mark.parametrize("bad", ["abebe", "a@b", "a b@example.org", "@example.org", "a@@example.org", "a@example.org" + "x" * 250])
+def test_bad_email_is_refused_with_message(bad):
+    assert derived.sync_email({"email": bad}) == ["Email: enter an address like name@example.org"]
+
+
+def test_an_email_of_254_characters_is_kept_and_255_refused():
+    def address(length):
+        return "a" * (length - len("@example.org")) + "@example.org"
+
+    assert len(address(254)) == 254 and derived.sync_email({"email": address(254)}) == []
+    assert derived.sync_email({"email": address(255)}) == ["Email: enter an address like name@example.org"]
+
+
+def test_an_ingested_email_is_kept_only_when_valid():
+    assert derived.ingested_email(" ODK@Example.org ") == "odk@example.org"
+    assert derived.ingested_email("not an email") is None
+    assert derived.ingested_email("a@b..co") is None
+    assert derived.ingested_email(None) is None

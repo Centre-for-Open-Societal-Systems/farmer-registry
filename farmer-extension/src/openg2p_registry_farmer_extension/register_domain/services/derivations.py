@@ -32,6 +32,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from ..derived import (
     ethiopic_of,
+    email_of,
     ethiopic_twin,
     farmer_search_text,
     geo_names,
@@ -39,6 +40,7 @@ from ..derived import (
     land_rollup,
     local_name_problems,
     normalize_phone,
+    sync_email,
 )
 from ..name_rules import NAME_LABELS, name_problems
 
@@ -108,7 +110,7 @@ def _farmer_record(record: dict) -> None:
         record.update(geo_names(_json(record.get("geo_code_hierarchy_json"))))
     if "is_household_head" in record:
         record["is_household_head"] = as_bool(record.get("is_household_head"))
-    if problems := name_problems(record) + local_name_problems(record):
+    if problems := name_problems(record) + local_name_problems(record) + sync_email(record):
         validation_error("; ".join(problems))
 
 
@@ -232,6 +234,8 @@ class FarmerDerivations(Derivations):
             row.enumerator_name = row.created_by
         if row.data_collection_date is None and row.created_at is not None:
             row.data_collection_date = row.created_at.date()
+        if is_blank(row.email):
+            row.email = email_of(row.emails)
         await _phones_from_list(row, session)
         await refresh_farmer(session, row.internal_record_id)
 
