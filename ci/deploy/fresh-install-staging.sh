@@ -16,14 +16,25 @@
 # Order: values and chart verified, then pg_dump archive written and verified on the target, only
 # then uninstall, drop, install. If neither a release nor the databases exist (a true first
 # install) there is nothing to dump; if either exists, a verified fresh dump is mandatory.
+#
+# Two evidence modes (ci/deploy/staging.py "mode"):
+#   * first-install: the rehearsal was New Dev and the evidence says the target is empty. The
+#     backup credentials are not needed and not used, because the script re-checks in the cluster
+#     that neither the release nor any target database exists and refuses to go on if one does.
+#   * upgrade (the full rehearsal shape): the backup credentials are mandatory and the verified
+#     archive is written before anything is removed, exactly as before.
 set -euo pipefail
 set +x
 umask 077
 : "${KUBECONFIG:?Jenkins must bind staging-farmer-kubeconfig}"
 : "${IMAGE_TAG:?Missing immutable commit image tag}"
 : "${STAGING_EVIDENCE_FILE:?Bind trusted staging rehearsal evidence}"
-: "${BACKUP_SSH_KEY:?Bind the staging backup SSH key credential}"
-: "${BACKUP_TARGET_FILE:?Bind the staging backup target credential}"
+BACKUP_AVAILABLE=false
+if [[ -n "${BACKUP_SSH_KEY:-}" || -n "${BACKUP_TARGET_FILE:-}" ]]; then
+  : "${BACKUP_SSH_KEY:?Bind the staging backup SSH key credential together with its target}"
+  : "${BACKUP_TARGET_FILE:?Bind the staging backup target credential together with its key}"
+  BACKUP_AVAILABLE=true
+fi
 test "${DELIVERY_ACTION:-}" = fresh-install
 test "${DELIVERY_ENVIRONMENT:-staging}" = staging
 export DELIVERY_ENVIRONMENT=staging
@@ -46,20 +57,22 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# The backup target comes only from the bound credential.
-BACKUP_HOST=$(sed -n 1p "$BACKUP_TARGET_FILE")
-BACKUP_DIR=$(sed -n 2p "$BACKUP_TARGET_FILE")
-tail -n +3 "$BACKUP_TARGET_FILE" > "$STATE/known_hosts"
-[[ "$BACKUP_HOST" =~ ^[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+$ ]] || { echo 'Backup target host is not user@host.' >&2; exit 1; }
-[[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9_./-]+$ ]] || { echo 'Backup target directory must be an absolute path.' >&2; exit 1; }
-test -s "$STATE/known_hosts" || { echo 'Backup target host key missing.' >&2; exit 1; }
+# The backup target comes only from the bound credential, when one is bound.
+if [[ "$BACKUP_AVAILABLE" == true ]]; then
+  BACKUP_HOST=$(sed -n 1p "$BACKUP_TARGET_FILE")
+  BACKUP_DIR=$(sed -n 2p "$BACKUP_TARGET_FILE")
+  tail -n +3 "$BACKUP_TARGET_FILE" > "$STATE/known_hosts"
+  [[ "$BACKUP_HOST" =~ ^[A-Za-z0-9_.-]+@[A-Za-z0-9_.-]+$ ]] || { echo 'Backup target host is not user@host.' >&2; exit 1; }
+  [[ "$BACKUP_DIR" =~ ^/[A-Za-z0-9_./-]+$ ]] || { echo 'Backup target directory must be an absolute path.' >&2; exit 1; }
+  test -s "$STATE/known_hosts" || { echo 'Backup target host key missing.' >&2; exit 1; }
+fi
 
 # Python dependencies live in Docker on the agent; host Helm/kubectl keep the
 # existing VPN access. The helper receives no kubeconfig or Docker socket.
 guard() {
   docker run --rm --network none --user "$(id -u):$(id -g)" \
     -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE -e KUBECONFIG_CREDENTIAL \
-    -e DELIVERY_ENVIRONMENT -e HELM_NAMESPACE -e HELM_RELEASE \
+    -e DELIVERY_ENVIRONMENT -e DELIVERY_ACTION -e HELM_NAMESPACE -e HELM_RELEASE \
     -v "$STAGING_EVIDENCE_FILE:/staging-evidence.json:ro" -e STAGING_EVIDENCE_FILE=/staging-evidence.json \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
     "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
@@ -74,6 +87,15 @@ kubectl config view --minify -o json > "$STATE/cluster.json"
 GUARD_SCRIPT=ci/deploy/staging.py guard cluster "$STATE/cluster.json"
 GUARD_SCRIPT=ci/deploy/oan_chart.py guard require-deployable staging
 GUARD_SCRIPT=ci/deploy/staging.py guard verify
+MODE=$(GUARD_SCRIPT=ci/deploy/staging.py guard mode)
+case "$MODE" in
+  first-install | upgrade) ;;
+  *) echo 'Unknown staging evidence mode.' >&2; exit 1 ;;
+esac
+if [[ "$MODE" == upgrade && "$BACKUP_AVAILABLE" != true ]]; then
+  echo 'The evidence is not a first-install record: bind the backup SSH key and target credentials.' >&2
+  exit 1
+fi
 guard provenance
 
 # 2. The reviewed environment values of the pinned oan-helm commit, checksum verified.
@@ -176,6 +198,16 @@ for db in "$REGISTRY_DB" "$IDGEN_DB"; do
     DUMPED+=("$db.dump")
   fi
 done
+RELEASE_PRESENT=false
+if helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json" 2> /dev/null; then
+  RELEASE_PRESENT=true
+fi
+# A first-install record vouches for an empty target only. It is checked here against the cluster,
+# before anything is shipped or removed, so it can never authorize replacing existing data.
+if [[ "$MODE" == first-install && ( ${#DUMPED[@]} -gt 0 || "$RELEASE_PRESENT" == true ) ]]; then
+  echo 'First-install evidence, but a release or a target database already exists; nothing was changed. Use the full rehearsal evidence with the backup credentials.' >&2
+  exit 1
+fi
 if [[ ${#DUMPED[@]} -gt 0 ]]; then
   # The copy must match the checksums taken next to the database.
   (cd "$STATE/backup" && sha256sum -c SHA256SUMS > /dev/null)
@@ -193,16 +225,12 @@ fi
 
 # 4. A fresh dump is mandatory whenever anything exists to lose: a release in the namespace or
 #    a database. Only a true first install proceeds without one.
-RELEASE_PRESENT=false
-if helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json" 2> /dev/null; then
-  RELEASE_PRESENT=true
-fi
 if [[ ${#DUMPED[@]} -eq 0 && "$RELEASE_PRESENT" == true ]]; then
   echo 'A release exists but no database could be archived; refusing to continue.' >&2
   exit 1
 fi
 if [[ ${#DUMPED[@]} -eq 0 ]]; then
-  echo 'First install: neither release nor databases exist, nothing to archive.'
+  echo "First install: neither release nor databases exist, nothing to archive; the backup credentials are not used (evidence mode $MODE)."
 fi
 
 # 5. Remove the release, then the databases. Only now is anything destroyed.

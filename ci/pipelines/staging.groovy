@@ -72,7 +72,17 @@ def call() {
                                     }
                                 }
                                 try {
-                                    if (env.EFFECTIVE_ACTION == 'fresh-install') {
+                                    // A first-install evidence record (New Dev was the rehearsal, the target is empty) never
+                                    // archives anything, so the backup credentials are not bound for it: a credential id that
+                                    // does not exist would fail withCredentials. The script validates the record and re-checks
+                                    // the cluster; if a release or database exists it refuses, and any other evidence needs the
+                                    // credentials (the script refuses without them).
+                                    def firstInstall = env.EFFECTIVE_ACTION == 'fresh-install' && sh(returnStatus: true,
+                                        script: 'set +x; grep -Eq \'"mode"[[:space:]]*:[[:space:]]*"first-install"\' "$STAGING_EVIDENCE_FILE"') == 0
+                                    if (firstInstall) {
+                                        echo 'First-install evidence: backup credentials are not bound (nothing exists to archive).'
+                                        runRegistry('ci/deploy/fresh-install-staging.sh')
+                                    } else if (env.EFFECTIVE_ACTION == 'fresh-install') {
                                         // The pg_dump archive target. Both credentials are created by the Jenkins admin:
                                         // an SSH key, and a file holding user@host, the directory and the host key.
                                         withCredentials([

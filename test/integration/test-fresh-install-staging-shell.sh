@@ -12,6 +12,8 @@ cat > "$TEST_ROOT/bin/docker" <<'MOCK'
 #!/bin/sh
 printf 'docker %s\n' "$*" >> "$CALLS"
 case "$*" in
+  *'staging.py mode'*) printf '%s
+' "${TEST_MODE:-upgrade}" ;;
   *'oan_chart.py values-url'*)
     [ "${TEST_VALUES_UNPINNED:-0}" -eq 0 ] || exit 1
     printf 'https://approved.example/farmer.yaml %s\n' "$(printf 'values' | sha256sum | cut -d ' ' -f 1)" ;;
@@ -88,7 +90,11 @@ run() {
   : > "$CALLS"
   rm -f "$CALLS.installed"
   result=0
-  bash ci/deploy/fresh-install-staging.sh > "$TEST_ROOT/output" 2>&1 || result=$?
+  if [ "${NO_BACKUP:-0}" -eq 1 ]; then
+    env -u BACKUP_SSH_KEY -u BACKUP_TARGET_FILE bash ci/deploy/fresh-install-staging.sh > "$TEST_ROOT/output" 2>&1 || result=$?
+  else
+    bash ci/deploy/fresh-install-staging.sh > "$TEST_ROOT/output" 2>&1 || result=$?
+  fi
 }
 line_of() { grep -n -- "$1" "$CALLS" | head -n 1 | cut -d: -f1; }
 # The cleanup trap may delete the (absent) archive Job; that is not a tool run of the install.
@@ -175,3 +181,49 @@ test "$result" -ne 0
 grep -q '^helm history ' "$CALLS"
 grep -q 'docker .* diagnose ' "$CALLS"
 echo 'PASS: install failure reports history and a classified diagnosis'
+
+# 8. First-install evidence on an empty target: no backup credentials are bound, nothing is
+#    archived, the log says so, and the install proceeds.
+unset TEST_INSTALL_EXIT
+export TEST_MODE=first-install NO_BACKUP=1 TEST_RELEASE_PRESENT_EXIT=1 TEST_DATABASES_PRESENT=0
+run
+if [ "$result" -ne 0 ]; then cat "$TEST_ROOT/output"; exit 1; fi
+grep -q 'nothing to archive; the backup credentials are not used' "$TEST_ROOT/output"
+if grep -q '^ssh ' "$CALLS"; then echo 'A first install must not touch the backup target'; exit 1; fi
+grep -q 'staging.py mode' "$CALLS"
+grep -q '^helm install farmer-registry' "$CALLS"
+echo 'PASS: first install needs no backup credentials and says so'
+
+# 9. First-install evidence never replaces anything: an existing database or release stops it
+#    before the archive, the uninstall, the drop or the install, with or without credentials.
+for no_backup in 1 0; do
+  export NO_BACKUP=$no_backup
+  export TEST_RELEASE_PRESENT_EXIT=1 TEST_DATABASES_PRESENT=1
+  run
+  test "$result" -ne 0
+  no_destruction 'First-install evidence must not replace existing databases'
+  if grep -q '^ssh ' "$CALLS"; then echo 'Nothing may be archived under first-install evidence'; exit 1; fi
+  grep -q 'First-install evidence, but a release or a target database already exists' "$TEST_ROOT/output"
+  export TEST_RELEASE_PRESENT_EXIT=0 TEST_DATABASES_PRESENT=0
+  run
+  test "$result" -ne 0
+  no_destruction 'First-install evidence must not remove an existing release'
+done
+echo 'PASS: first-install evidence refuses an existing release or database'
+
+# 10. The full evidence shape still demands the backup credentials, before any cluster change.
+export TEST_MODE=upgrade NO_BACKUP=1 TEST_RELEASE_PRESENT_EXIT=1 TEST_DATABASES_PRESENT=0
+run
+test "$result" -ne 0
+grep -q 'bind the backup SSH key and target credentials' "$TEST_ROOT/output"
+if grep -q '^kubectl apply\|^helm ' "$CALLS"; then echo 'Missing backup credentials must stop before the archive Job'; exit 1; fi
+# a lone credential is a configuration error, not a silent skip
+NO_BACKUP=0 run
+BACKUP_TARGET_FILE_SAVE=$BACKUP_TARGET_FILE
+result=0
+: > "$CALLS"
+env -u BACKUP_SSH_KEY BACKUP_TARGET_FILE="$BACKUP_TARGET_FILE_SAVE" bash ci/deploy/fresh-install-staging.sh > "$TEST_ROOT/output" 2>&1 || result=$?
+test "$result" -ne 0
+if tools_ran; then echo 'A half-bound backup credential must be refused first'; exit 1; fi
+unset TEST_MODE NO_BACKUP
+echo 'PASS: the upgrade shape still needs the backup credentials'

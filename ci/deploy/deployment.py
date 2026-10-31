@@ -527,7 +527,8 @@ def main():
     images = None
     if environment == "staging":
         from staging import evidence
-        record = evidence(os.environ["STAGING_EVIDENCE_FILE"], os.environ["SOURCE_COMMIT"])
+        record = evidence(os.environ["STAGING_EVIDENCE_FILE"], os.environ["SOURCE_COMMIT"],
+                          allow_first_install=os.environ.get("DELIVERY_ACTION") == "fresh-install")
         images = record["registry"]["images"]
         os.environ["ECR_REGISTRY"] = record["registry"]["registry"]
         os.environ["IMAGE_TAG"] = record["registry"]["sourceCommit"][:12]
