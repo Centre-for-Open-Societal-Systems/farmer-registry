@@ -1,0 +1,3 @@
+{# Native enrichment has stored attachments and prepared the schema-bound section payloads.
+   Do not accept an un-enriched payload: undefined input must fail transformation. #}
+{{ expanded.oan_intake_sections | tojson }}

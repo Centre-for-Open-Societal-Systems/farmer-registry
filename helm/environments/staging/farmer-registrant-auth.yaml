@@ -1,0 +1,9 @@
+# Fayda verification on the staging environment through the Commons eSignet (mock identity
+# system; staging Commons runs esignet 1.4.1). The chart's registrantAuth hook writes the provider row and the
+# shared eSignet client from these values; the client key lives in a Secret the
+# hook creates on first run. Merged over saved release values by
+# ci/deploy/deployment.py (hostnames are the only difference from the dev file).
+registrantAuth:
+  enabled: true
+  esignetBaseUrl: https://esignet.oanstaging.com
+  callbackUrl: https://staff-farmer.oanstaging.com/registrant-auth/callback

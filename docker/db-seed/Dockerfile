@@ -1,68 +1,48 @@
-# Farmer Registry — DB-seed image.
-#
-# Thin extension of the registry-platform db-seed base image. The base ships the
-# GENERIC seeding machinery (entrypoint.sh, upload_templates.py,
-# generate_reporting_views.py, mds_client.py, the shared openg2p-data clone).
-# This image adds farmer's own content and loaders.
-#
-# Master Data is read only through its API: the loaders here import the base's
-# /seed/mds_client.py (MDS_API_URL / MDS_TOKEN_URL / MDS_CLIENT_ID /
-# MDS_CLIENT_SECRET, set by the chart). They never connect to MDS's database.
-#
-# WHY THE SAMPLE LOADERS LIVE HERE
-#   load_sample_data.py and upload_images.py are written against the FARMER
-#   schema — they INSERT into g2p_register_farmers/lands/livestocks/... and read
-#   farmers.json, lands.json, livestocks.json. Those tables are declared by
-#   farmer-extension and those files ship in this image, so neither the platform
-#   nor any other variant can run them: NSR ships its own pair, and the platform
-#   installs with loadSampleData=false and no seed-data at all. They used to sit
-#   in the base image, which meant a farmer-shaped loader every non-farmer
-#   registry had to override — and a farmer id bug (FR-IND) that surfaced as a
-#   platform failure. The entrypoint keeps the HOOK; the variant supplies the
-#   loader.
-#
-# The COSS transactional entrypoint reads /seed/* at container-run time and
-# reuses the upstream geo-widget/template loaders. Demo and shared geography
-# imports require separate operator workflows; this deployment job rejects them.
-#
-# Build context = repo root (so farmer-extension/ and docker/db-seed/ are both
-# reachable).
-ARG RP_VERSION=1.2.2-rc.544
-FROM openg2p/openg2p-registry-db-seed:${RP_VERSION}
+# The registry platform's db-seed image with the Farmer extension's seed, as
+# OpenG2P's registry repositories build theirs. The platform image brings the
+# entrypoint and the generic machinery (load_geo_data.py, sync_geo_widgets.py,
+# upload_templates.py); this image adds the extension's metadata, approval
+# policy, templates and reporting views, and the Farmer sample loader (run only
+# with LOAD_SAMPLE_DATA=true, which no environment enables: ci/deploy/deployment.py).
+# Build from the repository root:  docker build -f docker/db-seed/Dockerfile .
+ARG BASE_IMAGE_VERSION=1.2.2-rc.614
+FROM openg2p/openg2p-registry-db-seed:${BASE_IMAGE_VERSION}
 
-# The RP db-seed image ships the reference registry's seed; clear it so only
-# farmer's seed is applied.
+# The platform image ships the reference registry's seed; only Farmer's is applied.
 RUN rm -rf /seed/meta_data/* /seed/awe_meta_data/* /seed/templates/* /seed/seed-data/*
 
+# OpenG2P's Farmer metadata with OAN's layer in zz-oan/, applied after the whole
+# Farmer tree. OAN replaces the Farmer approval policy (awe_meta_data/zz-oan/), so
+# the extension carries only the Farmer callback registration besides it.
 COPY farmer-extension/src/openg2p_registry_farmer_extension/meta_data/     /seed/meta_data/
 COPY farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data/ /seed/awe_meta_data/
-COPY farmer-extension/src/openg2p_registry_farmer_extension/templates/     /seed/templates/
-COPY odk/templates/                                                       /seed/templates/
-COPY docker/db-seed/seed-data/                                             /seed/seed-data/
 
-# Farmer's domain loaders — see "WHY THE SAMPLE LOADERS LIVE HERE" above. The
-# base image no longer carries these; without them LOAD_SAMPLE_DATA/LOAD_IMAGES
-# have nothing to run and the entrypoint says so.
-COPY docker/db-seed/load_sample_data.py /seed/load_sample_data.py
-COPY docker/db-seed/upload_images.py    /seed/upload_images.py
-RUN chmod +x /seed/load_sample_data.py /seed/upload_images.py
+# Templates are uploaded with LOAD_TEMPLATES=true under their file names.
+COPY farmer-extension/src/openg2p_registry_farmer_extension/templates/ /seed/templates/
 
-# Analytics seed, distinct from the demo fixture above.
-#   seed-data/*.json + the inherited load_sample_data.py  -> the ~500-row smoke set
-#                                                            (dbSeed.loadSampleData)
-#   generate_fr_bulk_sample.py                            -> volume for the charts
-#                                                            (analytics.bulkSample)
-# Both write the same tables, so the generator refuses to run on a non-empty
-# register rather than colliding with the fixture. The reporting views are
-# farmer's own schema and ship here rather than in the base image.
-COPY docker/db-seed/generate_fr_bulk_sample.py /seed/generate_fr_bulk_sample.py
-COPY docker/db-seed/import_official_eth_samples.py /seed/import_official_eth_samples.py
-COPY docker/db-seed/reporting_views.sql        /seed/reporting_views.sql
-# What the platform's reporting generator cannot infer: which views are
-# hand-written, and which column names are organisations rather than people.
-COPY docker/db-seed/reporting.yaml            /seed/reporting.yaml
-RUN chmod +x /seed/generate_fr_bulk_sample.py
+COPY farmer-extension/reporting/ /seed/oan-reporting/
+COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql
 
-# Keep upstream loaders, but propagate SQL failures and commit metadata per DB.
-COPY docker/db-seed/seed.py /seed/coss_seed.py
-ENTRYPOINT ["python3", "/seed/coss_seed.py"]
+# Sample data (LOAD_SAMPLE_DATA=true). The platform image checks out openg2p-data
+# at /openg2p-data; this one checks out the COSS copy at a pinned commit in its place:
+# the ETH-OAN pack's farm facts (samples/farms.json), the sample profile photos
+# (samples/photos/<individual_id>.webp) and the OAN theme. The sample
+# people come from Master Data's API.
+ARG OPENG2P_DATA_REPO=https://github.com/Centre-for-Open-Societal-Systems/openg2p-data.git
+ARG OPENG2P_DATA_REF=db3e2ff6e9cc764648c1348708c37cfec8e941c3
+RUN rm -rf /openg2p-data && mkdir -p /openg2p-data && cd /openg2p-data \
+    && git init -q && git remote add origin ${OPENG2P_DATA_REPO} \
+    && git fetch -q --depth 1 origin ${OPENG2P_DATA_REF} && git checkout -q FETCH_HEAD \
+    && rm -rf .git
+
+# mds_client.py is the registry platform's Master Data client
+# (OpenG2P/registry-platform docker/db-seed/mds_client.py at e7e6e269), unchanged.
+# Platform images after rc.557 ship it as /seed/mds_client.py; drop this copy
+# when the platform pin moves past it.
+COPY --chmod=755 docker/db-seed/mds_client.py docker/db-seed/load_sample_data.py /seed/
+
+# OAN theme: the staff-portal theme (palette, background image, logo) is data in
+# openg2p-data (themes/oan_theme), checked out above at the one pinned commit.
+# Render this registry's entry into the seed tree; it sorts after the registry
+# configuration (zz-oan/) and points it at the oan_theme row.
+RUN mkdir -p /seed/meta_data/zz-oan  && cd /openg2p-data  && python3 scripts/themes/build_theme_sql.py farmer > /seed/meta_data/zz-oan/90_oan_theme.sql

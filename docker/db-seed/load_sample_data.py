@@ -1,1127 +1,600 @@
 #!/usr/bin/env python3
-"""Load sample data into the Farmer Registry Postgres.
+"""Load the Farmer Registry's sample data (db-seed, LOAD_SAMPLE_DATA=true).
 
-Reads:
-- /openg2p-data/demography/{individuals,households}.csv (shared core + geo)
-- /seed/seed-data/*.json (farmer sub-tables, shipped in the db-seed image)
+Every sample person is registered the way an officer registers a farmer, and
+approved the way every register change is approved:
 
-Mapping:
-- every individual -> g2p_register_farmers (reuses the individual UUID)
-- every individual with a household_id -> g2p_register_household_members
-- households.csv -> g2p_register_households (farmer column set)
-- lands/livestocks/farm_inputs/membership_details -> respective tables
-- every farmer gets 1-3 declared main crops (Master Data CROP_COMMODITY codes),
-  derived from their sequence number -- see main_crops_for()
-- scores.json -> g2p_register_scores
-- completion-score computation queue seeded for Farmer + Household registers
+- one Farmer intake per person on the farmer form, saved section by section
+  through the staff API, with a placeholder identity document, then finalized;
+- the approval request's stage 1 is approved as INTAKE_SEED_APPROVER_1 and its
+  stage 2 as INTAKE_SEED_APPROVER_2, through the staff API's AWE proxy;
+- the registry's workers ingest the approved intake into the register.
+
+A household is entered on its head's intake (household information and every
+member); the other members' intakes pick that household in the household lookup
+once the head's intake is in the register.
+
+The data:
+- the sample people and households are Master Data's, read through its API
+  (/samples, with the MDS_* client-credentials settings), never its database;
+- the registry's own facts about them (grandfather's name, lands, crops,
+  livestock, farm inputs, cooperative membership) are the ETH-OAN pack's
+  samples/farms.json, in the openg2p-data checkout this image carries;
+- each person's profile photo is the pack's samples/photos/<individual_id>.webp.
+  It goes in the way the staff portal does it: the image is uploaded through the
+  staff API's document route and the farmer_photo section saves the document id
+  (record_image_document_id), which the approval and ingest carry to the farmer's
+  register row. A person without a photo file is registered without one.
+
+Staff accounts sign in as in the staff portal (staff IAM, then the Keycloak
+login form, then IAM's callback), with the sample users' password the chart
+passes (global.aweApproverUserPassword). The loader never uses the password
+grant and never changes Keycloak.
+
+Idempotent: a person whose Fayda ID a farmer already holds is skipped; a
+finalized intake still waiting for approval is approved rather than entered
+again; a household one of whose members is already a farmer is reused.
 """
 
-import csv
+from __future__ import annotations
+
+import html
+import http.cookiejar
 import json
 import os
+import re
 import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import psycopg2
-import psycopg2.extras
-from psycopg2.extras import Json
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import mds_client  # noqa: E402  (the registry platform's Master Data client)
 
-def _import_mds_client():
-    """The registry platform's stdlib Master Data client (``/seed/mds_client.py``).
-
-    In the db-seed image it sits next to this script. Run from a checkout, it is
-    taken from a sibling registry-platform checkout when there is one. None when
-    neither is present — only an error if MDS is actually configured (see
-    mds_client_from_env).
-    """
-    try:
-        import mds_client  # noqa: PLC0415
-        return mds_client
-    except ImportError:
-        pass
-    sibling = Path(__file__).resolve().parents[3] / "registry-platform" / "docker" / "db-seed"
-    if (sibling / "mds_client.py").is_file():
-        sys.path.insert(0, str(sibling))
-        import mds_client  # noqa: PLC0415
-        return mds_client
-    return None
-
-
-_mds = _import_mds_client()
-
-
-def _clean_id(value):
-    """Strip whitespace from a foundational ID.
-
-    The ID must be byte-identical to the one held by the ID system: eSignet
-    matches it exactly, and the registrant-authentication binding then compares
-    the authenticated subject against this column. A grouped ID ("4028 6914
-    8701") seeded here can only be authenticated by typing the spaces, which is
-    not how the number is entered. Master Data now normalises on load; this
-    keeps an already-seeded MDS from reintroducing the grouped form.
-    """
-    if not isinstance(value, str):
-        return value
-    return "".join(value.split()) or None
-
-
-def to_json(value):
-    return None if value is None else Json(value)
-
-
-SEEDER = "seeder"
-CREATED_AT = "2026-04-01 00:00:00"
-
+FORM = "farmer_ingestion_intake"
+INTAKE_ARTIFACT = "registry.intake_form"
+IDENTITY_DOCUMENT = "identity_document_1"
+PHOTO_LABEL = "profile image"
+PACK = os.environ.get("SAMPLE_PACK", "ETH-OAN")
 OPENG2P_DATA_DIR = Path(os.environ.get("OPENG2P_DATA_DIR", "/openg2p-data"))
-DEMO_DIR = OPENG2P_DATA_DIR / "demography"
-FARMER_DATA_DIR = Path(os.environ.get("FARMER_SEED_DATA_DIR", "/seed/seed-data"))
-
-JSON_COLUMNS_INDIVIDUAL = {"phone_numbers"}
-JSON_COLUMNS_HOUSEHOLD = set()
-
-# Geo is carried in the seed files as plain names (country..village); the id the
-# registry stores has to be derived from them.
-#
-# It is RESOLVED against master-data rather than computed, because only
-# master-data knows what its own ids are. Seeded from a country pack — now the
-# default — a unit's id is its P-code, so master-data holds "XK01010101" while
-# the slug-path this used to compute, "kamuntu/jasiri/baraka/umani/bimaka",
-# matches nothing. Nothing errors either: the names in geo_code_hierarchy_json
-# still read correctly, so reports that unpack geo positionally look right, and
-# the only symptom is that these records never appear on a map.
-#
-# Resolution walks the name chain through parent links rather than matching
-# names globally, since a village name repeats under different wards.
-#
-# The slug-path remains as the fallback for when master-data is unreachable or
-# holds no geography. So this never does worse than before; whichever path was
-# taken is reported at the end.
-#
-# Master Data is read through its API (mds_client: /catalogue with a Keycloak
-# client-credentials token as the registry's own client), never its database.
-GEO_LEVELS = ["country", "region", "district", "ward", "village"]
+COUNTRY_CODE = {"ETH": "ET"}
+DIAL_CODE = {"ET": "+251"}
+# Names in the farmer's own script, in the sample's farmer block; the register fields carry the same ids.
+LOCAL_NAME_FIELDS = ("first_name_local", "middle_name_local", "last_name_local")
+HOUSEHOLD_SECTIONS = ("household_information", "household_household_household_member_section_02")
+# Sections of the farmer form, in the order the staff portal saves them.
+FARMER_SECTIONS = (
+    "farmer_household_lookup", "farmer_identity", "farmer_personal_details", "farmer_phones",
+    "farmer_socio_economic_health", *HOUSEHOLD_SECTIONS, "farmer_location", "farmer_lands",
+    "farmer_crops_intake", "farmer_farm_inputs_intake", "farmer_livestock_intake", "farmer_membership",
+    "farmer_documents", "farmer_photo",
+)
+SAMPLE_PDF = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 120]/Contents 4 0 R"
+    b"/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+    b"4 0 obj<</Length 58>>stream\nBT /F1 14 Tf 20 60 Td (Sample identity document) Tj ET\nendstream endobj\n"
+    b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+    b"trailer<</Root 1 0 R>>\n%%EOF\n"
+)
 
 
-def _slug(name: str) -> str:
-    return name.strip().lower().replace(" ", "_")
+def log(message: str) -> None:
+    print(f"[load-sample-data] {message}", flush=True)
 
 
-# (parent unit id or "", lowercased name) -> unit id, read once from
-# master-data. Empty when master-data is unreachable or unseeded, which is what
-# puts every lookup on the slug-path fallback.
-_GEO_INDEX: dict = {}
-_GEO_STATS = {"resolved": 0, "fallback": 0, "unresolved_examples": []}
+def words(*parts) -> str:
+    return " ".join(str(p) for p in parts if p not in (None, ""))
 
 
-def mds_client_from_env():
-    """An MdsClient from MDS_* env, or None when MDS_API_URL is not set.
-
-    Configured but the client module missing is a broken image (a registry
-    platform older than mds_client.py), reported clearly; this loader is still
-    best effort, so it falls back rather than stopping.
-    """
-    if not os.environ.get("MDS_API_URL", "").strip():
-        print("[load-sample-data] MDS_API_URL not set — geo ids fall back to slug-paths, "
-              "people to the demography CSV.")
-        return None
-    if _mds is None:
-        print("[load-sample-data] ERROR: MDS_API_URL is set but mds_client.py is not "
-              "importable (it ships in the registry-platform db-seed image at "
-              "/seed/mds_client.py). Master Data is not read; falling back.",
-              file=sys.stderr)
-        return None
-    return _mds.MdsClient.from_env()
+def parse_date(value) -> date | None:
+    if isinstance(value, date) or not value:
+        return value or None
+    return date.fromisoformat(str(value)[:10])
 
 
-def read_geography(client) -> tuple:
-    """(levels, units) of the published geography, from master-data's API.
-
-    Best effort on purpose. No client, an unreachable MDS or no geography all
-    mean the same thing here — no ids to resolve against — and none of them
-    should stop sample data loading, which worked without any of this before.
-    """
-    if client is None:
-        return [], []
-    try:
-        levels = client.geo_levels()
-        units = client.all_geo_units() if levels else []
-    except Exception as exc:  # noqa: BLE001 — best effort, as before
-        print(f"[load-sample-data] could not read master-data geography ({exc}) — "
-              "geo ids fall back to slug-paths.")
-        return [], []
-    return levels, units
+def age_on(person: dict, today: date) -> int | None:
+    born = parse_date(person.get("birth_date"))
+    if born is None:
+        return person.get("age")
+    return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
 
 
-def load_geo_index(units: list) -> dict:
-    """Index master-data's units by (parent id, name) so a name chain resolves."""
-    index = {
-        (u.get("parent_unit_id") or "", (u.get("name") or "").strip().lower()): u["unit_id"]
-        for u in units
-    }
-    if index:
-        print(f"[load-sample-data] master-data geo: {len(index)} units available for resolution.")
-    return index
+class Geography:
+    """A record's location fields for a P-code, from Master Data's geography."""
 
+    def __init__(self, chain_of):
+        self._chain_of = chain_of
+        self._cache: dict[str, dict] = {}
 
-def load_geo_chain_by_id(levels: list, units: list) -> dict:
-    """unit_id -> (level_mnemonic, name, parent_id), for walking upwards.
-
-    This is what makes the loader country-agnostic. A record carries the id of
-    the one unit it sits in; every level above it — and how many there are, and
-    what they are called — is read from master-data rather than assumed. The
-    five names this file used to hard-code, country/region/district/ward/village,
-    describe Kamuntu and nothing else: Ethiopia has four levels and calls the
-    middle ones zone and woreda.
-    """
-    mnemonic = {lv["level_id"]: lv.get("level_mnemonic") for lv in levels}
-    return {
-        u["unit_id"]: (mnemonic.get(u.get("level_id"), u.get("level_id")), u.get("name"),
-                       u.get("parent_unit_id"))
-        for u in units
-    }
-
-
-_GEO_BY_ID: dict = {}
-
-
-def hierarchy_from_pcode(pcode: str) -> dict:
-    """Walk a unit's ancestry in master-data, root first."""
-    chain = []
-    seen, cur = set(), pcode
-    while cur and cur in _GEO_BY_ID and cur not in seen:
-        seen.add(cur)
-        level, name, parent = _GEO_BY_ID[cur]
-        chain.append({"level_mnemonic": level, "level_value_mnemonic": name,
-                      "level_value_id": cur})
-        cur = parent
-    chain.reverse()
-    return {"hierarchy": chain}
-
-
-def resolve_geo_chain(rec: dict) -> list:
-    """Resolve country..village names to master-data's own ids, or [] if any
-    link is missing. Partial resolution is deliberately not returned: half a
-    chain produces a hierarchy whose upper levels join and whose lower ones do
-    not, which is harder to notice than none of it joining."""
-    if not _GEO_INDEX:
-        return []
-    ids, parent = [], ""
-    for level in GEO_LEVELS:
-        name = str(rec.get(level) or "").strip().lower()
-        found = _GEO_INDEX.get((parent, name))
-        if not found:
-            return []
-        ids.append(found)
-        parent = found
-    return ids
-
-
-def geo_ids(rec: dict) -> list:
-    """One id per level — master-data's where they resolve, slug-paths where not."""
-    resolved = resolve_geo_chain(rec)
-    if resolved:
-        _GEO_STATS["resolved"] += 1
-        return resolved
-    _GEO_STATS["fallback"] += 1
-    if len(_GEO_STATS["unresolved_examples"]) < 3:
-        _GEO_STATS["unresolved_examples"].append(
-            "/".join(str(rec.get(level) or "") for level in GEO_LEVELS)
-        )
-    return ["/".join(_slug(rec[GEO_LEVELS[i]]) for i in range(depth + 1))
-            for depth in range(len(GEO_LEVELS))]
-
-
-def geo_lowest_id(rec: dict) -> str:
-    """The id of the record's lowest geo unit."""
-    # A record sourced from master-data already knows exactly where it is; only
-    # the CSV needs its names resolved.
-    if rec.get("geo_pcode"):
-        return rec["geo_pcode"]
-    return geo_ids(rec)[-1]
-
-
-def geo_hierarchy_dict(rec: dict) -> dict:
-    """Build geo_code_hierarchy_json from the name columns, matching the shape
-    registry-core's G2PGeoHierarchyService produces at runtime."""
-    if rec.get("geo_pcode"):
-        return hierarchy_from_pcode(rec["geo_pcode"])
-    ids = geo_ids(rec)
-    return {
-        "hierarchy": [
-            {
-                "level_mnemonic": level,
-                "level_value_mnemonic": rec[level],
-                "level_value_id": ids[depth],
+    def location(self, pcode: str) -> dict:
+        if pcode not in self._cache:
+            chain = self._chain_of(pcode)
+            if not chain:
+                raise RuntimeError(f"{pcode} is not a unit of Master Data's published geography")
+            hierarchy = [{
+                "level": u["level_mnemonic"], "level_id": u["level_id"], "level_mnemonic": u["level_mnemonic"],
+                "level_value_id": u["unit_id"], "level_value_mnemonic": u["name"],
+            } for u in chain]
+            self._cache[pcode] = {
+                "geo_lowest_level_value_id": pcode,
+                "geo_code_hierarchy_json": {"hierarchy": hierarchy, "lowest_level_value_id": pcode},
             }
-            for depth, level in enumerate(GEO_LEVELS)
-        ]
+        return self._cache[pcode]
+
+
+def local_phone(person: dict) -> str | None:
+    """+251941923320 -> 0941923320, the way an officer types it."""
+    e164 = person.get("phone")
+    if not e164:
+        return None
+    dial = DIAL_CODE.get(COUNTRY_CODE.get(person.get("country") or "ETH", "ET"), "")
+    return "0" + e164[len(dial):] if dial and e164.startswith(dial) else e164.lstrip("+")
+
+
+def photo_path(individual_id: str) -> Path | None:
+    """The pack's profile photo of a sample person, or None when the pack has none."""
+    path = OPENG2P_DATA_DIR / "packs" / PACK / "samples" / "photos" / f"{individual_id}.webp"
+    return path if path.is_file() else None
+
+
+def without(row: dict, *keys) -> dict:
+    return {k: v for k, v in row.items() if k not in keys}
+
+
+def household_sections(household_id: str, members: list[dict], head: dict, names: dict, today: date,
+                       new_id) -> dict[str, list[dict]]:
+    """The household information and members, as entered on the head's intake."""
+    ages = [age_on(m, today) for m in members]
+    return {
+        "household_information": [{
+            "internal_record_id": household_id,
+            "size_of_group": len(members),
+            "number_of_children": sum(a is not None and a <= 17 for a in ages),
+            "number_of_elderly_members": sum(a is not None and a >= 60 for a in ages),
+            "number_of_male_members": sum(m.get("gender") == "MALE" for m in members),
+            "number_of_female_members": sum(m.get("gender") == "FEMALE" for m in members),
+            "other_land_owner": False, "other_farmer_in_household": len(members) > 1,
+            "father_included": False, "mother_included": False,
+        }],
+        # The Fayda ID lets the household count a member who is also a farmer once.
+        "household_household_household_member_section_02": [{
+            "internal_record_id": new_id(), "link_internal_record_id": household_id,
+            "foundational_id": m.get("national_id"),
+            "first_name": names[m["individual_id"]][0], "middle_name": names[m["individual_id"]][1],
+            "last_name": names[m["individual_id"]][2],
+            "birth_date": m.get("birth_date"), "gender": m.get("gender"), "is_head": m is head,
+            **({} if m is head else {"relationship_to_the_head": m.get("relationship_to_head")}),
+        } for m in members],
     }
 
 
-def geo_hierarchy(rec: dict):
-    return to_json(geo_hierarchy_dict(rec))
-
-
-def _address_line(parts) -> str:
-    """One line from the pack's address parts.
-
-    The pack's address.json declares how a country composes these properly; that
-    lives in master-data's country, not here, and sample data does not warrant
-    fetching it. Joining the values keeps the information rather than inventing
-    a street.
-    """
-    if not parts:
-        return ""
-    return ", ".join(str(v) for v in parts.values() if v)
-
-
-def load_people_from_mds(client) -> tuple:
-    """The country's sample people, from master-data.
-
-    Returns (individuals, households) in the same dict shape the CSV produces,
-    so every insert below is unchanged — or ([], []) when master-data carries no
-    samples, which is its default.
-
-    These people belong to the country, not to this registry: master-data is
-    where the country is declared, so its samples are the ones that match the
-    geography and the code lists. What a registry adds on top is its own fields.
-    """
-    if client is None:
-        return [], []
-    try:
-        inds = client.sample_individuals()
-        hhs = client.sample_households() if inds else []
-    except Exception as exc:  # noqa: BLE001 — best effort, as before
-        print(f"[load-sample-data] could not read master-data samples ({exc}).")
-        return [], []
-
-    if not inds:
-        return [], []
-
-    head_of = {h["household_id"]: h.get("head_individual_id") for h in hhs}
-    by_hh = {}
-    for i in inds:
-        by_hh.setdefault(i.get("household_id"), []).append(i)
-
-    individuals = []
-    for i in inds:
-        # The registry's columns are first/middle/last. A pack that names people
-        # as given name + father's name maps onto first + last; middle stays
-        # empty rather than being filled with something the country does not use.
-        individuals.append({
-            "internal_record_id": i["individual_id"],
-            "functional_record_id": i["individual_id"],
-            "household_id": i.get("household_id"),
-            "full_name": i.get("full_name"),
-            "first_name": i.get("given_name"),
-            "middle_name": None,
-            "last_name": i.get("fathers_name"),
-            "given_name": i.get("given_name"),
-            "gender": i.get("gender"),
-            # The pack carries a full birth_date. Older packs carry only
-            # birth_year, and this fell back to 1 January for them — which put
-            # every sample person in the country on the same birthday, so any
-            # chart binned by month or day showed one enormous January spike.
-            # The fallback stays for those packs; it is not a precision the
-            # sample has, it is the only date its column can hold.
-            "birth_date": (
-                i.get("birth_date")
-                or (f"{i['birth_year']}-01-01" if i.get("birth_year") else None)
-            ),
-            "estimated_age": i.get("age"),
-            "marital_status": i.get("marital_status"),
-            "education_level": i.get("education_level"),
-            "foundational_id": _clean_id(i.get("national_id")),
-            "foundational_id_masked": None,
-            "phone_numbers": ([{"type": "personal", "number": i["phone"], "is_primary": True}]
-                              if i.get("phone") else None),
-            "emails": None,
-            "language_code": None,
-            "latitude": i.get("latitude"), "longitude": i.get("longitude"),
-            "altitude": None, "plus_code": None,
-            "address_line_1": _address_line(i.get("address_parts")),
-            "address_line_2": "",
-            "postal_code": None,
-            "country_code": i.get("country"),
-            "geo_pcode": i.get("geo_pcode"),
+def farm_sections(person: dict, farm: dict, farmer_id: str, new_id) -> dict[str, list[dict]]:
+    """The person's lands, the crops, livestock and farm inputs on them, and their membership."""
+    lands, sections = {}, {"farmer_lands": []}
+    for land in farm.get("lands") or []:
+        lands[land["land_ref"]] = new_id()
+        sections["farmer_lands"].append({
+            "internal_record_id": lands[land["land_ref"]], "link_internal_record_id": farmer_id,
+            **without(land, "land_ref"),
+            **({"area_in_hectare": land.get("land_size")} if land.get("unit") == "HECTARE" else {}),
         })
-
-    households = []
-    for h in hhs:
-        members = by_hh.get(h["household_id"], [])
-        head = next((m for m in members if m["individual_id"] == head_of.get(h["household_id"])), None)
-        adults = [m for m in members if (m.get("age") or 0) >= 18]
-        households.append({
-            "internal_record_id": h["household_id"],
-            "functional_record_id": h["household_id"],
-            # Registries differ in what they store about a household; supplying
-            # the union costs nothing, since each takes only the keys it asks for.
-            "head_individual_id": h.get("head_individual_id"),
-            "headship_type": h.get("headship_type"),
-            "size_adults": len(adults),
-            "size_elderly": sum(1 for m in members if (m.get("age") or 0) >= 60),
-            "head_name": (head or {}).get("full_name") or "",
-            "size_total": h.get("size_total") or len(members),
-            "size_children_u5": 0, "size_school_age": 0,
-            "number_of_female_members": sum(1 for m in members if m.get("gender") == "FEMALE"),
-            "number_of_male_members": sum(1 for m in members if m.get("gender") == "MALE"),
-            "latitude": h.get("latitude"), "longitude": h.get("longitude"),
-            "altitude": None, "plus_code": None,
-            "address_line_1": _address_line(h.get("address_parts")),
-            "address_line_2": "",
-            "postal_code": None,
-            "country_code": h.get("country"),
-            "geo_pcode": h.get("geo_pcode"),
-        })
-
-    print(f"[load-sample-data] master-data samples: {len(individuals)} individuals, "
-          f"{len(households)} households (country={inds[0].get('country')}).")
-    return individuals, households
+    for section, key in (("farmer_crops_intake", "crops"), ("farmer_farm_inputs_intake", "farm_inputs"),
+                         ("farmer_livestock_intake", "livestock")):
+        sections[section] = []
+        for row in farm.get(key) or []:
+            if row.get("land_ref") not in lands:
+                raise RuntimeError(f"{person['individual_id']} {key} names land {row.get('land_ref')!r}, "
+                                   "which is not among their lands")
+            sections[section].append({"internal_record_id": new_id(),
+                                      "link_internal_record_id": lands[row["land_ref"]],
+                                      **without(row, "land_ref")})
+    sections["farmer_membership"] = [{"internal_record_id": new_id(), "link_internal_record_id": farmer_id,
+                                      **farm["membership"]}] if farm.get("membership") else []
+    return sections
 
 
-# ── Attaching the registry's own sample rows to the loaded people ───────────
-#
-# The sub-table fixtures (land, livestock, housing, programmes, vulnerability) link
-# to the id space of the demography CSV — i0001, h001. Once people come from
-# master-data those ids are ETH-IND-0001 and ETH-HH-001, and every one of those
-# rows links to a record that does not exist. Nothing errors: the insert has no
-# foreign key to violate, so they land as orphans and the registry comes up with
-# farmers who own no land and households with no housing data.
-#
-# So the links are remapped onto whoever was actually loaded.
+def plan(people: list[dict], households: list[dict], farms: dict, geo: Geography, today: date,
+         new_id=lambda: str(uuid.uuid4())) -> list[dict]:
+    """One intake per sample person, each household's head first. No network, no database.
 
-_REMAP_STATS = {}
-
-
-def build_link_remap(individuals: list, households: list, fixture_rows: dict) -> dict:
-    """old link id -> loaded record id.
-
-    Distinct old ids are mapped in sorted order onto the loaded records, cycling
-    when there are fewer people than the fixtures assume — the country pack
-    carries a couple of dozen samples where the CSV carried five hundred, and
-    dropping the surplus would empty most of the form.
-
-    Person ids and household ids are mapped separately: a row linking to a
-    household must not be handed a person.
+    A head's intake carries the household (information and members); every
+    intake names its pack household, so a member's intake can pick the
+    household in the lookup once the head's intake is in the register.
     """
-    ind_ids = [i["internal_record_id"] for i in individuals]
-    hh_ids = [h["internal_record_id"] for h in households]
-    if not ind_ids and not hh_ids:
-        return {}
+    unknown = sorted(set(farms) - {p["individual_id"] for p in people})
+    if unknown:
+        raise RuntimeError(f"farms.json names people Master Data does not hold: {unknown}")
+    intakes = []
+    for household in households:
+        members = [p for p in people if p.get("household_id") == household["household_id"]]
+        if not members:
+            continue
+        head = next((m for m in members if m["individual_id"] == household.get("head_individual_id")), None)
+        if head is None:
+            raise RuntimeError(f"household {household['household_id']} names a head who is not among its people")
+        members = [head] + [m for m in members if m is not head]
+        facts = {m["individual_id"]: farms.get(m["individual_id"]) or {} for m in members}
+        names = {m["individual_id"]: (m.get("given_name"), m.get("fathers_name"),
+                                      (facts[m["individual_id"]].get("farmer") or {}).get("grandfathers_name"))
+                 for m in members}
+        for m in members:
+            missing = [label for label, value in zip(("given name", "father's name", "grandfather's name"),
+                                                     names[m["individual_id"]]) if not value]
+            if missing:
+                raise RuntimeError(f"{m['individual_id']} has no {', '.join(missing)}")
+        household_id = new_id()
+        for m in members:
+            farm, farmer = facts[m["individual_id"]], facts[m["individual_id"]].get("farmer") or {}
+            first, middle, last = names[m["individual_id"]]
+            farmer_id = new_id()
+            phone = local_phone(m)
+            sections: dict[str, list[dict]] = {
+                "farmer_household_lookup": [{"internal_record_id": farmer_id, "is_household_head": m is head}],
+                "farmer_identity": [{"internal_record_id": farmer_id, "has_national_id": bool(m.get("national_id")),
+                                     "foundational_id": m.get("national_id")}],
+                "farmer_personal_details": [{"internal_record_id": farmer_id, "first_name": first,
+                                             "middle_name": middle, "last_name": last,
+                                             "language_spoken": farmer.get("language_spoken"),
+                                             **{key: farmer[key] for key in LOCAL_NAME_FIELDS if farmer.get(key)},
+                                             "gender": m.get("gender"), "birth_date": m.get("birth_date"),
+                                             "marital_status": m.get("marital_status"),
+                                             "education_level": m.get("education_level")}],
+                "farmer_phones": [{"internal_record_id": new_id(), "link_internal_record_id": farmer_id,
+                                   "phone_type": farmer.get("phone_type") or "PRIMARY", "phone_number": phone,
+                                   "country_code": COUNTRY_CODE.get(m.get("country") or "ETH", "ET"),
+                                   "is_primary": True}] if phone else [],
+                "farmer_socio_economic_health": [{
+                    "internal_record_id": farmer_id, "disabled": (m.get("disability_status") or "NO") != "NO",
+                    "income_sources": farmer.get("income_sources"), "is_psnp_user": farmer.get("is_psnp_user"),
+                    "is_farmer": farmer.get("is_farmer"), "farming_type": farmer.get("farming_type"),
+                }],
+                "farmer_location": [{
+                    "internal_record_id": farmer_id, "latitude": m.get("latitude"), "longitude": m.get("longitude"),
+                    "address_line_1": words(*(m.get("address_parts") or {}).values()) or None,
+                    "local_language": farmer.get("local_language"), **geo.location(m["geo_pcode"]),
+                }],
+                **(household_sections(household_id, members, head, names, today, new_id) if m is head else {}),
+                **farm_sections(m, farm, farmer_id, new_id),
+                "farmer_documents": [{"internal_record_id": farmer_id,
+                                      "identity_document_type": farmer.get("identity_document_type")}],
+                "farmer_photo": [{"internal_record_id": farmer_id}],
+            }
+            intakes.append({
+                "individual_id": m["individual_id"], "name": words(first, middle, last),
+                "foundational_id": m.get("national_id"), "household": household["household_id"],
+                "is_head": m is head, "farmer_id": farmer_id, "household_id": household_id if m is head else None,
+                "sections": {s: sections[s] for s in FARMER_SECTIONS if sections.get(s)},
+            })
+    return intakes
 
-    # Ids the fixtures define themselves. Livestock and farm inputs link to their
-    # parcel, and a parcel is a fixture row, not a person — remapping that link
-    # would move them onto a farmer and lose the parcel. Only links pointing OUT
-    # of the fixture set name people or households.
-    fixture_own_ids = {
-        r["internal_record_id"]
-        for rows in fixture_rows.values()
-        for r in rows
-        if r.get("internal_record_id")
-    }
 
-    old_person, old_household = set(), set()
-    for rows in fixture_rows.values():
-        for r in rows:
-            link = r.get("link_internal_record_id")
-            if not link or link in fixture_own_ids:
+class StaffSession:
+    """One staff user signed in like the staff portal: IAM, the Keycloak login form, IAM's callback."""
+
+    def __init__(self, iam_url: str, api_url: str, username: str, password: str):
+        self.iam_url, self.api_url = iam_url.rstrip("/"), api_url.rstrip("/")
+        self.username, self._password = username, password
+        self._token = None
+        self.sign_in()
+
+    @staticmethod
+    def _open(opener, request) -> tuple[int, object, bytes]:
+        """Status, headers (looked up case-insensitively) and body, without following redirects."""
+        try:
+            with opener.open(request, timeout=60) as response:
+                return response.status, response.headers, response.read()
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.headers, exc.read()
+
+    def sign_in(self) -> None:
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                return None
+
+        jar = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar), NoRedirect)
+        status, _, body = self._open(opener, urllib.request.Request(
+            f"{self.iam_url}/auth/start_authentication_transaction?id=1&redirect_uri=/en", data=b"", method="POST"))
+        if status != 200:
+            raise RuntimeError(f"staff IAM did not start a sign-in for {self.username} ({status})")
+        status, _, body = self._open(opener, urllib.request.Request(json.loads(body)["redirectUrl"] + "&prompt=login"))
+        form = re.search(r'<form[^>]+id="kc-form-login"[^>]+action="([^"]+)"', body.decode("utf-8", "replace"))
+        if status != 200 or not form:
+            raise RuntimeError(f"no Keycloak login form for {self.username} ({status})")
+        login = urllib.parse.urlencode({"username": self.username, "password": self._password, "credentialId": ""})
+        status, headers, body = self._open(opener, urllib.request.Request(
+            html.unescape(form.group(1)), data=login.encode(), method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"}))
+        callback = headers.get("Location") or ""
+        if not callback.startswith(f"{self.iam_url}/auth/callback"):
+            said = " ".join(re.findall(r'kc-feedback-text[^>]*>([^<]+)', body.decode("utf-8", "replace")))
+            raise RuntimeError(f"Keycloak refused the sign-in of {self.username} ({status}): {said.strip()[:200]}")
+        status, _, _ = self._open(opener, urllib.request.Request(callback))
+        token = next((c.value for c in jar if c.name == "X-Access-Token"), None)
+        if status not in (302, 303, 307) or not token:
+            raise RuntimeError(f"staff IAM issued no session for {self.username} ({status})")
+        self._token = token
+        log(f"signed in as {self.username}")
+
+    def _send(self, path: str, data: bytes, content_type: str) -> tuple[int, dict]:
+        for attempt in (1, 2):
+            csrf = uuid.uuid4().hex
+            request = urllib.request.Request(f"{self.api_url}{path}", data=data, method="POST", headers={
+                "Authorization": f"Bearer {self._token}", "X-CSRF-Token": csrf, "Cookie": f"X-CSRF-Token={csrf}",
+                "Content-Type": content_type})
+            try:
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    status, body = response.status, response.read()
+            except urllib.error.HTTPError as exc:
+                status, body = exc.code, exc.read()
+            try:
+                reply = json.loads(body or b"{}")
+            except ValueError:
+                reply = {}
+            code = str((reply.get("response_header") or {}).get("response_error_code") or "")
+            if attempt == 1 and (status == 401 or code.endswith("401")):
+                self.sign_in()  # the session ended during a long run
                 continue
-            # The fixtures' own convention, and the only signal available for
-            # the rest: an id starting 'h' is a household, anything else a person.
-            (old_household if str(link).startswith("h") else old_person).add(link)
+            return status, reply
+        return status, reply
 
-    # An id that already names a loaded record maps to itself. That makes this a
-    # strict no-op on the CSV path, where the fixtures and the people share an id
-    # space — rather than relying on the two happening to be in the same order.
-    loaded = set(ind_ids) | set(hh_ids)
-    remap = {}
-    for old_set, new_ids in ((sorted(old_person), ind_ids), (sorted(old_household), hh_ids)):
-        if not new_ids:
-            continue
-        unmatched = [o for o in old_set if o not in loaded]
-        for old in old_set:
-            if old in loaded:
-                remap[old] = old
-        for index, old in enumerate(unmatched):
-            remap[old] = new_ids[index % len(new_ids)]
-    return remap
+    def post(self, path: str, payload: dict) -> dict:
+        envelope = {
+            "request_header": {"sender_app_mnemonic": "farmer-db-seed", "sender_app_url": "http://db-seed",
+                               "request_id": str(uuid.uuid4()),
+                               "request_timestamp": datetime.now(timezone.utc).isoformat()},
+            "request_body": {"request_payload": payload, "pagination_request": {"current_page": 1, "page_size": 100}},
+        }
+        status, reply = self._send(path, json.dumps(envelope).encode(), "application/json")
+        header = reply.get("response_header") or {}
+        if status != 200 or header.get("response_status") != "SUCCESS":
+            raise RuntimeError(f"{path} as {self.username}: {status} {header.get('response_error_code')} "
+                               f"{header.get('response_error_message')}")
+        return (reply.get("response_body") or {}).get("response_payload") or {}
+
+    def upload_identity_document(self, name: str) -> list[dict]:
+        boundary = uuid.uuid4().hex
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="documents"; filename="{name}.pdf"\r\n'
+                "Content-Type: application/pdf\r\n\r\n").encode() + SAMPLE_PDF + f"\r\n--{boundary}--\r\n".encode()
+        status, reply = self._send("/documents/upload_documents", body, f"multipart/form-data; boundary={boundary}")
+        documents = ((reply.get("response_body") or {}).get("response_payload") or {}).get("documents") or []
+        if status != 200 or not documents:
+            header = reply.get("response_header") or {}
+            raise RuntimeError(f"identity document upload failed ({status}): {header.get('response_error_message')}")
+        return [{"document_id": documents[0]["document_id"], "label": IDENTITY_DOCUMENT}]
+
+    def upload_photo(self, individual_id: str, image: bytes) -> list[dict]:
+        boundary = uuid.uuid4().hex
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="documents"; '
+                f'filename="{individual_id}.webp"\r\nContent-Type: image/webp\r\n\r\n').encode() \
+            + image + f"\r\n--{boundary}--\r\n".encode()
+        status, reply = self._send("/documents/upload_documents", body, f"multipart/form-data; boundary={boundary}")
+        documents = ((reply.get("response_body") or {}).get("response_payload") or {}).get("documents") or []
+        if status != 200 or not documents:
+            header = reply.get("response_header") or {}
+            raise RuntimeError(f"photo upload failed ({status}): {header.get('response_error_message')}")
+        return [{"document_id": documents[0]["document_id"], "label": PHOTO_LABEL}]
 
 
-def remap_links(table: str, rows: list, remap: dict) -> list:
-    """Repoint a fixture's links, and collapse it to one row per record when it
-    was one row per record to begin with.
+class Registry:
+    """The registry database: the form's metadata, who is registered, what was ingested. Reads only."""
 
-    Cycling turns 500 links into 21, so a table carrying exactly one row per
-    person — housing, vulnerability — would otherwise give each of them a
-    couple of dozen. Whether a table is one-per-record is read from the fixture
-    rather than configured: if every original link appeared once, it is.
-    """
-    if not remap:
-        return rows
-    links = [r.get("link_internal_record_id") for r in rows if r.get("link_internal_record_id")]
-    one_per_record = links and len(set(links)) == len(links)
+    def __init__(self):
+        self.conn = psycopg2.connect(host=env("PGHOST"), port=os.environ.get("PGPORT", "5432"),
+                                     dbname=env("PGDATABASE"), user=env("PGUSER"), password=env("PGPASSWORD"))
+        self.conn.autocommit = True
 
-    out, seen, unresolved = [], set(), 0
-    for r in rows:
-        link = r.get("link_internal_record_id")
-        if link in remap:
-            r = dict(r, link_internal_record_id=remap[link])
-            if one_per_record:
-                if r["link_internal_record_id"] in seen:
+    def rows(self, sql: str, params=()) -> list[tuple]:
+        with self.conn.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+
+    def form(self) -> tuple[str, str, dict[str, str]]:
+        """The farmer form's id, its register, and the register of each of its sections."""
+        found = self.rows(
+            "SELECT f.form_id, f.register_id, s.section_id, s.section_register_id"
+            " FROM g2p_intake_form_definitions f"
+            " JOIN g2p_intake_form_ui_tabs t ON t.form_id = f.form_id"
+            " JOIN g2p_intake_form_ui_tab_sections ts ON ts.tab_id = t.tab_id"
+            " JOIN g2p_register_sections s ON s.section_id = ts.section_id"
+            " WHERE f.form_mnemonic = %s", (FORM,))
+        if not found:
+            raise RuntimeError(f"form {FORM} is not in the registry metadata")
+        sections = {section: str(register) for _, _, section, register in found}
+        missing = [s for s in FARMER_SECTIONS if s not in sections]
+        if missing:
+            raise RuntimeError(f"form {FORM} has no section {', '.join(missing)}")
+        return str(found[0][0]), str(found[0][1]), sections
+
+    def farmers(self) -> dict[str, str]:
+        """Each farmer's Fayda ID, with their household."""
+        return {fid: str(link) for fid, link in self.rows(
+            "SELECT foundational_id, link_internal_record_id FROM g2p_register_farmers"
+            " WHERE foundational_id IS NOT NULL AND record_status = 'ACTIVE'")}
+
+    def awaiting_approval(self) -> dict[str, tuple[str, str]]:
+        """Finalized farmer intakes waiting for approval: Fayda ID -> (submission, farmer record)."""
+        return {fid: (str(sid), str(rid)) for fid, sid, rid in self.rows(
+            "SELECT f.foundational_id, s.submission_id, f.internal_record_id FROM g2p_intake_form_farmers f"
+            " JOIN g2p_intake_form_submissions s ON s.submission_id = f.submission_id"
+            " WHERE s.draft_status = 'FINAL' AND s.approval_status = 'PENDING' AND f.foundational_id IS NOT NULL")}
+
+    def approval_status(self, submission_id: str) -> str | None:
+        found = self.rows("SELECT approval_status FROM g2p_intake_form_submissions WHERE submission_id = %s",
+                          (submission_id,))
+        return found[0][0] if found else None
+
+    def wait_for(self, table: str, record_id: str, timeout: int) -> None:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.rows(f'SELECT 1 FROM "public"."{table}" WHERE internal_record_id = %s', (record_id,)):
+                return
+            time.sleep(3)
+        stuck = self.rows(
+            "SELECT register_ingest_process_status, register_ingest_process_attempts,"
+            " left(coalesce(register_ingest_process_last_error_code, ''), 300) FROM g2p_intake_form_submissions"
+            " WHERE approval_status = 'APPROVED' AND register_ingest_process_status <> 'PROCESSED'"
+            " ORDER BY approved_at DESC LIMIT 1")
+        raise RuntimeError(f"{table} {record_id} was not ingested within {timeout}s"
+                           + (f" (latest unprocessed intake: {stuck[0]})" if stuck else ""))
+
+
+class Loader:
+    def __init__(self, registry: Registry, submitter: StaffSession, approvers: list[StaffSession],
+                 approve_timeout: int, ingest_timeout: int):
+        self.registry, self.submitter, self.approvers = registry, submitter, approvers
+        self.approve_timeout, self.ingest_timeout = approve_timeout, ingest_timeout
+        self.form_id, self.register_id, self.section_registers = registry.form()
+
+    def submit(self, intake: dict, household_id: str | None) -> str:
+        submission_id = None
+        for section, rows in intake["sections"].items():
+            if section == "farmer_household_lookup" and household_id:
+                rows = [{**rows[0], "link_internal_record_id": household_id}]
+            documents = self.submitter.upload_identity_document(intake["individual_id"]) \
+                if section == "farmer_documents" else []
+            if section == "farmer_photo":
+                photo = photo_path(intake["individual_id"])
+                if photo is None:
+                    log(f"    no profile photo for {intake['individual_id']} in the pack; registering without one")
                     continue
-                seen.add(r["link_internal_record_id"])
-        elif link:
-            # Points at another sub-table row rather than a person — a
-            # livestock or farm-input row's parcel. Those ids are internal to
-            # the fixture and stay valid.
-            unresolved += 1
-        out.append(r)
+                documents = self.submitter.upload_photo(intake["individual_id"], photo.read_bytes())
+                rows = [{**rows[0], "record_image_document_id": documents[0]["document_id"]}]
+            saved = self.submitter.post("/intake-form-data/save_intake_form_submission", {
+                "submission_id": submission_id, "section_id": section, "section_payload": rows,
+                "section_register_id": self.section_registers[section], "form_id": self.form_id,
+                "register_id": self.register_id, "created_by": self.submitter.username, "documents": documents,
+            })
+            submission_id = submission_id or saved.get("submission_id")
+            if not submission_id:
+                raise RuntimeError(f"saving {section} for {intake['individual_id']} returned no submission")
+        self.submitter.post("/intake-form-data/finalize_intake_form_submission", {
+            "submission_id": submission_id, "register_id": self.register_id, "form_id": self.form_id})
+        return submission_id
 
-    _REMAP_STATS[table] = (len(rows), len(out), unresolved)
-    return out
+    def approve(self, submission_id: str) -> None:
+        """Stage 1 as the first approver, then stage 2 as the second, each once its task opens."""
+        deadline = time.time() + self.approve_timeout
+        for stage, approver in enumerate(self.approvers, 1):
+            while True:
+                if self.registry.approval_status(submission_id) == "APPROVED":
+                    return
+                tasks = approver.post("/awe/list_my_tasks", {"status": "open", "artifact_type": INTAKE_ARTIFACT,
+                                                             "page": 1, "page_size": 100})
+                task = next((t for t in (tasks.get("data") or {}).get("items") or []
+                             if t.get("artifact_id") == submission_id and int(t.get("stage_order") or 0) == stage),
+                            None)
+                if task:
+                    break
+                if time.time() > deadline:
+                    raise RuntimeError(f"no stage {stage} task for {approver.username} on intake {submission_id} "
+                                       f"within {self.approve_timeout}s")
+                time.sleep(3)
+            approver.post("/awe/claim_task", {"task_id": task["id"]})
+            approver.post("/awe/submit_task_decision", {
+                "task_id": task["id"], "action": "approve", "comment": "Sample data (db-seed)",
+                "artifact_id": submission_id, "artifact_type": INTAKE_ARTIFACT, "current_stage": stage})
+            log(f"    stage {stage} approved as {approver.username}")
+        while self.registry.approval_status(submission_id) != "APPROVED":
+            if time.time() > deadline:
+                raise RuntimeError(f"intake {submission_id} is not approved after both stages")
+            time.sleep(3)
+
+    def run(self, intakes: list[dict]) -> dict:
+        farmers, awaiting = self.registry.farmers(), self.registry.awaiting_approval()
+        households = {}  # pack household id -> its household in the register
+        for intake in intakes:
+            if intake["foundational_id"] in farmers:
+                households.setdefault(intake["household"], farmers[intake["foundational_id"]])
+        done = {"registered": 0, "resumed": 0, "skipped": 0}
+        for intake in intakes:
+            who, fid = f"{intake['individual_id']} {intake['name']}", intake["foundational_id"]
+            if fid in farmers:
+                done["skipped"] += 1
+                log(f"  {who}: already a farmer")
+                continue
+            if fid in awaiting:
+                submission_id, farmer_id = awaiting[fid]
+                log(f"  {who}: intake {submission_id} waits for approval; approving it")
+                self.approve(submission_id)
+                self.registry.wait_for("g2p_register_farmers", farmer_id, self.ingest_timeout)
+                farmers = self.registry.farmers()
+                households.setdefault(intake["household"], farmers.get(fid))
+                done["resumed"] += 1
+                continue
+            household_id = households.get(intake["household"])
+            if household_id is None and not intake["is_head"]:
+                raise RuntimeError(f"{who}: household {intake['household']} is not in the register, so this "
+                                   "member cannot be picked into it")
+            if household_id is not None and intake["is_head"]:
+                # A member registered first: the head joins that household instead of entering it again.
+                intake = {**intake, "sections": without(intake["sections"], *HOUSEHOLD_SECTIONS)}
+            submission_id = self.submit(intake, household_id)
+            log(f"  {who}: intake {submission_id} submitted")
+            self.approve(submission_id)
+            self.registry.wait_for("g2p_register_farmers", intake["farmer_id"], self.ingest_timeout)
+            if household_id is None:
+                self.registry.wait_for("g2p_register_households", intake["household_id"], self.ingest_timeout)
+                households[intake["household"]] = household_id = intake["household_id"]
+            farmers[fid] = household_id
+            done["registered"] += 1
+            log(f"  {who}: in the register")
+        return done
 
 
-def number_sample_lands(rows: list, ind_by_id: dict) -> list:
-    """Number each sample person's lands LAND-<n>-<k>, in the person's woreda.
-
-    Only for people from master-data. Sample person ETH-IND-0007 is farmer
-    FR-0007, and their lands are LAND-0007-1, LAND-0007-2… in their woreda. The
-    Crop Sown Registry's sample crop seasons use the same convention for the
-    same sample people. Neither registry reads the other; both derive the ids
-    from master-data's samples, so a demo shows the same farmers and plots.
-    Livestock and farm inputs link to a land by its internal id, which is
-    unchanged.
-    """
-    counts: dict = {}
-    for r in rows:
-        person = ind_by_id.get(r.get("link_internal_record_id"))
-        if not person or not person.get("geo_pcode"):
-            continue
-        number = person["functional_record_id"].rsplit("-", 1)[-1]
-        counts[number] = counts.get(number, 0) + 1
-        old = r.get("functional_record_id") or ""
-        r["functional_record_id"] = f"LAND-{number}-{counts[number]}"
-        r["search_text"] = (r.get("search_text") or "").replace(old, r["functional_record_id"])
-        r["geo_pcode"] = person["geo_pcode"]
-        r["country_code"] = person.get("country_code") or r.get("country_code")
-        if person.get("latitude") is not None:
-            r["latitude"], r["longitude"] = person["latitude"], person["longitude"]
-    return rows
-
-
-def report_link_remap() -> None:
-    if not _REMAP_STATS:
-        return
-    for table, (before, after, unresolved) in sorted(_REMAP_STATS.items()):
-        note = f"{table}: {before} fixture row(s) -> {after} attached"
-        if before != after:
-            note += " (one row per record; surplus dropped)"
-        if unresolved:
-            note += f", {unresolved} linked within the fixture"
-        print(f"[load-sample-data]   {note}")
-
-
-def report_geo_resolution() -> None:
-    resolved, fallback = _GEO_STATS["resolved"], _GEO_STATS["fallback"]
-    if not (resolved or fallback):
-        return
-    print(f"[load-sample-data] geo ids: {resolved} resolved against master-data, "
-          f"{fallback} fell back to slug-paths.")
-    if fallback:
-        # Never silent: a fallback id joins to nothing when master-data was
-        # seeded from a pack, and the only symptom is an empty map.
-        print("[load-sample-data]   unresolved name chains, e.g. "
-              + "; ".join(_GEO_STATS["unresolved_examples"]))
-        print("[load-sample-data]   those records will not join to a boundary. "
-              "Check the sample data's place names match the loaded country pack.")
-
-
-def env(name: str) -> str:
-    value = os.environ.get(name, "")
+def env(name: str, default: str | None = None) -> str:
+    value = os.environ.get(name, "").strip() or default
     if not value:
-        print(f"[load-sample-data] Missing env var: {name}", file=sys.stderr)
-        sys.exit(1)
+        raise RuntimeError(f"{name} is not set")
     return value
 
 
-def load_json(path: Path):
-    if not path.is_file():
-        print(f"[load-sample-data] Missing file: {path}", file=sys.stderr)
-        sys.exit(1)
-    return json.loads(path.read_text())
-
-
-def _read_csv_rows(path: Path, json_columns: set) -> list:
-    if not path.is_file():
-        print(f"[load-sample-data] Missing file: {path}", file=sys.stderr)
-        sys.exit(1)
-    with path.open(newline="", encoding="utf-8") as f:
-        out = []
-        for row in csv.DictReader(f):
-            parsed = {}
-            for k, v in row.items():
-                if v == "":
-                    parsed[k] = None
-                elif k in json_columns:
-                    parsed[k] = json.loads(v)
-                else:
-                    parsed[k] = v
-            out.append(parsed)
-        return out
-
-
-# SOURCE_OF_INCOME is read live from Master Data, whose codes are SOI_-prefixed
-# and only four: the seed JSON predates that and uses a wider, unprefixed set.
-# Map it on the way in — otherwise every sample farmer carries a code the
-# dropdown cannot show and the attribute validator rejects on the next edit.
-INCOME_MAP = {
-    "CROP_PRODUCTION": "SOI_CROP_PRODUCTION",
-    "CROP_FARMING": "SOI_CROP_PRODUCTION",
-    "LIVESTOCK_PRODUCTION": "SOI_LIVESTOCK_PRODUCTION",
-    "LIVESTOCK": "SOI_LIVESTOCK_PRODUCTION",
-    "GOVERNMENT_NGO_SUPPORT": "SOI_GOVERNMENT_NGO_SUPPORT",
-    "OTHERS": "SOI_OTHERS",
-    "REMITTANCES": "SOI_OTHERS",
-    "WAGE_LABOR": "SOI_OTHERS",
-    "BUSINESS_TRADE": "SOI_OTHERS",
-}
-
-
-def _map_income(value):
-    """(code, other_text) for Master Data's SOURCE_OF_INCOME list.
-
-    A missing value stays missing rather than being invented. A specific source
-    that has no MDS code of its own (remittances, wage labour...) becomes
-    SOI_OTHERS, and its name moves to source_of_income_other so it is not lost.
-    """
-    if not value:
-        return None, None
-    key = str(value).upper()
-    if key.startswith("SOI_"):
-        return key, None
-    code = INCOME_MAP.get(key, "SOI_OTHERS")
-    other = key.replace("_", " ").title() if code == "SOI_OTHERS" and key != "OTHERS" else None
-    return code, other
-
-
-def _as_int(v):
-    return int(v) if v not in (None, "") else None
-
-
-def _fr_id(ind: dict) -> str:
-    """Farmer functional id from the individual's id -> FR-####.
-
-    Take the LAST segment, not [1]. The docstring's `IND-####` was only ever the
-    two-segment shape; Master Data's sample population is country-prefixed
-    (`ETH-IND-0001`), where [1] is the literal 'IND' — so every farmer got the
-    same `FR-IND`. The insert only carries `ON CONFLICT (internal_record_id)`,
-    which does not cover the unique index on functional_record_id, so the second
-    row aborted the transaction: db-seed failed with zero rows loaded, retried,
-    and failed identically until BackoffLimitExceeded.
-    """
-    return "FR-" + ind["functional_record_id"].rsplit("-", 1)[-1]
-
-
-# Main crops a sample farmer declares at registration: Master Data
-# CROP_COMMODITY codes (ETH agriculture pack), the common Ethiopian staples.
-# Deterministic -- picked by the farmer's sequence number, so a re-seed and the
-# demo script agree on who grows what -- and never repeated within a farmer.
-SAMPLE_MAIN_CROPS = [
-    "CROP_TEFF", "CROP_WHEAT", "CROP_MAIZE",
-    "CROP_SORGHUM", "CROP_BARLEY", "CROP_FABA_BEAN",
-]
-
-
-def main_crops_for(ind: dict) -> list:
-    """1-3 CROP_COMMODITY codes for a sample farmer, from their sequence number.
-
-    FR-0001 -> 1 crop, FR-0002 -> 2, FR-0003 -> 3, FR-0004 -> 1 ...; the first
-    crop rotates through SAMPLE_MAIN_CROPS and the rest follow it, so the
-    sample spreads over all six codes. A farmer id with no number falls back
-    to the first crop alone.
-    """
-    tail = _fr_id(ind).rsplit("-", 1)[-1]
-    if not tail.isdigit():
-        return SAMPLE_MAIN_CROPS[:1]
-    n = int(tail)
-    count = (n - 1) % 3 + 1
-    start = (n - 1) % len(SAMPLE_MAIN_CROPS)
-    return [SAMPLE_MAIN_CROPS[(start + k) % len(SAMPLE_MAIN_CROPS)] for k in range(count)]
-
-
-def search_text_person(p: dict) -> str:
-    parts = [
-        p["functional_record_id"], p["full_name"],
-        p.get("foundational_id") or "", p.get("gender") or "",
-        p.get("birth_date") or "", p.get("marital_status") or "",
-    ]
-    # str() every part: master-data now returns birth_date as a real date rather
-    # than the "<year>-01-01" string this used to synthesise, and join() rejects a
-    # non-str — which failed the whole seed with zero records loaded.
-    return " ".join(str(x) for x in parts if x)
-
-
-def insert_farmers(cur, individuals: list, extras_by_id: dict) -> None:
-    columns = [
-        "internal_record_id", "functional_record_id",
-        "link_internal_record_id", "link_foundational_id",
-        "record_name", "record_image_document_id",
-        "created_by", "created_at", "last_approved_at", "last_approved_by",
-        "search_text", "record_status", "record_status_reason",
-        "foundational_id", "first_name", "middle_name", "last_name",
-        "given_name", "prefix", "suffix", "gender", "birth_date",
-        "phone_numbers", "emails", "marital_status", "occupation",
-        "income_level", "language_code", "registration_date",
-        "latitude", "longitude", "altitude", "plus_code",
-        "address_line_1", "address_line_2", "postal_code", "country_code",
-        "geo_lowest_level_value_id", "geo_code_hierarchy_json",
-        "estimated_age", "has_personal_phone", "disabled",
-        "disability_type", "disability_severity",
-        "source_of_income", "source_of_income_other",
-        "language_spoken", "education_level", "national_id_masked",
-        "main_crops",
-    ]
-    rows = []
-    for ind in individuals:
-        ex = extras_by_id.get(ind["internal_record_id"], {})
-        rows.append(
-            (
-                ind["internal_record_id"], _fr_id(ind),
-                ind.get("household_id"), None,
-                ind["full_name"], None,
-                SEEDER, CREATED_AT, CREATED_AT, SEEDER,
-                search_text_person(ind), "ACTIVE", None,
-                ind.get("foundational_id"), ind["first_name"],
-                ind.get("middle_name"), ind["last_name"], ind["given_name"],
-                None, None, ind["gender"], ind["birth_date"],
-                to_json(ind.get("phone_numbers")),
-                to_json([{"type": "personal", "address": ind["emails"], "is_primary": True}]
-                        if ind.get("emails") else None),
-                ind["marital_status"], None, None,
-                ind.get("language_code"), "2026-04-01",
-                ind["latitude"], ind["longitude"], ind["altitude"], ind["plus_code"],
-                ind["address_line_1"], ind["address_line_2"],
-                ind["postal_code"], ind["country_code"],
-                geo_lowest_id(ind), geo_hierarchy(ind),
-                _as_int(ind.get("estimated_age")), ex.get("has_personal_phone"),
-                ex.get("disabled"), ex.get("disability_type"),
-                ex.get("disability_severity"), _map_income(ex.get("source_of_income"))[0],
-                ex.get("source_of_income_other") or _map_income(ex.get("source_of_income"))[1],
-                ex.get("language_spoken"),
-                ind.get("education_level"), ind.get("foundational_id_masked"),
-                to_json(main_crops_for(ind)),
-            )
-        )
-    sql = (
-        'INSERT INTO "public"."g2p_register_farmers" ('
-        + ", ".join(f'"{c}"' for c in columns)
-        + ") VALUES %s ON CONFLICT (\"internal_record_id\") DO NOTHING"
-    )
-    psycopg2.extras.execute_values(cur, sql, rows, template=None, page_size=200)
-    print(f"[load-sample-data]   -> g2p_register_farmers: {len(rows)}")
-
-
-def insert_households(cur, households: list) -> None:
-    columns = [
-        "internal_record_id", "functional_record_id",
-        "link_internal_record_id", "link_foundational_id",
-        "record_name", "record_image_document_id",
-        "created_by", "created_at", "last_approved_at", "last_approved_by",
-        "search_text", "record_status", "record_status_reason",
-        "latitude", "longitude", "altitude", "plus_code",
-        "address_line_1", "address_line_2", "postal_code", "country_code",
-        "geo_lowest_level_value_id", "geo_code_hierarchy_json",
-        "household_head", "size_of_group", "number_of_children",
-        "number_of_elderly_members",
-        "number_of_female_members", "number_of_male_members", "other_land_owner",
-    ]
-    rows = []
-    for hh in households:
-        num_children = (_as_int(hh.get("size_children_u5")) or 0) + (
-            _as_int(hh.get("size_school_age")) or 0
-        )
-        other_land_owner = "TRUE" if _seq(hh) % 3 == 0 else "FALSE"
-        rows.append(
-            (
-                hh["internal_record_id"], hh["functional_record_id"],
-                None, None,
-                f"{hh['head_name']} {hh['functional_record_id']}", None,
-                SEEDER, CREATED_AT, CREATED_AT, SEEDER,
-                f"{hh['functional_record_id']} {hh['head_name']}", "ACTIVE", None,
-                hh["latitude"], hh["longitude"], hh["altitude"], hh["plus_code"],
-                hh["address_line_1"], hh["address_line_2"],
-                hh["postal_code"], hh["country_code"],
-                geo_lowest_id(hh), geo_hierarchy(hh),
-                hh["head_name"], _as_int(hh.get("size_total")), num_children,
-                _as_int(hh.get("size_elderly")),
-                _as_int(hh.get("number_of_female_members")),
-                _as_int(hh.get("number_of_male_members")), other_land_owner,
-            )
-        )
-    sql = (
-        'INSERT INTO "public"."g2p_register_households" ('
-        + ", ".join(f'"{c}"' for c in columns)
-        + ") VALUES %s ON CONFLICT (\"internal_record_id\") DO NOTHING"
-    )
-    psycopg2.extras.execute_values(cur, sql, rows, template=None, page_size=200)
-    print(f"[load-sample-data]   -> g2p_register_households: {len(rows)}")
-
-
-def _seq(record: dict) -> int:
-    # Last segment, for the same reason as _fr_id: on a country-prefixed id
-    # (`ETH-HH-001`) index [1] is 'HH' and int() raises. This is only reached
-    # after the farmers insert, which is why _fr_id failed first.
-    return int(record["functional_record_id"].rsplit("-", 1)[-1])
-
-
-def _relationship_to_head(ind: dict, is_head: bool) -> str:
-    """A RELATIONSHIP_TO_HEAD code (Master Data list) for a sample member.
-
-    The sample people carry no relationship, so it is inferred the same way the
-    1.2 intake-form loader does: the head is SELF, a minor a CHILD, a married
-    adult a SPOUSE, anyone else an OTHER_RELATIVE.
-    """
-    if is_head:
-        return "SELF"
-    age = _as_int(ind.get("estimated_age"))
-    if age is not None and age < 18:
-        return "CHILD"
-    if (ind.get("marital_status") or "").upper() == "MARRIED":
-        return "SPOUSE"
-    return "OTHER_RELATIVE"
-
-
-def insert_household_members(cur, members: list, ind_by_id: dict, remap: dict,
-                             head_by_household: dict | None = None) -> None:
-    columns = [
-        "internal_record_id", "functional_record_id",
-        "link_internal_record_id", "link_foundational_id",
-        "record_name", "record_image_document_id",
-        "created_by", "created_at", "last_approved_at", "last_approved_by",
-        "search_text", "record_status", "record_status_reason",
-        "foundational_id", "first_name", "middle_name", "last_name",
-        "given_name", "prefix", "suffix", "gender", "birth_date",
-        "phone_numbers", "emails", "marital_status", "occupation",
-        "income_level", "language_code", "education_level", "registration_date",
-        "latitude", "longitude", "altitude", "plus_code",
-        "address_line_1", "address_line_2", "postal_code", "country_code",
-        "geo_lowest_level_value_id", "geo_code_hierarchy_json", "is_disabled",
-        "is_head", "relationship_to_the_head",
-    ]
-    head_by_household = head_by_household or {}
-    rows = []
-    skipped = 0
-    for m in members:
-        # member_individual_id names a person in the FIXTURE's id space — the same
-        # space link_internal_record_id uses. remap_links repoints only the link,
-        # so this one still has to be resolved here, or the lookup is a fixture id
-        # ('i0001') against a dict keyed by the loaded master-data ids and the load
-        # dies on the first member.
-        #
-        # Resolving can legitimately come up empty: the remap cycles a couple of
-        # dozen loaded people onto hundreds of fixture ids, so a member may name
-        # someone this country pack never loaded. Skip that row — a household
-        # short one member is worth more than no sample data at all.
-        member_id = m.get("member_individual_id")
-        ind = ind_by_id.get(remap.get(member_id, member_id))
-        if ind is None:
-            skipped += 1
-            continue
-        # Only knowable when the household names its head (Master Data samples
-        # do); otherwise both stay NULL rather than guessing a head.
-        head_id = head_by_household.get(m["link_internal_record_id"])
-        is_head = (ind["internal_record_id"] == head_id) if head_id else None
-        rows.append(
-            (
-                m["internal_record_id"], m["functional_record_id"],
-                m["link_internal_record_id"], None,
-                ind["full_name"], None,
-                SEEDER, CREATED_AT, CREATED_AT, SEEDER,
-                search_text_person(ind), "ACTIVE", None,
-                ind.get("foundational_id"), ind["first_name"],
-                ind.get("middle_name"), ind["last_name"], ind["given_name"],
-                None, None, ind["gender"], ind["birth_date"],
-                to_json(ind.get("phone_numbers")),
-                to_json([{"type": "personal", "address": ind["emails"], "is_primary": True}]
-                        if ind.get("emails") else None),
-                ind["marital_status"], None, None,
-                ind.get("language_code"), ind.get("education_level"), "2026-04-01",
-                ind["latitude"], ind["longitude"], ind["altitude"], ind["plus_code"],
-                ind["address_line_1"], ind["address_line_2"],
-                ind["postal_code"], ind["country_code"],
-                geo_lowest_id(ind), geo_hierarchy(ind),
-                m.get("is_disabled"),
-                is_head, _relationship_to_head(ind, is_head) if head_id else None,
-            )
-        )
-    sql = (
-        'INSERT INTO "public"."g2p_register_household_members" ('
-        + ", ".join(f'"{c}"' for c in columns)
-        + ") VALUES %s ON CONFLICT (\"internal_record_id\") DO NOTHING"
-    )
-    psycopg2.extras.execute_values(cur, sql, rows, template=None, page_size=200)
-    note = f" ({skipped} skipped — member names a person this pack did not load)" if skipped else ""
-    print(f"[load-sample-data]   -> g2p_register_household_members: {len(rows)}{note}")
-
-
-COMMON_COLUMNS = [
-    "internal_record_id", "functional_record_id",
-    "link_internal_record_id", "link_foundational_id",
-    "record_name", "record_image_document_id",
-    "created_by", "created_at", "last_approved_at", "last_approved_by",
-    "search_text", "record_status", "record_status_reason",
-]
-
-# (table, json_file, extra_cols, json_cols)
-SUB_TABLES = [
-    (
-        "g2p_register_lands", "lands.json",
-        [
-            "land_ownership_type", "certificate_storage_id", "land_size", "unit",
-            "soil_fertility", "current_land_use", "farming_type",
-            "year_of_acquisition", "means_of_acquisition",
-            "latitude", "longitude", "altitude", "plus_code",
-            "address_line_1", "address_line_2", "postal_code", "country_code",
-            "geo_lowest_level_value_id", "geo_code_hierarchy_json",
-            "shape_type", "shape_coordinates_json",
-        ],
-        {"geo_code_hierarchy_json", "shape_coordinates_json"},
-    ),
-    (
-        "g2p_register_livestocks", "livestocks.json",
-        ["livestock_type", "breed", "head_count", "livestock_system"],
-        set(),
-    ),
-    (
-        "g2p_register_farm_inputs", "farm_inputs.json",
-        [
-            "fertilizer_use", "pesticide_use", "insecticide_use",
-            "improved_seed_use", "water_source",
-            "access_to_machinery", "access_to_finance",
-        ],
-        set(),
-    ),
-    (
-        "g2p_register_membership_details", "membership_details.json",
-        [
-            "is_primary_cooperative_member", "primary_cooperative_name",
-            "is_cooperative_union_member", "cooperative_union_name",
-            "is_farmer_cluster_member", "farmer_cluster_role",
-        ],
-        set(),
-    ),
-]
-
-
-def insert_sub_table(cur, table: str, rows_json: list, extra_cols: list, json_cols: set) -> None:
-    if not rows_json:
-        print(f"[load-sample-data]   -> {table}: 0 (empty)")
-        return
-    columns = COMMON_COLUMNS + extra_cols
-    rows = []
-    for r in rows_json:
-        common = [
-            r["internal_record_id"], r["functional_record_id"],
-            r["link_internal_record_id"], r.get("link_foundational_id"),
-            r["record_name"],
-            r.get("record_image_document_id") or r.get("record_image_storage_id"),
-            r.get("created_by", SEEDER), r.get("created_at", CREATED_AT),
-            r.get("last_approved_at", CREATED_AT), r.get("last_approved_by", SEEDER),
-            r["search_text"], r.get("record_status", "ACTIVE"),
-            r.get("record_status_reason"),
-        ]
-        extras = [
-            to_json(r.get(c)) if c in json_cols else r.get(c) for c in extra_cols
-        ]
-        rows.append(tuple(common + extras))
-    sql = (
-        f'INSERT INTO "public"."{table}" ('
-        + ", ".join(f'"{c}"' for c in columns)
-        + ") VALUES %s ON CONFLICT (\"internal_record_id\") DO NOTHING"
-    )
-    psycopg2.extras.execute_values(cur, sql, rows, template=None, page_size=200)
-    print(f"[load-sample-data]   -> {table}: {len(rows)}")
-
-
-def insert_scores(cur, scores: list) -> None:
-    if not scores:
-        return
-    columns = [
-        "internal_record_id", "register_id", "score_type", "score_definition_id",
-        "link_internal_record_id", "triggered_by_cr_id", "triggered_by_submission_id",
-        "computed_score", "computed_at",
-    ]
-    rows = [tuple(r.get(c) for c in columns) for r in scores]
-    sql = (
-        'INSERT INTO "public"."g2p_register_scores" ('
-        + ", ".join(f'"{c}"' for c in columns)
-        + ") VALUES %s ON CONFLICT (\"internal_record_id\") DO NOTHING"
-    )
-    psycopg2.extras.execute_values(cur, sql, rows, template=None, page_size=200)
-    print(f"[load-sample-data]   -> g2p_register_scores: {len(rows)}")
-
-
-# Stable namespace so re-running the seed produces the same queue_id per
-# (register, record, section) — with ON CONFLICT DO NOTHING this makes the
-# completion-score enqueue idempotent.
-_QUEUE_NS = uuid.UUID("a1b2c3d4-0000-4000-8000-000000000002")
-
-
-def get_register_id(cur, mnemonic: str):
-    cur.execute(
-        'SELECT register_id FROM "public"."g2p_register_definitions" '
-        "WHERE register_mnemonic = %s",
-        (mnemonic,),
-    )
-    row = cur.fetchone()
-    return row[0] if row else None
-
-
-def qualifying_sections(cur, register_id: str) -> list:
-    """Own-register sections plus list sections, EXCLUDING sections backed by a
-    CORE_TABLE register (e.g. Score). The completion-score worker resolves a
-    section's model as G2PRegister<section_register_mnemonic> from the extensions
-    register_domain.models; CORE_TABLE registers have no such generated model, so
-    enqueuing them makes the worker fail."""
-    cur.execute(
-        "SELECT s.section_id, s.section_register_id, s.is_list, d.register_purpose "
-        'FROM "public"."g2p_register_sections" s '
-        'LEFT JOIN "public"."g2p_register_definitions" d '
-        "  ON d.register_id = s.section_register_id "
-        "WHERE s.register_id = %s",
-        (register_id,),
-    )
-    out = []
-    for section_id, section_register_id, is_list, purpose in cur.fetchall():
-        if section_register_id != register_id and not is_list:
-            continue
-        if purpose == "CORE_TABLE":
-            continue
-        out.append(section_id)
-    return out
-
-
-def enqueue_completion_scores(cur, register_id: str, record_ids: list) -> None:
-    if not register_id:
-        print("[load-sample-data]   -> completion-score queue: register not found, skipped")
-        return
-    sections = qualifying_sections(cur, register_id)
-    if not sections:
-        print(f"[load-sample-data]   -> completion-score queue ({register_id}): no sections")
-        return
-    rows = []
-    for rid in record_ids:
-        for sid in sections:
-            queue_id = str(uuid.uuid5(_QUEUE_NS, f"{register_id}:{rid}:{sid}"))
-            rows.append((queue_id, register_id, rid, sid, None, None, "PENDING", 0))
-    columns = [
-        "queue_id", "register_id", "internal_record_id", "section_id",
-        "change_request_id", "submission_id",
-        "compute_status", "compute_number_of_attempts",
-    ]
-    sql = (
-        'INSERT INTO "public"."g2p_completion_score_computation_queue" ('
-        + ", ".join(f'"{c}"' for c in columns)
-        + ") VALUES %s ON CONFLICT (queue_id) DO NOTHING"
-    )
-    psycopg2.extras.execute_values(cur, sql, rows, template=None, page_size=500)
-    print(
-        f"[load-sample-data]   -> completion-score queue: {len(rows)} rows "
-        f"({len(record_ids)} records x {len(sections)} sections)"
-    )
-
-
 def main() -> None:
-    print("[load-sample-data] Starting…")
-    print(f"[load-sample-data] OPENG2P_DATA_DIR = {OPENG2P_DATA_DIR}")
-    print(f"[load-sample-data] FARMER_SEED_DATA_DIR = {FARMER_DATA_DIR}")
+    mds = mds_client.MdsClient.from_env(required=True)
+    people, households = mds.sample_individuals(), mds.sample_households()
+    if not people:
+        log("Master Data holds no sample people (load the country pack's samples on commons-services): "
+            "nothing to load.")
+        return
+    farms_file = OPENG2P_DATA_DIR / "packs" / PACK / "samples" / "farms.json"
+    farms = {f["individual_id"]: f for f in json.loads(farms_file.read_text(encoding="utf-8"))}
+    log(f"{len(people)} sample people in {len(households)} households from Master Data; "
+        f"farm facts for {len(farms)} of them from {farms_file}")
+    intakes = plan(people, households, farms, Geography(mds.geo_chain), date.today())
 
-    # Before anything derives a geo id. Read once; every record resolves
-    # against this rather than reopening master-data per row.
-    global _GEO_INDEX, _GEO_BY_ID
-    mds = mds_client_from_env()
-    levels, units = read_geography(mds)
-    _GEO_INDEX = load_geo_index(units)
-    _GEO_BY_ID = load_geo_chain_by_id(levels, units)
+    iam, api, password = env("STAFF_IAM_URL"), env("STAFF_API_URL"), env("INTAKE_SEED_PASSWORD")
+    sessions: dict[str, StaffSession] = {}
 
-    # People come from master-data when it carries the country's samples. The
-    # CSV is the fallback, and it can only ever describe the one country whose
-    # five level names its columns happen to be — which is why it is no longer
-    # the primary source.
-    individuals, households = load_people_from_mds(mds)
-    if not individuals:
-        print("[load-sample-data] no samples in master-data — falling back to the "
-              "demography CSV. Enable geoSeed.load.samples for a pack-coherent set.")
-        individuals = _read_csv_rows(DEMO_DIR / "individuals.csv", JSON_COLUMNS_INDIVIDUAL)
-        households = _read_csv_rows(DEMO_DIR / "households.csv", JSON_COLUMNS_HOUSEHOLD)
-    ind_by_id = {i["internal_record_id"]: i for i in individuals}
+    def session(user: str) -> StaffSession:
+        if user not in sessions:
+            sessions[user] = StaffSession(iam, api, user, password)
+        return sessions[user]
 
-    farmer_extras = {f["internal_record_id"]: f for f in load_json(FARMER_DATA_DIR / "farmers.json")}
-    members = load_json(FARMER_DATA_DIR / "household_members.json")
-
-    conn = psycopg2.connect(
-        host=env("PGHOST"),
-        port=os.environ.get("PGPORT", "5432"),
-        dbname=env("PGDATABASE"),
-        user=env("PGUSER"),
-        password=env("PGPASSWORD"),
-    )
-    conn.autocommit = False
-    cur = conn.cursor()
-
-    # Read every fixture first: the remap has to see all the links before it can
-    # assign them, or two tables referring to the same person would disagree.
-    fixtures = {fname: load_json(FARMER_DATA_DIR / fname) for _, fname, _, _ in SUB_TABLES}
-    fixtures["scores.json"] = load_json(FARMER_DATA_DIR / "scores.json")
-    fixtures["household_members.json"] = members
-    remap = build_link_remap(individuals, households, fixtures)
-    if remap:
-        print(f"[load-sample-data] attaching fixture rows to {len(set(remap.values()))} "
-              f"loaded record(s) ({len(remap)} fixture id(s) remapped):")
-
+    registry = Registry()
     try:
-        insert_farmers(cur, individuals, farmer_extras)
-        insert_households(cur, households)
-        insert_household_members(
-            cur, remap_links("g2p_register_household_members", members, remap),
-            ind_by_id, remap,
-            {hh["internal_record_id"]: hh.get("head_individual_id") for hh in households})
-        for table, fname, extras, json_cols in SUB_TABLES:
-            rows = remap_links(table, fixtures[fname], remap)
-            if table == "g2p_register_lands":
-                rows = number_sample_lands(rows, ind_by_id)
-                # lands.json carries geo as plain names; derive the DB id + JSON
-                # (a sample person's land is already in their woreda).
-                for r in rows:
-                    r["geo_lowest_level_value_id"] = geo_lowest_id(r)
-                    r["geo_code_hierarchy_json"] = geo_hierarchy_dict(r)
-            insert_sub_table(cur, table, rows, extras, json_cols)
-        insert_scores(cur, remap_links("g2p_register_scores", fixtures["scores.json"], remap))
-
-        # Seed completion-score computation queue for Farmer + Household records.
-        enqueue_completion_scores(
-            cur, get_register_id(cur, "Farmer"),
-            [ind["internal_record_id"] for ind in individuals],
-        )
-        enqueue_completion_scores(
-            cur, get_register_id(cur, "Household"),
-            [hh["internal_record_id"] for hh in households],
-        )
-
-        conn.commit()
-        report_link_remap()
-        report_geo_resolution()
-        print("[load-sample-data] Done.")
-    except Exception as exc:
-        conn.rollback()
-        print(f"[load-sample-data] FAILED: {exc}", file=sys.stderr)
-        raise
+        loader = Loader(
+            registry, session(env("INTAKE_SEED_SUBMIT_USER", "alex.carter")),
+            [session(env("INTAKE_SEED_APPROVER_1", "alex.carter")),
+             session(env("INTAKE_SEED_APPROVER_2", "nina.patel"))],
+            int(env("INTAKE_SEED_APPROVE_TIMEOUT", "300")), int(env("INTAKE_SEED_INGEST_TIMEOUT", "300")))
+        done = loader.run(intakes)
     finally:
-        cur.close()
-        conn.close()
+        registry.conn.close()
+    log(f"Done: {done['registered']} farmers registered, {done['resumed']} waiting intakes approved, "
+        f"{done['skipped']} already farmers.")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        print(f"[load-sample-data] FAILED: {exc}", file=sys.stderr)
+        raise

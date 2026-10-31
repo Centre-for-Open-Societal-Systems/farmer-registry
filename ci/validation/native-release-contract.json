@@ -1,0 +1,27 @@
+{
+  "platformVersion": "1.2.2-rc.614",
+  "parents": {
+    "staff-api": {
+      "dockerfile": "docker/staff-api/Dockerfile",
+      "repository": "openg2p/openg2p-registry-staff-api"
+    },
+    "partner-api": {
+      "dockerfile": "docker/partner-api/Dockerfile",
+      "repository": "openg2p/openg2p-registry-partner-api"
+    },
+    "celery": {
+      "dockerfile": "docker/celery/Dockerfile",
+      "repository": "openg2p/openg2p-registry-celery"
+    },
+    "db-seed": {
+      "dockerfile": "docker/db-seed/Dockerfile",
+      "repository": "openg2p/openg2p-registry-db-seed"
+    }
+  },
+  "observedInstalledPackages": {
+    "openg2p-registry-core": "1.2.1",
+    "openg2p-registry-celery-worker": "1.2.1",
+    "openg2p-registry-farmer-extension": "1.0.3+oan.1"
+  },
+  "nativeWorkerSaveAcceptance": "REQUIRED; distribution versions alone are not ABI proof"
+}

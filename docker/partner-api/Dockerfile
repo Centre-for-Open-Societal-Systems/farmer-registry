@@ -1,20 +1,12 @@
-# Farmer Registry — Partner API image.
-#
-# Thin extension of the registry-platform base image (see
-# docker/staff-api/Dockerfile for the full rationale). Adds only the
-# farmer domain model; ENV defaults and the migrate+gunicorn CMD are inherited.
-#
-# Build context = repo root (so farmer-extension/ is reachable).
-ARG RP_VERSION=1.2.2-rc.544
-FROM openg2p/openg2p-registry-partner-api:${RP_VERSION}
+# The registry platform's partner-api image with the Farmer extension installed, as
+# OpenG2P's registry repositories build theirs. Build from the repository root:
+#   docker build -f docker/partner-api/Dockerfile .
+ARG BASE_IMAGE_VERSION=1.2.2-rc.614
+FROM openg2p/openg2p-registry-partner-api:${BASE_IMAGE_VERSION}
 
-# Option C: select farmer's domain model (coexists with the base image's
-# reference extension; env picks farmer, no uninstall needed).
+# Selects this registry's domain extension; the platform publishes it as
+# openg2p_registry_extensions.
 ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension
-COPY docker/common/patch_master_data_csrf.py /tmp/patch_master_data_csrf.py
-RUN python /tmp/patch_master_data_csrf.py && rm /tmp/patch_master_data_csrf.py
-COPY docker/partner-api/patch_odk_signature.py /tmp/patch_odk_signature.py
-RUN python /tmp/patch_odk_signature.py && rm /tmp/patch_odk_signature.py

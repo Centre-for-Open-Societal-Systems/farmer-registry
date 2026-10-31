@@ -1,0 +1,42 @@
+{
+  "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.birth_date": {
+    "readonly_states": [
+      false
+    ],
+    "files": [
+      "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/register-metadata/g2p_register_sections.sql"
+    ]
+  },
+  "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.data_collection_date": {
+    "readonly_states": [
+      true
+    ],
+    "files": [
+      "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/15_sections.sql"
+    ]
+  },
+  "birth_date": {
+    "readonly_states": [
+      false
+    ],
+    "files": [
+      "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/register-metadata/g2p_register_sections.sql"
+    ]
+  },
+  "collected_date": {
+    "readonly_states": [
+      false
+    ],
+    "files": [
+      "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/10_sections.sql"
+    ]
+  },
+  "planted_date": {
+    "readonly_states": [
+      false
+    ],
+    "files": [
+      "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/register-metadata/g2p_register_sections.sql"
+    ]
+  }
+}

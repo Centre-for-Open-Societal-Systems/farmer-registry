@@ -4,8 +4,10 @@ def call() {
         agent any
         options { skipDefaultCheckout(true); disableConcurrentBuilds(); timestamps(); timeout(time: 60, unit: 'MINUTES') }
         parameters {
+            choice(name: 'DELIVERY_ACTION', choices: ['validate-only', 'fresh-install', 'deploy'],
+                description: 'validate-only checks the source and changes nothing. fresh-install backs up the staging registry databases to the protected backup target, removes the OAN release in namespace farmer if present, drops its databases and installs the pinned OAN chart on empty databases. deploy upgrades the existing OAN release. Either cluster action also needs DEPLOY_STAGING. The legacy far release is never touched.')
             booleanParam(name: 'DEPLOY_STAGING', defaultValue: false,
-                description: 'Promote tested RC images after Farmer maintenance and verified final backups.')
+                description: 'Second guard: nothing reaches the staging cluster unless this is set together with a DELIVERY_ACTION other than validate-only.')
             booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
                 description: 'Release available staging dashboards and prepare the paused promoted connector.')
         }
@@ -13,11 +15,11 @@ def call() {
             DELIVERY_ENVIRONMENT = 'staging'
             AWS_REGION = 'ap-south-1'
             HELM_RELEASE = 'farmer-registry'
-            HELM_NAMESPACE = 'far'
+            HELM_NAMESPACE = 'farmer'
             KUBECONFIG_CREDENTIAL = 'staging-farmer-kubeconfig'
         }
         stages {
-            stage('Validate staging RC') {
+            stage('Test') {
                 steps {
                     checkout scm
                     dir('service-outcomes') { deleteDir() }
@@ -26,11 +28,13 @@ def call() {
                         env.SOURCE_COMMIT = sh(returnStdout: true, script: 'git rev-parse --verify HEAD').trim()
                         if (!(env.SOURCE_COMMIT ==~ /[0-9a-f]{40}/)) { error('Invalid source commit') }
                         env.IMAGE_TAG = env.SOURCE_COMMIT.take(12)
-                        if (!params.DEPLOY_STAGING) {
-                            currentBuild.description = 'VALIDATION ONLY — staging was not deployed'
-                            echo 'DEPLOY_STAGING=false: this successful build validates source only. The live Farmer release remains unchanged.'
+                        // Both guards must agree before any cluster action; otherwise this build only validates.
+                        env.EFFECTIVE_ACTION = params.DEPLOY_STAGING ? params.DELIVERY_ACTION : 'validate-only'
+                        if (env.EFFECTIVE_ACTION == 'validate-only') {
+                            currentBuild.description = 'VALIDATION ONLY - staging was not deployed'
+                            echo 'No cluster action (DEPLOY_STAGING=false or DELIVERY_ACTION=validate-only): this successful build validates source only.'
                         } else {
-                            currentBuild.description = 'Staging deployment requested — acceptance pending'
+                            currentBuild.description = 'Staging ' + env.EFFECTIVE_ACTION + ' requested - acceptance pending'
                         }
                     }
                     sh '''
@@ -39,37 +43,66 @@ def call() {
                       docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" \
                         "coss-ci/validation:$IMAGE_TAG" bash ci/validation/validate.sh
                     '''
-                    stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,tests/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
+                    stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,test/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
                 }
             }
-            stage('Promote rehearsed staging Registry (far)') {
-                when { beforeAgent true; expression { params.DEPLOY_STAGING } }
+            stage('Deploy (registry)') {
+                when { beforeAgent true; expression { env.EFFECTIVE_ACTION in ['deploy', 'fresh-install'] } }
                 agent { label 'vpn-agent2' }
                 steps {
                     dir('staging-deployment') {
                         deleteDir()
                         unstash 'staging-deployment'
                         withCredentials([
-                            file(credentialsId: 'staging-farmer-kubeconfig', variable: 'KUBECONFIG'),
+                            file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
                             file(credentialsId: 'staging-farmer-rehearsal', variable: 'STAGING_EVIDENCE_FILE')
                         ]) {
-                            sh '''
-                              set -eu
-                              set +x
-                              mkdir -p service-outcomes
-                              docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
-                              export ECR_REGISTRY=recorded-in-protected-evidence
-                              export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
-                              bash ci/deploy/deploy-rc.sh
-                            '''
+                            script {
+                                def runRegistry = { String entry ->
+                                    withEnv(['DELIVERY_ACTION=' + env.EFFECTIVE_ACTION, 'DELIVERY_ENTRY=' + entry]) {
+                                        sh '''
+                                          set -eu
+                                          set +x
+                                          mkdir -p service-outcomes
+                                          docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                                          export ECR_REGISTRY=recorded-in-protected-evidence
+                                          export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
+                                          bash "$DELIVERY_ENTRY"
+                                        '''
+                                    }
+                                }
+                                try {
+                                    // A first-install evidence record (New Dev was the rehearsal, the target is empty) never
+                                    // archives anything, so the backup credentials are not bound for it: a credential id that
+                                    // does not exist would fail withCredentials. The script validates the record and re-checks
+                                    // the cluster; if a release or database exists it refuses, and any other evidence needs the
+                                    // credentials (the script refuses without them).
+                                    def firstInstall = env.EFFECTIVE_ACTION == 'fresh-install' && sh(returnStatus: true,
+                                        script: 'set +x; grep -Eq \'"mode"[[:space:]]*:[[:space:]]*"first-install"\' "$STAGING_EVIDENCE_FILE"') == 0
+                                    if (firstInstall) {
+                                        echo 'First-install evidence: backup credentials are not bound (nothing exists to archive).'
+                                        runRegistry('ci/deploy/fresh-install-staging.sh')
+                                    } else if (env.EFFECTIVE_ACTION == 'fresh-install') {
+                                        // The pg_dump archive target. Both credentials are created by the Jenkins admin:
+                                        // an SSH key, and a file holding user@host, the directory and the host key.
+                                        withCredentials([
+                                            sshUserPrivateKey(credentialsId: 'staging-farmer-backup-ssh', keyFileVariable: 'BACKUP_SSH_KEY'),
+                                            file(credentialsId: 'staging-farmer-backup-target', variable: 'BACKUP_TARGET_FILE')
+                                        ]) { runRegistry('ci/deploy/fresh-install-staging.sh') }
+                                    } else {
+                                        runRegistry('ci/deploy/deploy-rc.sh')
+                                    }
+                                } finally {
+                                    archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
+                                }
+                            }
                         }
-                        archiveArtifacts artifacts: 'service-outcomes/*.json', allowEmptyArchive: true
-                        script { currentBuild.description = 'Registry deployed to far — signed intake acceptance remains a separate gate' }
+                        script { currentBuild.description = 'Registry ' + env.EFFECTIVE_ACTION + ' done in namespace farmer - signed intake acceptance remains a separate gate' }
                     }
                 }
             }
-            stage('Build staging optional services') {
-                when { expression { params.DEPLOY_STAGING && params.COORDINATE_SERVICES } }
+            stage('Build (services)') {
+                when { expression { env.EFFECTIVE_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
                 steps {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                         withCredentials([
@@ -92,8 +125,8 @@ def call() {
                     stash name: 'staging-services', includes: 'helm/**,ci/**,scripts/**,integrations/**,service-outcomes/staging-build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
                 }
             }
-            stage('Deploy staging optional services') {
-                when { beforeAgent true; expression { params.DEPLOY_STAGING && params.COORDINATE_SERVICES } }
+            stage('Deploy (services)') {
+                when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
                 agent { label 'vpn-agent2' }
                 steps {
                     dir('staging-services') {
@@ -109,7 +142,7 @@ def call() {
                         }
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                             withCredentials([
-                                file(credentialsId: 'staging-farmer-kubeconfig', variable: 'KUBECONFIG'),
+                                file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
                                 file(credentialsId: 'staging-farmer-dev-acceptance', variable: 'DEV_ACCEPTANCE')
                             ]) {
                                 // Missing protected connector backup fails that service;

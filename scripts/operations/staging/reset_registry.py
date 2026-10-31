@@ -226,7 +226,7 @@ def promoted(record):
     for target in (sha, refs['refs/heads/develop']):
         command(['git', 'merge-base', '--is-ancestor', implementation, target])
     command(['git', 'diff', '--exit-code', implementation, sha, '--',
-             'ci', 'helm', 'scripts', 'integrations', 'docker', 'farmer-extension', 'tests/runtime'])
+             'ci', 'helm', 'scripts', 'integrations', 'docker', 'farmer-extension', 'test/runtime'])
     if record.get('deliveryHash') != delivery_hash():
         raise ValueError('Reset code changed after rehearsal')
 

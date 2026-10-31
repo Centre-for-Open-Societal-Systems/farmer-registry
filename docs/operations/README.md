@@ -21,10 +21,13 @@ pull requests validate without publishing or deploying.
 
 Use the [develop-to-staging merge handoff](merge-develop-staging.md) for the migration PR, promotion sequence, seeded-farmer counts and remaining staging cutover gates.
 
-Merged develop builds validate, build six Registry images, publish commit-tagged
-images, and upgrade the existing release. Registry failures are fatal. Available
-Farmer add-ons release independently; their failures mark Jenkins unstable.
-Missing branches or application files preserve existing deployments.
+Merged develop builds validate, build six Registry images and publish them
+commit-tagged (`DELIVERY_ACTION=publish-only`, the default). Choosing
+`deploy` additionally upgrades the existing release with them; `fresh-install`
+rebuilds the dev environment from an empty database (see [dev delivery](../dev-farmer-first.md)).
+Registry failures are fatal. Available Farmer add-ons release independently;
+their failures mark Jenkins unstable. Missing branches or application files
+preserve existing deployments.
 
 The deployment agent is `vpn-agent2`. Build agents need Docker, Bash, Git and AWS
 CLI. Helpers provide Python dependencies in containers. Publishing uses
@@ -33,8 +36,9 @@ Identity migration additionally requires explicit `APPLY_COMMONS_IDENTITY` and
 fresh `farmer-dev-identity-evidence`.
 
 `ci/deploy/deploy-dev.sh` requires an existing release, validates schema and
-resource preservation, uses the committed chart lock, and keeps private values
-out of artifacts. A failed release requires guarded recovery, never deletion.
+resource preservation, uses the pinned chart, and keeps private values out of
+artifacts. A failed upgrade is recovered by another `deploy`; a database that
+must be rebuilt uses `fresh-install`, never a hand-run `helm` or `psql`.
 
 ## Staging
 
@@ -72,5 +76,5 @@ Its configured `ci/commons-services/Jenkinsfile` is absent from current upstream
 `develop`; do not run it until its owner restores the source. Farmer cleanup does
 not grant permission to upgrade shared Commons services.
 
-See [service coordination](coordinated-services-rollout.md),
-[connector recovery](connector.md), and the [cleanup inventory](cleanup-inventory.md).
+See [service coordination](coordinated-services-rollout.md)
+and [connector recovery](connector.md).

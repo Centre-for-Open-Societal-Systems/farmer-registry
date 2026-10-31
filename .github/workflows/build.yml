@@ -1,60 +1,66 @@
-name: Build COSS images
-
+name: Build registry images
 on:
   pull_request:
   push:
-    branches: [develop, feat/gen2-common-rc245]
+    branches: [develop, 'deploy/**']
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        component: [staff-api, partner-api, celery, db-seed, sanity-tests, staff-ui]
+        include:
+          - {component: staff-api, dockerfile: docker/staff-api/Dockerfile}
+          - {component: partner-api, dockerfile: docker/partner-api/Dockerfile}
+          - {component: celery, dockerfile: docker/celery/Dockerfile}
+          - {component: db-seed, dockerfile: docker/db-seed/Dockerfile}
+          - {component: staff-ui, dockerfile: docker/staff-ui/Dockerfile}
+          - {component: sanity-tests, dockerfile: docker/sanity-tests/Dockerfile}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/${{ matrix.component }}/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: false
           load: true
-          tags: coss/${{ matrix.component }}:ci
+          tags: registry/${{ matrix.component }}:ci
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
-      - name: COSS domain regression checks on the pinned platform
+      - name: Platform entry points load the Farmer extension
+        if: contains(fromJSON('["staff-api", "partner-api", "celery"]'), matrix.component)
+        run: |
+          roles=${{ matrix.component }}
+          [ "$roles" = celery ] && roles="celery-worker celery-beat"
+          for role in $roles; do
+            docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python registry/${{ matrix.component }}:ci /repo/ci/validation/check_image_boot.py "$role"
+          done
+      - name: Installed Farmer extension regression checks
         if: matrix.component == 'staff-api'
         run: |
-          docker run --rm -v "$PWD:/repo:ro" -e PYTHONPATH=/repo/farmer-extension/src -w /repo/tests/runtime \
-            --entrypoint python coss/staff-api:ci -m unittest \
-            extension.test_domain_validation_utils extension.test_farmer_geo_sync extension.test_livestock_validation \
-            extension.test_intake_record_image_urls extension.test_household_family_size -v
-      - name: Worker attribution runtime
+          docker run --rm -v "$PWD:/repo:ro" -w /repo/farmer-extension -e PYTHONPATH=/repo/farmer-extension/tests --entrypoint sh registry/staff-api:ci -c 'pip install --quiet pytest==8.4.2 && python -m pytest -q -p no:cacheprovider tests'
+      - name: Native DDL, metadata replay and reporting preservation
+        if: matrix.component == 'staff-api'
+        env:
+          OAN_METADATA_TEST_IMAGE: registry/staff-api:ci
+        run: python3 ci/validation/check_native_metadata.py
+      - name: Registered native worker services
         if: matrix.component == 'celery'
-        run: docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python coss/celery:ci /repo/tests/runtime/odk_actor_worker_runtime.py
-      - name: Signed intake runtime
-        if: matrix.component == 'partner-api'
-        run: docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python coss/partner-api:ci /repo/tests/runtime/odk_signature_runtime.py
-      - name: Seed transaction and rollback integration
-        if: matrix.component == 'db-seed'
         run: |
-          set -euo pipefail
-          docker network create seed-ci
-          trap 'docker rm -f seed-ci-db >/dev/null 2>&1; docker network rm seed-ci >/dev/null 2>&1' EXIT
-          docker run -d --name seed-ci-db --network seed-ci -e POSTGRES_PASSWORD=local-test -e POSTGRES_DB=coss_seed_test_ci postgres:16-alpine
-          ready=false
-          for attempt in $(seq 1 30); do
-            # The temporary init server accepts Unix sockets before final TCP startup.
-            if docker exec -e PGPASSWORD=local-test seed-ci-db psql -h 127.0.0.1 -U postgres -d coss_seed_test_ci -X -v ON_ERROR_STOP=1 -Atqc 'SELECT 1'; then ready=true; break; fi
-            sleep 1
+          for mode in worker beat; do
+            docker run --rm --network none -v "$PWD:/repo:ro" --entrypoint python registry/celery:ci /repo/ci/validation/check_worker_extensions.py "$mode"
           done
-          test "$ready" = true
-          docker run --rm --network seed-ci -v "$PWD:/repo:ro" \
-            -e PGHOST=seed-ci-db -e PGDATABASE=coss_seed_test_ci -e PGUSER=postgres -e PGPASSWORD=local-test \
-            --entrypoint python3 coss/db-seed:ci /repo/tests/runtime/test_seed_transaction.py
+      - name: Native worker ODK save and rollback in owned PostgreSQL
+        if: matrix.component == 'celery'
+        env:
+          OAN_WORKER_SAVE_TEST_IMAGE: registry/celery:ci
+        run: python3 ci/validation/check_native_worker_save.py
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.component == 'celery'
+        with:
+          name: native-worker-save
+          path: ci-output/native-worker-save/

@@ -1,0 +1,13 @@
+# Internal Commons delivery service; activation of register topics is separate.
+registry:
+  staffApi:
+    envVars:
+      REGISTRY_CORE_WEBSUB_BASE_URL: http://commons-services-websub.commons.svc.cluster.local
+  partnerApi:
+    envVars:
+      REGISTRY_CORE_WEBSUB_BASE_URL: http://commons-services-websub.commons.svc.cluster.local
+      REGISTRY_PARTNER_API_WEBSUB_BASE_URL: http://commons-services-websub.commons.svc.cluster.local
+  celeryWorker:
+    envVars:
+      REGISTRY_CORE_WEBSUB_BASE_URL: http://commons-services-websub.commons.svc.cluster.local
+      REGISTRY_CELERY_WORKERS_WEBSUB_BASE_URL: http://commons-services-websub.commons.svc.cluster.local

@@ -1,0 +1,7 @@
+simulation: oan-odk-identity
+routing: path
+mocks:
+  - routeKey: pm
+    path: ../mocks/odk-partner-keys/config.yaml
+  - routeKey: mds
+    path: ../mocks/reporting-master-data/config.yaml

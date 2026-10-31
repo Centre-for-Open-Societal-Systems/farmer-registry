@@ -63,7 +63,7 @@ async def main():
    assert tuple((await conn.execute(text(query))).one())==expected
  factory=async_sessionmaker(engine,expire_on_commit=False)
  async with factory() as session:
-  connector=ConnectorDefinition(connector_id='synthetic-rehearsal',name='Synthetic Rehearsal',platform='odk_central',transport_type='odk_central',paused=True,enabled=True,auth_type='none',g2p_sender_id='farmer-partner',g2p_register_mnemonic='Farmer',data_model_mnemonic='FARMER_ODK_MODEL')
+  connector=ConnectorDefinition(connector_id='synthetic-rehearsal',name='Synthetic Rehearsal',platform='odk_central',transport_type='odk_central',paused=True,enabled=True,auth_type='none',g2p_sender_id='farmer-partner',g2p_register_mnemonic='Farmer',data_model_mnemonic='ODK_TO_FARMER_INTAKE')
   session.add(connector);await session.commit()
   send=AsyncMock(return_value='synthetic-correlation')
   with patch('openg2p_connector_service.services.ingestion_service.PartnerIngestClient.send',send):
@@ -131,7 +131,7 @@ async def main():
   await c.run_sync(Base.metadata.create_all);await db_migrations.apply(c)
  recovery_factory=async_sessionmaker(recovery_engine,expire_on_commit=False)
  async with recovery_factory() as session:
-  session.add(ConnectorDefinition(connector_id='synthetic-rehearsal',name='Synthetic Rehearsal',platform='odk_central',transport_type='odk_central',paused=True,enabled=True,auth_type='none',g2p_sender_id='farmer-partner',g2p_register_mnemonic='Farmer',data_model_mnemonic='FARMER_ODK_MODEL'))
+  session.add(ConnectorDefinition(connector_id='synthetic-rehearsal',name='Synthetic Rehearsal',platform='odk_central',transport_type='odk_central',paused=True,enabled=True,auth_type='none',g2p_sender_id='farmer-partner',g2p_register_mnemonic='Farmer',data_model_mnemonic='ODK_TO_FARMER_INTAKE'))
   await session.commit()
  parameters=dict(host=os.environ['CONNECTOR_DB_HOSTNAME'],port=int(os.environ['CONNECTOR_DB_PORT']),user=os.environ['CONNECTOR_DB_USERNAME'],password=os.environ['CONNECTOR_DB_PASSWORD'])
  source=await asyncpg.connect(**parameters,database=os.environ['CONNECTOR_DB_DBNAME'])

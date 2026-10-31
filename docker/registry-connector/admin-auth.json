@@ -1,0 +1,7 @@
+{
+  "issuer": "https://keycloak.development.oanstaging.com/realms/staff",
+  "jwks_url": "http://commons-keycloak.commons.svc.cluster.local:80/realms/staff/protocol/openid-connect/certs",
+  "client_id": "registry-connector",
+  "role": "REGISTRY_CONNECTOR_ADMIN",
+  "ui_client_id": "registry-connector-ui"
+}

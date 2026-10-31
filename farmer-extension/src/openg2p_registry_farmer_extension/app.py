@@ -1,4 +1,3 @@
-# ruff: noqa: E402
 import asyncio
 import logging
 
@@ -6,1176 +5,201 @@ from .config import Settings
 
 _config = Settings.get_config()
 
-from openg2p_fastapi_common.app import Initializer as BaseInitializer
 from openg2p_fastapi_common.context import dbengine
-from openg2p_registry_core.app import Initializer as CoreInitializer
+from openg2p_registry_farmer_extension.openg2p_farmer.app import Initializer as FarmerInitializer
 from sqlalchemy import text
 
-from .register_domain.models import (
-    G2PRegisterFarmer, G2PRegisterHistoryFarmer,
-    G2PRegisterFarmerPhone, G2PRegisterHistoryFarmerPhone,
-    G2PRegisterHousehold, G2PRegisterHistoryHousehold,
-    G2PRegisterHouseholdMember, G2PRegisterHistoryHouseholdMember,
-    G2PRegisterCrop, G2PRegisterHistoryCrop,
-    G2PRegisterLand, G2PRegisterHistoryLand,
-    G2PRegisterFarmInputs, G2PRegisterHistoryFarmInputs,
-    G2PRegisterLivestock, G2PRegisterHistoryLivestock,
-    G2PRegisterMembershipDetails, G2PRegisterHistoryMembershipDetails,
-    G2PRegisterRegId, G2PRegisterHistoryRegId,
-    G2PRegisterConsentRequest, G2PRegisterHistoryConsentRequest,
-    G2PRegisterConsentReceipt, G2PRegisterHistoryConsentReceipt,
-    G2PIntakeFormHousehold, G2PIntakeFormFarmer, G2PIntakeFormFarmerPhone, G2PIntakeFormHouseholdMember,
-    G2PIntakeFormCrop, G2PIntakeFormLand, G2PIntakeFormFarmInputs,
-    G2PIntakeFormLivestock, G2PIntakeFormMembershipDetails, G2PIntakeFormRegId,
-    G2PIntakeFormConsentRequest, G2PIntakeFormConsentReceipt,
-)
-from .register_domain.factory import G2PRegisterDomainFactory
-from .register_domain.services import (
-    G2PRegisterDomainServiceFarmer,
-    G2PRegisterDomainServiceHousehold,
-    install_record_image_url_resolution,
-)
+# The farmer initializer migrates its mapped classes directly, so the OAN
+# columns must be appended to them before any migration runs.
+from .register_domain import models as _oan_models
 
 _logger = logging.getLogger(_config.logging_default_logger_name)
 
+# OAN registers, in parent-before-child order: (register, history, intake form).
+OAN_REGISTERS: list[tuple] = [
+    (_oan_models.G2PRegisterFarmerPhone, _oan_models.G2PRegisterHistoryFarmerPhone, _oan_models.G2PIntakeFormFarmerPhone),
+]
 
-class Initializer(BaseInitializer):
+
+class Initializer(FarmerInitializer):
+    """The farmer extension's initializer, then OAN's registers."""
+
     def initialize(self, **kwargs):
-        super().initialize()
-        CoreInitializer().initialize()
+        super().initialize(**kwargs)
+        from .runtime import install
 
-        self._patch_filter_builder()
+        install()
+        from .awe_proxy import install as install_scoped_awe_tasks
 
-        # Intake reads return record_image_document_id but never the presigned
-        # record_image_url the register-side reads add, so a photo captured at
-        # intake has nothing to render on the approval screen. Patches the
-        # platform class rather than registering a subclass — see the function
-        # for why a subclass cannot win the component lookup.
-        install_record_image_url_resolution()
+        install_scoped_awe_tasks()
+        from .history_change_request_source import install as install_history_change_request_source
 
-        G2PRegisterDomainFactory()
-        G2PRegisterDomainServiceFarmer()
-        G2PRegisterDomainServiceHousehold()
+        install_history_change_request_source()
+        from .history_without_change_request import install as install_history_without_change_request
 
-    def _patch_filter_builder(self):
-        try:
-            from openg2p_registry_core.services.filter_builder import FilterBuilder
-            from sqlalchemy import Boolean
-
-            orig_build_field_conditions = FilterBuilder._build_field_conditions
-            orig_validate_value = FilterBuilder._validate_value
-
-            def patched_validate_value(this, field_config, operator, value):
-                filter_type = field_config.get("filter_type")
-                if filter_type == "boolean":
-                    if isinstance(value, str) and value.lower() in ("true", "false"):
-                        return
-                return orig_validate_value(this, field_config, operator, value)
-
-            def patched_build_field_conditions(this, column, field_name, operators, field_config):
-                is_bool_col = hasattr(column, "type") and isinstance(column.type, Boolean)
-                if is_bool_col and isinstance(operators, dict):
-                    converted_operators = {}
-                    for op, val in operators.items():
-                        if isinstance(val, str):
-                            if val.lower() == "true":
-                                converted_operators[op] = True
-                            elif val.lower() == "false":
-                                converted_operators[op] = False
-                            else:
-                                converted_operators[op] = val
-                        elif isinstance(val, list):
-                            converted_operators[op] = [
-                                True if (isinstance(v, str) and v.lower() == "true") or v is True
-                                else False if (isinstance(v, str) and v.lower() == "false") or v is False
-                                else v
-                                for v in val
-                            ]
-                        else:
-                            converted_operators[op] = val
-                    operators = converted_operators
-
-                return orig_build_field_conditions(this, column, field_name, operators, field_config)
-
-            FilterBuilder._validate_value = patched_validate_value
-            FilterBuilder._build_field_conditions = patched_build_field_conditions
-            _logger.info("FilterBuilder boolean handling patched successfully")
-        except Exception as e:
-            _logger.warning(f"Failed to patch FilterBuilder: {e}")
-
-    async def fastapi_app_startup(self, app):
-        # The explicit CLI `migrate` step is a separate invocation from
-        # serving traffic (see the image's CMD: "migrate; gunicorn ...").
-        # Deployments that override the container command/args can skip that
-        # step silently — the server then starts against a schema missing
-        # every extension column added here, failing every query that
-        # touches one (e.g. "column g2p_register_farmers.state does not
-        # exist"). Re-running these ALTER TABLE ADD COLUMN IF NOT EXISTS /
-        # idempotent UPDATE statements on every startup, not just on an
-        # explicit `migrate` invocation, makes the schema self-healing
-        # regardless of what the deployment's command ends up being.
-        #
-        # This runs from fastapi_app_startup — awaited inside the ASGI
-        # lifespan's own event loop — rather than from initialize() via
-        # asyncio.run(). initialize() runs synchronously at import time and
-        # can fire more than once per process; asyncio.run() opens and tears
-        # down a fresh event loop on every call, so a second call reuses a
-        # dbengine/connection pool whose asyncpg connections are still bound
-        # to the first (now-closed) loop, raising "attached to a different
-        # loop". fastapi_app_startup runs exactly once per worker, inside
-        # the loop that will actually serve requests, so there's no
-        # cross-loop reuse.
-        await self._migrate_extension_tables()
-        self._register_deduplication_routes(app)
+        install_history_without_change_request()
 
     def migrate_database(self, args):
-        asyncio.run(self._migrate_extension_tables())
+        super().migrate_database(args)
+        # The farmer migration ran in its own event loop, which is closed now, and
+        # the pooled connections belong to it. Drop them without closing them.
+        dbengine.get().sync_engine.dispose(close=False)
 
-    async def _migrate_extension_tables(self):
-        _logger.info("Migrating extensions database")
+        async def migrate():
+            _logger.info("Migrating OAN registers")
+            for classes in OAN_REGISTERS:
+                for cls in classes:
+                    await cls.create_migrate()
+            await add_oan_columns()
+            from .schema_compat import migrate_existing_schema
 
-        await G2PRegisterHousehold.create_migrate()
-        await G2PRegisterHistoryHousehold.create_migrate()
-        await G2PIntakeFormHousehold.create_migrate()
+            await migrate_existing_schema(dbengine.get())
+            await fill_derived_columns()
+            await rename_records()
 
-        await G2PRegisterHouseholdMember.create_migrate()
-        await G2PRegisterHistoryHouseholdMember.create_migrate()
-        await G2PIntakeFormHouseholdMember.create_migrate()
-
-        await G2PRegisterFarmer.create_migrate()
-        await G2PRegisterHistoryFarmer.create_migrate()
-        await G2PIntakeFormFarmer.create_migrate()
-
-        await G2PRegisterFarmerPhone.create_migrate()
-        await G2PRegisterHistoryFarmerPhone.create_migrate()
-        await G2PIntakeFormFarmerPhone.create_migrate()
-
-        # Every table must exist before the ALTER TABLE / UPDATE block below,
-        # which targets them directly (the Ethiopic *_ec columns on crops and
-        # reg_ids, re-pointing crops/livestock/farm inputs at their farmer,
-        # the land rollups). Those create_migrate() calls used to run after
-        # the block, which only worked on an existing database: a fresh one
-        # stopped with "relation g2p_register_lands does not exist", and
-        # later "relation g2p_register_crops does not exist". On a fresh
-        # database create_all() already builds the full current columns, so
-        # the ADD COLUMN IF NOT EXISTS statements are no-ops there.
-        await G2PRegisterLand.create_migrate()
-        await G2PRegisterHistoryLand.create_migrate()
-        await G2PIntakeFormLand.create_migrate()
-
-        await G2PRegisterMembershipDetails.create_migrate()
-        await G2PRegisterHistoryMembershipDetails.create_migrate()
-        await G2PIntakeFormMembershipDetails.create_migrate()
-
-        await G2PRegisterFarmInputs.create_migrate()
-        await G2PRegisterHistoryFarmInputs.create_migrate()
-        await G2PIntakeFormFarmInputs.create_migrate()
-
-        await G2PRegisterCrop.create_migrate()
-        await G2PRegisterHistoryCrop.create_migrate()
-        await G2PIntakeFormCrop.create_migrate()
-
-        await G2PRegisterLivestock.create_migrate()
-        await G2PRegisterHistoryLivestock.create_migrate()
-        await G2PIntakeFormLivestock.create_migrate()
-
-        await G2PRegisterRegId.create_migrate()
-        await G2PRegisterHistoryRegId.create_migrate()
-        await G2PIntakeFormRegId.create_migrate()
-
-        await G2PRegisterConsentRequest.create_migrate()
-        await G2PRegisterHistoryConsentRequest.create_migrate()
-        await G2PIntakeFormConsentRequest.create_migrate()
-
-        await G2PRegisterConsentReceipt.create_migrate()
-        await G2PRegisterHistoryConsentReceipt.create_migrate()
-        await G2PIntakeFormConsentReceipt.create_migrate()
-
-        # SQLAlchemy create_all() creates missing tables but intentionally
-        # does not add columns to tables that already exist. Keep extension
-        # upgrades idempotent for existing Registry installations.
-        async with dbengine.get().begin() as conn:
-            extension_columns = {
-                "is_household_head": (
-                    "g2p_register_farmers",
-                    "g2p_register_history_farmers",
-                    "g2p_intake_form_farmers",
-                ),
-                "father_included": (
-                    "g2p_register_households",
-                    "g2p_register_history_households",
-                    "g2p_intake_form_households",
-                ),
-                "mother_included": (
-                    "g2p_register_households",
-                    "g2p_register_history_households",
-                    "g2p_intake_form_households",
-                ),
-            }
-            for column_name, table_names in extension_columns.items():
-                for table_name in table_names:
-                    await conn.execute(
-                        text(
-                            f'ALTER TABLE "public"."{table_name}" '
-                            f'ADD COLUMN IF NOT EXISTS "{column_name}" BOOLEAN'
-                        )
-                    )
-
-            for table_name in (
-                "g2p_register_farmers",
-                "g2p_register_history_farmers",
-                "g2p_intake_form_farmers",
-            ):
-                # Installations created before the Ethiopic column became a
-                # string still have it as DATE, which cannot hold Pagumen
-                # (month 13) at all. Convert in place, rendering any existing
-                # value with to_char so the stored text keeps the same day.
-                # Guarded on the current type so the ALTER is a no-op on the
-                # second and every later boot.
-                await conn.execute(
-                    text(
-                        f'ALTER TABLE "public"."{table_name}" '
-                        'ADD COLUMN IF NOT EXISTS "birth_date_ec" VARCHAR'
-                    )
-                )
-                await conn.execute(
-                    text(
-                        f"""
-                        DO $$
-                        BEGIN
-                            IF EXISTS (
-                                SELECT 1 FROM information_schema.columns
-                                 WHERE table_schema = 'public'
-                                   AND table_name = '{table_name}'
-                                   AND column_name = 'birth_date_ec'
-                                   AND data_type = 'date'
-                            ) THEN
-                                ALTER TABLE "public"."{table_name}"
-                                ALTER COLUMN "birth_date_ec" TYPE VARCHAR
-                                USING to_char("birth_date_ec", 'YYYY-MM-DD');
-                            END IF;
-                        END $$;
-                        """
-                    )
-                )
-                await conn.execute(
-                    text(
-                        f'ALTER TABLE "public"."{table_name}" '
-                        'ADD COLUMN IF NOT EXISTS "state" VARCHAR'
-                    )
-                )
-                await conn.execute(
-                    text(
-                        f'ALTER TABLE "public"."{table_name}" '
-                        'ADD COLUMN IF NOT EXISTS "import_source" VARCHAR'
-                    )
-                )
-                # Father's name triple (see models/farmer.py). Declared on the
-                # model, so create_all() covers fresh databases; this covers the
-                # ones that already existed.
-                for father_column in (
-                    "father_first_name", "father_middle_name", "father_last_name",
-                ):
-                    await conn.execute(
-                        text(
-                            f'ALTER TABLE "public"."{table_name}" '
-                            f'ADD COLUMN IF NOT EXISTS "{father_column}" VARCHAR'
-                        )
-                    )
-                # region_name/zone_name/woreda_name/kebele_name were declared
-                # on the model (flattened out of geo_code_hierarchy_json) but
-                # never had a matching ALTER TABLE entry here — the same
-                # missing-column bug class already hit "state" in production.
-                # woreda_level_value_id is new: the raw geo id (not just the
-                # display name) so the Land table's kebele dropdown can filter
-                # by this farmer's own woreda.
-                for geo_column in (
-                    "region_name", "zone_name", "woreda_name", "kebele_name",
-                    "woreda_level_value_id",
-                ):
-                    await conn.execute(
-                        text(
-                            f'ALTER TABLE "public"."{table_name}" '
-                            f'ADD COLUMN IF NOT EXISTS "{geo_column}" VARCHAR'
-                        )
-                    )
-                await conn.execute(
-                    text(
-                        f'ALTER TABLE "public"."{table_name}" '
-                        'ADD COLUMN IF NOT EXISTS "is_duplicated" BOOLEAN DEFAULT FALSE'
-                    )
-                )
-
-                # Older section-by-section intake saves cleared these list
-                # projections even though the selected location and hierarchy
-                # survived. Recover only missing projections from each row's
-                # own snapshot, including intake and history twins. No location
-                # is invented for farmers who never supplied one.
-                for level, aliases in (
-                    ("region", "'region'"),
-                    ("zone", "'zone', 'district'"),
-                    ("woreda", "'woreda', 'ward'"),
-                    ("kebele", "'kebele', 'village'"),
-                ):
-                    await conn.execute(text(f"""
-                        UPDATE public.{table_name} AS farmer
-                        SET {level}_name = (
-                            SELECT COALESCE(
-                                NULLIF(entry->>'level_value_display_name', ''),
-                                NULLIF(entry->>'level_value_name', ''),
-                                NULLIF(entry->>'display_name', ''),
-                                NULLIF(entry->>'level_value_mnemonic', '')
-                            )
-                            FROM jsonb_array_elements(
-                                farmer.geo_code_hierarchy_json->'hierarchy'
-                            ) AS entry
-                            WHERE lower(entry->>'level_mnemonic') IN ({aliases})
-                            LIMIT 1
-                        )
-                        WHERE NULLIF(farmer.{level}_name, '') IS NULL
-                          AND jsonb_typeof(
-                              farmer.geo_code_hierarchy_json->'hierarchy'
-                          ) = 'array'
-                    """))
-                await conn.execute(text(f"""
-                    UPDATE public.{table_name} AS farmer
-                    SET woreda_level_value_id = (
-                        SELECT entry->>'level_value_id'
-                        FROM jsonb_array_elements(
-                            farmer.geo_code_hierarchy_json->'hierarchy'
-                        ) AS entry
-                        WHERE lower(entry->>'level_mnemonic') IN ('woreda', 'ward')
-                        LIMIT 1
-                    )
-                    WHERE NULLIF(farmer.woreda_level_value_id, '') IS NULL
-                      AND jsonb_typeof(
-                          farmer.geo_code_hierarchy_json->'hierarchy'
-                      ) = 'array'
-                """))
-
-            await conn.execute(
-                text(
-                    """
-                    CREATE TABLE IF NOT EXISTS public.dedup_results_register_records (
-                        dedup_result_id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-                        register_id VARCHAR NOT NULL,
-                        primary_internal_record_id VARCHAR NOT NULL,
-                        duplicate_internal_record_id VARCHAR NOT NULL,
-                        match_criteria_type VARCHAR NOT NULL,
-                        match_value VARCHAR,
-                        match_score FLOAT NOT NULL DEFAULT 100.0,
-                        field_matches JSONB NOT NULL DEFAULT '{}'::jsonb,
-                        created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT (now() at time zone 'utc'),
-                        status VARCHAR DEFAULT 'FLAGGED'
-                    )
-                    """
-                )
-            )
-            await conn.execute(
-                text(
-                    """
-                    CREATE INDEX IF NOT EXISTS ix_dedup_results_reg_records
-                    ON public.dedup_results_register_records (primary_internal_record_id, duplicate_internal_record_id)
-                    """
-                )
-            )
-
-            # A row only enters the live register after approval. Project
-            # that workflow fact onto existing Farmer rows, and recover
-            # their source from the newest history version where possible.
-            await conn.execute(
-                text(
-                    """
-                    UPDATE public.g2p_register_farmers
-                    SET state = 'APPROVED'
-                    WHERE state IS NULL
-                    """
-                )
-            )
-            await conn.execute(
-                text(
-                    """
-                    WITH latest_source AS (
-                        SELECT DISTINCT ON (internal_record_id)
-                            internal_record_id,
-                            change_request_source
-                        FROM public.g2p_register_history_farmers
-                        WHERE change_request_source IN (
-                            'INTAKE_FORM',
-                            'PARTNER',
-                            'STAFF_PORTAL',
-                            'BENEFICIARY_PORTAL',
-                            'AGENT_PORTAL'
-                        )
-                        ORDER BY
-                            internal_record_id,
-                            approved_at DESC NULLS LAST,
-                            created_at DESC NULLS LAST
-                    )
-                    UPDATE public.g2p_register_farmers AS farmer
-                    SET import_source = latest_source.change_request_source
-                    FROM latest_source
-                    WHERE farmer.internal_record_id =
-                          latest_source.internal_record_id
-                      AND farmer.import_source IS NULL
-                    """
-                )
-            )
-            await conn.execute(
-                text(
-                    """
-                    UPDATE public.g2p_register_farmers
-                    SET import_source = 'IMPORT_FILE'
-                    WHERE import_source IS NULL
-                    """
-                )
-            )
-
-            # construct_search_text now includes the Amharic and Afaan Oromo
-            # names, so the list search box finds a farmer by local script.
-            # Rows written before that only get it on their next approval;
-            # append the missing names now. Only names not already present
-            # are added, so re-running is a no-op. Register rows only: the
-            # list searches them, and intake rows are rewritten on every save.
-            for table_name in ("g2p_register_farmers",):
-                await conn.execute(
-                    text(
-                        f"""
-                        WITH local_names AS (
-                            SELECT
-                                internal_record_id,
-                                array_remove(ARRAY[
-                                    nullif(btrim(first_name_amh), ''),
-                                    nullif(btrim(middle_name_amh), ''),
-                                    nullif(btrim(last_name_amh), ''),
-                                    nullif(btrim(first_name_om), ''),
-                                    nullif(btrim(middle_name_om), ''),
-                                    nullif(btrim(last_name_om), '')
-                                ], NULL) AS parts,
-                                coalesce(search_text, '') AS current_text
-                            FROM public.{table_name}
-                        ),
-                        missing AS (
-                            SELECT
-                                internal_record_id,
-                                string_agg(DISTINCT part, ' ') AS names
-                            FROM local_names, unnest(parts) AS part
-                            WHERE position(part IN current_text) = 0
-                            GROUP BY internal_record_id
-                        )
-                        UPDATE public.{table_name} AS farmer
-                        SET search_text = btrim(concat_ws(' ', nullif(farmer.search_text, ''), missing.names))
-                        FROM missing
-                        WHERE farmer.internal_record_id = missing.internal_record_id
-                        """
-                    )
-                )
-
-            # Until the father's name became its own first/middle/last
-            # triple, the intake form's mandatory second name was "Middle
-            # Name" -- and, Ethiopian naming having no middle name of its
-            # own, that slot held the father's name (validation_rules
-            # REQUIRED_NAME_FIELDS was first_name + middle_name). Move it
-            # across for every record a person typed in, so those farmers
-            # satisfy the new required father_first_name without staff
-            # re-entering it, and so "Middle Name" stops displaying a
-            # father as the farmer's own name.
-            #
-            # Only form-entered records: for imports and partner feeds the
-            # source system decides what middle_name means, and the seed's
-            # own sample pack fills it with genuine middle names. Rows that
-            # already carry a father_first_name are left alone, which is
-            # what makes this safe to re-run on every boot. Intake drafts
-            # have no import_source -- they are form-entered by definition.
-            for table_name, source_filter in (
-                (
-                    "g2p_register_farmers",
-                    "AND upper(import_source) IN "
-                    "('INTAKE_FORM', 'STAFF_PORTAL', 'AGENT_PORTAL', "
-                    "'BENEFICIARY_PORTAL')",
-                ),
-                ("g2p_intake_form_farmers", ""),
-            ):
-                moved = await conn.execute(
-                    text(
-                        f"""
-                        UPDATE public.{table_name}
-                        SET father_first_name = middle_name,
-                            middle_name = NULL
-                        WHERE NULLIF(father_first_name, '') IS NULL
-                          AND NULLIF(middle_name, '') IS NOT NULL
-                          {source_filter}
-                        """
-                    )
-                )
-                if moved.rowcount:
-                    _logger.info(
-                        "Moved middle_name into father_first_name for %s "
-                        "form-entered rows of %s",
-                        moved.rowcount,
-                        table_name,
-                    )
-
-            # Existing seed/import data often contains a Gregorian birth
-            # date but leaves the legacy estimated_age field empty. Keep
-            # the stored Age available to the metadata-driven UI.
-            await conn.execute(
-                text(
-                    """
-                    UPDATE public.g2p_register_farmers
-                    SET estimated_age = extract(
-                        year FROM age(current_date, birth_date)
-                    )::integer
-                    WHERE birth_date IS NOT NULL
-                      AND estimated_age IS NULL
-                    """
-                )
-            )
-
-            # Ethiopic twins of the Gregorian date columns (see the farmer's
-            # birth_date_ec above): a VARCHAR because month 13 exists. Declared
-            # on the models, so create_all() covers fresh databases; this covers
-            # the ones that already existed.
-            for column_name, tables in {
-                "birth_date_ec": (
-                    "g2p_register_household_members",
-                    "g2p_register_history_household_members",
-                    "g2p_intake_form_household_members",
-                ),
-                "planted_date_ec": (
-                    "g2p_register_crops",
-                    "g2p_register_history_crops",
-                    "g2p_intake_form_crops",
-                ),
-                "expiry_date_ec": (
-                    "g2p_register_reg_ids",
-                    "g2p_register_history_reg_ids",
-                    "g2p_intake_form_reg_ids",
-                ),
-            }.items():
-                for table_name in tables:
-                    await conn.execute(
-                        text(
-                            f'ALTER TABLE "public"."{table_name}" '
-                            f'ADD COLUMN IF NOT EXISTS "{column_name}" VARCHAR'
-                        )
-                    )
-
-            # Crops, livestock and farm inputs are children of the FARMER (see
-            # zz_farmer_register_parents.sql). Rows written while their master
-            # register was Land point at a land row and never show on the
-            # farmer's tabs; re-point each at that land's own farmer. A row
-            # whose link is not a land (already a farmer, or unlinked) is left
-            # alone, so this is a no-op on the second and every later boot.
-            for table_name in (
-                "g2p_register_crops",
-                "g2p_register_history_crops",
-                "g2p_register_livestocks",
-                "g2p_register_history_livestocks",
-                "g2p_register_farm_inputs",
-                "g2p_register_history_farm_inputs",
-            ):
-                await conn.execute(
-                    text(
-                        f"""
-                        UPDATE "public"."{table_name}" AS child
-                        SET link_internal_record_id = land.link_internal_record_id
-                        FROM "public"."g2p_register_lands" AS land
-                        WHERE child.link_internal_record_id = land.internal_record_id
-                          AND land.link_internal_record_id IS NOT NULL
-                        """
-                    )
-                )
-
-            # Land rollups on the farmer (total / owned / rented / crop-sharing
-            # area and ownership) were only recomputed when a land CHANGE
-            # REQUEST was approved; a land that arrived through intake never
-            # touched them, so farmers registered with lands showed empty
-            # totals. The land service fills them on ingest now; this fills in
-            # the farmers that already have active lands and no totals, with
-            # the same buckets and unit factors as
-            # G2PRegisterDomainServiceLand._recompute_farmer_land_rollups.
-            # Only NULL totals are touched, so it is a no-op afterwards.
-            await conn.execute(
-                text(
-                    """
-                    WITH per_land AS (
-                        SELECT l.link_internal_record_id AS farmer_id,
-                               l.land_ownership_type,
-                               COALESCE(l.land_size, 0) * CASE COALESCE(l.unit, 'HECTARE')
-                                   WHEN 'ACRE' THEN 0.404686
-                                   WHEN 'SQUARE_METER' THEN 0.0001
-                                   WHEN 'SQUARE_KM' THEN 100.0
-                                   WHEN 'SQUARE_FOOT' THEN 0.0000092903
-                                   WHEN 'SQUARE_YARD' THEN 0.0000836127
-                                   ELSE 1.0 END AS hectares
-                        FROM "public"."g2p_register_lands" l
-                        WHERE l.record_status = 'ACTIVE'
-                          AND l.link_internal_record_id IS NOT NULL
-                    ),
-                    per_farmer AS (
-                        SELECT farmer_id,
-                               SUM(hectares) FILTER (WHERE land_ownership_type = 'OWNER') AS owned,
-                               SUM(hectares) FILTER (WHERE land_ownership_type = 'TENANT') AS rented,
-                               SUM(hectares) FILTER (WHERE land_ownership_type IS DISTINCT FROM 'OWNER'
-                                                       AND land_ownership_type IS DISTINCT FROM 'TENANT') AS shared,
-                               SUM(hectares) AS total,
-                               COUNT(DISTINCT land_ownership_type) FILTER (WHERE land_ownership_type IS NOT NULL) AS kinds,
-                               MIN(land_ownership_type) FILTER (WHERE land_ownership_type IS NOT NULL) AS only_kind
-                        FROM per_land
-                        GROUP BY farmer_id
-                    )
-                    UPDATE "public"."g2p_register_farmers" AS f
-                    SET total_land_area = ROUND(COALESCE(p.total, 0)::numeric, 6),
-                        total_land_owned_area = ROUND(COALESCE(p.owned, 0)::numeric, 6),
-                        total_land_rent_area = ROUND(COALESCE(p.rented, 0)::numeric, 6),
-                        total_land_crop_sharing_area = ROUND(COALESCE(p.shared, 0)::numeric, 6),
-                        land_ownership = CASE
-                            WHEN p.kinds = 0 THEN NULL
-                            WHEN p.kinds = 1 AND p.only_kind IN ('OWNER', 'TENANT') THEN p.only_kind
-                            ELSE 'HYBRID' END
-                    FROM per_farmer p
-                    WHERE f.internal_record_id = p.farmer_id
-                      AND f.total_land_area IS NULL
-                    """
-                )
-            )
-
-            # Farmers ingested from the web intake form were stamped
-            # import_source PARTNER (post_ingest assumed every ingest was a
-            # partner's) and had no Enumerator data (the intake form renders
-            # only its first tab, so that section was never typed in). The
-            # farmer service now reads both off the submission on ingest;
-            # this fills in the farmers ingested before that. The intake
-            # row keeps the register row's internal_record_id, which is the
-            # link to the submission. Only blank / PARTNER values are
-            # touched, so it is a no-op afterwards.
-            await conn.execute(
-                text(
-                    """
-                    WITH latest AS (
-                        SELECT DISTINCT ON (i.internal_record_id)
-                               i.internal_record_id, s.submission_source, s.created_by,
-                               COALESCE(s.first_created_at, s.finalized_at)::date AS collected_on
-                        FROM "public"."g2p_intake_form_farmers" i
-                        JOIN "public"."g2p_intake_form_submissions" s ON s.submission_id = i.submission_id
-                        WHERE i.internal_record_id IS NOT NULL
-                        ORDER BY i.internal_record_id, s.first_created_at DESC
-                    )
-                    UPDATE "public"."g2p_register_farmers" AS f
-                    SET import_source = CASE
-                            WHEN f.import_source IS DISTINCT FROM 'PARTNER' THEN f.import_source
-                            WHEN l.submission_source = 'STAFF_PORTAL' THEN 'INTAKE_FORM'
-                            ELSE f.import_source END,
-                        enumerator_name = COALESCE(f.enumerator_name, l.created_by),
-                        data_collection_date = COALESCE(f.data_collection_date, l.collected_on)
-                    FROM latest l
-                    WHERE f.internal_record_id = l.internal_record_id
-                      AND (f.enumerator_name IS NULL OR f.data_collection_date IS NULL
-                           OR (f.import_source = 'PARTNER' AND l.submission_source = 'STAFF_PORTAL'))
-                    """
-                )
-            )
-
-            # A household member's own land certificate (see G2PHouseholdMember).
-            for column_name, column_type in {
-                "certificate_provided": "BOOLEAN",
-                "certificate_storage_id": "TEXT",
-            }.items():
-                for table_name in (
-                    "g2p_register_household_members",
-                    "g2p_register_history_household_members",
-                    "g2p_intake_form_household_members",
-                ):
-                    await conn.execute(
-                        text(
-                            f'ALTER TABLE "public"."{table_name}" '
-                            f'ADD COLUMN IF NOT EXISTS "{column_name}" {column_type}'
-                        )
-                    )
-
-            land_extension_columns = {
-                "area_in_hectare": "NUMERIC(16, 6)",
-                "land_kebele": "VARCHAR",
-                "certificate_provided": "BOOLEAN",
-                # land_size is on the G2PLand mixin as Numeric(16, 6) and was
-                # never listed here, so a table that predates the mixin field
-                # kept whatever type first created it. See the retype below.
-                "land_size": "NUMERIC(16, 6)",
-            }
-            for column_name, column_type in land_extension_columns.items():
-                for table_name in (
-                    "g2p_register_lands",
-                    "g2p_register_history_lands",
-                    "g2p_intake_form_lands",
-                ):
-                    await conn.execute(
-                        text(
-                            f'ALTER TABLE "public"."{table_name}" '
-                            f'ADD COLUMN IF NOT EXISTS "{column_name}" {column_type}'
-                        )
-                    )
-
-            # `ADD COLUMN IF NOT EXISTS` above fixes a MISSING land_size; it
-            # cannot fix a column that exists with the WRONG type, and on
-            # staging two of the three land tables held it as varchar:
-            #
-            #   g2p_register_lands          numeric            (worked)
-            #   g2p_register_history_lands  character varying  (broken)
-            #   g2p_intake_form_lands       character varying  (broken)
-            #
-            # The model declares it once, on the shared G2PLand mixin, so every
-            # read goes through SQLAlchemy's Numeric type. Reading a varchar
-            # twin raises InvalidRequestError("Unknown PG numeric type: 1043")
-            # from AsyncpgNumeric.result_processor -- 1043 being varchar's OID.
-            # That surfaced as a SYS-ERR-001 toast on save_intake_form_submission
-            # (reads g2p_intake_form_lands) and get_number_of_versions (reads
-            # g2p_register_history_lands), while ordinary register reads were
-            # fine because g2p_register_lands is the one table with the right
-            # type. Same bug class as the `state` column noted above, one step
-            # further along: the column exists, but its type was never migrated.
-            #
-            # Guarded on the current type, so this is a no-op on every boot
-            # after the first and on any database that was always correct.
-            #
-            # The USING clause cannot be a bare cast: this runs on every
-            # startup, and one unparseable row would fail the boot rather than
-            # the request. Values that are not a plain number become NULL --
-            # a land area that is not a number carries no meaning anyway -- and
-            # the count of those is logged below before anything is changed, so
-            # the loss is never silent.
-            #
-            # g2p_register_lands is deliberately left alone where it is a bare
-            # `numeric`: OID 1700 is a decimal type as far as the driver is
-            # concerned, so it reads correctly, and narrowing a populated
-            # column to NUMERIC(16, 6) can overflow. Consistency there is not
-            # worth failing a boot for.
-            for table_name in (
-                "g2p_register_lands",
-                "g2p_register_history_lands",
-                "g2p_intake_form_lands",
-            ):
-                discarded = (
-                    await conn.execute(
-                        text(
-                            f"""
-                            SELECT count(*) FROM "public"."{table_name}"
-                             WHERE "land_size" IS NOT NULL
-                               AND btrim("land_size"::text) <> ''
-                               AND btrim("land_size"::text) !~ '^-?[0-9]+(\\.[0-9]+)?$'
-                            """
-                        )
-                    )
-                ).scalar()
-                if discarded:
-                    _logger.warning(
-                        "%s: %s land_size value(s) are not numeric and will be set to "
-                        "NULL while the column is converted to NUMERIC(16, 6)",
-                        table_name,
-                        discarded,
-                    )
-                await conn.execute(
-                    text(
-                        f"""
-                        DO $$
-                        BEGIN
-                            IF EXISTS (
-                                SELECT 1 FROM information_schema.columns
-                                 WHERE table_schema = 'public'
-                                   AND table_name = '{table_name}'
-                                   AND column_name = 'land_size'
-                                   AND data_type IN ('character varying', 'text')
-                            ) THEN
-                                ALTER TABLE "public"."{table_name}"
-                                ALTER COLUMN "land_size" TYPE NUMERIC(16, 6)
-                                USING CASE
-                                    WHEN btrim("land_size") ~ '^-?[0-9]+(\\.[0-9]+)?$'
-                                    THEN btrim("land_size")::numeric
-                                    ELSE NULL
-                                END;
-                            END IF;
-                        END $$;
-                        """
-                    )
-                )
-
-            await conn.execute(
-                text(
-                    """
-                    UPDATE public.g2p_register_lands
-                    SET area_in_hectare = land_size * CASE unit
-                        WHEN 'HECTARE' THEN 1.0
-                        WHEN 'ACRE' THEN 0.404686
-                        WHEN 'SQUARE_METER' THEN 0.0001
-                        WHEN 'SQUARE_KM' THEN 100.0
-                        WHEN 'SQUARE_FOOT' THEN 0.0000092903
-                        WHEN 'SQUARE_YARD' THEN 0.0000836127
-                        ELSE 1.0
-                    END
-                    WHERE area_in_hectare IS NULL
-                      AND land_size IS NOT NULL
-                    """
-                )
-            )
-            await conn.execute(
-                text(
-                    """
-                    UPDATE public.g2p_register_lands
-                    SET certificate_provided = (
-                        nullif(btrim(certificate_storage_id), '') IS NOT NULL
-                    )
-                    WHERE certificate_provided IS NULL
-                    """
-                )
-            )
-            await conn.execute(
-                text(
-                    """
-                    WITH kebele_values AS (
-                        SELECT
-                            land.internal_record_id,
-                            (
-                                SELECT initcap(replace(replace(
-                                    item->>'level_value_mnemonic', '_', ' '
-                                ), '-', ' '))
-                                FROM jsonb_array_elements(
-                                    coalesce(
-                                        land.geo_code_hierarchy_json::jsonb
-                                            ->'hierarchy',
-                                        '[]'::jsonb
-                                    )
-                                ) AS item
-                                WHERE lower(item->>'level_mnemonic')
-                                    IN ('kebele', 'village')
-                                ORDER BY CASE
-                                    WHEN lower(item->>'level_mnemonic') = 'kebele'
-                                    THEN 0 ELSE 1
-                                END
-                                LIMIT 1
-                            ) AS display_name
-                        FROM public.g2p_register_lands AS land
-                        WHERE land.land_kebele IS NULL
-                    )
-                    UPDATE public.g2p_register_lands AS land
-                    SET land_kebele = kebele_values.display_name
-                    FROM kebele_values
-                    WHERE kebele_values.internal_record_id
-                        = land.internal_record_id
-                      AND kebele_values.display_name IS NOT NULL
-                    """
-                )
-            )
-
-            # PhoneTypeEnum was narrowed to PRIMARY/SECONDARY/OTHER to match
-            # the ATI Odoo source (g2p_ati/models/phone_number.py), which
-            # only ever offered those three. Existing rows still carry the
-            # old MOBILE/PERSONAL/HOME/WORK values and a country_code
-            # column matching that source's country_id is new.
-            for table_name in (
-                "g2p_register_farmer_phones",
-                "g2p_register_history_farmer_phones",
-                "g2p_intake_form_farmer_phones",
-            ):
-                for column_name in ("country_code", "phone_e164"):
-                    await conn.execute(
-                        text(
-                            f'ALTER TABLE "public"."{table_name}" '
-                            f'ADD COLUMN IF NOT EXISTS "{column_name}" VARCHAR'
-                        )
-                    )
-            await conn.execute(
-                text(
-                    """
-                    UPDATE public.g2p_register_farmer_phones
-                    SET phone_type = CASE WHEN is_primary THEN 'PRIMARY' ELSE 'SECONDARY' END
-                    WHERE phone_type NOT IN ('PRIMARY', 'SECONDARY', 'OTHER')
-                    """
-                )
-            )
-
-            # Convert the legacy Farmer.phone_numbers JSON projection into
-            # proper child records. Deterministic IDs and ON CONFLICT make
-            # this safe to run on every upgrade or container restart.
-            #
-            # Only for farmers with no phone rows yet. The phone service
-            # writes the child rows back into phone_numbers as a projection,
-            # so a farmer registered through the intake form has both the
-            # real row (UUID id) and the JSON; expanding the JSON again on
-            # the next boot minted a second "<farmer>-phone-1" row for the
-            # same number, without country code -- the duplicate on the
-            # Phone Numbers tab. First, drop the ones already minted.
-            await conn.execute(
-                text(
-                    """
-                    DELETE FROM public.g2p_register_farmer_phones AS synthetic
-                    USING public.g2p_register_farmer_phones AS real
-                    WHERE synthetic.internal_record_id LIKE synthetic.link_internal_record_id || '-phone-%'
-                      AND real.link_internal_record_id = synthetic.link_internal_record_id
-                      AND real.internal_record_id NOT LIKE real.link_internal_record_id || '-phone-%'
-                      AND real.phone_number = synthetic.phone_number
-                    """
-                )
-            )
-            await conn.execute(
-                text(
-                    """
-                    WITH expanded AS (
-                        SELECT
-                            f.*,
-                            phone.item,
-                            phone.ordinality,
-                            row_number() OVER (
-                                PARTITION BY f.internal_record_id
-                                ORDER BY
-                                    CASE
-                                        WHEN lower(coalesce(phone.item->>'is_primary', 'false'))
-                                            IN ('true', '1', 'yes') THEN 0
-                                        ELSE 1
-                                    END,
-                                    phone.ordinality
-                            ) AS primary_rank
-                        FROM public.g2p_register_farmers AS f
-                        CROSS JOIN LATERAL jsonb_array_elements(
-                            -- New farmers may store JSON null, which COALESCE
-                            -- does not treat as SQL NULL. Expand arrays only.
-                            CASE WHEN jsonb_typeof(f.phone_numbers) = 'array'
-                                 THEN f.phone_numbers ELSE '[]'::jsonb END
-                        ) WITH ORDINALITY AS phone(item, ordinality)
-                        WHERE nullif(btrim(phone.item->>'number'), '') IS NOT NULL
-                          AND NOT EXISTS (
-                              SELECT 1 FROM public.g2p_register_farmer_phones AS existing
-                              WHERE existing.link_internal_record_id = f.internal_record_id
-                          )
-                    )
-                    INSERT INTO public.g2p_register_farmer_phones (
-                        internal_record_id,
-                        functional_record_id,
-                        link_internal_record_id,
-                        link_foundational_id,
-                        record_name,
-                        record_image_document_id,
-                        created_by,
-                        created_at,
-                        last_approved_at,
-                        last_approved_by,
-                        search_text,
-                        record_status,
-                        record_status_reason,
-                        phone_type,
-                        phone_number,
-                        is_primary
-                    )
-                    SELECT
-                        expanded.internal_record_id || '-phone-' || expanded.ordinality,
-                        NULL,
-                        expanded.internal_record_id,
-                        expanded.foundational_id,
-                        btrim(expanded.item->>'number'),
-                        NULL,
-                        expanded.created_by,
-                        expanded.created_at,
-                        expanded.last_approved_at,
-                        expanded.last_approved_by,
-                        concat_ws(
-                            ' ',
-                            upper(coalesce(nullif(expanded.item->>'type', ''), 'OTHER')),
-                            btrim(expanded.item->>'number')
-                        ),
-                        'ACTIVE',
-                        NULL,
-                        CASE
-                            WHEN expanded.primary_rank = 1
-                                AND lower(coalesce(expanded.item->>'is_primary', 'false'))
-                                    IN ('true', '1', 'yes')
-                            THEN 'PRIMARY'
-                            WHEN upper(coalesce(nullif(expanded.item->>'type', ''), 'OTHER')) = 'OTHER'
-                            THEN 'OTHER'
-                            ELSE 'SECONDARY'
-                        END,
-                        btrim(expanded.item->>'number'),
-                        expanded.primary_rank = 1
-                            AND lower(coalesce(expanded.item->>'is_primary', 'false'))
-                                IN ('true', '1', 'yes')
-                    FROM expanded
-                    ON CONFLICT (internal_record_id) DO NOTHING
-                    """
-                )
-            )
-
-            await self._normalise_farmer_phones(conn)
-
-            # Preserve known head-of-household information from existing
-            # linked Household records without guessing for unlinked rows.
-            await conn.execute(
-                text(
-                    """
-                    WITH ranked_linked_farmers AS (
-                        SELECT
-                            farmer.internal_record_id,
-                            household.household_head,
-                            lower(btrim(farmer.record_name)) =
-                                lower(btrim(household.household_head))
-                                AS name_matches_head,
-                            row_number() OVER (
-                                PARTITION BY household.internal_record_id
-                                ORDER BY
-                                    CASE
-                                        WHEN lower(btrim(farmer.record_name)) =
-                                            lower(btrim(household.household_head))
-                                        THEN 0
-                                        ELSE 1
-                                    END,
-                                    farmer.created_at,
-                                    farmer.internal_record_id
-                            ) AS household_rank
-                        FROM public.g2p_register_farmers AS farmer
-                        JOIN public.g2p_register_households AS household
-                          ON household.internal_record_id =
-                             farmer.link_internal_record_id
-                    )
-                    UPDATE public.g2p_register_farmers AS farmer
-                    SET is_household_head = (
-                        ranked.household_head IS NOT NULL
-                        AND ranked.name_matches_head
-                        AND ranked.household_rank = 1
-                    )
-                    FROM ranked_linked_farmers AS ranked
-                    WHERE ranked.internal_record_id = farmer.internal_record_id
-                    """
-                )
-            )
-
-    async def _normalise_farmer_phones(self, conn):
-        """Reduce stored phones to the national number and fill phone_e164.
-
-        The SQL twin of validation_rules.normalize_phone(), for rows written
-        before normalisation existed: Gen1 migrations (E.164), trunk-0 local
-        numbers and legacy JSON expansions. Only rows whose separator-stripped
-        value matches PHONE_PATTERN are touched; each UPDATE skips rows already
-        in canonical form, so re-running is a no-op. Anything unrecognisable is
-        left exactly as stored and counted in the log for manual review.
-        """
-        from .register_domain.services.validation_rules import PHONE_PATTERN
-
-        cleaned = r"regexp_replace(phone_number, '[\s().-]', '', 'g')"
-        national = f"right(regexp_replace({cleaned}, '[^0-9]', '', 'g'), 9)"
-        for table_name in (
-            "g2p_register_farmer_phones",
-            "g2p_register_history_farmer_phones",
-            "g2p_intake_form_farmer_phones",
-        ):
-            await conn.execute(
-                text(
-                    f"""
-                    UPDATE public."{table_name}"
-                    SET phone_number = {national},
-                        phone_e164 = '+251' || {national},
-                        country_code = coalesce(nullif(btrim(country_code), ''), 'ETH')
-                    WHERE {cleaned} ~ :pattern
-                      AND (
-                          phone_number IS DISTINCT FROM {national}
-                          OR phone_e164 IS DISTINCT FROM '+251' || {national}
-                          OR nullif(btrim(country_code), '') IS NULL
-                      )
-                    """
-                ),
-                {"pattern": PHONE_PATTERN},
-            )
-            unrecognised = (
-                await conn.execute(
-                    text(
-                        f"""
-                        SELECT count(*) FROM public."{table_name}"
-                        WHERE nullif(btrim(phone_number), '') IS NOT NULL
-                          AND {cleaned} !~ :pattern
-                        """
-                    ),
-                    {"pattern": PHONE_PATTERN},
-                )
-            ).scalar_one()
-            if unrecognised:
-                _logger.warning(
-                    "%s: %s phone number(s) are not a recognisable Ethiopian "
-                    "number and were left unchanged",
-                    table_name,
-                    unrecognised,
-                )
-
-        # Refresh the Farmer.phone_numbers projection the phone service keeps
-        # (same shape and order as _sync_parent_phone_projection), so the
-        # numbers it carries match the rows just rewritten.
-        await conn.execute(
-            text(
-                """
-                UPDATE public.g2p_register_farmers AS f
-                SET phone_numbers = p.projection,
-                    has_personal_phone = TRUE
-                FROM (
-                    SELECT
-                        link_internal_record_id,
-                        jsonb_agg(
-                            jsonb_build_object(
-                                'type', lower(phone_type),
-                                'number', phone_number,
-                                'e164', phone_e164,
-                                'is_primary', coalesce(is_primary, FALSE)
-                            )
-                            ORDER BY is_primary DESC NULLS LAST, created_at ASC
-                        ) AS projection
-                    FROM public.g2p_register_farmer_phones
-                    WHERE record_status = 'ACTIVE'
-                    GROUP BY link_internal_record_id
-                ) AS p
-                WHERE f.internal_record_id = p.link_internal_record_id
-                  AND f.phone_numbers IS DISTINCT FROM p.projection
-                """
-            )
-        )
-
-    def _register_deduplication_routes(self, app):
-        from fastapi import APIRouter
-        from iam_core.user_auth.decorators import require_permissions
-
-        from .register_domain.services import G2PRegisterDomainServiceFarmer
-
-        router = APIRouter(prefix="/api/v1/farmer-registry", tags=["Farmer Registry Deduplication"])
-
-        # ResolvePermissionMiddleware runs with allow_by_default=True, so a
-        # route without a marker skips token and permission checks entirely.
-        # Every route here must carry one. The scan and the reset rewrite
-        # is_duplicated across the whole register, so they need the same
-        # permission as other register-wide configuration changes; the summary
-        # only reads flags. CSRF applies as it does to every other POST.
-        @router.post("/deduplicate")
-        @require_permissions({"registryConfiguration:edit"})
-        async def trigger_deduplication(
-            check_id_documents: bool = True,
-            check_foundational_id: bool = True,
-            check_phones: bool = True,
-            check_household_overlap: bool = True,
-            reset_existing: bool = True,
-        ):
-            service = G2PRegisterDomainServiceFarmer()
-            return await service.deduplicate_registry_records(
-                check_id_documents=check_id_documents,
-                check_foundational_id=check_foundational_id,
-                check_phones=check_phones,
-                check_household_overlap=check_household_overlap,
-                reset_existing=reset_existing,
-            )
-
-        @router.get("/deduplicate/summary")
-        @require_permissions({"register:view"})
-        async def get_deduplication_summary():
-            service = G2PRegisterDomainServiceFarmer()
-            return await service.get_deduplication_summary()
-
-        @router.post("/deduplicate/reset")
-        @require_permissions({"registryConfiguration:edit"})
-        async def reset_deduplication():
-            service = G2PRegisterDomainServiceFarmer()
-            return await service.reset_deduplication()
-
-        app.include_router(router)
+        asyncio.run(migrate())
 
 
+async def add_oan_columns() -> None:
+    """Add the columns OAN maps on the farmer tables that an existing table lacks.
+
+    create_all creates missing tables only, so a field added after a registry
+    was first migrated (register_domain/fields.py, or core's registrant
+    authentication mixin on the Farmer register) would otherwise be mapped but
+    absent, and every query of that register would fail. Columns are only
+    added, never changed or dropped.
+    """
+    from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import (
+        models as farmer_models,
+    )
+    from sqlalchemy import inspect as sa_inspect
+
+    from .register_domain.fields import OAN_FIELDS
+
+    engine = dbengine.get()
+    async with engine.begin() as conn:
+        for mnemonic in OAN_FIELDS:
+            for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm"):
+                table = getattr(farmer_models, f"{prefix}{mnemonic}").__table__
+                present = await conn.run_sync(
+                    lambda sconn, name=table.name: {c["name"] for c in sa_inspect(sconn).get_columns(name)}
+                    if sa_inspect(sconn).has_table(name) else None)
+                if present is None:
+                    continue
+                for column in table.c:
+                    if column.name not in present:
+                        _logger.info("Adding column %s.%s", table.name, column.name)
+                        await conn.execute(text(
+                            f'ALTER TABLE "{table.name}" ADD COLUMN IF NOT EXISTS "{column.name}" {column_ddl(column, engine.dialect)}'))
+
+
+async def fill_derived_columns() -> None:
+    """Fill search_text and record_name on farmer rows saved without them.
+
+    Rows saved through the OAN subclasses before their listeners were
+    registered (register_domain/models) have both columns NULL, which hides
+    them from the register list. Only rows with a NULL search_text are
+    touched, so this is a no-op once they are filled.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .register_domain.models import _populate_derived_columns
+
+    async with AsyncSession(dbengine.get(), expire_on_commit=False) as session:
+        for cls in (_oan_models.G2PRegisterFarmer, _oan_models.G2PIntakeFormFarmer):
+            rows = (await session.execute(select(cls).where(cls.search_text.is_(None)))).scalars().all()
+            for row in rows:
+                _populate_derived_columns(None, None, row)
+            if rows:
+                _logger.info("Filled search_text on %d %s rows", len(rows), cls.__tablename__)
+        await session.commit()
+
+
+# Rows renamed per transaction
+RENAME_BATCH = 500
+
+
+async def rename_records() -> None:
+    """Give the rows saved before the readable names the name they now get.
+
+    record_name is stored when a row is saved, so every farmer and child row
+    keeps the name it was saved with (the father's name missing, raw codes)
+    until it is saved again. Run by the staff-api `migrate` command, this
+    recomposes it for the register and history rows of the registers in
+    record_names.COMPOSERS (intake forms are drafts that carry an application
+    reference and are renamed when saved). A row is changed only when its stored
+    name differs from the composed one, so a second run changes nothing. History
+    rows are snapshots, but the name is a title and not part of the record.
+
+    A register's search text holds its record name, so it is updated with it
+    (the farmer's does not hold it). Rows are read in pages of RENAME_BATCH by
+    primary key, selecting only the columns the name uses, and each page is its
+    own transaction. A table that fails is logged and skipped, so a bad row
+    never stops the migration.
+    """
+    from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import models as farmer_models
+    from sqlalchemy import bindparam, select, update
+    from sqlalchemy import inspect as sa_inspect
+
+    from .register_domain.record_names import COMPOSERS, FIELDS, compose, renamed_search_text
+
+    engine = dbengine.get()
+    tables = [
+        (mnemonic, getattr(farmer_models if mnemonic != "FarmerPhone" else _oan_models, f"{prefix}{mnemonic}").__table__)
+        for mnemonic in COMPOSERS
+        for prefix in ("G2PRegister", "G2PRegisterHistory")
+    ]
+    for mnemonic, table in tables:
+        try:
+            async with engine.connect() as conn:
+                exists = await conn.run_sync(lambda sconn, name=table.name: sa_inspect(sconn).has_table(name))
+            keys = list(table.primary_key.columns)
+            if not exists or "record_name" not in table.c or len(keys) != 1:
+                continue
+            key = keys[0]
+            uses_search_text = "search_text" in table.c and mnemonic != "Farmer"
+            columns = [key, table.c.record_name, *(table.c[f] for f in FIELDS[mnemonic] if f in table.c)]
+            if uses_search_text:
+                columns.append(table.c.search_text)
+            statement = update(table).where(key == bindparam("pk")).values(record_name=bindparam("new_name"))
+            if uses_search_text:
+                statement = statement.values(search_text=bindparam("new_search_text"))
+            last, renamed = None, 0
+            while True:
+                query = select(*columns).order_by(key).limit(RENAME_BATCH)
+                if last is not None:
+                    query = query.where(key > last)
+                async with engine.begin() as conn:
+                    rows = (await conn.execute(query)).mappings().all()
+                    if not rows:
+                        break
+                    last = rows[-1][key.name]
+                    changes = []
+                    for row in rows:
+                        name = compose(mnemonic, dict(row))
+                        if name and name != row["record_name"]:
+                            change = {"pk": row[key.name], "new_name": name}
+                            if uses_search_text:
+                                change["new_search_text"] = renamed_search_text(
+                                    row["search_text"], row["record_name"], name)
+                            changes.append(change)
+                    if changes:
+                        await conn.execute(statement, changes)
+                        renamed += len(changes)
+            if renamed:
+                _logger.info("Renamed %d rows of %s", renamed, table.name)
+        except Exception as error:
+            _logger.warning("Could not rename the rows of %s: %s", table.name, error)
+
+
+def column_ddl(column, dialect) -> str:
+    """The type, and the NOT NULL DEFAULT a non-nullable column with a scalar
+    default needs so the rows already in the table get a value."""
+    ddl = column.type.compile(dialect=dialect)
+    default = column.default
+    if not column.nullable and default is not None and getattr(default, "is_scalar", False):
+        value = default.arg
+        literal = "true" if value is True else "false" if value is False else repr(value)
+        ddl += f" NOT NULL DEFAULT {literal}"
+    return ddl

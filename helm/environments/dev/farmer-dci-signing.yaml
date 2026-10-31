@@ -1,0 +1,27 @@
+# DCI response signing on the dev environment. The chart's dciSigning hook generates the
+# partner API's RSA key into Secret farmer-registry-dci-signing on first run and
+# publishes the public key in ConfigMap farmer-registry-dci-signing-public for
+# the consuming registries (Crop Sown) to pin. The partner API mounts the Secret
+# and signs its DCI search responses with it. Merged over saved release values by
+# ci/deploy/deployment.py for dev only.
+dciSigning:
+  enabled: true
+  kid: farmer-registry-dci-rsa
+registry:
+  partnerApi:
+    extraVolumes:
+      - name: dci-signing
+        secret:
+          secretName: farmer-registry-dci-signing
+    extraVolumeMounts:
+      - name: dci-signing
+        mountPath: /etc/dci-signing
+        readOnly: true
+    envVars:
+      REGISTRY_PARTNER_API_CRYPTO_SIGNING_KEY_PATH: /etc/dci-signing/signing.p12
+      REGISTRY_PARTNER_API_CRYPTO_SIGNING_KEY_KID: farmer-registry-dci-rsa
+    envVarsFrom:
+      REGISTRY_PARTNER_API_CRYPTO_SIGNING_KEY_PASSWORD:
+        secretKeyRef:
+          name: farmer-registry-dci-signing
+          key: password

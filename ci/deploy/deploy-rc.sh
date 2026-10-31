@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Shared RC upgrade for explicit environment/namespace pairs. No schema writes.
+# Shared upgrade of the pinned OAN chart for explicit environment/namespace pairs (dev/farmer and
+# staging/farmer). No schema writes.
 set -euo pipefail
 set +x
 umask 077
@@ -10,17 +11,12 @@ DELIVERY_ENVIRONMENT=${DELIVERY_ENVIRONMENT:-dev}
 export DELIVERY_ENVIRONMENT
 case "$DELIVERY_ENVIRONMENT:${HELM_NAMESPACE:-}" in
   dev:farmer) ;;
-  staging:far) : "${STAGING_EVIDENCE_FILE:?Bind trusted staging rehearsal evidence}" ;;
+  staging:farmer) : "${STAGING_EVIDENCE_FILE:?Bind trusted staging rehearsal evidence}" ;;
   *) echo 'Invalid deployment environment/namespace pair' >&2; exit 1 ;;
 esac
 test "${HELM_RELEASE:-}" = farmer-registry
-CHART=helm/openg2p-farmer-registry
 STATE=$(mktemp -d)
-SCHEMA_JOB=''
 cleanup() {
-  if [[ -n "$SCHEMA_JOB" ]]; then
-    kubectl delete -n far "$SCHEMA_JOB" --ignore-not-found --wait=false >/dev/null 2>&1 || true
-  fi
   rm -rf "$STATE"
 }
 trap cleanup EXIT
@@ -29,7 +25,7 @@ trap cleanup EXIT
 # existing VPN access. The helper receives no kubeconfig or Docker socket.
 guard() {
   # Bash 4.3 + nounset cannot expand an empty array. Keep this nonempty.
-  local evidence_args=(-e APPLY_COMMONS_IDENTITY -e DELIVERY_ENVIRONMENT -e KUBECONFIG_CREDENTIAL)
+  local evidence_args=(-e APPLY_COMMONS_IDENTITY -e DELIVERY_ENVIRONMENT -e KUBECONFIG_CREDENTIAL -e HELM_NAMESPACE -e HELM_RELEASE)
   if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
     evidence_args+=(-v "$STAGING_EVIDENCE_FILE:/staging-evidence.json:ro" -e STAGING_EVIDENCE_FILE=/staging-evidence.json)
   fi
@@ -38,10 +34,13 @@ guard() {
     evidence_args+=(-v "$IDENTITY_EVIDENCE_FILE:/identity-evidence.json:ro" -e IDENTITY_EVIDENCE_FILE=/identity-evidence.json)
   fi
   docker run --rm --network none --user "$(id -u):$(id -g)" \
-    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT "${evidence_args[@]}" \
+    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE "${evidence_args[@]}" \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
     "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
 }
+
+# Dev and staging each deploy only the OAN chart pinned for them.
+GUARD_SCRIPT=ci/deploy/oan_chart.py guard require-deployable "$DELIVERY_ENVIRONMENT"
 
 if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
   kubectl config view --minify -o json > "$STATE/cluster.json"
@@ -52,6 +51,9 @@ fi
 # after a credential, namespace or context mistake. Private manifests stay local.
 if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
   guard provenance
+  guard attempt "$STATE/attempt.json"
+  mkdir -p "$(dirname "$REGISTRY_OUTCOME_FILE")"
+  cp "$STATE/attempt.json" "$REGISTRY_OUTCOME_FILE"
 fi
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json"
 guard status "$STATE/status.json"
@@ -66,37 +68,35 @@ else
 fi
 helm get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/values.json"
 helm get manifest "$HELM_RELEASE" -n "$HELM_NAMESPACE" > "$STATE/before.yaml"
+# Helm stores hook ConfigMaps separately. Include their existing identities
+# rather than treating them as unreviewed new persistent resources.
+printf '\n---\n' >> "$STATE/before.yaml"
+helm get hooks "$HELM_RELEASE" -n "$HELM_NAMESPACE" >> "$STATE/before.yaml"
 if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
   GUARD_SCRIPT=ci/deploy/staging.py guard cutover "$STATE/status.json" "$STATE/values.json" "$STATE/before.yaml"
 fi
+CHART="$STATE/oan-farmer.tgz"
+URL=$(GUARD_SCRIPT=ci/deploy/oan_chart.py guard url)
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+  --output "$CHART" "$URL"
+GUARD_SCRIPT=ci/deploy/oan_chart.py guard verify "$CHART"
+export OAN_CHART_ARCHIVE="$CHART"
 guard prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
 
 # This gate includes all 36 intake/register/history coordinate columns and the
 # document-history field. Migrations remain explicit backed-up operator actions.
 check_schema() {
-  if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
-    kubectl get deployment farmer-registry-staff-portal-api -n far -o json > "$STATE/api.json"
-    guard schema-probe "$STATE/api.json" "$STATE/schema-probe.json"
-    SCHEMA_JOB=$(kubectl create -f "$STATE/schema-probe.json" -o name)
-    if ! kubectl wait -n far --for=condition=complete "$SCHEMA_JOB" --timeout=100s > "$STATE/schema-wait.log" 2>&1; then
-      echo 'Staging schema probe failed; maintenance must remain active.' >&2
-      return 1
-    fi
-    kubectl logs -n far "$SCHEMA_JOB" > "$STATE/schema.log"
-    cat "$STATE/schema.log"
-    kubectl delete -n far "$SCHEMA_JOB" --wait=true > /dev/null
-    SCHEMA_JOB=''
-  else
-    kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
-      python3 - < scripts/operations/commons/check_geo_schema.py
-  fi
+  kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
+    python3 - < scripts/operations/commons/check_geo_schema.py
 }
 check_schema
-helm repo add openg2p https://openg2p.github.io/openg2p-helm --force-update
-helm dependency build "$CHART"
 helm lint "$CHART" --strict -f "$STATE/values.yaml" > "$STATE/lint.log"
+RENDER_FLAGS=(--is-upgrade --dry-run=server)
+export OAN_VALUES_FILE="$STATE/values.yaml" OAN_CHART_ONLY=false
+RENDER_FLAGS+=(--post-renderer ci/deploy/oan-renderer.sh)
+UPGRADE_FLAGS+=(--post-renderer ci/deploy/oan-renderer.sh)
 helm template "$HELM_RELEASE" "$CHART" -n "$HELM_NAMESPACE" \
-  -f "$STATE/values.yaml" --is-upgrade --dry-run=server > "$STATE/after.yaml"
+  -f "$STATE/values.yaml" "${RENDER_FLAGS[@]}" > "$STATE/after.yaml"
 guard validate "$STATE/before.yaml" "$STATE/after.yaml"
 
 # Another operator may have changed the release while images/chart were checked.
@@ -125,6 +125,18 @@ printf '\n---\n' >> "$STATE/deployed.yaml"
 helm get hooks "$HELM_RELEASE" -n "$HELM_NAMESPACE" >> "$STATE/deployed.yaml"
 guard validate "$STATE/before.yaml" "$STATE/deployed.yaml"
 check_schema
+# The seed applies metadata with ON_ERROR_STOP=0; fail the delivery if OAN's checks do not hold.
+CHECKS=farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/90_checks.sql
+python3 scripts/operations/commons/check_seed_metadata.py "$CHECKS" > "$STATE/check_seed_metadata.py"
+kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- python3 - < "$STATE/check_seed_metadata.py"
+
+# The partner API's DCI response-signing public key (chart dciSigning hook), for
+# the consuming registries' chart values; the private key never leaves the Secret.
+if kubectl get configmap "$HELM_RELEASE-dci-signing-public" -n "$HELM_NAMESPACE" > /dev/null 2>&1; then
+  echo "DCI response-signing public key (kid $(kubectl get configmap "$HELM_RELEASE-dci-signing-public" -n "$HELM_NAMESPACE" -o go-template='{{index .data "kid"}}')):"
+  kubectl get configmap "$HELM_RELEASE-dci-signing-public" -n "$HELM_NAMESPACE" -o go-template='{{index .data "public-key.pem"}}'
+  echo
+fi
 if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
   guard outcome "$STATE/final-status.json" "$STATE/outcome.json"
   mkdir -p "$(dirname "$REGISTRY_OUTCOME_FILE")"

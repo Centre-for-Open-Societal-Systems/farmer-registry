@@ -1,0 +1,22 @@
+# Farmer ODK ingestion through the native intake flow
+
+The signed ODK_TO_FARMER_INTAKE envelope and connector IDs are preserved. OAN uses registered ingestion/intake subclasses and the documented synchronous payload-enricher interface; no platform worker or compiled UI is patched.
+
+The enricher validates and stores every embedded File as a registry document in the worker transaction, gives each land its own native UUID and resolves a known household through its approved head's ODK Farmer ID. The pure mapper prepares the 16 section mnemonics returned by current intake metadata; the native Jinja template serializes those sections. Child crop/livestock/input rows use an explicit land link, including nested repeats. Ambiguous legacy global repeats with several lands are rejected with a correction message. Names, demographics, household-head answers, counts, member relationships, geography, membership and agricultural fields remain subject to native/domain validation.
+
+Identity documents use the standard DocumentAttachment path and the exact file-widget label identity_document_1 on the Documents section only. The native worker merges sections on the same Farmer row; the intake subclass removes document routing metadata from model payloads and attaches only the current section's documents. Source-provided prepared sections or household UUIDs are ignored. Draft save creates no approved registry records.
+
+The inherited land domain check opens an independent session and cannot see a land saved earlier in an uncommitted native worker transaction. OAN scopes the intake session, verifies explicit parents there, delegates every other inherited validation and leaves native intake parent resolution enabled. Other domain/CR operations retain their original validation path.
+
+## Form source
+
+ATI_Farmers_Profile_ODK_Form_v3.xlsx is a source candidate derived from the preserved v2 workbook. It keeps business questions and translations, adds MDS Entity-List geography (the chosen entity UUID is resolved to its code/name), required identity-document type/photo and explicit crop season. It has passed pyxform3.1.0 and external ODK Validate, with no warnings. It has not been published to Central or tested on a Collect device. Provision the four geography Entity Lists and independent Central credentials before publishing; no legacy numeric code is guessed into an MDS hierarchy.
+
+Multi-choice income, crop/animal water, machinery and finance answers use additive OAN JSON list fields and the native multi-select widget. Native Master Data validation checks every selected code; existing singular columns stay intact, and their values backfill only unset lists across register/history/intake. An explicitly empty list or an existing multi-answer list is preserved. Compatibility scalar values are emitted only when exactly one answer exists. A source choice missing from Master Data (for example rice_polisher, maize_sheller, multi_crop_trasher or standalone harvester/combiner) remains a visible validation failure requiring an approved MDS catalogue addition; no code is invented or silently dropped. Old form-source interpretation remains in Git history; incoming raw/enriched payloads remain native ingestion evidence. Full ODK finalization and real AWE/attachment/Collect acceptance remain required before deployment promotion.
+
+## Verification
+
+The OAN image suite passed 188 tests after the ODK and approval-serialization changes. A child process in the actual local Farmer worker image, loading only the new OAN source in an isolated process, ran native worker validation/create/save on the installed 16-section form. The identity value, Land-to-Crop link and section-scoped identity document were verified and the entire transaction was rolled back. No live form publication, FINAL submission, approval or registry record was created by that check. The running worker code was not replaced.
+
+The unpublished v3 candidate uses explicit repeat-derived parcel selections for
+main crops, livestock and root inputs. See [the contract and validation](odk/ATI-LAND-LINKS-20261026.md).

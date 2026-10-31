@@ -1,0 +1,113 @@
+{{- if not .Values.dashboardApi.auth.enabled }}
+{{- fail "deployed dashboards require dashboardApi.auth.enabled=true" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dashboard.fullname" . }}
+  labels:
+    {{- include "dashboard.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "dashboard.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dashboard.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "dashboard.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- include "dashboard.imagePullSecrets" . | nindent 6 }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000   # the image's "node" user
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: dashboard
+          image: {{ include "dashboard.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            {{- include "dashboard.appEnv" . | nindent 12 }}
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: CHART_SOURCE
+              value: http
+            - name: DASHBOARD_API_URL
+              value: {{ include "dashboard.dashboardApiUrl" . | quote }}
+            {{- if .Values.dashboardApi.auth.enabled }}
+            - name: DASHBOARD_API_AUTH
+              value: client-credentials
+            - name: OIDC_TOKEN_URL
+              value: {{ .Values.dashboardApi.auth.tokenUrl | quote }}
+            - name: DASHBOARD_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "dashboard.clientSecretName" . }}
+                  key: {{ .Values.iamSetup.clientSecret.key }}
+            {{- end }}
+            - name: DASHBOARD_CACHE_TTL_SECONDS
+              value: {{ .Values.cacheTtlSeconds | quote }}
+            - name: SESSION_CACHE_SECONDS
+              value: {{ .Values.sessionCacheSeconds | quote }}
+            - name: OIDC_LOGOUT_URL
+              value: {{ .Values.oidc.logoutUrl | quote }}
+            - name: OIDC_CLIENT_ID
+              value: {{ .Values.oidc.clientId | quote }}
+            - name: STAFF_PORTAL_URL
+              value: {{ include "dashboard.staffPortalUrl" . | quote }}
+            - name: REGISTRY_PORTAL_URL
+              value: {{ .Values.links.registryPortalUrl | quote }}
+            {{- range $name, $value := .Values.env }}
+            {{- if has $name (list "AUTH_ENABLED" "DASHBOARD_API_AUTH" "DASHBOARD_CLIENT_SECRET") }}
+            {{- fail "configure dashboard authentication through typed chart settings, not env" }}
+            {{- end }}
+            - name: {{ $name }}
+              value: {{ tpl (toString $value) $ | quote }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # Next.js writes its runtime cache under .next/cache; everything else
+          # in the image is read-only.
+          volumeMounts:
+            - name: next-cache
+              mountPath: /app/.next/cache
+            - name: tmp
+              mountPath: /tmp
+          # /api/health is exempt from the session check and the canonical-host
+          # redirect, so probes on the pod address get a plain answer.
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: next-cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}

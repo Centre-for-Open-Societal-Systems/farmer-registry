@@ -1,4 +1,4 @@
-# New-dev Commons Services values; not a Farmer Registry overlay.
+# Dev Commons Services values; not a Farmer Registry overlay.
 # Apply with values-map-tiles.yaml in the owning Commons release.
 # Both existing Istio VirtualServices are retained; see the hostname runbook.
 global:

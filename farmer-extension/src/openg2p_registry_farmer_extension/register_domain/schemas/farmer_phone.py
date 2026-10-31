@@ -1,4 +1,3 @@
-from typing import Optional
 
 from openg2p_registry_core.schemas import (
     G2PIntakeFormSchemaBase,
@@ -6,27 +5,22 @@ from openg2p_registry_core.schemas import (
     G2PRegisterHistorySchema,
 )
 
-from ..models.enums import PhoneTypeEnum
-
 
 class G2PSchemaFarmerPhone:
-    phone_type: PhoneTypeEnum
-    phone_number: str
-    is_primary: Optional[bool] = False
-    country_code: Optional[str] = None
+    phone_type: str | None = None
+    phone_number: str | None = None
+    country_code: str | None = None
+    is_primary: bool | None = None
+    phone_e164: str | None = None
 
 
 class G2PRegisterSchemaFarmerPhone(G2PRegisterBaseSchema, G2PSchemaFarmerPhone):
-    pass
+    """A farmer's phone number."""
 
 
-class G2PRegisterHistorySchemaFarmerPhone(
-    G2PRegisterHistorySchema, G2PSchemaFarmerPhone
-):
-    pass
+class G2PRegisterHistorySchemaFarmerPhone(G2PRegisterHistorySchema):
+    """History of a farmer's phone number."""
 
 
-class G2PIntakeFormSchemaFarmerPhone(
-    G2PIntakeFormSchemaBase, G2PRegisterBaseSchema, G2PSchemaFarmerPhone
-):
-    pass
+class G2PIntakeFormSchemaFarmerPhone(G2PIntakeFormSchemaBase, G2PRegisterBaseSchema, G2PSchemaFarmerPhone):
+    """A farmer's phone number on the intake form."""
