@@ -25,6 +25,8 @@ Merged develop builds validate, build six Registry images and publish them
 commit-tagged (`DELIVERY_ACTION=publish-only`, the default). Choosing
 `deploy` additionally upgrades the existing release with them; `fresh-install`
 rebuilds the dev environment from an empty database (see [dev delivery](../dev-farmer-first.md)).
+`connector-plan` and `connector-upgrade` build no images: they print, or apply,
+the `farmer-registry-connector` release defined in [`ci/connector`](../../ci/connector/README.md).
 Registry failures are fatal. Available Farmer add-ons release independently;
 their failures mark Jenkins unstable. Missing branches or application files
 preserve existing deployments.

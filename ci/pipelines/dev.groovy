@@ -15,8 +15,8 @@ pipeline {
         KUBECONFIG_CREDENTIAL = 'farmer-dev-kubeconfig'
     }
     parameters {
-        choice(name: 'DELIVERY_ACTION', choices: ['publish-only', 'deploy', 'fresh-install'],
-            description: 'publish-only builds and pushes the images. deploy upgrades the existing dev release with them. fresh-install backs up the dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all dev farmer data is lost; Commons is untouched).')
+        choice(name: 'DELIVERY_ACTION', choices: ['publish-only', 'deploy', 'fresh-install', 'connector-plan', 'connector-upgrade'],
+            description: 'publish-only builds and pushes the images. deploy upgrades the existing dev release with them. fresh-install backs up the dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all dev farmer data is lost; Commons is untouched). connector-plan prints, without changing anything, the manifest diff and server-side dry run of the farmer-registry-connector release against ci/connector. connector-upgrade builds no images and leaves the registry release alone: it archives the connector database to the dev box and upgrades the farmer-registry-connector release to ci/connector (chart + values, --reset-values), printing the manifest diff and a server-side dry run first.')
         booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
             description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
         booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
@@ -51,6 +51,7 @@ pipeline {
             }
         }
         stage('Build') {
+            when { expression { !(env.DELIVERY_ACTION in ['connector-plan', 'connector-upgrade']) } }
             steps {
                 sh '''
                     set -eu
@@ -59,7 +60,7 @@ pipeline {
             }
         }
         stage('Publish') {
-            when { allOf { branch 'develop'; not { changeRequest() } } }
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { !(env.DELIVERY_ACTION in ['connector-plan', 'connector-upgrade']) } } }
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
                     script {
@@ -217,6 +218,34 @@ pipeline {
                         }
                     }
                     archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('Upgrade connector (dev)') {
+            // The farmer-registry-connector release from git: ci/connector/chart with
+            // ci/connector/farmer-connector.values.yaml. Upgrade only; the connector
+            // database is archived to the dev box first.
+            when {
+                beforeAgent true
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION in ['connector-plan', 'connector-upgrade'] } }
+            }
+            agent { label 'vpn-agent2' }
+            steps {
+                dir('dev-deployment') {
+                    deleteDir()
+                    unstash 'dev-deployment'
+                    script {
+                        if (env.DELIVERY_ACTION == 'connector-plan') {
+                            withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                                sh 'PLAN_ONLY=1 bash ci/connector/upgrade-farmer-connector.sh'
+                            }
+                        } else {
+                            withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
+                                             sshUserPrivateKey(credentialsId: 'farmer-new-dev-backup-ssh', keyFileVariable: 'BACKUP_SSH_KEY')]) {
+                                sh 'bash ci/connector/upgrade-farmer-connector.sh'
+                            }
+                        }
+                    }
                 }
             }
         }

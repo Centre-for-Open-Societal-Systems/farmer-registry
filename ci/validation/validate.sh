@@ -10,6 +10,7 @@ bash test/integration/test-fresh-install-staging-shell.sh
 bash test/integration/test-staging-deploy-shell.sh
 bash -n ci/services/run.sh ci/services/run-container.sh
 bash -n scripts/operations/connector/fetch-backup-container.sh
+bash -n ci/connector/upgrade-farmer-connector.sh
 bash test/integration/test-container-shell.sh
 bash -n ci/build/staging-legacy.sh ci/deploy/staging-legacy.sh
 python ci/environments.py dev

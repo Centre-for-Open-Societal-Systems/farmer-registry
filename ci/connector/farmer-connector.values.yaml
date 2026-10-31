@@ -1,0 +1,83 @@
+# User values of the New Dev farmer-registry-connector release (namespace farmer),
+# applied with `helm upgrade --reset-values` by ci/connector/upgrade-farmer-connector.sh
+# (Jenkins DELIVERY_ACTION=connector-plan / connector-upgrade).
+# Taken from `helm get values farmer-registry-connector` at revision 11 (2026-10-19).
+# Only the four images differ: they are the Farmer ECR connector images built by
+# this repository (docker/registry-connector, docker/registry-connector-ui), pinned
+# by digest. The Secret names are the chart defaults of the live revision, written
+# out because the vendored chart has none. No secret values: the database password
+# and the signing key come from the Secrets of the farmer-connector-credentials release.
+fullnameOverride: farmer-registry-connector
+
+global:
+  connectorDB: farmer_connector_v2
+  connectorDBUser: farmer_connector_v2_user
+  connectorDBSecret: farmer-connector-v2-db
+  connectorDBUserPasswordKey: password
+  hostname: connector-farmer-registry.development.oanstaging.com
+  partnerApiService: farmer-registry-partner-api
+  postgresqlHost: commons-postgresql.commons.svc.cluster.local
+  postgresqlPort: 5432
+  redisHost: commons-redis-master.commons.svc.cluster.local
+
+imagePullSecrets:
+  - name: ecr-pull-secret
+
+commonEnv:
+  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry.development.oanstaging.com
+  CONNECTOR_FULL_SCAN_ON_INCREMENTAL_UNSUPPORTED: "false"
+  CONNECTOR_STORE_RUN_PAYLOADS: "false"
+  CONNECTOR_STRICT_INCREMENTAL: "true"
+
+cossSigning:
+  enabled: true
+  keyId: farmer-connector-v2-52da0fc34e90
+  partnerId: farmer-partner
+  secret: farmer-connector-v2-signing
+
+cossCutover:
+  phase: active
+  checkpointBackupHash: 261ca69a23e704d7c80b25a2420ad955eba6063323ceaf88f7e9d2f6e2c3270c
+
+api:
+  autoscaling:
+    enabled: false
+  replicaCount: 1
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/registry-connector
+    tag: 782b7971095b@sha256:590ebabef68e8f63e2c169db2f83c6579faed662bd30c0a64941435c7c9ff78a
+beat:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/registry-connector
+    tag: 782b7971095b@sha256:590ebabef68e8f63e2c169db2f83c6579faed662bd30c0a64941435c7c9ff78a
+consumer:
+  enabled: false
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/registry-connector
+    tag: 782b7971095b@sha256:590ebabef68e8f63e2c169db2f83c6579faed662bd30c0a64941435c7c9ff78a
+worker:
+  replicaCount: 1
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/registry-connector
+    tag: 782b7971095b@sha256:590ebabef68e8f63e2c169db2f83c6579faed662bd30c0a64941435c7c9ff78a
+ui:
+  replicaCount: 1
+  image:
+    repository: 379220350808.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/registry-connector-ui
+    tag: 782b7971095b@sha256:dc2fdb9a591bb69f050382b311856a87872fa6c4fcc16c22031c68e346256cc6
+
+istio:
+  enabled: true
+  gateway:
+    create: false
+    name: internal
+  virtualservice:
+    enabled: true
+    gateway: internal
+
+postgres-init:
+  enabled: false
+postgresCheckerInit:
+  enabled: false
