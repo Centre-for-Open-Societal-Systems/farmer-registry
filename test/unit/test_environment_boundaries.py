@@ -46,6 +46,14 @@ def test_staging_requires_rehearsal_and_shared_rc_path_without_automatic_cutover
     assert "dev:farmer" in shell and "staging:farmer" in shell and "staging:far)" not in shell
 
 
+def test_staging_binds_backup_credentials_only_for_evidence_that_is_not_a_first_install():
+    pipeline = (ROOT / "ci/pipelines/staging.groovy").read_text(encoding="utf-8")
+    first, other = pipeline.split("if (firstInstall) {")[1].split("} else if (env.EFFECTIVE_ACTION == 'fresh-install') {")
+    assert "staging-farmer-backup" not in first and "runRegistry('ci/deploy/fresh-install-staging.sh')" in first
+    assert "staging-farmer-backup-ssh" in other and "staging-farmer-backup-target" in other
+    assert "first-install" in pipeline.split("def firstInstall")[1][:300]
+
+
 def test_staging_contract_is_the_oan_install_beside_the_legacy_release():
     staging = delivery.configuration("staging")
     assert (staging["namespace"], staging["release"], staging["platform"]) == ("farmer", "farmer-registry", "1.2.2-rc.614")

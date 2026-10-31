@@ -5,6 +5,11 @@ pin ci/deploy/oan-chart-staging.json) is what the staging pipeline deploys. The 
 (namespace far, platform 1.2.2-rc.544) describes the retired in-repo chart release and keeps
 its baseline revision and baseline content hashes; only the OAN shape drops those fields.
 
+A third shape, mode "first-install", covers the first OAN install into an empty namespace when
+the rehearsal was New Dev rather than a migration of far: there is no database to restore, so
+the migration flags and the backup inventory give way to observed facts (see first_install_facts).
+It is accepted only for the fresh-install action, never for deploy or cutover.
+
 Bind this file through Jenkins staging-farmer-rehearsal, never a build parameter
 or an artifact downloaded from an untrusted PR. Evidence contains no credentials.
 """
@@ -78,6 +83,14 @@ def delivery_hash(root=ROOT):
     return result.hexdigest()
 
 
+FIRST_INSTALL = "first-install"
+FRESH = "fresh-install"
+DAY = timedelta(hours=24)
+FIRST_INSTALL_RELEASE = ("farmer-registry", "farmer")
+COMMONS_RELEASE = ("commons-services", "commons")
+STAGING_GATEWAY = "istio-system/staging"
+
+
 def passed(record, names):
     if any(record.get(name) is not True for name in names):
         raise ValueError("Staging evidence has incomplete verification")
@@ -97,9 +110,63 @@ def pinned_platform():
     return profile("staging")["platformVersion"]
 
 
-def evidence(path, source_commit, now=None):
+def fresh(stamp, current):
+    """True when an observation time lies within the last 24 hours and not in the future."""
+    if not isinstance(stamp, str):
+        return False
+    try:
+        observed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return observed.tzinfo is not None and timedelta(0) <= current - observed <= DAY
+
+
+def first_install_facts(record, current):
+    """Every field of a first-install record is an observation someone can repeat.
+
+    The rehearsal is the New Dev release that runs the same images; the target is an empty
+    namespace on staging whose databases do not exist yet and whose Commons is the rebuilt one.
+    The fresh-install script re-checks the databases and the release in the cluster before it
+    installs anything, so this record can never authorize replacing existing data.
+    """
+    from oan_chart import profile
+    pin = profile("staging")
+    facts = record.get("firstInstall")
+    if not isinstance(facts, dict):
+        raise ValueError("First-install facts required")
+    if facts.get("pin") != {"chartVersion": pin["version"], "chartSha256": pin["sha256"],
+                            "platform": pin["platformVersion"], "valuesCommit": pin["values"]["commit"],
+                            "valuesSha256": pin["values"]["sha256"]}:
+        raise ValueError("First-install evidence does not match the pinned chart and values")
+    new_dev = facts.get("newDev", {})
+    if (new_dev.get("release"), new_dev.get("namespace"), new_dev.get("status")) != (*FIRST_INSTALL_RELEASE, "deployed"):
+        raise ValueError("The New Dev rehearsal release must be the deployed farmer-registry in farmer")
+    if (type(new_dev.get("revision")) is not int or new_dev["revision"] < 1 or not new_dev.get("chartVersion")
+            or new_dev.get("platform") != pin["platformVersion"] or new_dev.get("allDeploymentsReady") is not True
+            or not fresh(new_dev.get("observedAt"), current)):
+        raise ValueError("New Dev rehearsal facts are incomplete, stale or on another platform")
+    commons = facts.get("stagingCommons", {})
+    if ((commons.get("release"), commons.get("namespace"), commons.get("status")) != (*COMMONS_RELEASE, "deployed")
+            or type(commons.get("revision")) is not int or commons["revision"] < 1 or not commons.get("chartVersion")
+            or commons.get("gateway") != STAGING_GATEWAY or not fresh(commons.get("observedAt"), current)):
+        raise ValueError("Staging Commons must be a deployed commons-services behind the staging gateway")
+    configured = configuration("staging")
+    databases = {configured["registryDatabase"], configured["idGeneratorDatabase"], configured["connectorDatabase"]}
+    target = facts.get("target", {})
+    if (target.get("namespace") != configured["namespace"] or target.get("releasePresent") is not False
+            or target.get("databases") != dict.fromkeys(sorted(databases), "absent")
+            or not fresh(target.get("observedAt"), current)):
+        raise ValueError("A first install needs the target release and all target databases to be absent")
+
+
+def evidence(path, source_commit, now=None, allow_first_install=False):
     record = json.loads(Path(path).read_text(encoding="utf-8"))
     oan = oan_record(record)
+    first = record.get("mode") == FIRST_INSTALL
+    if record.get("mode") not in (None, FIRST_INSTALL):
+        raise ValueError("Unknown staging evidence mode")
+    if first and not (oan and allow_first_install):
+        raise ValueError("First-install evidence is accepted only for the OAN fresh-install action")
     legacy = record.get("namespace") == configuration("staging-legacy")["namespace"]
     expected_platform = pinned_platform() if oan else LEGACY_PLATFORM
     if record.get("environment") != "staging" or not (oan or legacy) or record.get("platform") != expected_platform:
@@ -110,7 +177,10 @@ def evidence(path, source_commit, now=None):
     verified = datetime.fromisoformat(record["verifiedAt"].replace("Z", "+00:00"))
     if verified.tzinfo is None or not timedelta(0) <= current - verified <= timedelta(hours=24):
         raise ValueError("Staging rehearsal evidence is stale or future dated")
-    passed(record.get("rehearsal", {}), REHEARSAL)
+    if first:
+        first_install_facts(record, current)
+    else:
+        passed(record.get("rehearsal", {}), REHEARSAL)
     registry = record["registry"]
     if not re.fullmatch(r"\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com", registry.get("registry", "")):
         raise ValueError("Staging image registry is invalid")
@@ -131,7 +201,12 @@ def evidence(path, source_commit, now=None):
     # and retained, checksummed exports are mandatory.
     required_backups = {"registry", "connector", "helm", "odkFormMedia", "pipelines", "runHistory", "checkpoints"}
     backups = record.get("backups", {})
-    if set(backups) != required_backups or any(not HASH.fullmatch(v) for v in backups.values()):
+    if first:
+        # Nothing exists to back up: the proof is the absent databases checked above, and a
+        # backup claim here would be unverifiable. Upgrades keep the full inventory.
+        if backups:
+            raise ValueError("First-install evidence carries no backup inventory")
+    elif set(backups) != required_backups or any(not HASH.fullmatch(v) for v in backups.values()):
         raise ValueError("Complete protected staging backup inventory required")
     if oan:
         # A fresh install has no baseline release; its content is not rehearsed against one.
@@ -188,14 +263,18 @@ def main():
     if action == "cluster":
         validate_cluster("staging", os.environ.get("KUBECONFIG_CREDENTIAL"), json.loads(Path(args[0]).read_text()))
         return
-    record = evidence(os.environ["STAGING_EVIDENCE_FILE"], os.environ["SOURCE_COMMIT"])
+    record = evidence(os.environ["STAGING_EVIDENCE_FILE"], os.environ["SOURCE_COMMIT"],
+                      allow_first_install=action in ("verify", "mode", "summary") and os.environ.get("DELIVERY_ACTION") == FRESH)
+    if action == "mode":
+        print(record.get("mode", "upgrade"))
+        return
     if action == "cutover":
         status, values = (json.loads(Path(p).read_text()) for p in args[:2])
         manifest = [d for d in yaml.safe_load_all(Path(args[2]).read_text()) if isinstance(d, dict)]
         cutover(record, status, values, manifest)
     elif action == "summary":
         Path(args[0]).write_text(json.dumps({k: record[k] for k in (
-            "environment", "namespace", "platform", "deliveryHash", "verifiedAt", "baselineRevision", "registry", "backups") if k in record}, indent=2) + "\n")
+            "environment", "namespace", "platform", "mode", "deliveryHash", "verifiedAt", "baselineRevision", "registry", "backups", "firstInstall") if k in record}, indent=2) + "\n")
     elif action != "verify":
         raise ValueError("Unknown staging evidence operation")
     print("PASS: staging rehearsal " + action)

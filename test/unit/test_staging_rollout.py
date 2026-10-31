@@ -423,3 +423,118 @@ def test_staging_identity_requires_public_staff_issuer_and_matching_internal_key
         with pytest.raises(ValueError): identity.check(*args, environment="staging")
     else:
         assert identity.check(*args, environment="staging")["environment"] == "staging"
+
+
+# First install of the OAN release in an empty namespace: New Dev was the rehearsal.
+
+
+@pytest.fixture
+def first_install(oan_evidence):
+    from oan_chart import profile
+    pin = profile("staging")
+    record = copy.deepcopy(oan_evidence)
+    stamp = NOW.isoformat()
+    for field in ("rehearsal", "cutover", "backups", "finalBackupAt"):
+        del record[field]
+    record.update(mode="first-install", firstInstall={
+        "rehearsalEnvironment": "new-dev",
+        "pin": {"chartVersion": pin["version"], "chartSha256": pin["sha256"], "platform": pin["platformVersion"],
+                "valuesCommit": pin["values"]["commit"], "valuesSha256": pin["values"]["sha256"]},
+        "newDev": {"release": "farmer-registry", "namespace": "farmer", "status": "deployed", "revision": 37,
+                   "chartVersion": "1.0.0-dev.19", "platform": pin["platformVersion"], "allDeploymentsReady": True,
+                   "observedAt": stamp},
+        "stagingCommons": {"release": "commons-services", "namespace": "commons", "status": "deployed", "revision": 13,
+                           "chartVersion": "1.0.0-dev.30", "gateway": "istio-system/staging", "observedAt": stamp},
+        "target": {"namespace": "farmer", "releasePresent": False, "observedAt": stamp,
+                   "databases": {"farmer_connector_v2": "absent", "farmer_registry": "absent", "farmer_registry_idgen": "absent"}}})
+    return record
+
+
+def verify_first(tmp_path, record, now=NOW, allow=True):
+    path = tmp_path / "evidence.json"
+    path.write_text(json.dumps(record))
+    return staging.evidence(path, SHA, now, allow_first_install=allow)
+
+
+def test_first_install_evidence_needs_no_migration_flags_or_backup_inventory(tmp_path, first_install):
+    record = verify_first(tmp_path, first_install)
+    assert record["mode"] == "first-install" and record["registry"]["images"]["staff-api"]["digest"] == DIGEST
+
+
+def test_first_install_evidence_is_refused_outside_the_fresh_install_action(tmp_path, first_install):
+    with pytest.raises(ValueError, match="fresh-install"):
+        verify_first(tmp_path, first_install, allow=False)
+    with pytest.raises(ValueError):
+        # cutover and upgrade call evidence() without the permission
+        verify(tmp_path, first_install)
+
+
+def test_first_install_evidence_is_refused_for_the_legacy_namespace(tmp_path, first_install):
+    first_install.update(namespace="far", platform="1.2.2-rc.544")
+    with pytest.raises(ValueError):
+        verify_first(tmp_path, first_install)
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda f: f["pin"].update(valuesSha256="0" * 64),
+    lambda f: f["pin"].update(chartVersion="1.0.0-dev.19"),
+    lambda f: f["pin"].update(valuesCommit="9" * 40),
+    lambda f: f["newDev"].update(status="failed"),
+    lambda f: f["newDev"].update(allDeploymentsReady=False),
+    lambda f: f["newDev"].update(platform="1.2.2-rc.544"),
+    lambda f: f["newDev"].update(namespace="far"),
+    lambda f: f["newDev"].update(observedAt="2026-10-14T12:00:00+00:00"),
+    lambda f: f["stagingCommons"].update(status="failed"),
+    lambda f: f["stagingCommons"].update(gateway="far/internal"),
+    lambda f: f["target"].update(releasePresent=True),
+    lambda f: f["target"]["databases"].update(farmer_registry="present"),
+    lambda f: f["target"]["databases"].pop("farmer_connector_v2"),
+    lambda f: f["target"]["databases"].update(farmer_registry_far="absent"),
+    lambda f: f["target"].update(observedAt="2026-10-14T12:00:00+00:00"),
+])
+def test_first_install_evidence_rejects_any_unproven_fact(tmp_path, first_install, mutate):
+    mutate(first_install["firstInstall"])
+    with pytest.raises(ValueError):
+        verify_first(tmp_path, first_install)
+
+
+def test_first_install_evidence_keeps_digests_freshness_and_rejects_a_backup_claim(tmp_path, first_install):
+    with pytest.raises(ValueError):
+        verify_first(tmp_path, first_install, NOW + timedelta(hours=25))
+    first_install["backups"] = dict.fromkeys(("registry", "connector"), "2" * 64)
+    with pytest.raises(ValueError, match="backup"):
+        verify_first(tmp_path, first_install)
+    del first_install["backups"]
+    first_install["registry"]["images"]["celery"]["digest"] = "latest"
+    with pytest.raises(ValueError):
+        verify_first(tmp_path, first_install)
+
+
+def test_first_install_does_not_relax_the_upgrade_shape(tmp_path, oan_evidence):
+    del oan_evidence["backups"]
+    with pytest.raises(ValueError, match="backup"):
+        verify(tmp_path, oan_evidence)
+    oan_evidence["backups"] = dict.fromkeys(("registry", "connector", "helm", "odkFormMedia", "pipelines", "runHistory", "checkpoints"), "2" * 64)
+    oan_evidence["rehearsal"]["isolatedDatabases"] = False
+    with pytest.raises(ValueError, match="verification"):
+        verify(tmp_path, oan_evidence)
+    oan_evidence["mode"] = "anything-else"
+    with pytest.raises(ValueError, match="mode"):
+        verify(tmp_path, oan_evidence)
+
+
+def test_cli_mode_reports_first_install_only_for_fresh_install(tmp_path, first_install):
+    path = tmp_path / "evidence.json"
+    first_install.update(deliveryHash=module("staging_unpatched", "ci/deploy/staging.py").delivery_hash(), verifiedAt=datetime.now(timezone.utc).isoformat())
+    for key in ("observedAt",):
+        for block in ("newDev", "stagingCommons", "target"):
+            first_install["firstInstall"][block][key] = first_install["verifiedAt"]
+    path.write_text(json.dumps(first_install))
+    base = dict(os.environ, DELIVERY_ENVIRONMENT="staging", STAGING_EVIDENCE_FILE=str(path), SOURCE_COMMIT=SHA)
+    command = [sys.executable, str(ROOT / "ci/deploy/staging.py"), "mode"]
+    ok = subprocess.run(command, env=dict(base, DELIVERY_ACTION="fresh-install"), capture_output=True, text=True)
+    assert ok.returncode == 0, ok.stderr
+    assert ok.stdout.strip() == "first-install"
+    for action in ("deploy", ""):
+        refused = subprocess.run(command, env=dict(base, DELIVERY_ACTION=action), capture_output=True, text=True)
+        assert refused.returncode == 1
