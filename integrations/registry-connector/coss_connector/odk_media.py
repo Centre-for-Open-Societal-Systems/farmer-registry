@@ -14,6 +14,29 @@ from openg2p_connector_service.transports.odk_central import OdkCentralTransport
 from openg2p_connector_service.transports.registry import register_transport
 
 
+# The Farmer form nests repeats under groups under repeats (other farmers ->
+# land group -> land repeat). Upstream spends one level of its default depth
+# of 4 on every group as well as every repeat, so the land repeats inside a
+# household member (and their certificate names) were never fetched.
+NAV_LINK_MAX_DEPTH = 8
+
+
+class DeepNavigationConnector:
+    """The connector with a navigation depth deep enough for this form unless the
+    connector's own source configuration sets one."""
+
+    def __init__(self, connector):
+        self._connector = connector
+
+    def __getattr__(self, name):
+        return getattr(self._connector, name)
+
+    def get_source_config(self):
+        cfg = dict(self._connector.get_source_config())
+        cfg.setdefault("nav_link_max_depth", NAV_LINK_MAX_DEPTH)
+        return cfg
+
+
 class AttachmentTransferError(RuntimeError):
     pass
 
@@ -91,7 +114,7 @@ class FarmerOdkTransport(OdkCentralTransport):
         form = quote(str(cfg["form_id"]), safe="")
         root = f"{base}/v1/projects/{cfg['project_id']}/forms/{form}"
         async with httpx.AsyncClient(timeout=60) as client:
-            async for record in super().fetch(connector):
+            async for record in super().fetch(DeepNavigationConnector(connector)):
                 instance = record.data.get("__id")
                 if not instance:
                     raise AttachmentTransferError("ODK record has no stable submission ID")

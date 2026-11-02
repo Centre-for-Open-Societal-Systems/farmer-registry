@@ -19,6 +19,23 @@ def source():
         "access_to_finance":{"finance_access":"yes","finance":"loan insurance saving digital_banking"}}
 
 class SourceMapperTests(unittest.TestCase):
+    def test_a_farmer_with_only_a_secondary_or_other_number_has_a_primary_phone(self):
+        for key, kind in (("other_phone_number", "OTHER"), ("secondary_phone_number", "SECONDARY")):
+            data = source()
+            data["basic_info"]["personal_info"][key] = "251915330917"
+            phones = mapper.intake_sections(data)["farmer_phones"]
+            self.assertEqual([(p["phone_type"], p["is_primary"]) for p in phones], [(kind, True)])
+
+    def test_the_primary_number_stays_the_only_primary(self):
+        data = source()
+        personal = data["basic_info"]["personal_info"]
+        personal.update(primary_phone_number="251911000001", secondary_phone_number="251911000002", other_phone_number="251911000003")
+        phones = mapper.intake_sections(data)["farmer_phones"]
+        self.assertEqual([p["is_primary"] for p in phones], [True, False, False])
+
+    def test_no_phone_adds_no_row(self):
+        self.assertEqual(mapper.intake_sections(source())["farmer_phones"], [])
+
     def test_root_sibling_groups_keep_every_finance_machine_and_water_answer(self):
         result=mapper.intake_sections(source())
         row=result["farmer_farm_inputs_intake"][0]
