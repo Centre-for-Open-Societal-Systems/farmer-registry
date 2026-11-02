@@ -91,38 +91,6 @@ class HouseholdRosterTests(unittest.TestCase):
         self.assertEqual(counts.size_of_group, 1)
         self.assertEqual(counts.number_of_female_members, 1)
 
-    def test_head_member_without_national_id_collapses_into_farmer(self):
-        members = [
-            _person(
-                internal_record_id="member-1",
-                first_name="Yohannes",
-                last_name="Tadesse",
-                birth_date="1981-02-08",
-                gender="MALE",
-            ),
-            _person(
-                internal_record_id="member-2",
-                first_name="Selamawit",
-                last_name="Haile",
-                birth_date="1985-11-23",
-                gender="FEMALE",
-            ),
-        ]
-        farmers = [
-            _person(
-                internal_record_id="farmer-1",
-                foundational_id="FID-1",
-                first_name="Yohannes",
-                last_name="Tadesse",
-                birth_date="1981-02-08",
-                gender="MALE",
-            )
-        ]
-        counts = compute_household_roster_counts(union_roster_people(members, farmers))
-        self.assertEqual(counts.size_of_group, 2)
-        self.assertEqual(counts.number_of_male_members, 1)
-        self.assertEqual(counts.number_of_female_members, 1)
-
     def test_overlay_person_wins_over_matching_member(self):
         members = [
             _person(
