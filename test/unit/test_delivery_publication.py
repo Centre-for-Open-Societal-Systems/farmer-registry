@@ -135,10 +135,11 @@ def test_native_worker_probe_rejects_other_jobs_and_local_fallback(key, value):
     assert not worker.permitted_ci("linux", {**JENKINS, key: value})
 
 
-def test_the_pin_proposal_is_the_last_stage_and_cannot_fail_the_build():
+def test_the_pin_proposal_is_followed_only_by_the_image_pull_request_and_cannot_fail_the_build():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
-    stage = pipeline.split("stage('Propose chart pin update')", 1)[1].split("    post {", 1)[0]
-    assert "stage(" not in stage                                    # nothing after it
+    tail = pipeline.split("stage('Propose chart pin update')", 1)[1].split("    post {", 1)[0]
+    stage = tail.split("stage('Open oan-helm image PR')", 1)[0]
+    assert tail.count("stage(") == 1                                # only the oan-helm image pull request follows it
     definition = stage.split("steps {", 1)[0]
     assert "branch 'develop'" in definition and "not { changeRequest() }" in definition
     assert "env.DELIVERY_ACTION == 'deploy'" in definition         # not after a fresh install

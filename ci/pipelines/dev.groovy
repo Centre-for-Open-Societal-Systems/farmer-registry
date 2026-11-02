@@ -15,6 +15,9 @@ pipeline {
         KUBECONFIG_CREDENTIAL = 'farmer-dev-kubeconfig'
         // GitHub App credential (username + installation token) with Contents and Pull requests write on this repository.
         PIN_PR_CRED_ID = 'oan-ci-app'
+        // "Username with password" for the very last stage: the GitHub account that owns the fork of oan-helm and its
+        // classic token (public_repo). The image pull request goes from that fork into oan-helm main.
+        OAN_HELM_FORK_CRED_ID = 'oan-helm-fork-token'
     }
     parameters {
         choice(name: 'DELIVERY_ACTION', choices: ['deploy', 'fresh-install'],
@@ -112,6 +115,8 @@ pipeline {
                           -v "$PWD:/repo" "coss-ci/validation:$IMAGE_TAG" \
                           python ci/delivery.py publication service-outcomes/publication.json
                     '''
+                    // Only the digests, for the last stage ("Open oan-helm image PR").
+                    stash name: 'image-digests', includes: 'service-outcomes/registry-images.tsv'
                 }
             }
         }
@@ -241,6 +246,38 @@ pipeline {
                             docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
                             VALIDATION_IMAGE="coss-ci/validation:$IMAGE_TAG" python3 ci/deploy/propose_pin_pr.py
                         '''
+                    }
+                }
+            }
+        }
+
+        stage('Open oan-helm image PR') {
+            // The last stage. After the images were pushed AND deployed to New Dev (a failed deploy fails the build, so
+            // this stage never runs for it): put this build's image tags and digests into the oan-helm Farmer chart
+            // (charts/openg2p-farmer-registry/values.yaml) through a pull request from the fork of oan-helm (GH_USER/oan-helm)
+            // into Centre-for-Open-Societal-Systems/oan-helm main (ci/deploy/release_images.py). The stage does not wait for
+            // the merge and ends green once the pull request is open; a person with write access merges it and oan-helm's
+            // release workflow then publishes the chart and updates CHANGELOG.md. If the pull request cannot be opened the
+            // stage is UNSTABLE and says why. One pull request per commit merged to develop: a re-run of a commit that
+            // oan-helm main already carries opens nothing, and neither does the merge of a chart-pin pull request.
+            when {
+                beforeAgent true
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' } }
+            }
+            agent { label 'vpn-agent2' }
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                checkout scm
+                sh 'mkdir -p service-outcomes && rm -f service-outcomes/registry-images.tsv service-outcomes/oan-helm-pr.txt'
+                unstash 'image-digests'
+                script {
+                    def subject = sh(returnStdout: true, script: 'git log -1 --pretty=%s').trim()
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                        withCredentials([usernamePassword(credentialsId: "${OAN_HELM_FORK_CRED_ID}", usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                            withEnv(["COMMIT_SUBJECT=${subject}"]) {
+                                sh 'python3 ci/deploy/release_images.py'
+                            }
+                        }
                     }
                 }
             }

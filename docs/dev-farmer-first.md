@@ -46,6 +46,29 @@ write on this repository). Without it the stage is UNSTABLE and the build still 
 By hand: `python3 ci/deploy/bump_pin.py --latest` (dry run) or `<commit> --write`.
 The staging pin (`oan-chart-staging.json`) is never touched by this stage.
 
+## oan-helm image pull request
+
+After the pin stage, the very last stage of a successful `deploy` build (`Open oan-helm image PR`, `develop` only, never for
+a fresh install or a pull request) runs `ci/deploy/release_images.py`. It records the build's images in the oan-helm
+Farmer chart so that the next chart release names them:
+
+- the Publish stage writes the ECR digest of each image to `service-outcomes/registry-images.tsv` and stashes it;
+- the stage rewrites the `tag` of `staffUi`, `staffApi`, `partnerApi`, `celeryWorker`, `celeryBeat`, `dbSeed` and `sanity`
+  in `charts/openg2p-farmer-registry/values.yaml` to `<commit12>@sha256:<digest>` (seven lines; the analytics and dashboard
+  images are separate services and are not touched), on the branch `bot/farmer-images-<commit12>` of the fork of oan-helm,
+  and opens a pull request from it into `Centre-for-Open-Societal-Systems/oan-helm` `main`;
+- it never waits for the merge: the stage is green once the pull request is open, and UNSTABLE (the build still passes) if
+  it cannot be opened; a person with write access merges it (checks `protected-paths` and `validate`), and oan-helm's release
+  workflow then publishes the next `openg2p-farmer-registry` version and writes the `CHANGELOG.md` entry; the pin stage of a
+  later build proposes moving the pin to it. Nothing here deploys;
+- one pull request per commit: a commit whose images oan-helm `main` already carries (re-run, Replay, rebuild) and the commit
+  that merges a chart-pin pull request (only `ci/deploy/oan-chart.json` changed) open nothing; without the second rule every
+  pin merge would start another round of image pull request, release and pin pull request.
+
+Jenkins credential `oan-helm-fork-token` ("Username with password", global): the username is the GitHub account that owns the
+fork of oan-helm, the password a classic token of that account with the `public_repo` scope (a fine-grained token cannot open
+a pull request on the organisation repository). `DRY_RUN=1` prints what would change and touches nothing.
+
 ## Fresh install
 
 The dev environment is a development environment: its registry database may be rebuilt
