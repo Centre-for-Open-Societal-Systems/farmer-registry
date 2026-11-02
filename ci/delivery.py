@@ -1,20 +1,28 @@
-"""Separate immutable image publication from dev deployment.
+"""Image publication and dev delivery.
 
-DELIVERY_ACTION selects what a build does. publish-only builds and pushes the
-images. deploy upgrades the existing dev release with them. fresh-install
-rebuilds dev from an empty database with the same images and chart
-(ci/deploy/fresh-install-dev.sh).
+Every develop build publishes the immutable images and then DELIVERY_ACTION
+decides what happens to the dev release. deploy (the default, no button needed)
+upgrades the existing release with those images and the pinned chart, and Helm
+puts the previous revision back when the upgrade fails (ci/deploy/deploy-rc.sh).
+fresh-install rebuilds dev from an empty database with the same images and chart
+(ci/deploy/fresh-install-dev.sh); it stays a deliberate choice.
+
+A branch-index or first build may carry a stale parameter definition: an empty
+value or the retired publish-only choice means the default, deploy.
 """
 import json
 import os
 from pathlib import Path
 import sys
 
-ACTIONS = ("publish-only", "deploy", "fresh-install")
+ACTIONS = ("deploy", "fresh-install")
+RETIRED = ("publish-only",)
 
 
 def action(environment):
-    selected = environment.get("DELIVERY_ACTION") or "publish-only"
+    selected = environment.get("DELIVERY_ACTION") or "deploy"
+    if selected in RETIRED:
+        selected = "deploy"
     if selected not in ACTIONS:
         raise ValueError("Unknown delivery action")
     return selected

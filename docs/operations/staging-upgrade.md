@@ -47,7 +47,7 @@ host's known_hosts lines). These two names are proposed; create them or change t
    the ETH-OAN pack published; Partner Management with `farmer-partner`; consent manager;
    websub; eSignet; MinIO; Redis).
 2. Namespace `farmer` exists with `ecr-pull-secret` and a copy of Secret `commons-postgresql`.
-3. The pin names oan-helm commit `d7588ad` (chart `1.0.0-dev.20`, platform rc.614; dev stays on dev.19) and
+3. The pin names oan-helm commit `d7588ad` (chart `1.0.0-dev.20`, platform rc.614; dev follows oan-helm main through pin pull requests) and
    its `environments/staging/values/farmer.yaml` with sha256 in the `values` block of `oan-chart-staging.json`.
    A newer chart or values file needs a new commit and checksum there (the install refuses empty ones).
 4. Evidence: generate the template with `python ci/deploy/staging.py template <file>`, fill it only

@@ -7,7 +7,7 @@ staging cluster by itself.
 
 1. Review and merge the feature PR into `develop`. Wait for the
    [Farmer Jenkins develop build](https://jenkins.oanstaging.com/job/Gen2-Package/job/farmer-registry/job/develop/).
-   Develop builds and publishes the images and can deploy to the dev environment (namespace `farmer`, `DELIVERY_ACTION`).
+   Develop builds publish the images and deploy them to the dev environment (namespace `farmer`); Helm rolls back on failure.
    Confirm the dev release, login and normal Registry use before promoting that commit.
 2. Open the [develop-to-staging comparison](https://github.com/Centre-for-Open-Societal-Systems/farmer-registry/compare/staging...develop).
    Create the promotion PR with base `staging` and head `develop`; the PR check rejects any other source branch.
