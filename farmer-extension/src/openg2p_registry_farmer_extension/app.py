@@ -38,6 +38,9 @@ class Initializer(FarmerInitializer):
         from .history_without_change_request import install as install_history_without_change_request
 
         install_history_without_change_request()
+        from .household_roster_head import install as install_household_roster_head
+
+        install_household_roster_head()
 
     def migrate_database(self, args):
         super().migrate_database(args)

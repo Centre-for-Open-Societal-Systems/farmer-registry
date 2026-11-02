@@ -117,15 +117,6 @@ def roster_identity_key(person: dict) -> str:
     return f"record:{record_id}" if record_id else f"anon:{id(person)}"
 
 
-def _name_birth_key(person: dict) -> str | None:
-    first_name = _normalize_text(person.get("first_name"))
-    last_name = _normalize_text(person.get("last_name"))
-    birth_date = parse_date(person.get("birth_date"))
-    if not (first_name and last_name and birth_date):
-        return None
-    return f"person:{first_name}|{last_name}|{birth_date.isoformat()}"
-
-
 def union_roster_people(
     members: list[dict],
     farmers: list[dict],
@@ -134,23 +125,12 @@ def union_roster_people(
     overlay_household_id: str | None = None,
 ) -> list[dict]:
     by_key: dict[str, dict] = {}
-    farmer_person_keys: set[str] = set()
     for farmer in farmers:
         if not is_active_person(farmer):
             continue
         by_key[roster_identity_key(farmer)] = farmer
-        person_key = _name_birth_key(farmer)
-        if person_key:
-            farmer_person_keys.add(person_key)
     for member in members:
         if not is_active_person(member):
-            continue
-        # The household member form carries no national id, so the head listed as a
-        # member must still collapse into the farmer who carries one.
-        if (
-            not _normalize_text(member.get("foundational_id"))
-            and _name_birth_key(member) in farmer_person_keys
-        ):
             continue
         by_key[roster_identity_key(member)] = member
     if (
