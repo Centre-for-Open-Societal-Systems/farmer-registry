@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -267,11 +268,23 @@ class ImagePullRequestTests(unittest.TestCase):
             self.assertTrue(self.run_stage(CHANGED_FILES=files), files)
 
     def test_the_changed_files_are_read_from_git_when_not_given(self):
-        subprocess.run("git init -q . && git config user.email a@b && git config user.name n && mkdir -p ci/deploy"
-                       " && echo 1 > ci/deploy/oan-chart.json && echo 1 > x && git add . && git commit -qm one"
-                       " && echo 2 > ci/deploy/oan-chart.json && git commit -qam two", shell=True, cwd=str(self.root), check=True)
-        self.assertEqual(self.r.changed_files(self.root, {}), ["ci/deploy/oan-chart.json"])
-        self.assertIsNone(self.run_stage_in(self.root))
+        # The validation container has no git binary: stand in for `git diff --name-only HEAD^1 HEAD`.
+        calls = []
+
+        def fake_run(command, **kwargs):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0, stdout="ci/deploy/oan-chart.json\n")
+        with mock.patch.object(self.r.subprocess, "run", fake_run):
+            self.assertEqual(self.r.changed_files(self.root, {}), ["ci/deploy/oan-chart.json"])
+            self.assertEqual(calls, [["git", "diff", "--name-only", "HEAD^1", "HEAD"]])
+            self.assertIsNone(self.run_stage_in(self.root))
+        self.assertNotIn(("POST", "ORG/pulls"), self.methods())
+
+        def no_git(command, **kwargs):
+            raise FileNotFoundError("git")
+        with mock.patch.object(self.r.subprocess, "run", no_git):      # no git, or a first commit: assume the commit has code
+            self.assertIsNone(self.r.changed_files(self.root, {}))
+            self.assertTrue(self.run_stage_in(self.root))
 
     def run_stage_in(self, root):
         return self.proposal().run(dict(self.env), root, (root / "service-outcomes/registry-images.tsv").read_text())
