@@ -87,6 +87,46 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0].source_event_id, "farmer:uuid:synthetic")
         self.assertEqual(result[0].data["photo"]["__type"], "File")
 
+    async def test_nested_member_land_repeats_are_fetched_with_the_farmer_depth(self):
+        """other farmers (repeat) -> land group -> land repeat: the certificate names sit four containers down."""
+        def handle(request):
+            path = request.url.path
+            if path.endswith("/Submissions"):
+                return httpx.Response(200, json={"value": []})
+            if path.endswith("/other_farmers_repeat"):
+                return httpx.Response(200, json={"value": [{"name": "member", "hh_member_land_info": {
+                    "hh_member_land_info_repeat@odata.navigationLink": "Submissions('1')/other_farmers_in_hh/other_farmers_repeat('1')/hh_member_land_info/hh_member_land_info_repeat"}}]})
+            return httpx.Response(200, json={"value": [{"hh_member_land_certificate": "hhm_land_cert_1_1.jpg"}]})
+
+        def entry():
+            return {"other_farmers_in_hh": {"other_farmers_repeat@odata.navigationLink": "Submissions('1')/other_farmers_in_hh/other_farmers_repeat"}}
+
+        async def resolve(depth):
+            data = entry()
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as client:
+                await OdkCentralTransport._resolve_navigation_links(
+                    client=client, service_root="https://odk.example/v1/projects/1/forms/f.svc", headers={},
+                    entry=data, connector_id="c", allowed_names=None, max_depth=depth)
+            return json.dumps(data)
+
+        self.assertNotIn("hhm_land_cert_1_1.jpg", await resolve(4))
+        from coss_connector.odk_media import NAV_LINK_MAX_DEPTH
+        self.assertIn("hhm_land_cert_1_1.jpg", await resolve(NAV_LINK_MAX_DEPTH))
+
+    async def test_transport_gives_upstream_the_farmer_depth_unless_the_connector_sets_one(self):
+        seen = []
+        async def fetch(_self, connector):
+            seen.append(connector.get_source_config()["nav_link_max_depth"])
+            return
+            yield
+        auth = SimpleNamespace(get_auth_context=AsyncMock(return_value=SimpleNamespace(headers={}, base_url=None)))
+        for extra, expected in (({}, 8), ({"nav_link_max_depth": 3}, 3)):
+            connector = ConnectorDefinition(auth_type="none", source_config_json=json.dumps(
+                {"base_url": "https://odk.example", "project_id": 1, "form_id": "farmer", **extra}))
+            with patch.object(OdkCentralTransport, "fetch", fetch), patch("coss_connector.odk_media.get_auth_strategy", return_value=auth):
+                [item async for item in FarmerOdkTransport().fetch(connector)]
+            self.assertEqual(seen[-1], expected)
+
     async def test_no_record_is_yielded_after_attachment_failure(self):
         record = SourceRecord("farmer:uuid:synthetic", {"__id": "uuid:synthetic", "photo": "photo.jpg"})
         async def fetch(_self, _connector):

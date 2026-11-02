@@ -195,6 +195,10 @@ def intake_sections(d):
             phone = phone[3:]
         if phone:
             output[SECTIONS[4]].append({"phone_number":phone,"phone_type":kind,"country_code":"ET","is_primary":kind=="PRIMARY"})
+    # A farmer who gave only a secondary or other number still has a primary one:
+    # the farmer's own phone list marks its first number primary (derivations.py).
+    if output[SECTIONS[4]] and not any(p["is_primary"] for p in output[SECTIONS[4]]):
+        output[SECTIONS[4]][0]["is_primary"] = True
     output[SECTIONS[5]] = [clean({"education_level":code(socio.get("education_level"),{"READ_WRITE":"CAN_READ_AND_WRITE"}),
         "income_sources":codes(socio.get("income_source"),INCOME),
         "source_of_income":single(codes(socio.get("income_source"),INCOME)),
