@@ -37,7 +37,7 @@ type: application
 #   publish time, in lockstep with the farmer images this chart references.
 #   Bumping it here only affects a local `helm package`/`helm install .`.
 version: 0.0.0-rc.0
-appVersion: "1.2.2-rc.614"
+appVersion: "1.2.2-rc.625"
 
 keywords:
   - openg2p
@@ -61,12 +61,12 @@ maintainers:
 # deliberately. Aliased to `registry` so the overlay nests under a hyphen-free
 # key (.Values.registry.*).
 #
-# This RC is published in the pre-move OpenG2P Helm repository. Keep this
-# repository paired with rc.544; newer upstream development uses GitLab.
+# Published in the public OpenG2P Helm repository; github.com/openg2p/versions
+# lists each registry-platform RC with its chart and source revision.
 dependencies:
   - name: openg2p-registry
     alias: registry
-    version: 1.2.2-rc.614
+    version: 1.2.2-rc.625
     repository: https://openg2p.github.io/openg2p-helm
 
 # Rancher catalog branding

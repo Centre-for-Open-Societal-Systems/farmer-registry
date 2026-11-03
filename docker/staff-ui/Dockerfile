@@ -4,12 +4,12 @@
 # difference. Build from the repository root:
 #   docker build -f docker/staff-ui/Dockerfile .
 # BASE_IMAGE_VERSION is the org.opencontainers.image.revision label of
-# openg2p/openg2p-registry-staff-ui:1.2.2-rc.614.
+# openg2p/openg2p-registry-staff-ui:1.2.2-rc.625.
 FROM node:20-alpine AS base
 WORKDIR /app
 
 FROM base AS source
-ARG BASE_IMAGE_VERSION=ca399ed3110f6f93d607bd406b22933554adcc5e
+ARG BASE_IMAGE_VERSION=29d2a2397ef9fa09308561e15ae9aa444a4fcd7c
 RUN apk add --no-cache git \
  && git init -q /src && cd /src \
  && git remote add origin https://github.com/OpenG2P/registry-platform.git \

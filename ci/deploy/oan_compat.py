@@ -81,8 +81,9 @@ def render(documents, values, environment=None):
     return result
 
 
-# The corrections above were reviewed against this platform; another one needs a new review.
-REVIEWED_PLATFORMS = {'1.2.2-rc.614'}
+# The corrections above were reviewed against these platforms; another one needs a new review.
+# rc.625 ships the same chart templates as rc.614 (only image tags differ). Staging stays on rc.614.
+REVIEWED_PLATFORMS = {'1.2.2-rc.614', '1.2.2-rc.625'}
 # Environments that render the OAN chart, each into namespace farmer.
 ENVIRONMENTS = ('dev', 'staging')
 
