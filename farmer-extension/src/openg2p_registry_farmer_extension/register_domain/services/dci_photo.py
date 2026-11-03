@@ -7,11 +7,13 @@ bytes: ``{"content_type", "sha256", "data"}`` with ``data`` in base64. The
 receivers store it in their own document store and skip it when ``sha256`` is
 the photo they already hold.
 
-The DCI service renders its output template synchronously, with the record
-already filtered to the consent's scopes. The record then carries
-``record_image_url`` (core resolves ``record_image_document_id`` to a presigned
-URL of the documents bucket) only when the consent releases it. The
-function reads the object named in that URL straight from the document store, the same
+The DCI service renders its output template synchronously. The partner search
+it renders from (core ``PartnerRegisterSearch``) returns plain table columns, so
+a record names its photo only by ``record_image_document_id``. Before the
+render, ``add_record_image_urls`` gives each such record the
+``record_image_url`` the staff search would (a presigned URL of the documents
+bucket, from core ``G2PDocumentService.get_document_urls``). The function reads
+the object named in that URL straight from the document store, the same
 synchronous storage call the template helper itself makes, so no request goes
 out to the public storage host.
 
@@ -99,6 +101,64 @@ def make_photo_function(download):
     return farmer_photo
 
 
+def records_missing_image_url(pages) -> list[dict]:
+    """Search records that name a photo document but carry no image URL."""
+    return [record for page in pages for record in (getattr(page, "records", None) or [])
+            if isinstance(record, dict) and record.get("record_image_document_id")
+            and not record.get("record_image_url")]
+
+
+def add_record_image_urls(records, urls: dict) -> None:
+    """Set ``record_image_url`` from ``{document_id: presigned URL}``; unknown ids stay as they are."""
+    for record in records:
+        url = urls.get(record["record_image_document_id"])
+        if url:
+            record["record_image_url"] = url
+
+
+def install_search_image_urls():
+    """Resolve the photo URLs of the partner search results before the render.
+
+    Wraps the DCI service's search step in this process (the partner API); the
+    platform files stay unchanged. A failure leaves the URLs out, so the
+    response renders without the photo rather than failing.
+    """
+    try:
+        from openg2p_fastapi_common.context import get_async_session_maker
+        from openg2p_registry_core.services.g2p_document_service import (
+            G2PDocumentService,
+        )
+        from openg2p_registry_partner_api.search.dci.services.g2p_dci_service import (
+            G2PDciService,
+        )
+    except ImportError:
+        return None
+    search = getattr(G2PDciService, "_run_search", None)
+    if search is None:
+        _logger.warning("DCI search step not found; the farmer photo is not sent")
+        return None
+    if getattr(search, "resolves_record_image_urls", False):
+        return G2PDciService
+
+    async def _run_search(self, searches, allowed_columns):
+        pages = await search(self, searches, allowed_columns)
+        records = records_missing_image_url(pages)
+        if records:
+            try:
+                async with get_async_session_maker()() as session:
+                    urls = await G2PDocumentService.get_component().get_document_urls(
+                        session, [record["record_image_document_id"] for record in records])
+            except Exception:  # noqa: BLE001 - a missing photo must not fail the lookup
+                _logger.warning("Farmer photo URLs could not be resolved for the DCI search")
+                urls = {}
+            add_record_image_urls(records, urls)
+        return pages
+
+    _run_search.resolves_record_image_urls = True
+    G2PDciService._run_search = _run_search
+    return G2PDciService
+
+
 def install_dci_photo():
     """Register the function on the template helper of this process.
 
@@ -106,6 +166,7 @@ def install_dci_photo():
     created before the extension initializes; other processes have one too and
     simply never use it.
     """
+    install_search_image_urls()
     try:
         from openg2p_registry_core.helpers import TemplateHelper
         from openg2p_registry_core.helpers.document import get_document_handler

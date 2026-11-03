@@ -59,6 +59,7 @@ FARMER = {
     "marital_status": "MARRIED", "education_level": "BASIC",
     "disabled": True, "disability_type": "VISUAL", "disability_severity": "MILD",
     "source_of_income": "SOI_OTHERS", "source_of_income_other": "Trading",
+    "income_sources": ["SOI_CROP", "SOI_LIVESTOCK", "SOI_OTHERS"],
     "is_psnp_user": False, "is_farmer": True, "farming_type": "MIXED",
     "email": "abebe@example.org",
     "address_line_1": "Kebele 01", "address_line_2": None, "postal_code": "1000", "country_code": "ET",
@@ -86,7 +87,7 @@ def test_block_carries_every_farmer_tab_field():
     block = _block(FARMER)
     for key in ("has_national_id", "rid", "odk_farmer_id", "pula_id", "language_spoken", "birth_date_ec",
                 "estimated_age", "marital_status", "education_level", "disabled", "disability_type",
-                "disability_severity", "source_of_income", "source_of_income_other", "is_psnp_user", "is_farmer",
+                "disability_severity", "source_of_income", "source_of_income_other", "income_sources", "is_psnp_user", "is_farmer",
                 "farming_type", "email", "plus_code", "latitude", "longitude", "altitude"):
         assert block[key] == FARMER[key], key
     assert block["fan"] == "1234567890123456" and block["fin"] is None
@@ -128,6 +129,25 @@ def test_no_photo_without_url_function_or_readable_image():
     assert _block(FARMER, stored={("documents", "abc123"): b"not an image"})["photo"] is None
     other_bucket = {**FARMER, "record_image_url": "https://minio/templates/abc123"}
     assert _block(other_bucket)["photo"] is None
+
+
+class _Page:
+    def __init__(self, records):
+        self.records = records
+
+
+def test_search_records_get_the_image_url_of_their_photo_document():
+    # The partner search returns table columns only: the document id, no URL.
+    searched = {key: value for key, value in FARMER.items() if key != "record_image_url"}
+    no_photo = {"internal_record_id": "i-2", "record_image_document_id": None}
+    has_url = {"internal_record_id": "i-3", "record_image_document_id": "doc-3", "record_image_url": "https://x/documents/k"}
+    unknown = {"internal_record_id": "i-4", "record_image_document_id": "doc-gone"}
+    records = dci_photo.records_missing_image_url([_Page([searched, no_photo, has_url]), _Page([unknown])])
+    assert [record["internal_record_id"] for record in records] == ["i-1", "i-4"]
+    dci_photo.add_record_image_urls(records, {"doc-1": FARMER["record_image_url"]})
+    assert searched["record_image_url"] == FARMER["record_image_url"]
+    assert "record_image_url" not in unknown
+    assert _block(searched)["photo"]["sha256"] == hashlib.sha256(JPEG).hexdigest()
 
 
 def test_oversized_photo_is_left_out():

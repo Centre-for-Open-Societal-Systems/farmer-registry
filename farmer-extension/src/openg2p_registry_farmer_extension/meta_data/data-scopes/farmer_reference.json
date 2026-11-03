@@ -34,6 +34,7 @@
         "Farmer.disability_type",
         "Farmer.disability_severity",
         "Farmer.source_of_income",
+        "Farmer.income_sources",
         "Farmer.source_of_income_other",
         "Farmer.is_psnp_user",
         "Farmer.is_farmer",
