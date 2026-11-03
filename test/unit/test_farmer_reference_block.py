@@ -130,6 +130,25 @@ def test_no_photo_without_url_function_or_readable_image():
     assert _block(other_bucket)["photo"] is None
 
 
+class _Page:
+    def __init__(self, records):
+        self.records = records
+
+
+def test_search_records_get_the_image_url_of_their_photo_document():
+    # The partner search returns table columns only: the document id, no URL.
+    searched = {key: value for key, value in FARMER.items() if key != "record_image_url"}
+    no_photo = {"internal_record_id": "i-2", "record_image_document_id": None}
+    has_url = {"internal_record_id": "i-3", "record_image_document_id": "doc-3", "record_image_url": "https://x/documents/k"}
+    unknown = {"internal_record_id": "i-4", "record_image_document_id": "doc-gone"}
+    records = dci_photo.records_missing_image_url([_Page([searched, no_photo, has_url]), _Page([unknown])])
+    assert [record["internal_record_id"] for record in records] == ["i-1", "i-4"]
+    dci_photo.add_record_image_urls(records, {"doc-1": FARMER["record_image_url"]})
+    assert searched["record_image_url"] == FARMER["record_image_url"]
+    assert "record_image_url" not in unknown
+    assert _block(searched)["photo"]["sha256"] == hashlib.sha256(JPEG).hexdigest()
+
+
 def test_oversized_photo_is_left_out():
     big = b"\xff\xd8\xff" + b"0" * dci_photo.MAX_PHOTO_BYTES
     assert dci_photo.encode_photo(big) is None
