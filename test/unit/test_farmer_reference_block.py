@@ -59,6 +59,7 @@ FARMER = {
     "marital_status": "MARRIED", "education_level": "BASIC",
     "disabled": True, "disability_type": "VISUAL", "disability_severity": "MILD",
     "source_of_income": "SOI_OTHERS", "source_of_income_other": "Trading",
+    "income_sources": ["SOI_CROP", "SOI_LIVESTOCK", "SOI_OTHERS"],
     "is_psnp_user": False, "is_farmer": True, "farming_type": "MIXED",
     "email": "abebe@example.org",
     "address_line_1": "Kebele 01", "address_line_2": None, "postal_code": "1000", "country_code": "ET",
@@ -86,7 +87,7 @@ def test_block_carries_every_farmer_tab_field():
     block = _block(FARMER)
     for key in ("has_national_id", "rid", "odk_farmer_id", "pula_id", "language_spoken", "birth_date_ec",
                 "estimated_age", "marital_status", "education_level", "disabled", "disability_type",
-                "disability_severity", "source_of_income", "source_of_income_other", "is_psnp_user", "is_farmer",
+                "disability_severity", "source_of_income", "source_of_income_other", "income_sources", "is_psnp_user", "is_farmer",
                 "farming_type", "email", "plus_code", "latitude", "longitude", "altitude"):
         assert block[key] == FARMER[key], key
     assert block["fan"] == "1234567890123456" and block["fin"] is None

@@ -133,7 +133,10 @@ def install_search_image_urls():
         )
     except ImportError:
         return None
-    search = G2PDciService._run_search
+    search = getattr(G2PDciService, "_run_search", None)
+    if search is None:
+        _logger.warning("DCI search step not found; the farmer photo is not sent")
+        return None
     if getattr(search, "resolves_record_image_urls", False):
         return G2PDciService
 
