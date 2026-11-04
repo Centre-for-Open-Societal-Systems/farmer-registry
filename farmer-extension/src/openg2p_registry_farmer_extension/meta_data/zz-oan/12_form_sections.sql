@@ -106,7 +106,7 @@ form_layout (section_id, upstream_section_id, col, ord, w) AS (
    -- Upstream disables the birth date once an age is typed; one rule decides
    -- (the last wins), so here it is locked once Fayda verified it instead,
    -- and the server checks the age against the birth date.
-   '{"widget-id": "birth_date", "widget-variant": "ethiopian",
+   '{"widget-id": "birth_date",
      "widget-data-options": {"maxDate": "today", "minDate": "1900-01-01",
        "action": "disable", "condition": {"field": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.last_authentication_status", "operator": "equals", "value": "SUCCESS"}}}'),
   ('farmer_personal_details', 'farmer_farmer_personal_identification_section_01', 3, 3,

@@ -31,7 +31,7 @@ BEGIN
     -- calendar (registry-widgets utils/formatting.ts, utils/calendarDates.ts).
     IF node->>'column-key' IN ('planted_date', 'collected_date') THEN
       result := jsonb_set(result, '{widget-data-format}',
-        COALESCE(result->'widget-data-format', '{}'::jsonb) || '{"dateFormat":"DD/MM/YYYY","calendar":"ethiopian"}'::jsonb);
+        COALESCE(result->'widget-data-format', '{}'::jsonb) || '{"dateFormat":"DD/MM/YYYY","calendar":"ethiopic"}'::jsonb);
     END IF;
   ELSE
     result := node;
