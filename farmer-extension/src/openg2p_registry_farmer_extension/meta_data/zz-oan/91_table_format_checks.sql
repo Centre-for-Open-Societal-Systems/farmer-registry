@@ -109,7 +109,7 @@ BEGIN
       jsonb_array_elements(s.section_ui_schema::jsonb #> '{panels,0,panels,0,widgets,0,widget-data-columns}') c
     WHERE s.section_id IN ('farmer_crops', 'farmer_crops_intake', 'farmer_livestock', 'farmer_livestock_intake')
       AND c ->> 'column-key' IN ('planted_date', 'collected_date')
-      AND (c #>> '{widget-data-format,calendar}' IS DISTINCT FROM 'ethiopian'
+      AND (c #>> '{widget-data-format,calendar}' IS DISTINCT FROM 'ethiopic'
            OR c #>> '{widget-data-format,dateFormat}' IS DISTINCT FROM 'DD/MM/YYYY')) m;
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'Table dates are not formatted in the Ethiopian calendar: %', found;

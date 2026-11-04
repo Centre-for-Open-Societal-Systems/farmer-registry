@@ -252,16 +252,19 @@ BEGIN
     RAISE EXCEPTION 'OAN sections not on the intake form: %', missing;
   END IF;
 
-  -- Every entered date, including child/table fields, uses the same calendar.
+  -- Every entered date, including child/table fields, uses the native
+  -- Ethiopian calendar.
   SELECT string_agg(DISTINCT s.section_id || '.' || COALESCE(w->>'widget-id', w->>'column-key'), ', ')
     INTO missing
   FROM "public"."g2p_register_sections" s,
        jsonb_path_query(s.section_ui_schema,
-         'lax $.** ? (@.widget == "date" || @.widget == "oan-ethiopian-date-input")') w
+         'lax $.** ? (@.widget == "date" || @.widget == "oan-next-due-date" || @.widget == "oan-ethiopian-date-input")') w
   WHERE COALESCE((w->>'widget-readonly')::boolean, false) = false
-    AND w->>'widget-variant' IS DISTINCT FROM 'ethiopian';
+    AND (w #>> '{widget-data-format,calendar}' IS DISTINCT FROM 'ethiopic'
+         OR w->>'widget' = 'oan-ethiopian-date-input'
+         OR w->>'widget-variant' = 'ethiopian');
   IF missing IS NOT NULL THEN
-    RAISE EXCEPTION 'Staff-entered dates missing the Ethiopian calendar variant: %', missing;
+    RAISE EXCEPTION 'Staff-entered dates not on the native Ethiopian calendar: %', missing;
   END IF;
 
   IF EXISTS (SELECT 1 FROM "public"."g2p_register_sections"
