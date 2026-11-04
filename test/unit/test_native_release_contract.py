@@ -31,7 +31,7 @@ def test_release_contract_rejects_unreviewed_pin_drift(source, kind):
     if kind.startswith("parent"):
         path = source / "docker/celery/Dockerfile"
         content = path.read_text()
-        content = content.replace("1.2.2-rc.614", "unreviewed") if kind == "parent-tag" else content.replace("openg2p/openg2p-registry-celery", "example/other")
+        content = content.replace("1.2.2-rc.625", "unreviewed") if kind == "parent-tag" else content.replace("openg2p/openg2p-registry-celery", "example/other")
         path.write_text(content)
     else:
         path = source / "ci/deploy/oan-chart.json"
@@ -43,7 +43,7 @@ def test_release_contract_rejects_unreviewed_pin_drift(source, kind):
 
 
 @pytest.mark.skipif(not BASH, reason="Bash required")
-@pytest.mark.parametrize("args", [[], ["-n"], ["--check", "1.2.2-rc.614"], ["1.2.2-rc.614"]])
+@pytest.mark.parametrize("args", [[], ["-n"], ["--check", "1.2.2-rc.625"], ["1.2.2-rc.625"]])
 def test_native_candidate_fenced_before_network_tools_or_mutation(source, args):
     before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()}
     env = dict(os.environ, PATH="")

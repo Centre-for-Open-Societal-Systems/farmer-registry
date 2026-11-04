@@ -146,9 +146,9 @@ def test_version_order(bump):
 def test_a_newer_chart_is_proposed(bump):
     old = json.loads(bump.PROFILE.read_text())
     oan = Published()
-    oan.release("1.0.0-dev.20", old["platformVersion"])
+    oan.release("1.0.0-dev.22", old["platformVersion"])
     new, why = proposal(bump, old, oan)
-    assert new is not None and "newer chart 1.0.0-dev.20" in why
+    assert new is not None and "newer chart 1.0.0-dev.22" in why
     assert new["repository"].endswith("/oan-helm/" + HEAD + "/repository/")
 
 
@@ -185,13 +185,13 @@ def test_head_commit_is_read_with_git_ls_remote(bump):
 def test_only_the_dev_pin_is_rewritten_even_for_a_new_platform(bump):
     old = json.loads(bump.PROFILE.read_text())
     oan = Published()
-    oan.release("1.0.0-dev.21", "1.2.2-rc.700")
+    oan.release("1.0.0-dev.22", "1.2.2-rc.700")
     new, _ = proposal(bump, old, oan)
     assert new["platformVersion"] == "1.2.2-rc.700"
     assert bump.update_companions(old, new, root=bump.ROOT) == []
     staging = (bump.ROOT / "ci/deploy/oan-chart-staging.json").read_text()
     assert bump.apply_pin(old, new, bump.ROOT) == ["ci/deploy/oan-chart.json"]
-    assert json.loads(bump.PROFILE.read_text())["version"] == "1.0.0-dev.21"
+    assert json.loads(bump.PROFILE.read_text())["version"] == "1.0.0-dev.22"
     assert (bump.ROOT / "ci/deploy/oan-chart-staging.json").read_text() == staging   # the staging pin is never touched
 
 
