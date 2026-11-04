@@ -96,9 +96,9 @@ def test_staging_pin_is_the_dev_chart_made_for_staging():
     dev, staging = oan_chart.profile('dev'), oan_chart.profile('staging')
     assert (staging['environment'], staging['namespace'], staging['release']) == ('staging', 'farmer', 'farmer-registry')
     # Staging is pinned to oan-helm d7588ad (chart dev.20) and moves only by a reviewed change; dev follows
-    # oan-helm main through pin pull requests. Same chart name and platform.
-    for field in ('name', 'platformVersion'):
-        assert staging[field] == dev[field]
+    # oan-helm main through pin pull requests. Same chart name; dev may run a newer reviewed platform first.
+    assert staging['name'] == dev['name']
+    assert {staging['platformVersion'], dev['platformVersion']} <= oan_compat.REVIEWED_PLATFORMS
     assert (staging['version'], staging['platformVersion']) == ('1.0.0-dev.20', '1.2.2-rc.614')
     assert staging['repository'].split('/')[-3] == staging['values']['commit']
 
