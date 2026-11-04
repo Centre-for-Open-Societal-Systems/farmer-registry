@@ -25,7 +25,7 @@ RESOURCES = {
                 "connectorQueue": "farmer-registry-connector-v2",
                 "connectorHostname": "connector-farmer-registry.oanstaging.com",
                 "apiServers": ["https://10.0.1.212:6443", "https://52.66.116.220:6443"],
-                "platform": "1.2.2-rc.614"},
+                "platform": "1.2.2-rc.625"},
     "staging-legacy": {"registryDatabase": "farmer_registry_far", "connectorDatabase": "farmer_connector_v2_far",
                 "legacyConnectorDatabase": "farmer_connector_far",
                 "connectorQueue": "farmer-registry-connector-v2-far",

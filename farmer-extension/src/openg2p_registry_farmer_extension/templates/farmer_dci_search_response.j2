@@ -376,9 +376,18 @@
   "last_updated": {{ (farmer.get('last_approved_at') or '') | tojson }}
 {#- The Farmer reference that Crop and Livestock keep of a farmer, added to the
     farmer extension's DCI search response as one more top-level object. A
-    Consent Manager scope of "farmer_reference" releases exactly this block.
+    Consent Manager scope of "farmer_reference" releases exactly this block
+    (meta_data/data-scopes/farmer_reference.json lists its fields).
     Everything above this comment is openg2p_farmer_to_dci.json.j2 unchanged
-    (test/unit/test_dci_search_response.py holds it to that file). -#}
+    (test/unit/test_dci_search_response.py holds it to that file).
+
+    It carries every field of the Farmer tab except the Fayda verification,
+    the documents and the staff who created or approved the record, so the
+    receiving registries keep the same farmer details. The photo travels as
+    its bytes (farmer_photo, register_domain/services/dci_photo.py): a
+    document id means nothing to another registry. approved_at is the latest
+    approval of the farmer or of one of its phone numbers, so a phone-only
+    change is a newer version too. -#}
 ,
 {%- set source = farmer -%}
 {%- set hierarchy = (source.get('geo_code_hierarchy_json') or {}).get('hierarchy') or [] -%}
@@ -392,10 +401,20 @@
 {%- endif -%}
 {%- endfor -%}
 {%- set identifier = (source.get('foundational_id') or '') | string | replace(' ', '') -%}
-{%- set approved = (source.get('last_approved_at') or '') | string -%}
 {%- set phones = source.get('farmer_phone') or [] -%}
-{%- set phone = phones[0].get('phone_number') if phones else none -%}
+{%- set latest = namespace(approved=(source.get('last_approved_at') or '') | string) -%}
+{%- for item in phones -%}
+{%- if (item.get('last_approved_at') or '') | string > latest.approved -%}{%- set latest.approved = item.get('last_approved_at') | string -%}{%- endif -%}
+{%- endfor -%}
+{%- set approved = latest.approved -%}
+{%- set primary = namespace(number=none) -%}
+{%- for item in phones -%}
+{%- if primary.number is none and item.get('is_primary') -%}{%- set primary.number = item.get('phone_number') -%}{%- endif -%}
+{%- endfor -%}
+{%- set phone = primary.number if primary.number is not none else (phones[0].get('phone_number') if phones else none) -%}
 {%- set amharic = (source.get('language_spoken') or '') | string | upper == 'AMHARIC' -%}
+{%- set has_local = source.get('first_name_local') or source.get('middle_name_local') or source.get('last_name_local') -%}
+{%- set other = has_local and not amharic -%}
 "farmer_reference": {
   "source_record_id": {{ source.get('internal_record_id') | tojson }},
   "farmer_id": {{ source.get('functional_record_id') | tojson }},
@@ -403,19 +422,53 @@
   "fan": {{ (identifier if identifier | length == 16 else none) | tojson }},
   "approved_at": {{ ((approved if approved.endswith('Z') or '+' in approved else approved ~ 'Z') if approved else none) | tojson }},
   "record_status": {{ source.get('record_status') | tojson }},
+  "photo": {{ (farmer_photo(source.get('record_image_url')) if farmer_photo is defined else none) | tojson }},
+  "has_national_id": {{ source.get('has_national_id') | tojson }},
+  "rid": {{ source.get('rid') | tojson }},
+  "odk_farmer_id": {{ source.get('odk_farmer_id') | tojson }},
+  "pula_id": {{ source.get('pula_id') | tojson }},
   "first_name": {{ source.get('first_name') | tojson }},
   "middle_name": {{ source.get('middle_name') | tojson }},
   "last_name": {{ source.get('last_name') | tojson }},
+  "language_spoken": {{ source.get('language_spoken') | tojson }},
   "first_name_amh": {{ (source.get('first_name_local') if amharic else none) | tojson }},
   "middle_name_amh": {{ (source.get('middle_name_local') if amharic else none) | tojson }},
   "last_name_amh": {{ (source.get('last_name_local') if amharic else none) | tojson }},
+  "first_name_other": {{ (source.get('first_name_local') if other else none) | tojson }},
+  "middle_name_other": {{ (source.get('middle_name_local') if other else none) | tojson }},
+  "last_name_other": {{ (source.get('last_name_local') if other else none) | tojson }},
   "gender": {{ source.get('gender') | tojson }},
   "birth_date": {{ source.get('birth_date') | tojson }},
+  "birth_date_ec": {{ source.get('birth_date_ec') | tojson }},
+  "estimated_age": {{ source.get('estimated_age') | tojson }},
+  "marital_status": {{ source.get('marital_status') | tojson }},
+  "education_level": {{ source.get('education_level') | tojson }},
+  "disabled": {{ source.get('disabled') | tojson }},
+  "disability_type": {{ source.get('disability_type') | tojson }},
+  "disability_severity": {{ source.get('disability_severity') | tojson }},
+  "source_of_income": {{ source.get('source_of_income') | tojson }},
+  "income_sources": {{ source.get('income_sources') | tojson }},
+  "source_of_income_other": {{ source.get('source_of_income_other') | tojson }},
+  "is_psnp_user": {{ source.get('is_psnp_user') | tojson }},
+  "is_farmer": {{ source.get('is_farmer') | tojson }},
+  "farming_type": {{ source.get('farming_type') | tojson }},
   "mobile_number": {{ phone | tojson }},
+  "phones": [
+    {%- for item in phones %}
+    {"phone_type": {{ item.get('phone_type') | tojson }}, "phone_number": {{ item.get('phone_number') | tojson }},
+     "country_code": {{ item.get('country_code') | tojson }}, "is_primary": {{ item.get('is_primary') | tojson }},
+     "phone_e164": {{ item.get('phone_e164') | tojson }}}{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ],
+  "email": {{ source.get('email') | tojson }},
   "address_line_1": {{ source.get('address_line_1') | tojson }},
   "address_line_2": {{ source.get('address_line_2') | tojson }},
   "postal_code": {{ source.get('postal_code') | tojson }},
   "country_code": {{ source.get('country_code') | tojson }},
+  "plus_code": {{ source.get('plus_code') | tojson }},
+  "latitude": {{ source.get('latitude') | tojson }},
+  "longitude": {{ source.get('longitude') | tojson }},
+  "altitude": {{ source.get('altitude') | tojson }},
   "geo_lowest_level_value_id": {{ source.get('geo_lowest_level_value_id') | tojson }},
   "geo_code_hierarchy_json": {{ source.get('geo_code_hierarchy_json') | tojson }},
   "region_id": {{ geo.region_id | tojson }}, "region_name": {{ geo.region_name | tojson }},

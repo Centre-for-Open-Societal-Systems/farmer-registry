@@ -73,7 +73,9 @@ def delivery_hash(root=ROOT):
     """Bind code, chart, migrations and overlays; omit downloads and local output."""
     result = hashlib.sha256()
     for directory in ("ci", "helm", "scripts", "integrations", "docker", "farmer-extension", "test/runtime"):
-        for path in sorted((root / directory).rglob("*")):
+        # Order by the POSIX relative path: Windows sorts Path objects case-insensitively,
+        # so sorting the paths themselves gives a different hash for the same tree.
+        for path in sorted((root / directory).rglob("*"), key=lambda p: p.relative_to(root).as_posix()):
             relative = path.relative_to(root)
             if not path.is_file() or {"charts", "__pycache__", ".pytest_cache", ".venv"}.intersection(relative.parts):
                 continue

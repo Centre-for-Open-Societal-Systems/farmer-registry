@@ -12,6 +12,7 @@ def install():
     )
     from .register_domain.services.attribute_messages import install_attribute_messages
     from .register_domain.services.outgest_json import install_outgest_json
+    from .register_domain.services.dci_photo import install_dci_photo
     from .odk import install as install_odk
 
     install_registrant_auth_compat()
@@ -19,3 +20,4 @@ def install():
     install_attribute_messages()
     install_outgest_json()
     install_odk()
+    install_dci_photo()

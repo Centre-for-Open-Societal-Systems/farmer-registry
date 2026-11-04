@@ -16,4 +16,4 @@ connectorHostname: connector-farmer-registry.oanstaging.com
 apiServers:
   - https://10.0.1.212:6443
   - https://52.66.116.220:6443
-platform: 1.2.2-rc.614
+platform: 1.2.2-rc.625

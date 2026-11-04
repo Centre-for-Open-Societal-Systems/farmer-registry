@@ -83,7 +83,7 @@ registry is the source (`meta_data/50_outgestion.sql`, templates in
 
 | What | How |
 |---|---|
-| Lookup | the signed, consent-checked DCI search on the partner API. Its response is the farmer extension's own template plus a `farmer_reference` block (record id, farmer id, FIN or FAN, approval time, status, names, Amharic names, phone, location). `templates/farmer_dci_search_response.j2` is upstream's template unchanged with the block as its last object; `test/unit/test_dci_search_response.py` fails when upstream's template changes until it is copied in again. A Consent Manager policy with scope `farmer_reference` releases that block only |
+| Lookup | the signed, consent-checked DCI search on the partner API. Its response is the farmer extension's own template plus a `farmer_reference` block: every Farmer-tab field except the Fayda verification, the documents and the staff who created or approved the record (identity and other IDs, names in English and the farmer's own language, personal, socio-economic and health details, all phone numbers, email, address, map pin and location), and the photo as its bytes with a SHA-256 (`register_domain/services/dci_photo.py`). Its approval time is the latest approval of the farmer or of one of its phone numbers. `templates/farmer_dci_search_response.j2` is upstream's template unchanged with the block as its last object; `test/unit/test_dci_search_response.py` fails when upstream's template changes until it is copied in again. A Consent Manager policy with scope `farmer_reference` releases that block only; `meta_data/data-scopes/farmer_reference.json` lists its fields |
 | Change notice | outgestion publishes `farmer_reference.changed.v1` (event id, farmer id, FIN or FAN; no personal details) to the WebSub topic `oan.farmer-reference.changed.v1` on every approved farmer change; receivers fetch the details through the lookup |
 | Seed | `LOAD_TEMPLATES=true` uploads both templates (`farmer_dci_search_response.j2`, `farmer_reference_changed_v1.j2`); the Farmer register's `outgest_applicable` is on |
 
@@ -165,7 +165,7 @@ userinfo and compares `individual_id` with the FIN. Core keeps the sign-in
 transactions in Redis, so the staff API needs
 `REGISTRY_CORE_REGISTRANT_AUTH_REDIS_URL`.
 
-The pinned platform (`1.2.2-rc.614`) calls `get_async_session_maker` in the
+The pinned platform (`1.2.2-rc.625`) calls `get_async_session_maker` in the
 registrant authentication service without importing it;
 `register_domain/services/registrant_auth_compat.py` gives the module that name
 until a platform image does (a no-op then).

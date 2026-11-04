@@ -73,6 +73,10 @@ for TEST_MODE in normal recovery; do
     esac
     if [ "$TEST_UPGRADE_EXIT" -eq 1 ]; then
       grep -q ' diagnose ' "$GUARD_CALLS"
+      case "$TEST_MODE" in
+        normal) grep -q 'atomic upgrade has put the previous revision back' "$TEST_ROOT/output" ;;
+        recovery) if grep -q 'atomic upgrade has put' "$TEST_ROOT/output"; then echo 'Recovery must not claim a rollback'; exit 1; fi ;;
+      esac
       grep -q '^history ' "$HELM_CALLS"
       test "$(grep -c '^get hooks ' "$HELM_CALLS")" = 1
     else

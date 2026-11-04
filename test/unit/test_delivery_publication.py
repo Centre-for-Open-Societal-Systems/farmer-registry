@@ -1,4 +1,4 @@
-"""A source merge can publish images without selecting any cluster writer."""
+"""Every develop build publishes the images and deploys them; fresh-install stays a deliberate choice."""
 import importlib.util
 import json
 from pathlib import Path
@@ -23,13 +23,16 @@ COMPONENTS = ("staff-api", "partner-api", "celery", "db-seed", "sanity-tests", "
 
 
 @pytest.mark.parametrize("environment", [{}, {"DELIVERY_ACTION": ""}, {"DELIVERY_ACTION": "publish-only"}])
-def test_first_build_or_explicit_publication_never_selects_deployment(environment):
-    assert delivery.action(environment) == "publish-only"
+def test_first_build_or_a_stale_parameter_definition_deploys(environment):
+    # A branch-index build has no parameter yet, and a build started before the button was removed still
+    # offers the retired publish-only choice: both mean the default, deploy.
+    assert delivery.action(environment) == "deploy"
 
 
 @pytest.mark.parametrize("selected", ["deploy", "fresh-install"])
-def test_cluster_actions_are_explicit_choices(selected):
+def test_delivery_actions_are_the_two_choices(selected):
     assert delivery.action({"DELIVERY_ACTION": selected}) == selected
+    assert delivery.ACTIONS == ("deploy", "fresh-install")
 
 
 @pytest.mark.parametrize("environment", [
@@ -51,7 +54,7 @@ def published(tmp_path, monkeypatch):
     path.write_text("".join(f"{component}\t{ECR}/openg2p/farmer-registry/{component}:{COMMIT[:12]}\tsha256:{'c' * 64}\n"
                             for component in COMPONENTS), encoding="utf-8")
     return {"ECR_REGISTRY": ECR, "IMAGE_TAG": COMMIT[:12], "SOURCE_COMMIT": COMMIT,
-            "DELIVERY_ACTION": "publish-only"}, path
+            "DELIVERY_ACTION": "deploy"}, path
 
 
 def test_publication_receipt_records_all_digests_and_no_deployment_claim(published):
@@ -84,7 +87,7 @@ def test_receipt_rejects_incomplete_or_mismatched_build_provenance(published, de
         delivery.publication(environment)
 
 
-def test_every_cluster_or_optional_stage_requires_explicit_deploy():
+def test_every_cluster_or_optional_stage_runs_for_develop_only():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
     for stage, actions in (("Deploy (registry)", "env.DELIVERY_ACTION in ['deploy', 'fresh-install']"),
                            ("Build (services)", "env.DELIVERY_ACTION == 'deploy'"),
@@ -99,7 +102,8 @@ def test_every_cluster_or_optional_stage_requires_explicit_deploy():
     assert "COORDINATE_SERVICES', defaultValue: false" in pipeline
     assert "ci-output/native-worker-save/**" in pipeline
     assert "check_native_worker_save.py" in (ROOT / "ci/build/images.sh").read_text()
-    assert "choices: ['publish-only', 'deploy', 'fresh-install']" in pipeline
+    assert "choices: ['deploy', 'fresh-install']" in pipeline
+    assert "publish-only" not in pipeline.split("parameters {", 1)[1].split("stages {", 1)[0]
     assert "RESET_ACTION" not in pipeline
 
 
@@ -129,3 +133,26 @@ def test_native_worker_probe_accepts_existing_hosted_ci_and_jenkins_only():
 ])
 def test_native_worker_probe_rejects_other_jobs_and_local_fallback(key, value):
     assert not worker.permitted_ci("linux", {**JENKINS, key: value})
+
+
+def test_the_pin_proposal_is_followed_only_by_the_image_pull_request_and_cannot_fail_the_build():
+    pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
+    tail = pipeline.split("stage('Propose chart pin update')", 1)[1].split("    post {", 1)[0]
+    stage = tail.split("stage('Open oan-helm image PR')", 1)[0]
+    assert tail.count("stage(") == 1                                # only the oan-helm image pull request follows it
+    definition = stage.split("steps {", 1)[0]
+    assert "branch 'develop'" in definition and "not { changeRequest() }" in definition
+    assert "env.DELIVERY_ACTION == 'deploy'" in definition         # not after a fresh install
+    assert "agent { label 'vpn-agent2' }" in definition
+    assert "catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE')" in stage
+    assert "PIN_PR_CRED_ID = 'oan-ci-app'" in pipeline
+    assert "credentialsId: \"${PIN_PR_CRED_ID}\"" in stage
+    assert "ci/deploy/propose_pin_pr.py" in stage
+    assert "VALIDATION_IMAGE" in stage
+
+
+def test_a_failed_deploy_never_reaches_the_pin_proposal():
+    # Declarative pipelines skip later stages once the build has failed; the registry deploy has no catchError.
+    pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
+    deploy = pipeline.split("stage('Deploy (registry)')", 1)[1].split("stage('Build (services)')", 1)[0]
+    assert "catchError" not in deploy
