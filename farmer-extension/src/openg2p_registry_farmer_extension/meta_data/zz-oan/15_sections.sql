@@ -114,7 +114,10 @@ ON CONFLICT ("section_id") DO UPDATE SET
 
 -- Apply after both derived and OAN-only sections exist. Walking the full JSON
 -- also covers dates in table columns (household members and child registers).
--- This is metadata configuration; the date widget and stored field stay native.
+-- Every entered date uses upstream's date widget in the Ethiopian calendar
+-- ("widget-data-format": {"calendar": "ethiopic"}, registry-widgets
+-- 1.1.9-dev.17 on the platform 1.2 branch). The stored value stays the
+-- Gregorian ISO date. Read-only dates keep the Gregorian display.
 CREATE OR REPLACE FUNCTION pg_temp.oan_ethiopian_dates(node jsonb)
 RETURNS jsonb LANGUAGE plpgsql AS $$
 DECLARE
@@ -126,13 +129,20 @@ BEGIN
   ELSIF jsonb_typeof(node) = 'object' THEN
     SELECT COALESCE(jsonb_object_agg(key, pg_temp.oan_ethiopian_dates(value)), '{}'::jsonb)
       INTO result FROM jsonb_each(node);
-    IF node->>'widget' = 'date' AND COALESCE((node->>'widget-readonly')::boolean, false) = false THEN
-      result := result || '{"widget-variant": "ethiopian"}'::jsonb;
-      -- Native TableCellDate ignores variants. A registered custom cell type
-      -- takes TableWidget's supported WidgetRenderer path and row callback.
-      IF node ? 'column-key' THEN
-        result := result || '{"widget": "oan-ethiopian-date-input"}'::jsonb;
-      END IF;
+    -- Metadata seeded before the native calendar used an OAN widget variant
+    -- and table-cell alias; both go back to the native date widget.
+    IF result->>'widget' = 'oan-ethiopian-date-input' THEN
+      result := result || '{"widget": "date"}'::jsonb;
+    END IF;
+    IF result->>'widget-variant' = 'ethiopian' THEN
+      result := result - 'widget-variant';
+    END IF;
+    IF result->>'widget' IN ('date', 'oan-next-due-date')
+       AND COALESCE((result->>'widget-readonly')::boolean, false) = false THEN
+      result := jsonb_set(result, '{widget-data-format}',
+        CASE WHEN jsonb_typeof(result->'widget-data-format') = 'object'
+             THEN result->'widget-data-format' ELSE '{}'::jsonb END
+        || '{"calendar": "ethiopic"}'::jsonb);
     END IF;
   ELSE
     result := node;
