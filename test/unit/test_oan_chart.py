@@ -78,7 +78,7 @@ def test_normal_guard_checks_init_environment_and_new_pvc():
 def test_pin_is_the_deployed_dev_chart_without_promotion_flags():
     pin = oan_chart.profile()
     assert (pin['environment'], pin['namespace'], pin['release']) == ('dev', 'farmer', 'farmer-registry')
-    # The version moves with reviewed pin pull requests (ci/deploy/propose_pin_pr.py); the platform only with the images.
+    # The version moves with reviewed pin pull requests (ci/deploy/bump_pin.py); the platform only with the images.
     assert re.fullmatch(r'1\.0\.0-dev\.\d+', pin['version'])
     assert pin['platformVersion'] in oan_compat.REVIEWED_PLATFORMS
     assert 'promotionReady' not in pin and 'freshDatabaseEpoch' not in pin
@@ -95,11 +95,11 @@ def test_deployment_requires_the_dev_pin_for_dev(monkeypatch):
 def test_staging_pin_is_the_dev_chart_made_for_staging():
     dev, staging = oan_chart.profile('dev'), oan_chart.profile('staging')
     assert (staging['environment'], staging['namespace'], staging['release']) == ('staging', 'farmer', 'farmer-registry')
-    # Staging is pinned to oan-helm aac0608 (chart dev.21) and moves only by a reviewed change; dev follows
+    # Staging is pinned to oan-helm d7588ad (chart dev.20) and moves only by a reviewed change; dev follows
     # oan-helm main through pin pull requests. Same chart name; dev may run a newer reviewed platform first.
     assert staging['name'] == dev['name']
     assert {staging['platformVersion'], dev['platformVersion']} <= oan_compat.REVIEWED_PLATFORMS
-    assert (staging['version'], staging['platformVersion']) == ('1.0.0-dev.21', '1.2.2-rc.625')
+    assert (staging['version'], staging['platformVersion']) == ('1.0.0-dev.20', '1.2.2-rc.614')
     assert staging['repository'].split('/')[-3] == staging['values']['commit']
 
 

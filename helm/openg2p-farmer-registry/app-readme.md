@@ -1,40 +1,29 @@
-# OpenG2P Farmer Registry
+# OAN Farmer Registry
 
-A ready-to-install **Farmer Registry** built on the OpenG2P registry platform.
+OpenAgriNet (OAN) application developed in the Centre for Open Societal Systems
+(COSS) repositories. This chart reuses the pinned OpenG2P registry platform.
 
-This package is a thin overlay over the shared **openg2p-registry** chart: it
-adds the farmer domain (registers, schemas, seed metadata and DCI templates) via
-the farmer-built images, and reuses the platform's service templates, IAM/Keycloak
-wiring, db-seed machinery and sanity suite unchanged.
+| Source | GitHub repository |
+| --- | --- |
+| OAN application | [farmer-registry](https://github.com/Centre-for-Open-Societal-Systems/farmer-registry) |
+| OAN Helm sources | [oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm/tree/main/charts/openg2p-farmer-registry) |
+| OAN dashboard component | [farmer-registry-dashboard-api](https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api) |
+| OAN dashboard component | [oan_farmerregistry_dashboard](https://github.com/Centre-for-Open-Societal-Systems/oan_farmerregistry_dashboard) |
 
-- **Platform chart & images:** published by
-  [registry-platform](https://github.com/OpenG2P/registry-platform); this chart
-  pins a specific `openg2p-registry` version as a dependency.
-- **What to set:** the ingress host (`global.registryHostname`) and, for a real
-  environment, the shared commons endpoints (Postgres, Keycloak, Consent/Partner
-  Management, AWE, Audit) via the inherited `global.*` values.
-- **Sanity suite:** set `registry.sanity.runE2e=true` to run the full end-to-end
-  check (DCI search + change-request → AWE approval) after install.
+The Helm chart name retains its `openg2p-` prefix to preserve the existing release
+and resource names. It does not identify the application source owner. The
+OpenG2P dependency repository contains reused platform templates; application
+images and provenance are configured by this OAN chart.
 
-COSS application repositories are declared in `values.yaml` under
-`cossAddons.components`:
+Use chart version **1.0.0-dev.5** and upgrade the current release in its current
+namespace. Review private values, image digests and namespace-local Secret
+references before applying changes. Optional dashboard components remain at
+their explicit enablement settings; DA workloads await verified images/config.
 
-| Add-on | Application source | Helm owner |
-| --- | --- | --- |
-| Farmer dashboard | `Centre-for-Open-Societal-Systems/oan_farmerregistry_dashboard` | `farmer-registry-dashboard` |
-| Farmer dashboard API | `Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api` | `farmer-registry`, through `dashboardApi.image` |
-| Registry connector | `OpenG2P/registry-connector` | `farmer-registry-connector` |
+See [included services](https://github.com/Centre-for-Open-Societal-Systems/oan-helm/blob/main/docs/service-catalog.md),
+[readiness](https://github.com/Centre-for-Open-Societal-Systems/oan-helm/blob/main/docs/readiness.md) and
+[Rancher instructions](https://github.com/Centre-for-Open-Societal-Systems/oan-helm/blob/main/docs/rancher-dev.md).
 
-Jenkins reads this Helm catalogue directly. It builds the dashboard repositories'
-`develop` branches for dev and `staging` branches for staging. Missing application
-files preserve deployed services. The API is updated by image only, preserving
-the Registry release's other resources and suppressing setup Jobs. The connector
-uses a pinned upstream develop commit and separate storage; its preparation
-values keep ingestion stopped. No livestock, crop or shared dashboard is owned
-by this Farmer chart.
-
-These Git repositories are application sources, rather than Helm chart indexes.
-Only the pinned platform chart is a Helm dependency: making the connector a
-dependency would couple Registry upgrades and removal to connector ingestion.
-
-See the deployment docs at [docs.openg2p.org](https://docs.openg2p.org).
+Dev URLs use `<service>.development.oanstaging.com`. The environment-owned
+wildcard DNS/TLS and `istio-system/development` Gateway must be prepared first.
+See the service onboarding and enablement guide in `docs/service-onboarding.md`.

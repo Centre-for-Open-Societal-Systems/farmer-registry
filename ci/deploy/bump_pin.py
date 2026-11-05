@@ -13,9 +13,8 @@ the pin. It never touches a cluster. The pin changes in a reviewed pull request,
 higher version than the pin; a different archive for the same version is an error (published archives are immutable)
 and an older chart is never proposed (no downgrade). The dev release takes its values from the live release, so no
 values file is pinned for dev (ci/deploy/oan-chart-staging.json is a separate pin and is never touched here).
-The last stage of the develop Jenkins build (ci/deploy/propose_pin_pr.py) runs this after every successful deploy and
-opens the pull request, unless the platform version changes: the images and ci/deploy/oan_compat.py have to move with
-that (see NOTE below), so the stage reports it and leaves the change to a person.
+A develop build deploys the chart it packaged itself, so this pin only serves a deploy run by hand. A platform version
+change needs the images and ci/deploy/oan_compat.py to move with it (see NOTE below).
 
 A new platform version is NOT propagated automatically: the Dockerfiles (ARG BASE_IMAGE_VERSION), the chart
 dependency in helm/openg2p-farmer-registry, REVIEWED_PLATFORMS in ci/deploy/oan_compat.py, ci/environments.py,

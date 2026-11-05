@@ -38,7 +38,7 @@ def component():
 
 
 def record(component):
-    return {"commit": SHA, "repository": ECR + "/" + component.get("imageRepository", "openg2p/" + component["name"]),
+    return {"commit": SHA, "repository": ECR + "/" + component.get("imageRepository", "openg2p/farmer-registry/" + component["name"]),
             "tag": SHA[:12], "digest": DIGEST, "chartHash": "c" * 64, "outcome": "built"}
 
 
@@ -468,12 +468,12 @@ def test_promotion_rejects_tampered_artifact(component, field, value):
 
 
 def test_promoted_image_contains_exact_digest(component):
-    assert coordinator.artifact(component, record(component), ECR) == ECR + "/openg2p/example:" + SHA[:12] + "@" + DIGEST
+    assert coordinator.artifact(component, record(component), ECR) == ECR + "/openg2p/farmer-registry/example:" + SHA[:12] + "@" + DIGEST
 
 
 def test_all_connector_images_are_pinned_and_ui_tampering_is_rejected():
     component = coordinator.configuration()[0]
-    images = {role: {"repository": ECR + "/openg2p/registry-connector-" + role,
+    images = {role: {"repository": ECR + "/openg2p/farmer-registry/registry-connector-" + role,
                      "tag": SHA[:12], "digest": DIGEST} for role in ("api", "ui")}
     item = dict(images["api"], commit=SHA, chartHash="c" * 64, images=images)
     assert set(coordinator.image_artifacts(component, item, ECR)) == {"api", "ui"}
@@ -484,7 +484,7 @@ def test_all_connector_images_are_pinned_and_ui_tampering_is_rejected():
 
 def test_connector_bundle_requires_both_api_and_ui_digests():
     component = coordinator.configuration()[0]
-    item = {"repository": ECR + "/openg2p/registry-connector-api", "commit": SHA,
+    item = {"repository": ECR + "/openg2p/farmer-registry/registry-connector-api", "commit": SHA,
             "tag": SHA[:12], "digest": DIGEST, "chartHash": "c" * 64,
             "images": {"api": {"digest": DIGEST}}}
     with pytest.raises(coordinator.ServiceError, match="missing-component-image"):
@@ -493,7 +493,7 @@ def test_connector_bundle_requires_both_api_and_ui_digests():
 
 def test_overlay_change_requires_another_image_tag():
     component = coordinator.configuration()[0]
-    item = {"repository": ECR + "/openg2p/registry-connector-api", "commit": SHA,
+    item = {"repository": ECR + "/openg2p/farmer-registry/registry-connector-api", "commit": SHA,
             "tag": SHA[:12], "digest": DIGEST, "chartHash": "c" * 64,
             "overlayHashes": {"api": "d" * 64}}
     with pytest.raises(coordinator.ServiceError, match="invalid-promotion-artifact"):

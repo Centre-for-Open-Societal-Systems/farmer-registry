@@ -14,9 +14,7 @@ pipeline {
         HELM_NAMESPACE = 'farmer'
         KUBECONFIG_CREDENTIAL = 'farmer-dev-kubeconfig'
         // GitHub App credential (username + installation token) with Contents and Pull requests write on this repository.
-        PIN_PR_CRED_ID = 'oan-ci-app'
-        // "Username with password" for the very last stage: the GitHub account that owns the fork of oan-helm and its
-        // classic token (public_repo). The image pull request goes from that fork into oan-helm main.
+        // "Username with password" for the very last stage: a maintainer account with push access to oan-helm.
         OAN_HELM_FORK_CRED_ID = 'oan-helm-fork-token'
     }
     parameters {
@@ -115,9 +113,32 @@ pipeline {
                           -v "$PWD:/repo" "coss-ci/validation:$IMAGE_TAG" \
                           python ci/delivery.py publication service-outcomes/publication.json
                     '''
-                    // Only the digests, for the last stage ("Open oan-helm image PR").
+                    // Only the digests, for the stage "Package chart".
                     stash name: 'image-digests', includes: 'service-outcomes/registry-images.tsv'
                 }
+            }
+        }
+        stage('Package chart') {
+            // helm/openg2p-farmer-registry with this build's images (ci/deploy/package_chart.py). The deploy installs this
+            // archive and "Publish chart" publishes the same one, so what runs on New Dev is what oan-helm lists. It needs
+            // the git history for the version, so it is not part of the deployment stash.
+            when {
+                beforeAgent true
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION in ['deploy', 'fresh-install'] } }
+            }
+            agent { label 'vpn-agent2' }
+            options { timeout(time: 15, unit: 'MINUTES') }
+            steps {
+                checkout scm
+                sh 'mkdir -p service-outcomes && rm -f service-outcomes/registry-images.tsv'
+                unstash 'image-digests'
+                script {
+                    def subject = sh(returnStdout: true, script: 'git log -1 --pretty=%s').trim()
+                    withEnv(["COMMIT_SUBJECT=${subject}"]) {
+                        sh 'python3 ci/deploy/package_chart.py package'
+                    }
+                }
+                stash name: 'built-chart', includes: 'built-chart/**'
             }
         }
         stage('Deploy (package)') {
@@ -136,6 +157,7 @@ pipeline {
                 dir('dev-deployment') {
                     deleteDir()
                     unstash 'dev-deployment'
+                    unstash 'built-chart'
                     withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
                         script {
                           def deployRegistry = {
@@ -146,6 +168,7 @@ pipeline {
                                   sh '''
                             set -eu
                             export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
+                            export BUILT_CHART_DIR="$PWD/built-chart"
                             docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
                             bash ci/deploy/fresh-install-dev.sh
                             '''
@@ -154,6 +177,7 @@ pipeline {
                                 sh '''
                             set -eu
                             export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
+                            export BUILT_CHART_DIR="$PWD/built-chart"
                             docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
                             bash ci/deploy/deploy-dev.sh
                             '''
@@ -227,39 +251,11 @@ pipeline {
                 }
             }
         }
-        stage('Propose chart pin update') {
-            // Last stage: when oan-helm main has a newer Farmer chart than ci/deploy/oan-chart.json, open a pull
-            // request to develop that moves the pin. It never deploys and never pushes to develop; a person merges
-            // it, and the next develop build deploys it. A failure here marks this stage UNSTABLE and never fails the build.
-            when {
-                beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' } }
-            }
-            agent { label 'vpn-agent2' }
-            options { timeout(time: 10, unit: 'MINUTES') }
-            steps {
-                checkout scm
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    withCredentials([usernamePassword(credentialsId: "${PIN_PR_CRED_ID}", usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
-                        sh '''
-                            set -eu
-                            docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
-                            VALIDATION_IMAGE="coss-ci/validation:$IMAGE_TAG" python3 ci/deploy/propose_pin_pr.py
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Open oan-helm image PR') {
+        stage('Publish chart') {
             // The last stage. After the images were pushed AND deployed to New Dev (a failed deploy fails the build, so
-            // this stage never runs for it): put this build's image tags and digests into the oan-helm Farmer chart
-            // (charts/openg2p-farmer-registry/values.yaml) through a pull request from the fork of oan-helm (GH_USER/oan-helm)
-            // into Centre-for-Open-Societal-Systems/oan-helm main (ci/deploy/release_images.py). The stage does not wait for
-            // the merge and ends green once the pull request is open; a person with write access merges it and oan-helm's
-            // release workflow then publishes the chart and updates CHANGELOG.md. If the pull request cannot be opened the
-            // stage is UNSTABLE and says why. One pull request per commit merged to develop: a re-run of a commit that
-            // oan-helm main already carries opens nothing, and neither does the merge of a chart-pin pull request.
+            // this stage never runs for it): add the archive of "Package chart" to repository/develop/ of oan-helm. No
+            // pull request and no merge: oan-helm's workflow updates the index, the changelog and the rollback history.
+            // If publishing fails the stage is UNSTABLE and says why; New Dev already runs the build.
             when {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' } }
@@ -268,16 +264,12 @@ pipeline {
             options { timeout(time: 15, unit: 'MINUTES') }
             steps {
                 checkout scm
-                sh 'mkdir -p service-outcomes && rm -f service-outcomes/registry-images.tsv service-outcomes/oan-helm-pr.txt'
-                unstash 'image-digests'
-                script {
-                    def subject = sh(returnStdout: true, script: 'git log -1 --pretty=%s').trim()
-                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
-                        withCredentials([usernamePassword(credentialsId: "${OAN_HELM_FORK_CRED_ID}", usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
-                            withEnv(["COMMIT_SUBJECT=${subject}"]) {
-                                sh 'python3 ci/deploy/release_images.py'
-                            }
-                        }
+                sh 'rm -rf built-chart'
+                unstash 'built-chart'
+                catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {
+                    // A maintainer's token for now; the GitHub App replaces this credential when it is configured.
+                    withCredentials([usernamePassword(credentialsId: "${OAN_HELM_FORK_CRED_ID}", usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                        sh 'python3 ci/deploy/package_chart.py publish'
                     }
                 }
             }

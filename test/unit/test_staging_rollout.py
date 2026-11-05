@@ -88,7 +88,7 @@ def test_actual_cli_rejects_unverified_template_and_accepts_recorded_staging_sta
     created = subprocess.run([sys.executable, str(ROOT / "ci/deploy/staging.py"), "template", str(path)], capture_output=True, text=True)
     assert created.returncode == 0
     template = json.loads(path.read_text())
-    assert template["namespace"] == "farmer" and template["platform"] == "1.2.2-rc.625"
+    assert template["namespace"] == "farmer" and template["platform"] == "1.2.2-rc.614"
     assert not set(staging.BASELINE_FIELDS) & set(template)
     status.write_text(json.dumps({"name": "farmer-registry", "namespace": "farmer", "version": 3, "info": {"status": "deployed"}}))
     env = dict(os.environ, DELIVERY_ENVIRONMENT="staging", STAGING_EVIDENCE_FILE=str(path), SOURCE_COMMIT=SHA)
@@ -102,7 +102,7 @@ def test_actual_cli_rejects_unverified_template_and_accepts_recorded_staging_sta
 
 
 def test_oan_evidence_reads_the_platform_from_the_pin_and_needs_no_baseline(tmp_path, oan_evidence):
-    assert staging.pinned_platform() == "1.2.2-rc.625"
+    assert staging.pinned_platform() == "1.2.2-rc.614"
     record = verify(tmp_path, oan_evidence)
     assert not set(staging.BASELINE_FIELDS) & set(record)
     assert record["registry"]["images"]["staff-api"]["digest"] == DIGEST

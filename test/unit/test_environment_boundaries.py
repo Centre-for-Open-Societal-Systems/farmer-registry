@@ -27,10 +27,10 @@ def test_existing_environment_requires_matching_namespace_and_hostname(environme
         delivery.validate_release(environment, status, {"global": {"registryHostname": delivery.configuration(other)["registryHostname"]}})
 
 
-def test_staging_requires_rehearsal_and_shared_rc_path_without_automatic_cutover():
+def test_staging_promotes_automatically_and_keeps_the_rehearsed_manual_actions():
     pipeline = (ROOT / "ci/pipelines/staging.groovy").read_text(encoding="utf-8")
-    assert "name: 'DEPLOY_STAGING', defaultValue: false" in pipeline
-    assert "choices: ['validate-only', 'fresh-install', 'deploy']" in pipeline
+    assert "name: 'DEPLOY_STAGING', defaultValue: true" in pipeline
+    assert "choices: ['promote', 'validate-only', 'fresh-install', 'deploy']" in pipeline
     assert "params.DEPLOY_STAGING ? params.DELIVERY_ACTION : 'validate-only'" in pipeline
     assert "HELM_NAMESPACE = 'farmer'" in pipeline and "label 'vpn-agent2'" in pipeline
     assert "staging-farmer-kubeconfig" in pipeline and "ci/deploy/fresh-install-staging.sh" in pipeline
@@ -38,6 +38,7 @@ def test_staging_requires_rehearsal_and_shared_rc_path_without_automatic_cutover
     assert "staging-farmer-rehearsal" in pipeline
     assert "ci/deploy/deploy-rc.sh" in pipeline
     assert "staging-legacy" not in pipeline
+    assert "ci/deploy/promote-staging.sh" in pipeline and "oan-helm-fork-token" in pipeline
     assert "ci/deploy/deploy-dev.sh" not in pipeline
     assert "connector_cutover" not in pipeline
     shell = (ROOT / "ci/deploy/deploy-rc.sh").read_text(encoding="utf-8")
@@ -56,7 +57,7 @@ def test_staging_binds_backup_credentials_only_for_evidence_that_is_not_a_first_
 
 def test_staging_contract_is_the_oan_install_beside_the_legacy_release():
     staging = delivery.configuration("staging")
-    assert (staging["namespace"], staging["release"], staging["platform"]) == ("farmer", "farmer-registry", "1.2.2-rc.625")
+    assert (staging["namespace"], staging["release"], staging["platform"]) == ("farmer", "farmer-registry", "1.2.2-rc.614")
     assert staging["registryHostname"] == "farmer-registry.oanstaging.com"
     assert staging["staffIssuer"] == "https://keycloak.oanstaging.com/realms/staff"
     assert (staging["registryDatabase"], staging["idGeneratorDatabase"], staging["connectorDatabase"]) == (

@@ -21,53 +21,25 @@ recovered by the next build without the automatic rollback (it would restore an
 older revision over database changes the failed one already made).
 
 The chart is published by [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm);
-`oan-chart.json` pins its version and SHA-256, and `deploy-rc.sh` refuses any
-other archive. The pin moves in a reviewed pull request that the build opens
-itself (next section).
+A develop build installs the chart it packaged itself (next section). `oan-chart.json` is the fallback
+for a deploy run by hand without `BUILT_CHART_DIR`: it pins a version and SHA-256, and `deploy-rc.sh`
+refuses any other archive. `ci/deploy/bump_pin.py` moves it.
 
-## Chart pin updates
+## Chart packaging and publication
 
-The last stage of a successful `deploy` build (`Propose chart pin update`) runs
-`ci/deploy/propose_pin_pr.py`. It compares the pin with the newest Farmer chart on
-the head of oan-helm `main`:
+A develop `deploy` or `fresh-install` build runs `ci/deploy/package_chart.py` twice:
 
-- same chart: "up to date", nothing happens;
-- newer chart, same platform: it writes the new pin on a branch
-  `bot/oan-chart-pin-<version>-<sha8>`, verifies the archive and runs the pin tests in
-  the validation container, and opens a pull request to `develop`. Merging it is the
-  deploy of the new chart; the PR text says what to read first;
-- newer chart with another platform version: reported, nothing proposed (the images,
-  `oan_compat.py` and the chart dependency must move with it; see
-  `ci/deploy/bump_pin.py --help`);
-- an older chart, or a different archive for the same version: refused.
+- `Package chart`, before the deploy: the version comes from git (`0.0.0-develop.<commit count>`, using
+  `scripts/ci/derive-version.sh` of oan-helm). The stage packages `helm/openg2p-farmer-registry`, with the
+  tag `<commit12>@sha256:<digest>` of `staffUi`, `staffApi`, `partnerApi`, `celeryWorker`, `celeryBeat`,
+  `dbSeed` and `sanity` written into the packaged copy only, and writes `built-chart/` with the archive and
+  its `pin.json`. If this stage fails nothing is deployed.
+- The deploy installs that archive (`BUILT_CHART_DIR`, verified against `pin.json` by `oan_chart.py`).
+- `Publish chart`, last, `deploy` builds only: the same archive goes to `repository/develop/` of oan-helm,
+  where a workflow updates the index, changelog and rollback history.
 
-It needs the Jenkins credential `oan-ci-app` (GitHub App, Contents and Pull requests
-write on this repository). Without it the stage is UNSTABLE and the build still passes.
-By hand: `python3 ci/deploy/bump_pin.py --latest` (dry run) or `<commit> --write`.
-The staging pin (`oan-chart-staging.json`) is never touched by this stage.
-
-## oan-helm image pull request
-
-After the pin stage, the very last stage of a successful `deploy` build (`Open oan-helm image PR`, `develop` only, never for
-a fresh install or a pull request) runs `ci/deploy/release_images.py`. It records the build's images in the oan-helm
-Farmer chart so that the next chart release names them:
-
-- the Publish stage writes the ECR digest of each image to `service-outcomes/registry-images.tsv` and stashes it;
-- the stage rewrites the `tag` of `staffUi`, `staffApi`, `partnerApi`, `celeryWorker`, `celeryBeat`, `dbSeed` and `sanity`
-  in `charts/openg2p-farmer-registry/values.yaml` to `<commit12>@sha256:<digest>` (seven lines; the analytics and dashboard
-  images are separate services and are not touched), on the branch `bot/farmer-images-<commit12>` of the fork of oan-helm,
-  and opens a pull request from it into `Centre-for-Open-Societal-Systems/oan-helm` `main`;
-- it never waits for the merge: the stage is green once the pull request is open, and UNSTABLE (the build still passes) if
-  it cannot be opened; a person with write access merges it (checks `protected-paths` and `validate`), and oan-helm's release
-  workflow then publishes the next `openg2p-farmer-registry` version and writes the `CHANGELOG.md` entry; the pin stage of a
-  later build proposes moving the pin to it. Nothing here deploys;
-- one pull request per commit: a commit whose images oan-helm `main` already carries (re-run, Replay, rebuild) and the commit
-  that merges a chart-pin pull request (only `ci/deploy/oan-chart.json` changed) open nothing; without the second rule every
-  pin merge would start another round of image pull request, release and pin pull request.
-
-Jenkins credential `oan-helm-fork-token` ("Username with password", global): the username is the GitHub account that owns the
-fork of oan-helm, the password a classic token of that account with the `public_repo` scope (a fine-grained token cannot open
-a pull request on the organisation repository). `DRY_RUN=1` prints what would change and touches nothing.
+Nothing is committed back here, and no pull request is needed. If publishing fails the stage is UNSTABLE
+and the build still passes. See `docs/chart-channels.md` and `docs/rollback.md` in oan-helm.
 
 ## Fresh install
 

@@ -1,77 +1,41 @@
 apiVersion: v2
 name: openg2p-farmer-registry
-description: |
-  OpenG2P Farmer Registry — a thin, branded package over the shared
-  openg2p-registry chart published by the registry platform.
-
-  Registry service templates come from openg2p-registry as a pinned
-  dependency and supplies the farmer values overlay (variant identity, hostname,
-  the farmer-built images, seed toggles and the farmer sanity suite). Every
-  deployment, service, ingress, keycloak/iam wiring and the db-seed machinery
-  come from the openg2p-registry subchart. The optional COSS dashboard-api
-  Deployment and Service remain here to preserve existing release ownership.
-  COSS add-on application repositories, build layouts, image values and Helm
-  owners are configured under cossAddons.components in values.yaml. Jenkins
-  coordinates their releases and preserves services when source code is absent.
-
-  It does own the ANALYTICS layer, in templates/ — because the reporting views
-  and dashboards are written against the farmer schema and the platform has no
-  concept of them:
-
-    analytics-jobs.yaml                reporting-views + dashboard-import Jobs
-    reporting-views-refresh.yaml       CronJob refreshing the materialized views
-    dashboard-bundle-configmap.yaml    ships fr-dashboards.zip into the cluster
-    maps-content-configmap.yaml        maps content for G2P Insights
-    _maps-content.tpl                  its name helper
-    _mds-api-env.tpl                   Master Data API env (MDS_*) for the Jobs
-    superset-service-account-secret.yaml
-
-  Hook weights order these above the sanity suite (25), so rebuilding the views
-  cannot change what the sanity tests asserted against.
+description: OAN Farmer Registry for OpenAgriNet (OAN), developed in COSS repositories;
+  reuses pinned OpenG2P platform templates. Component images have independent versions.
 type: application
-
-# Version handling:
-#   This `version` is a STATIC placeholder — it is NOT the published version.
-#   The central CI pipeline (build-publish.yml -> openg2p-packaging @v1) derives
-#   the real version from git (one version per commit) and overrides it at
-#   publish time, in lockstep with the farmer images this chart references.
-#   Bumping it here only affects a local `helm package`/`helm install .`.
-version: 0.0.0-rc.0
-appVersion: "1.2.2-rc.625"
-
+version: 0.0.0
+appVersion: 1.2.2-rc.625
 keywords:
-  - openg2p
-  - registry
-  - farmer-registry
-home: https://openg2p.org
+- oan
+- openagrinet
+- coss
+- openg2p
+- registry
+- farmer-registry
+home: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
 icon: https://openg2p.github.io/openg2p-helm/openg2p-logo.png
 sources:
-  - https://github.com/OpenG2P/farmer-registry
-  - https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
-  - https://github.com/Centre-for-Open-Societal-Systems/oan_farmerregistry_dashboard
-  - https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api
-  - https://github.com/OpenG2P/registry-connector
+- https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
+- https://github.com/Centre-for-Open-Societal-Systems/oan-helm
+- https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api
+- https://github.com/Centre-for-Open-Societal-Systems/oan_farmerregistry_dashboard
+- https://github.com/OpenG2P/farmer-registry
+- https://github.com/OpenG2P/registry-connector
 maintainers:
-  - name: OpenG2P
-    email: info@openg2p.org
-
-# The Farmer Registry is the openg2p-registry chart plus a values overlay. The
-# openg2p-registry version is HARDCODED (not CI-rewritten): the farmer images
-# extend that same base image tag, so the two are pinned together and only moved
-# deliberately. Aliased to `registry` so the overlay nests under a hyphen-free
-# key (.Values.registry.*).
-#
-# Published in the public OpenG2P Helm repository; github.com/openg2p/versions
-# lists each registry-platform RC with its chart and source revision.
+- name: OpenAgriNet (OAN) / COSS
+  url: https://github.com/Centre-for-Open-Societal-Systems/oan-helm
 dependencies:
-  - name: openg2p-registry
-    alias: registry
-    version: 1.2.2-rc.625
-    repository: https://openg2p.github.io/openg2p-helm
-
-# Rancher catalog branding
+- name: openg2p-registry
+  alias: registry
+  version: 1.2.2-rc.625
+  repository: https://openg2p.github.io/openg2p-helm
 annotations:
-  catalog.cattle.io/display-name: "OpenG2P Farmer Registry"
+  catalog.cattle.io/display-name: OAN Farmer Registry
   catalog.cattle.io/certified: partner
-  catalog.cattle.io/kube-version: ">=1.23.0-0"
-  openg2p.org/add-to-rancher: ""
+  catalog.cattle.io/kube-version: '>=1.23.0-0'
+  openg2p.org/add-to-rancher: ''
+  oan.org/owner: OpenAgriNet (OAN) / COSS
+  oan.org/application-source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
+  oan.org/chart-source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry/tree/develop/helm/openg2p-farmer-registry
+  org.opencontainers.image.source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
+  oan.org/promotion-ready: 'true'

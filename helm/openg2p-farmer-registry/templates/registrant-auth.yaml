@@ -1,0 +1,317 @@
+{{- if .Values.registrantAuth.enabled }}
+{{/*
+Registrant authentication (Fayda through eSignet) for the farmer register, as
+chart configuration instead of hand-run SQL.
+
+Core's registrant authentication needs two rows that no seed writes: the
+provider row in this registry's database (g2p_registrant_authentication_providers)
+and the OIDC client in eSignet's database (esignet.client_detail) with this
+registry's callback among its redirect URIs. Both are derived from the values
+below and written idempotently by this hook, after the seed (weight 10):
+
+  1. key (init): the client signs its token requests with an RSA key
+     (private_key_jwt). The key lives only in the Secret named by
+     registrantAuth.keySecret, mounted here as an optional volume. When the
+     Secret is absent a key is generated; it is never printed. The public JWK
+     is derived from the key either way.
+  2. store (init): when the Secret was absent, store the generated key in it.
+  3. provision: upsert the provider row (the PEM key as text bytes, which is
+     what iam_core expects) and upsert the eSignet client, adding this
+     registry's callback to any redirect URIs the other registries already
+     registered on the shared client.
+
+The Jenkins account and this Job are confined to the registry namespace; the
+Commons PostgreSQL Secret is present there as a copy, so eSignet's database is
+reached with it. eSignet caches client details in its Redis after first use, so
+a change to an existing client's name or redirect URIs may need
+`kubectl -n commons rollout restart deployment commons-services-esignet`.
+*/}}
+{{- $v := .Values.registrantAuth }}
+{{- $base := trimSuffix "/" (required "registrantAuth.esignetBaseUrl is required (the public eSignet URL)" $v.esignetBaseUrl) }}
+{{- $callback := required "registrantAuth.callbackUrl is required (the Staff API's /registrant-auth/callback)" $v.callbackUrl }}
+{{- $logo := $v.logoUri | default (printf "https://%s/favicon.ico" (tpl .Values.global.registryHostname $)) }}
+{{- $config := dict "scope" $v.scope "issuer" $base "audiences" (list $v.clientId) "jwt_assertion_aud" (printf "%s/v1/esignet/oauth/v2/token" $base) "extra_authorize_params" $v.extraAuthorizeParams }}
+{{- $clientName := dict "@none" $v.clientName "eng" $v.clientName "amh" $v.clientName }}
+{{- $hook := dict "helm.sh/hook" "post-install,post-upgrade" "helm.sh/hook-weight" "18" "helm.sh/hook-delete-policy" "before-hook-creation" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-registrant-auth
+  annotations: {{- toYaml $hook | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-registrant-auth
+  annotations: {{- toYaml $hook | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: [{{ $v.keySecret.name | quote }}]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-registrant-auth
+  annotations: {{- toYaml $hook | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-registrant-auth
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-registrant-auth
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-registrant-auth
+  annotations: {{- toYaml $hook | nindent 4 }}
+data:
+  key.sh: |
+    #!/bin/bash
+    # Use the mounted key or generate one; derive the public JWK either way.
+    set -euo pipefail
+    umask 077
+    if [ -s "/keysecret/$SECRET_KEY" ]; then
+      cp "/keysecret/$SECRET_KEY" /work/private.pem
+      echo "[registrant-auth] Using the key in Secret $SECRET_NAME."
+    else
+      openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /work/private.pem 2> /dev/null
+      touch /work/store-key
+      echo "[registrant-auth] Secret $SECRET_NAME is absent; generated a new RSA key."
+    fi
+    openssl pkey -in /work/private.pem -noout > /dev/null
+    # JWK "n" is the unsigned big-endian modulus, base64url without padding;
+    # openssl prints it as hex without a leading zero byte. "e" is 65537.
+    modulus=$(openssl rsa -in /work/private.pem -noout -modulus | cut -d= -f2)
+    n=$(printf "$(printf '%s' "$modulus" | sed 's/../\\x&/g')" | base64 -w0 | tr '+/' '-_' | tr -d '=')
+    printf '{"kty":"RSA","n":"%s","e":"AQAB","alg":"RS256","use":"sig","kid":"%s"}' "$n" "$KEY_ID" > /work/jwk.json
+    chmod 644 /work/jwk.json
+    echo "[registrant-auth] Public JWK kid=$KEY_ID ready."
+  store.sh: |
+    #!/bin/sh
+    # Store a newly generated key in the Secret; nothing to do when it was mounted.
+    set -eu
+    if [ ! -f /work/store-key ]; then
+      exit 0
+    fi
+    if kubectl -n "$NAMESPACE" get secret "$SECRET_NAME" > /dev/null 2>&1; then
+      echo "[registrant-auth] Secret $SECRET_NAME appeared meanwhile; this run must be repeated to use it." >&2
+      exit 1
+    fi
+    kubectl -n "$NAMESPACE" create secret generic "$SECRET_NAME" --from-file="$SECRET_KEY=/work/private.pem" > /dev/null
+    echo "[registrant-auth] Stored the new key in Secret $SECRET_NAME."
+  provision.sh: |
+    #!/bin/bash
+    # Upsert the provider row in the registry and the OIDC client in eSignet.
+    set -euo pipefail
+    PEM=$(cat /work/private.pem)
+    JWK=$(cat /work/jwk.json)
+    export PGPASSWORD="$REGISTRY_PASSWORD"
+    psql -X -q -v ON_ERROR_STOP=1 -h "$PGHOST" -p "$PGPORT" -U "$REGISTRY_USER" -d "$REGISTRY_DB" \
+      -v pid="$PROVIDER_ID" -v register="$REGISTER_ID" -v pname="$PROVIDER_NAME" -v client="$CLIENT_ID" \
+      -v pem="$PEM" -v callback="$CALLBACK_URL" -v base="$ESIGNET_BASE_URL" -v config="$PROVIDER_CONFIG" <<'SQL'
+    INSERT INTO g2p_registrant_authentication_providers (
+      provider_id, register_id, provider_name, provider_description, adapter_name,
+      server_metadata_url, authorization_endpoint, token_endpoint, userinfo_endpoint, jwks_endpoint,
+      client_id, client_secret, client_private_key, token_endpoint_auth_method, oauth_callback_url,
+      keymanager_sign_app_id, provider_config, display_order, is_active, created_at, updated_at)
+    VALUES (
+      :'pid', :'register', :'pname', 'Verify the registrant with eSignet (Fayda)', 'esignet',
+      :'base' || '/v1/esignet/oidc/.well-known/openid-configuration', :'base' || '/authorize',
+      :'base' || '/v1/esignet/oauth/v2/token', :'base' || '/v1/esignet/oidc/userinfo',
+      :'base' || '/v1/esignet/oauth/.well-known/jwks.json',
+      :'client', NULL, convert_to(:'pem', 'UTF8'), 'private_key_jwt', :'callback',
+      NULL, :'config'::jsonb, 0, true, now(), now())
+    ON CONFLICT (provider_id) DO UPDATE SET
+      register_id = EXCLUDED.register_id, provider_name = EXCLUDED.provider_name,
+      provider_description = EXCLUDED.provider_description, adapter_name = EXCLUDED.adapter_name,
+      server_metadata_url = EXCLUDED.server_metadata_url, authorization_endpoint = EXCLUDED.authorization_endpoint,
+      token_endpoint = EXCLUDED.token_endpoint, userinfo_endpoint = EXCLUDED.userinfo_endpoint,
+      jwks_endpoint = EXCLUDED.jwks_endpoint, client_id = EXCLUDED.client_id, client_secret = NULL,
+      client_private_key = EXCLUDED.client_private_key, token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method,
+      oauth_callback_url = EXCLUDED.oauth_callback_url, provider_config = EXCLUDED.provider_config,
+      is_active = true, updated_at = now();
+    SQL
+    echo "[registrant-auth] Provider $PROVIDER_ID for register $REGISTER_ID is in place."
+    export PGPASSWORD="$ESIGNET_PASSWORD"
+    psql -X -q -v ON_ERROR_STOP=1 -h "$PGHOST" -p "$PGPORT" -U "$ESIGNET_USER" -d "$ESIGNET_DB" \
+      -v client="$CLIENT_ID" -v name="$CLIENT_NAME" -v logo="$LOGO_URI" -v callback="$CALLBACK_URL" \
+      -v claims="$CLAIMS" -v acrs="$ACR_VALUES" -v jwk="$JWK" <<'SQL'
+    INSERT INTO esignet.client_detail (
+      id, name, rp_id, logo_uri, redirect_uris, claims, acr_values, public_key, grant_types, auth_methods, status, cr_dtimes)
+    VALUES (
+      :'client', :'name', 'oan', :'logo', jsonb_build_array(:'callback'::text)::text, :'claims', :'acrs', :'jwk',
+      '["authorization_code"]', '["private_key_jwt"]', 'ACTIVE', now())
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name, logo_uri = EXCLUDED.logo_uri, claims = EXCLUDED.claims, acr_values = EXCLUDED.acr_values,
+      public_key = EXCLUDED.public_key, grant_types = EXCLUDED.grant_types, auth_methods = EXCLUDED.auth_methods,
+      status = 'ACTIVE', upd_dtimes = now(),
+      -- Keep every callback the other registries registered on the shared client.
+      redirect_uris = (SELECT jsonb_agg(u ORDER BY u)::text FROM (
+        SELECT DISTINCT value AS u
+        FROM jsonb_array_elements(client_detail.redirect_uris::jsonb || EXCLUDED.redirect_uris::jsonb)) s);
+    SQL
+    echo "[registrant-auth] eSignet client $CLIENT_ID accepts $CALLBACK_URL."
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-registrant-auth
+  labels:
+    app.kubernetes.io/name: registrant-auth
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "20"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: registrant-auth
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Release.Name }}-registrant-auth
+      {{- with $v.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: key
+          image: {{ include "coss.image" $v.images.postgres | quote }}
+          command: ["bash", "/scripts/key.sh"]
+          env:
+            - name: SECRET_NAME
+              value: {{ $v.keySecret.name | quote }}
+            - name: SECRET_KEY
+              value: {{ $v.keySecret.key | quote }}
+            - name: KEY_ID
+              value: {{ $v.clientId | quote }}
+          volumeMounts:
+            - name: work
+              mountPath: /work
+            - name: keysecret
+              mountPath: /keysecret
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources: {{- toYaml $v.resources | nindent 12 }}
+        - name: store
+          image: {{ include "coss.image" $v.images.kubectl | quote }}
+          command: ["sh", "/scripts/store.sh"]
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: SECRET_NAME
+              value: {{ $v.keySecret.name | quote }}
+            - name: SECRET_KEY
+              value: {{ $v.keySecret.key | quote }}
+          volumeMounts:
+            - name: work
+              mountPath: /work
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources: {{- toYaml $v.resources | nindent 12 }}
+      containers:
+        - name: provision
+          image: {{ include "coss.image" $v.images.postgres | quote }}
+          command: ["bash", "/scripts/provision.sh"]
+          env:
+            - name: PGHOST
+              value: {{ tpl .Values.global.postgresqlHost $ | quote }}
+            - name: PGPORT
+              value: {{ .Values.global.registryDBPort | quote }}
+            - name: REGISTRY_DB
+              value: {{ tpl .Values.global.registryDB $ | quote }}
+            - name: REGISTRY_USER
+              value: {{ tpl .Values.global.registryDBUser $ | quote }}
+            - name: REGISTRY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ tpl .Values.global.registryDBSecret $ | quote }}
+                  key: {{ tpl .Values.global.registryDBUserPasswordKey $ | quote }}
+            - name: ESIGNET_DB
+              value: {{ $v.esignetDatabase.name | quote }}
+            - name: ESIGNET_USER
+              value: {{ $v.esignetDatabase.user | quote }}
+            - name: ESIGNET_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $v.esignetDatabase.secret.name | quote }}
+                  key: {{ $v.esignetDatabase.secret.key | quote }}
+            - name: PROVIDER_ID
+              value: {{ $v.providerId | quote }}
+            - name: PROVIDER_NAME
+              value: {{ $v.providerName | quote }}
+            - name: REGISTER_ID
+              value: {{ $v.registerId | quote }}
+            - name: CLIENT_ID
+              value: {{ $v.clientId | quote }}
+            - name: CLIENT_NAME
+              value: {{ toJson $clientName | quote }}
+            - name: LOGO_URI
+              value: {{ $logo | quote }}
+            - name: CALLBACK_URL
+              value: {{ $callback | quote }}
+            - name: ESIGNET_BASE_URL
+              value: {{ $base | quote }}
+            - name: PROVIDER_CONFIG
+              value: {{ toJson $config | quote }}
+            - name: CLAIMS
+              value: {{ toJson $v.claims | quote }}
+            - name: ACR_VALUES
+              value: {{ toJson $v.acrValues | quote }}
+          volumeMounts:
+            - name: work
+              mountPath: /work
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources: {{- toYaml $v.resources | nindent 12 }}
+      volumes:
+        - name: work
+          emptyDir:
+            medium: Memory
+        - name: keysecret
+          secret:
+            secretName: {{ $v.keySecret.name | quote }}
+            optional: true
+        - name: scripts
+          configMap:
+            name: {{ .Release.Name }}-registrant-auth
+            defaultMode: 0555
+{{- end }}
