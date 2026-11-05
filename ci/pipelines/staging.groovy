@@ -1,12 +1,14 @@
-// Merging staging only validates. Promotion needs protected rehearsal evidence.
+// A merge into staging promotes the chart develop built from this source tree: the same image digests, under an rc
+// version, deployed with the staging values. Nothing is built, and the build fails if develop never built this tree.
+// fresh-install and deploy are the manual actions that need protected rehearsal evidence.
 def call() {
     pipeline {
         agent any
         options { skipDefaultCheckout(true); disableConcurrentBuilds(); timestamps(); timeout(time: 60, unit: 'MINUTES') }
         parameters {
-            choice(name: 'DELIVERY_ACTION', choices: ['validate-only', 'fresh-install', 'deploy'],
-                description: 'validate-only checks the source and changes nothing. fresh-install backs up the staging registry databases to the protected backup target, removes the OAN release in namespace farmer if present, drops its databases and installs the pinned OAN chart on empty databases. deploy upgrades the existing OAN release. Either cluster action also needs DEPLOY_STAGING. The legacy far release is never touched.')
-            booleanParam(name: 'DEPLOY_STAGING', defaultValue: false,
+            choice(name: 'DELIVERY_ACTION', choices: ['promote', 'validate-only', 'fresh-install', 'deploy'],
+                description: 'promote delivers the chart develop built from this source tree (ci/deploy/promote-staging.sh). validate-only checks the source and changes nothing. fresh-install backs up the staging registry databases to the protected backup target, removes the OAN release in namespace farmer if present, drops its databases and installs the pinned OAN chart on empty databases. deploy upgrades the existing OAN release. Either cluster action also needs DEPLOY_STAGING. The legacy far release is never touched.')
+            booleanParam(name: 'DEPLOY_STAGING', defaultValue: true,
                 description: 'Second guard: nothing reaches the staging cluster unless this is set together with a DELIVERY_ACTION other than validate-only.')
             booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
                 description: 'Release available staging dashboards and prepare the paused promoted connector.')
@@ -44,6 +46,21 @@ def call() {
                         "coss-ci/validation:$IMAGE_TAG" bash ci/validation/validate.sh
                     '''
                     stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,test/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
+                }
+            }
+            stage('Promote and deploy') {
+                when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'promote' } }
+                agent { label 'vpn-agent2' }
+                steps {
+                    checkout scm
+                    withCredentials([
+                        file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
+                        [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds'],
+                        usernamePassword(credentialsId: 'oan-helm-fork-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')
+                    ]) {
+                        sh 'bash ci/deploy/promote-staging.sh'
+                    }
+                    script { currentBuild.description = 'Promoted to staging in namespace farmer' }
                 }
             }
             stage('Deploy (registry)') {

@@ -192,3 +192,19 @@ def test_db_seed_values_never_override_or_float_without_a_job():
     with pytest.raises(ValueError, match='db-seed Job'):
         oan_compat.render([], SEED_VALUES, 'staging')
     assert oan_compat.render([seed_job()], {'registry': {'dbSeed': {'envVars': {'X': None}}}}, 'staging') == [seed_job()]
+
+
+def test_promotion_merges_the_value_layers_and_needs_no_pin(tmp_path, monkeypatch, capsys):
+    _, candidate, values = fixture()
+    monkeypatch.chdir(tmp_path)
+    first, second = tmp_path / 'overlay.yaml', tmp_path / 'layer.yaml'
+    first.write_text(yaml.safe_dump({'registry': {'staffApi': {'envVars': {'COMMON_DB_HOSTNAME': 'kept'}}}}))
+    second.write_text(yaml.safe_dump(values))
+    for name, value in (('DELIVERY_ENVIRONMENT', 'staging'), ('HELM_NAMESPACE', 'farmer'), ('HELM_RELEASE', oan_compat.RELEASE),
+                        ('OAN_PROMOTED_VALUES', 'overlay.yaml:layer.yaml')):
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv('OAN_CHART_ARCHIVE', raising=False)
+    monkeypatch.setattr(sys, 'stdin', io.StringIO(yaml.safe_dump_all(candidate)))
+    oan_compat.main()
+    rendered = list(yaml.safe_load_all(capsys.readouterr().out))[0]['spec']['template']['spec']
+    assert [e['name'] for e in rendered['containers'][0]['env']] == ['PASSWORD']

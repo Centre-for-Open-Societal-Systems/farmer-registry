@@ -1,5 +1,13 @@
 # Farmer staging: OAN chart install in namespace farmer
 
+## Automatic promotion
+
+A merge into `staging` runs `ci/deploy/promote-staging.sh` (the `promote` action, the default). It builds nothing: `deliver_staging.sh` of oan-helm finds the chart develop built from the same source tree, adds the rc tag to the same image digests, upgrades `farmer-registry` in namespace `farmer` with `--reset-values`, rolls Helm back on failure and publishes the rc chart. It fails if develop never built this tree, so staging only runs what New Dev ran first.
+
+Values come only from `environments/staging/values/farmer.yaml` of oan-helm and the `helm/environments/staging/farmer-*.yaml` layers here. A Helm rollback restores the chart and values, not a database change made by a hook, so take a backup before a merge that changes the schema.
+
+The sections below describe the manual `fresh-install` and `deploy` actions, which need the protected rehearsal evidence.
+
 Staging runs the same OAN chart as New Dev (`openg2p-farmer-registry` 1.0.0-dev.20, platform
 `1.2.2-rc.614`, pinned in `ci/deploy/oan-chart-staging.json`) in namespace `farmer`,
 installed fresh beside the legacy release in namespace `far`. The legacy release, its

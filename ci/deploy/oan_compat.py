@@ -9,7 +9,7 @@ import sys
 
 import yaml
 
-from deployment import RELEASE, envs, index, load, pod
+from deployment import RELEASE, envs, index, load, merge, pod
 from oan_chart import profile, verify
 
 OMITTABLE = {
@@ -93,12 +93,19 @@ def main():
     if (environment not in ENVIRONMENTS or os.environ.get('HELM_NAMESPACE') != 'farmer'
             or os.environ.get('HELM_RELEASE') != RELEASE):
         raise ValueError('OAN compatibility renderer requires dev/farmer or staging/farmer')
-    pin = verify(os.environ['OAN_CHART_ARCHIVE'])
-    if pin.get('environment') != environment:
-        raise ValueError('Compatibility renderer pin belongs to another environment')
-    if pin['version'] != profile(environment)['version'] or pin['platformVersion'] not in REVIEWED_PLATFORMS:
-        raise ValueError('Compatibility corrections require review for another chart')
-    values = load(os.environ['OAN_VALUES_FILE'])
+    promoted = os.environ.get('OAN_PROMOTED_VALUES')
+    if promoted:
+        # A promoted chart has no pin: deliver_staging.sh of oan-helm proved it is the one develop built from this tree.
+        values = {}
+        for path in promoted.split(':'):
+            merge(values, load(path))
+    else:
+        pin = verify(os.environ['OAN_CHART_ARCHIVE'])
+        if pin.get('environment') != environment:
+            raise ValueError('Compatibility renderer pin belongs to another environment')
+        if pin['version'] != profile(environment)['version'] or pin['platformVersion'] not in REVIEWED_PLATFORMS:
+            raise ValueError('Compatibility corrections require review for another chart')
+        values = load(os.environ['OAN_VALUES_FILE'])
     docs = [doc for doc in yaml.safe_load_all(sys.stdin) if isinstance(doc, dict)]
     docs = render(docs, values, environment)
     if os.environ.get('OAN_CHART_ONLY', 'false') == 'true':
