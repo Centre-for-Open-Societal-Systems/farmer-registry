@@ -1,0 +1,105 @@
+{{- define "farmer.odkGeoSync.pod" -}}
+{{- $v := .Values.odkGeoSync -}}
+restartPolicy: Never
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 65534
+containers:
+  - name: odk-geo-sync
+    image: {{ include "coss.image" $v.image | quote }}
+    env:
+      - name: MDS_API_URL
+        value: {{ tpl $v.masterData.apiUrl . | quote }}
+      {{- if $v.masterData.clientSecret.name }}
+      - name: MDS_TOKEN_URL
+        value: {{ tpl $v.masterData.tokenUrl . | quote }}
+      - name: MDS_CLIENT_ID
+        value: {{ required "odkGeoSync.masterData.clientId is required with a client secret" $v.masterData.clientId | quote }}
+      - name: MDS_CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: {{ tpl $v.masterData.clientSecret.name . | quote }}
+            key: {{ $v.masterData.clientSecret.key | quote }}
+      {{- end }}
+      - name: ODK_CENTRAL_URL
+        value: {{ required "odkGeoSync.odk.url is required (the registry's ODK Central)" $v.odk.url | quote }}
+      - name: ODK_PROJECT_ID
+        value: {{ required "odkGeoSync.odk.projectId is required (the registry's ODK project id)" $v.odk.projectId | toString | quote }}
+      - name: ODK_CENTRAL_EMAIL
+        valueFrom:
+          secretKeyRef:
+            name: {{ required "odkGeoSync.odk.credentialsSecret.name is required (a Central Project Manager login)" $v.odk.credentialsSecret.name | quote }}
+            key: {{ $v.odk.credentialsSecret.emailKey | quote }}
+      - name: ODK_CENTRAL_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: {{ $v.odk.credentialsSecret.name | quote }}
+            key: {{ $v.odk.credentialsSecret.passwordKey | quote }}
+      - name: ODK_GEO_LEVELS
+        value: {{ join "," $v.levels | quote }}
+      - name: DRY_RUN
+        value: {{ $v.dryRun | toString | quote }}
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: ["ALL"]
+    resources: {{- toYaml $v.resources | nindent 6 }}
+{{- end }}
+{{- if .Values.odkGeoSync.enabled }}
+{{/*
+Keep the ODK form's location Entity Lists (region, zone, woreda, kebele) equal
+to Master Data: livestock-registry tools/odk-geo-sync. Nightly; with
+runOnInstall also once after each install and upgrade (a hook: a failed run
+then fails the release). A run that cannot read Master Data changes nothing.
+*/}}
+{{- $v := .Values.odkGeoSync }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-odk-geo-sync
+  labels:
+    app.kubernetes.io/name: odk-geo-sync
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  schedule: {{ $v.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 3600
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: odk-geo-sync
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          {{- include "farmer.odkGeoSync.pod" . | nindent 10 }}
+{{- if $v.runOnInstall }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-odk-geo-sync-install
+  labels:
+    app.kubernetes.io/name: odk-geo-sync
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: odk-geo-sync
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- include "farmer.odkGeoSync.pod" . | nindent 6 }}
+{{- end }}
+{{- end }}
