@@ -116,7 +116,7 @@ def configuration(path=MANIFEST, environment="dev"):
             raise ValueError("Dashboard API must retain its Farmer chart ownership")
         if item["release"] in ("commons", "commons-services", "farmer-connector") or (item["release"] == "farmer-registry" and not embedded):
             raise ValueError("Optional service must not adopt an existing shared/Registry/old connector release")
-        if item.get("imageRepository") and not re.fullmatch(r"(?:openg2p|oan)/[a-z0-9/-]+", item["imageRepository"]):
+        if item.get("imageRepository") and not re.fullmatch(r"openg2p/[a-z0-9/-]+", item["imageRepository"]):
             raise ValueError("Invalid image repository")
     if environment == "staging":
         items = copy.deepcopy(items)
@@ -328,10 +328,13 @@ def dashboard_hook_rehearsal(component, environment, record, chart, registry, ru
     return result
 
 
+def image_repository(component, suffix):
+    return component.get("imageRepository", "openg2p/farmer-registry/" + component["name"] + suffix)
+
+
 def build_image(component, role, spec, commit, source, registry, run, tag=None):
     suffix = "-" + role if component.get("images") else ""
-    repository_name = component.get("imageRepository", "openg2p/" + component["name"] + suffix)
-    repository = registry + "/" + repository_name
+    repository = registry + "/" + image_repository(component, suffix)
     tag = tag or commit[:12]
     image = repository + ":" + tag
     upstream_image = image + "-upstream" if spec.get("overlay") else image
@@ -361,7 +364,7 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
         raise ServiceError("missing-pushed-digest")
     digest = matches[0]
     published = run(["aws", "ecr", "describe-images", "--region", "ap-south-1",
-                  "--repository-name", repository_name,
+                  "--repository-name", image_repository(component, suffix),
                   "--image-ids", "imageDigest=" + digest, "--query", "imageDetails[0].imageDigest",
                   "--output", "text"]).strip()
     if published != digest:
@@ -607,7 +610,7 @@ def artifact(component, record, registry):
     if not SHA.fullmatch(record.get("commit", "")) or not DIGEST.fullmatch(record.get("digest", "")):
         raise ServiceError("invalid-promotion-artifact")
     suffix = "-" + next(iter(image_specs(component))) if component.get("images") else ""
-    if record.get("repository") != registry + "/" + component.get("imageRepository", "openg2p/" + component["name"] + suffix):
+    if record.get("repository") != registry + "/" + image_repository(component, suffix):
         raise ServiceError("promotion-repository-mismatch")
     expected_tag = record["commit"][:12]
     if record.get("overlayHashes"):
@@ -626,7 +629,7 @@ def image_artifacts(component, record, registry):
     images = {}
     for role in component["images"]:
         image = record["images"][role]
-        if image.get("repository") != registry + "/openg2p/" + component["name"] + "-" + role or image.get("tag") != record["tag"] or not DIGEST.fullmatch(image.get("digest", "")):
+        if image.get("repository") != registry + "/" + image_repository(component, "-" + role) or image.get("tag") != record["tag"] or not DIGEST.fullmatch(image.get("digest", "")):
             raise ServiceError("invalid-component-image-digest")
         images[role] = image["repository"] + ":" + image["tag"] + "@" + image["digest"]
     if next(iter(images.values())) != primary:
