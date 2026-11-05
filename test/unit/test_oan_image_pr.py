@@ -394,7 +394,7 @@ class PipelineWiringTests(unittest.TestCase):
         self.assertIn("service-outcomes/registry-images.tsv", publish)
         self.assertLess(publish.index("registry-images.tsv\n"), publish.index("stash name: 'image-digests'"))
         self.assertIn("includes: 'service-outcomes/registry-images.tsv'", publish)
-        self.assertIn("unstash 'image-digests'", self.stage())
+        self.assertIn("unstash 'image-digests'", self.text.split("stage('Package chart')", 1)[1].split("stage('Deploy (package)')", 1)[0])
 
     def test_the_stage_cannot_fail_the_build_and_runs_only_for_a_normal_develop_deploy(self):
         stage = self.stage()
