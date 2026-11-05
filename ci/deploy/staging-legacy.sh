@@ -77,9 +77,9 @@ EOF
 helm status "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/status.json"
 
 helm get values "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o yaml > $STATE/values.yaml
-docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+docker build -t "oan-ci/validation:$IMAGE_TAG" ci/validation
 docker run --rm --network none --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" -v "$STATE:$STATE:ro" -v "$STATE/values.yaml:/private-values.yaml:ro" \
-  "coss-ci/validation:$IMAGE_TAG" python ci/environments.py staging --status "$STATE/status.json" --values /private-values.yaml
+  "oan-ci/validation:$IMAGE_TAG" python ci/environments.py staging --status "$STATE/status.json" --values /private-values.yaml
 
 # Never install placeholder defaults after a namespace or credential error.
 

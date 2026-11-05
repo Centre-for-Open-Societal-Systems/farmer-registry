@@ -110,7 +110,7 @@ def canonical_catalog():
 def reference_summary(references, expected_values):
     summary = {"coverage": "unknown" if references is None else "known", "tables": 0,
                "groups": 0, "records": 0, "already_exact": False}
-    for category in ("exact_coss_ids", "legacy_et_pcode_candidates", "unmappable"):
+    for category in ("exact_oan_ids", "legacy_et_pcode_candidates", "unmappable"):
         summary[category] = {"groups": 0, "records": 0}
     if references is None:
         return summary
@@ -127,7 +127,7 @@ def reference_summary(references, expected_values):
         require((table, identity) not in seen, "Duplicate reference group")
         seen.add((table, identity))
         tables.add(table)
-        category = ("exact_coss_ids" if identity in expected_values else
+        category = ("exact_oan_ids" if identity in expected_values else
                     "legacy_et_pcode_candidates" if re.fullmatch(r"ET[0-9]+", identity)
                     and identity in legacy else "unmappable")
         summary[category]["groups"] += 1
@@ -164,7 +164,7 @@ def audit(catalog, references=None):
     refs = reference_summary(references, wanted_values)
     return {"compatible": catalog_ok and refs["already_exact"],
             "catalog": {"compatible": catalog_ok, "level_shape_compatible": shape == PARENTS,
-                        "counts_by_level": counts, "expected_coss_counts": expected_counts,
+                        "counts_by_level": counts, "expected_oan_counts": expected_counts,
                         "levels": level_diff, "values": value_diff}, "references": refs}
 
 

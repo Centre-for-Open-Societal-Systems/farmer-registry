@@ -10,7 +10,7 @@ No source/runtime changes or tests were executed for this read-only investigatio
 
 - Read-only Farmer upstream checkout: `OpenG2P/openg2p-workspace/farmer-registry`, commit `ed1e70ccf18df5476fa404ed8018e12d55e418fa`.
 - Read-only registry platform 1.2 checkout: `OpenG2P/openg2p-workspace/registry-platform`, commit `53551e379a710417963ab2ef7c252ba1d1336fff` (branch 1.2).
-- Actual ATI v3 workbook in Farmer deploy-develop: SHA-256 `c7b022fc4007bf50a3d8dc9e8555d3eec536156fa16e72b501e031a45d92cfae`; source paths/requiredness also recorded in ATI-MAPPER-AUDIT-20261026.csv. Original COSS mapper comparison: develop `75bb62b58d6ee5a3bd398be40d4ad9a80b5f88ca`.
+- Actual ATI v3 workbook in Farmer deploy-develop: SHA-256 `c7b022fc4007bf50a3d8dc9e8555d3eec536156fa16e72b501e031a45d92cfae`; source paths/requiredness also recorded in ATI-MAPPER-AUDIT-20261026.csv. Original legacy OAN (Gen1) mapper comparison: develop `75bb62b58d6ee5a3bd398be40d4ad9a80b5f88ca`.
 - Local package source is evidence for that source revision, not proof that an installed wheel or deployment executes identical code. Exact package wheel/image pin comparison and native disposable-DB acceptance remain required. No suitable checked-in end-to-end multi-Farmer example was established by this inspection; code capabilities are not presented as an official supported recipe.
 
 ## Shipped metadata

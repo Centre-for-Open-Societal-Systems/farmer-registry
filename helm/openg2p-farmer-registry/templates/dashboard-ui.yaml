@@ -29,7 +29,7 @@ spec:
       {{- end }}
       containers:
         - name: dashboard-ui
-          image: {{ include "coss.image" $component.image | quote }}
+          image: {{ include "oan.image" $component.image | quote }}
           imagePullPolicy: {{ $component.image.pullPolicy }}
           ports:
             - name: http

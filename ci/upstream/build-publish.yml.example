@@ -23,8 +23,8 @@ on:
 
 jobs:
   build-publish:
-    # Keep upstream packaging available without publishing COSS changes into
-    # OpenG2P's image namespace. COSS runs build.yml until its release contract
+    # Keep upstream packaging available without publishing OAN changes into
+    # OpenG2P's image namespace. OAN runs build.yml until its release contract
     # (image namespace, chart publication and credentials) is configured.
     if: github.repository == 'OpenG2P/farmer-registry'
     uses: openg2p/openg2p-packaging/.github/workflows/build-publish.yml@v1

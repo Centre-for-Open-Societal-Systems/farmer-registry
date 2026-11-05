@@ -2,7 +2,7 @@
 from pathlib import Path
 
 ANCHOR = '- name: CONNECTOR_CORS_ORIGINS\n  value: {{ .Values.commonEnv.CONNECTOR_CORS_ORIGINS | quote }}\n'
-EXTRA = '''{{- if .Values.cossSigning.enabled }}
+EXTRA = '''{{- if .Values.oanSigning.enabled }}
 - name: CONNECTOR_REQUIRE_SIGNING
   value: "true"
 - name: CONNECTOR_SIGNING_ENABLED
@@ -10,18 +10,18 @@ EXTRA = '''{{- if .Values.cossSigning.enabled }}
 - name: CONNECTOR_SIGNING_ALGORITHM
   value: "RS256"
 - name: CONNECTOR_SIGNING_ISSUER
-  value: {{ required "Signing partnerId is required" .Values.cossSigning.partnerId | quote }}
+  value: {{ required "Signing partnerId is required" .Values.oanSigning.partnerId | quote }}
 - name: CONNECTOR_SIGNING_KEY_ID
-  value: {{ required "Signing keyId is required" .Values.cossSigning.keyId | quote }}
+  value: {{ required "Signing keyId is required" .Values.oanSigning.keyId | quote }}
 - name: CONNECTOR_SIGNING_PRIVATE_KEY_PEM
   valueFrom:
     secretKeyRef:
-      name: {{ required "Signing Secret is required" .Values.cossSigning.secret | quote }}
+      name: {{ required "Signing Secret is required" .Values.oanSigning.secret | quote }}
       key: private-key.pem
 {{- end }}
-{{- if .Values.cossQueue }}
+{{- if .Values.oanQueue }}
 - name: CONNECTOR_CELERY_QUEUE
-  value: {{ .Values.cossQueue | quote }}
+  value: {{ .Values.oanQueue | quote }}
 {{- end }}
 {{- with .Values.adminAuth }}
 - name: CONNECTOR_ADMIN_AUTH_ISSUER

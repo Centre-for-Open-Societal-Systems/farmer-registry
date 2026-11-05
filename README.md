@@ -6,7 +6,7 @@ uses platform **1.2.2-rc.625**. Forms use section schemas, registered widgets,
 themes and language metadata; behavior uses registered extension services.
 OpenG2P framework and worker sources remain unchanged.
 
-This delivery branch composes the reviewed OAN source with the existing COSS
+This delivery branch composes the reviewed OAN source with the existing OAN
 delivery tooling. **Promotion remains blocked.** Source checks and disposable
 database rehearsals do not establish live acceptance. Read the
 [candidate scope and remaining checks](docs/refactor-candidate.md) before using
@@ -42,7 +42,7 @@ rejects `LOAD_SAMPLE_DATA`, `LOAD_GEO_DATA` and `LOAD_IMAGES`); New Dev already 
 farmers, entered and approved the same way.
 
 Helm ownership is centralized in
-[COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm).
+[OAN oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm).
 The [deployment profile](ci/deploy/oan-chart.json) pins an immutable chart and
 SHA-256 checksum. Dashboard UI/API and connector releases have independent
 owners; this candidate does not replace their running releases.

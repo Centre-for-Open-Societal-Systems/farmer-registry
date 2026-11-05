@@ -161,7 +161,7 @@ def main():
     image = args.image
     if args.backup and not args.backup.is_file():
         raise ValueError('Private backup file missing')
-    name = "coss-connector-rehearsal-" + uuid.uuid4().hex[:12]
+    name = "oan-connector-rehearsal-" + uuid.uuid4().hex[:12]
     env = dict(os.environ)
     env["POSTGRES_PASSWORD"] = secrets.token_urlsafe(32)
     env.update(CONNECTOR_DB_PASSWORD=secrets.token_urlsafe(32), CONNECTOR_DB_HOSTNAME=name,

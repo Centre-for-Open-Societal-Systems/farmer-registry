@@ -92,7 +92,7 @@ def main():
             # Kubernetes exec may keep stdin open after the local file ends.
             # Bound the TOC input explicitly; --list validates the directory,
             # while the required full restore rehearsal validates payload data.
-            remote_file = "/tmp/coss-connector-backup-toc-" + uuid.uuid4().hex
+            remote_file = "/tmp/oan-connector-backup-toc-" + uuid.uuid4().hex
             with Path(tool_args[-1]).open("rb") as file:
                 prefix = file.read(2 * 1024 * 1024)
             result = subprocess.run(["kubectl", "exec", "-i", "-n", "commons", pg_pod, "--", "sh", "-c",

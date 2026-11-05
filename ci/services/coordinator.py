@@ -87,7 +87,7 @@ def image_specs(component):
 def configuration(path=MANIFEST, environment="dev"):
     if environment not in ("dev", "staging"):
         raise ValueError("Unknown environment")
-    items = yaml.safe_load(path.read_text(encoding="utf-8"))["cossAddons"]["components"]
+    items = yaml.safe_load(path.read_text(encoding="utf-8"))["oanAddons"]["components"]
     seen = set()
     for item in items:
         for field in ("name", "release", "namespace"):
@@ -127,8 +127,8 @@ def configuration(path=MANIFEST, environment="dev"):
 
 def configuration_hash():
     # Delivery metadata owns the catalogue independently of chart source.
-    # Hash semantics remain the exact existing cossAddons JSON contract.
-    addons = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["cossAddons"]
+    # Hash semantics remain the exact existing oanAddons JSON contract.
+    addons = yaml.safe_load(MANIFEST.read_text(encoding="utf-8"))["oanAddons"]
     return hashlib.sha256(json.dumps(addons, sort_keys=True).encode()).hexdigest()
 
 
@@ -305,7 +305,7 @@ def prepare_dashboard_chart(state, values, before, installed_chart):
 
 def dashboard_hook_rehearsal(component, environment, record, chart, registry, run):
     tools = os.environ.get("COORDINATOR_IMAGE", "")
-    if not re.fullmatch(r"coss-ci/services:[a-f0-9]{12}", tools):
+    if not re.fullmatch(r"oan-ci/services:[a-f0-9]{12}", tools):
         raise ServiceError("dashboard-hook-rehearsal-tools-required")
     values_file = ROOT / "helm/environments" / environment / "services" / (component["name"] + ".yaml")
     overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
@@ -515,9 +515,9 @@ def signing_preparation_before(before, after, environment="dev"):
     if environment == "staging":
         # The reviewed staging values name the isolated database, queue and signing key.
         reviewed = yaml.safe_load((ROOT / "helm/environments/staging/services/registry-connector.yaml").read_text(encoding="utf-8"))
-        expected["CONNECTOR_SIGNING_KEY_ID"] = {"value": reviewed["cossSigning"]["keyId"]}
-        expected["CONNECTOR_SIGNING_PRIVATE_KEY_PEM"] = {"valueFrom": {"secretKeyRef": {"name": reviewed["cossSigning"]["secret"], "key": "private-key.pem"}}}
-        expected["CONNECTOR_CELERY_QUEUE"] = {"value": reviewed["cossQueue"]}
+        expected["CONNECTOR_SIGNING_KEY_ID"] = {"value": reviewed["oanSigning"]["keyId"]}
+        expected["CONNECTOR_SIGNING_PRIVATE_KEY_PEM"] = {"valueFrom": {"secretKeyRef": {"name": reviewed["oanSigning"]["secret"], "key": "private-key.pem"}}}
+        expected["CONNECTOR_CELERY_QUEUE"] = {"value": reviewed["oanQueue"]}
         for document in after:
             if document["kind"] != "Deployment" or document["metadata"]["name"].endswith("-ui"):
                 continue
@@ -708,7 +708,7 @@ def deploy(component, environment, record, source, registry, run=command):
             if component.get("allowInstall") is not True:
                 raise SkipService("no-existing-release")
             before, values = [], {}
-        if component.get("kind") == "connector" and values.get("cossCutover", {}).get("phase") == "active":
+        if component.get("kind") == "connector" and values.get("oanCutover", {}).get("phase") == "active":
             raise SkipService("active-connector-requires-accepted-image-rollout")
         auth = dashboard_auth(overrides) if approved_dashboard else None
         merge(values, overrides)

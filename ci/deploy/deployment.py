@@ -289,7 +289,7 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
         values.setdefault('analytics', {})['image'] = {
             'repository': root + '/db-seed',
             'tag': images['db-seed']['tag'] + '@' + images['db-seed']['digest']}
-    # rc.544's chart omits AWE worker variables previously added by COSS. Carry
+    # rc.544's chart omits AWE worker variables previously added by OAN. Carry
     # their exact literals/Secret refs forward, without capturing Secret data.
     worker = old.get(("Deployment", RELEASE + "-celery-worker"), {})
     for container in envs(worker).values():
