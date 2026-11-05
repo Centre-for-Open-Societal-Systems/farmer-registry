@@ -344,14 +344,16 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
     rehearsal_result = None
     if spec.get("overlay"):
         overlay = relative_file(ROOT, spec["overlay"])
+        # An overlay that copies from the repository root names that root as its context.
+        context = ROOT if spec.get("overlayContext") == "repository" else overlay
         run(["docker", "build", "--build-arg", "UPSTREAM_IMAGE=" + upstream_image,
              "--label", "org.opencontainers.image.source=" + component["repository"],
              "--label", "org.opencontainers.image.revision=" + commit,
              "--label", "org.openg2p.overlay.sha256=" + chart_hash(overlay),
-             "-t", image, str(overlay)])
+             "-f", str(overlay / "Dockerfile"), "-t", image, str(context)])
         runtime_test = ROOT / "test/runtime/test_connector_media.py"
         rehearsal = ROOT / "scripts/operations/connector/rehearse.py"
-        if runtime_test.is_file():
+        if role == "api" and runtime_test.is_file():
             run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "python",
                  "-v", str(runtime_test) + ":/tests/test_media.py:ro", image, "/tests/test_media.py"])
         if rehearsal.is_file():

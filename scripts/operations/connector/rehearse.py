@@ -24,7 +24,7 @@ from openg2p_connector_service.database import get_engine
 from openg2p_connector_service.models import Base,ConnectorDefinition,IngestionRun,IdempotencyKey
 from openg2p_connector_service import db_migrations
 from openg2p_connector_service.services.ingestion_service import IngestionService
-from coss_connector import utc_timestamps
+from oan_connector import utc_timestamps
 from openg2p_connector_service.worker import _poll_async
 
 async def main():
@@ -125,7 +125,7 @@ async def main():
  # prove a key-insert failure rolls back the earlier run write, then rerun.
  import asyncpg
  from sqlalchemy.ext.asyncio import create_async_engine
- from coss_connector.recovery import reconcile_stopped
+ from oan_connector.recovery import reconcile_stopped
  recovery_engine=create_async_engine(engine.url.set(database='connector_recovery'))
  async with recovery_engine.begin() as c:
   await c.run_sync(Base.metadata.create_all);await db_migrations.apply(c)

@@ -24,6 +24,8 @@ cossAddons:
       ui:
         dockerfile: ui/Dockerfile
         context: ui
+        overlay: docker/registry-connector-ui
+        overlayContext: repository
         imageValues:
         - ui.image
   - name: farmer-registry-dashboard
