@@ -24,7 +24,7 @@ COPY farmer-extension/reporting/ /seed/oan-reporting/
 COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql
 
 # Sample data (LOAD_SAMPLE_DATA=true). The platform image checks out openg2p-data
-# at /openg2p-data; this one checks out the COSS copy at a pinned commit in its place:
+# at /openg2p-data; this one checks out the OAN copy at a pinned commit in its place:
 # the ETH-OAN pack's farm facts (samples/farms.json), the sample profile photos
 # (samples/photos/<individual_id>.webp) and the OAN theme. The sample
 # people come from Master Data's API.

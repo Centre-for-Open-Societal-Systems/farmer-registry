@@ -193,7 +193,7 @@ spec:
         fsGroup: 10001
       initContainers:
         - name: key
-          image: {{ include "coss.image" $v.images.postgres | quote }}
+          image: {{ include "oan.image" $v.images.postgres | quote }}
           command: ["bash", "/scripts/key.sh"]
           env:
             - name: SECRET_NAME
@@ -218,7 +218,7 @@ spec:
               drop: [ALL]
           resources: {{- toYaml $v.resources | nindent 12 }}
         - name: store
-          image: {{ include "coss.image" $v.images.kubectl | quote }}
+          image: {{ include "oan.image" $v.images.kubectl | quote }}
           command: ["sh", "/scripts/store.sh"]
           env:
             - name: NAMESPACE
@@ -242,7 +242,7 @@ spec:
           resources: {{- toYaml $v.resources | nindent 12 }}
       containers:
         - name: provision
-          image: {{ include "coss.image" $v.images.postgres | quote }}
+          image: {{ include "oan.image" $v.images.postgres | quote }}
           command: ["bash", "/scripts/provision.sh"]
           env:
             - name: PGHOST

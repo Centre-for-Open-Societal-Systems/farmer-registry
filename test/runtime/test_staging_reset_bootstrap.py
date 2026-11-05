@@ -27,7 +27,7 @@ def main():
             raise ValueError('Exact accepted Registry image digest required')
     args.directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     network = 'farmer-reset-bootstrap-' + uuid.uuid4().hex[:12]
-    pg, database = network + '-pg', 'coss_seed_rehearsal_reset'
+    pg, database = network + '-pg', 'oan_seed_rehearsal_reset'
     report = {'apiImage': args.api_image, 'seedImage': args.seed_image,
               'isolatedNetwork': True, 'metadataOnly': True}
     sequence = 0

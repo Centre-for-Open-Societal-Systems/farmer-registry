@@ -75,7 +75,7 @@ guard() {
     -e DELIVERY_ENVIRONMENT -e DELIVERY_ACTION -e HELM_NAMESPACE -e HELM_RELEASE \
     -v "$STAGING_EVIDENCE_FILE:/staging-evidence.json:ro" -e STAGING_EVIDENCE_FILE=/staging-evidence.json \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
-    "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
+    "oan-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
 }
 remote() {
   ssh -i "$BACKUP_SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes \

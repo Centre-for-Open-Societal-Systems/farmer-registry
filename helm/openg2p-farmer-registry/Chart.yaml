@@ -1,6 +1,6 @@
 apiVersion: v2
 name: openg2p-farmer-registry
-description: OAN Farmer Registry for OpenAgriNet (OAN), developed in COSS repositories;
+description: OAN Farmer Registry for OpenAgriNet (OAN), developed in OAN repositories;
   reuses pinned OpenG2P platform templates. Component images have independent versions.
 type: application
 version: 0.0.0
@@ -8,7 +8,6 @@ appVersion: 1.2.2-rc.625
 keywords:
 - oan
 - openagrinet
-- coss
 - openg2p
 - registry
 - farmer-registry
@@ -22,7 +21,7 @@ sources:
 - https://github.com/OpenG2P/farmer-registry
 - https://github.com/OpenG2P/registry-connector
 maintainers:
-- name: OpenAgriNet (OAN) / COSS
+- name: OpenAgriNet (OAN)
   url: https://github.com/Centre-for-Open-Societal-Systems/oan-helm
 dependencies:
 - name: openg2p-registry
@@ -34,7 +33,7 @@ annotations:
   catalog.cattle.io/certified: partner
   catalog.cattle.io/kube-version: '>=1.23.0-0'
   openg2p.org/add-to-rancher: ''
-  oan.org/owner: OpenAgriNet (OAN) / COSS
+  oan.org/owner: OpenAgriNet (OAN)
   oan.org/application-source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
   oan.org/chart-source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry/tree/develop/helm/openg2p-farmer-registry
   org.opencontainers.image.source: https://github.com/Centre-for-Open-Societal-Systems/farmer-registry

@@ -1,7 +1,7 @@
 # Pinned OAN Farmer dev deployments
 
 Dev uses the exact package in [the approved profile](../ci/deploy/oan-chart.json),
-published by COSS oan-helm. The package SHA256, chart version and bundled
+published by OAN oan-helm. The package SHA256, chart version and bundled
 platform version are checked before lint, render, upgrade or install. No
 dependency resolution or local-chart fallback runs for dev. Staging retains its
 local chart, namespace `far` and existing evidence gates.

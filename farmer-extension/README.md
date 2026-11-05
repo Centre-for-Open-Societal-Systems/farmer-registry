@@ -214,7 +214,7 @@ fail if a list is written in the registry.
 
 ## Migration from the previous registries
 
-Every field of the previous registries (Gen1 `g2p_ati`, and the COSS farmer
+Every field of the previous registries (Gen1 `g2p_ati`, and the legacy OAN (Gen1) farmer
 registry) has a Gen2 column, so a migration keeps everything. Most keep their
 name; these map:
 
@@ -222,7 +222,7 @@ name; these map:
 |---|---|
 | `given_name`, `family_name`, `gf_name_eng` | `first_name`, `middle_name`, `last_name` |
 | Gen1 `first_name_amh`, `family_name_amh`, `gf_name_amh` | `first_name_local`, `middle_name_local`, `last_name_local`, with `language_spoken` = `AMHARIC` |
-| COSS `*_om` (Afaan Oromo) | `*_local`, with `language_spoken` = `AFAAN_OROMO` |
+| legacy OAN (Gen1) `*_om` (Afaan Oromo) | `*_local`, with `language_spoken` = `AFAAN_OROMO` |
 | `birthdate_ec`, `collected_ec`, `expiry_date_ec` | derived again from the Gregorian date (`*_ec`) |
 | `age` | `estimated_age` |
 | `is_disabled` | `disabled` |
@@ -236,7 +236,7 @@ name; these map:
 | livestock `number_of_livestock`, `collected_gc`, `illness_type` | livestock `head_count`, `collected_date`, `disease_type` |
 | reg ids (Fayda FIN, RID, ODK farmer and member ack ids) | `foundational_id`, `rid`, `odk_farmer_id`, `odk_member_id` |
 | `farmer_id`, `rejection_reason`, `state`, `rec_import_source`, `odk_instance_id` | `functional_record_id`, `record_status_reason`, `legacy_state`, `import_source`, `odk_instance_id` |
-| COSS `father_*_name`, `is_duplicated`, member `certificate_*`, `woreda_level_value_id` | the same names; `woreda_level_value_id` is in `geo_code_hierarchy_json` |
+| legacy OAN (Gen1) `father_*_name`, `is_duplicated`, member `certificate_*`, `woreda_level_value_id` | the same names; `woreda_level_value_id` is in `geo_code_hierarchy_json` |
 
 A previous id's expiry date and status have no column: the identifiers are
 attributes of the farmer, as OpenG2P advised, not rows of an id table.
@@ -274,6 +274,6 @@ migrations, not configuration: retire them once every environment has applied th
 ## Seed data lives in openg2p-data
 
 The db-seed image carries configuration only. The OAN theme (palette, background images,
-logo) and the sample data are checked out from COSS `openg2p-data` at one pinned
+logo) and the sample data are checked out from OAN `openg2p-data` at one pinned
 `OPENG2P_DATA_REF`; `scripts/themes/build_theme_sql.py farmer` renders the theme into
 `zz-oan/90_oan_theme.sql`. The factory `OpenG2P-theme` row stays as it is today.

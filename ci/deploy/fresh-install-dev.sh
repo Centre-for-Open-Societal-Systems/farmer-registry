@@ -57,7 +57,7 @@ guard() {
     -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE -e OAN_BUILT_CHART_PIN \
     -e DELIVERY_ENVIRONMENT -e HELM_NAMESPACE -e HELM_RELEASE \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
-    "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
+    "oan-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
 }
 remote() {
   ssh -i "$BACKUP_SSH_KEY" -o BatchMode=yes -o StrictHostKeyChecking=yes \

@@ -1,4 +1,4 @@
--- Additive compatibility for existing COSS databases, through OAN's native
+-- Additive compatibility for existing legacy OAN (Gen1) databases, through OAN's native
 -- extension migration hook. Existing values, identifiers and checkpoints stay.
 DO $native_compat$
 DECLARE prefix text;

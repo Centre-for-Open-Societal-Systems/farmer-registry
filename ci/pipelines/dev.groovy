@@ -46,9 +46,9 @@ pipeline {
                 }
                 sh '''
                     set -eu
-                    docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                    docker build -t "oan-ci/validation:$IMAGE_TAG" ci/validation
                     docker run --rm --user "$(id -u):$(id -g)" \
-                      -v "$PWD:/repo:ro" "coss-ci/validation:$IMAGE_TAG" \
+                      -v "$PWD:/repo:ro" "oan-ci/validation:$IMAGE_TAG" \
                       bash ci/validation/validate.sh
                 '''
             }
@@ -86,7 +86,7 @@ pipeline {
                         : > service-outcomes/registry-images.tsv
                         for component in staff-api partner-api celery db-seed sanity-tests staff-ui; do
                           image="$ECR_REGISTRY/$ECR_REPOSITORY/$component:$IMAGE_TAG"
-                          docker tag "coss-ci/$component:$IMAGE_TAG" "$image"
+                          docker tag "oan-ci/$component:$IMAGE_TAG" "$image"
                           docker push "$image"
                           digest=$(aws ecr describe-images --region "$AWS_REGION" \
                             --repository-name "$ECR_REPOSITORY/$component" --image-ids "imageTag=$IMAGE_TAG" \
@@ -100,7 +100,7 @@ pipeline {
                           repository="$ECR_REPOSITORY/$component"
                           aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$repository" > /dev/null 2>&1 ||
                             aws ecr create-repository --region "$AWS_REGION" --repository-name "$repository" > /dev/null
-                          docker tag "coss-ci/$component:$IMAGE_TAG" "$ECR_REGISTRY/$repository:$IMAGE_TAG"
+                          docker tag "oan-ci/$component:$IMAGE_TAG" "$ECR_REGISTRY/$repository:$IMAGE_TAG"
                           docker push "$ECR_REGISTRY/$repository:$IMAGE_TAG"
                           digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" \
                             --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
@@ -110,7 +110,7 @@ pipeline {
                         docker run --rm --network none --user "$(id -u):$(id -g)" \
                           -e DELIVERY_ACTION \
                           -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT \
-                          -v "$PWD:/repo" "coss-ci/validation:$IMAGE_TAG" \
+                          -v "$PWD:/repo" "oan-ci/validation:$IMAGE_TAG" \
                           python ci/delivery.py publication service-outcomes/publication.json
                     '''
                     // Only the digests, for the stage "Package chart".
@@ -169,7 +169,7 @@ pipeline {
                             set -eu
                             export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
                             export BUILT_CHART_DIR="$PWD/built-chart"
-                            docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                            docker build -t "oan-ci/validation:$IMAGE_TAG" ci/validation
                             bash ci/deploy/fresh-install-dev.sh
                             '''
                                 }
@@ -178,7 +178,7 @@ pipeline {
                             set -eu
                             export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
                             export BUILT_CHART_DIR="$PWD/built-chart"
-                            docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                            docker build -t "oan-ci/validation:$IMAGE_TAG" ci/validation
                             bash ci/deploy/deploy-dev.sh
                             '''
                               }

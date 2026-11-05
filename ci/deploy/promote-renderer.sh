@@ -6,4 +6,4 @@ set +x
 : "${OAN_PROMOTED_VALUES:?Promoted values required}"
 exec docker run --rm -i --network none --user "$(id -u):$(id -g)" \
   -e DELIVERY_ENVIRONMENT -e HELM_NAMESPACE -e HELM_RELEASE -e OAN_PROMOTED_VALUES \
-  -v "$PWD:/repo:ro" "coss-ci/validation:$IMAGE_TAG" python ci/deploy/oan_compat.py
+  -v "$PWD:/repo:ro" "oan-ci/validation:$IMAGE_TAG" python ci/deploy/oan_compat.py

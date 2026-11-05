@@ -1,4 +1,4 @@
-cossAddons:
+oanAddons:
   components:
   - name: registry-connector
     repository: https://github.com/OpenG2P/registry-connector.git

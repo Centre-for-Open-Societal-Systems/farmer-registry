@@ -123,7 +123,7 @@ def test_failed_api_rollout_prevents_dependent_dashboard_rollout(tmp_path):
 
 def test_configuration_rejects_other_registry_ownership(tmp_path, component):
     config = tmp_path / "components.yaml"
-    config.write_text(yaml.safe_dump({"cossAddons": {"components": [dict(component, namespace="livestock")]}}))
+    config.write_text(yaml.safe_dump({"oanAddons": {"components": [dict(component, namespace="livestock")]}}))
     with pytest.raises(ValueError, match="farmer namespace"):
         coordinator.configuration(config)
 
@@ -131,7 +131,7 @@ def test_configuration_rejects_other_registry_ownership(tmp_path, component):
 @pytest.mark.parametrize("repository", ["untrusted/farmer-registry/dashboard-ui", "oan/../dashboard-ui", "oan/dashboard-ui:latest"])
 def test_configuration_rejects_invalid_image_repositories(tmp_path, component, repository):
     config = tmp_path / "components.yaml"
-    config.write_text(yaml.safe_dump({"cossAddons": {"components": [dict(component, imageRepository=repository)]}}))
+    config.write_text(yaml.safe_dump({"oanAddons": {"components": [dict(component, imageRepository=repository)]}}))
     with pytest.raises(ValueError, match="Invalid image repository"):
         coordinator.configuration(config)
 
@@ -143,7 +143,7 @@ def test_embedded_api_cannot_adopt_other_owners_or_image_values(tmp_path, field,
     api = copy.deepcopy(coordinator.configuration()[-1])
     api[field] = value
     config = tmp_path / "values.yaml"
-    config.write_text(yaml.safe_dump({"cossAddons": {"components": [api]}}))
+    config.write_text(yaml.safe_dump({"oanAddons": {"components": [api]}}))
     with pytest.raises(ValueError):
         coordinator.configuration(config)
 
@@ -159,7 +159,7 @@ def test_service_catalogue_is_delivery_owned_and_hash_covers_repositories(tmp_pa
     values["unrelated"] = {"replicas": 4}
     path.write_text(yaml.safe_dump(values))
     assert coordinator.configuration_hash() == original
-    values["cossAddons"]["components"][0]["repository"] = "https://github.com/example/changed.git"
+    values["oanAddons"]["components"][0]["repository"] = "https://github.com/example/changed.git"
     path.write_text(yaml.safe_dump(values))
     assert coordinator.configuration_hash() != original
 

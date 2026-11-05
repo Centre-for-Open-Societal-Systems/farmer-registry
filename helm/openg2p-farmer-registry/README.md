@@ -1,7 +1,6 @@
 # OAN Farmer Registry
 
-OpenAgriNet (OAN) application developed in the Centre for Open Societal Systems
-(COSS) repositories. This chart reuses the pinned OpenG2P registry platform.
+OpenAgriNet (OAN) application developed in OAN repositories. This chart reuses the pinned OpenG2P registry platform.
 
 | Source | GitHub repository |
 | --- | --- |
