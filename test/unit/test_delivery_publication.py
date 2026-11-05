@@ -99,11 +99,13 @@ def test_every_cluster_or_optional_stage_runs_for_develop_only():
     publication = pipeline.split("stage('Publish')", 1)[1].split("steps {", 1)[0]
     assert "branch 'develop'" in publication and "not { changeRequest() }" in publication
     assert "DELIVERY_ACTION" not in publication
-    assert "COORDINATE_SERVICES', defaultValue: true" in pipeline
+    assert "parameters {" not in pipeline and "params." not in pipeline
+    assert "(env.COORDINATE_SERVICES ?: 'true') != 'false'" in pipeline
     assert "ci-output/native-worker-save/**" in pipeline
     assert "check_native_worker_save.py" in (ROOT / "ci/build/images.sh").read_text()
-    assert "choices: ['deploy', 'fresh-install']" in pipeline
-    assert "publish-only" not in pipeline.split("parameters {", 1)[1].split("stages {", 1)[0]
+    operator = (ROOT / "ci/pipelines/operator.groovy").read_text()
+    assert "'fresh-install'" in operator and "submitter: 'admin'" in operator
+    assert "publish-only" not in operator
     assert "RESET_ACTION" not in pipeline
 
 

@@ -17,14 +17,6 @@ pipeline {
         // "Username with password" for the very last stage: a maintainer account with push access to oan-helm.
         OAN_HELM_FORK_CRED_ID = 'oan-helm-fork-token'
     }
-    parameters {
-        choice(name: 'DELIVERY_ACTION', choices: ['deploy', 'fresh-install'],
-            description: 'Leave on deploy: every develop build publishes the images and upgrades the existing dev release with them (the pinned chart, the live values), and Helm rolls back to the previous revision if the upgrade fails. fresh-install backs up the dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all dev farmer data is lost; Commons is untouched).')
-        booleanParam(name: 'COORDINATE_SERVICES', defaultValue: true,
-            description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
-        booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
-            description: 'Apply reviewed Commons staff identity values; requires fresh farmer-dev-identity-evidence credential.')
-    }
     stages {
         stage('Test') {
             steps {
@@ -187,8 +179,8 @@ pipeline {
                               archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
                             }
                           }
-                          withEnv(["APPLY_COMMONS_IDENTITY=${params.APPLY_COMMONS_IDENTITY}"]) {
-                            if (params.APPLY_COMMONS_IDENTITY) {
+                          withEnv(["APPLY_COMMONS_IDENTITY=${env.APPLY_COMMONS_IDENTITY == 'true'}"]) {
+                            if (env.APPLY_COMMONS_IDENTITY == 'true') {
                               withCredentials([file(credentialsId: 'farmer-dev-identity-evidence', variable: 'IDENTITY_EVIDENCE_FILE')]) {
                                 deployRegistry()
                               }
@@ -203,7 +195,7 @@ pipeline {
             }
         }
         stage('Build (services)') {
-            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } } }
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && (env.COORDINATE_SERVICES ?: 'true') != 'false' } } }
             steps {
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
@@ -221,7 +213,7 @@ pipeline {
         stage('Deploy (services)') {
             when {
                 beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && (env.COORDINATE_SERVICES ?: 'true') != 'false' } }
             }
             agent { label 'vpn-agent2' }
             steps {
