@@ -20,7 +20,7 @@ pipeline {
     parameters {
         choice(name: 'DELIVERY_ACTION', choices: ['deploy', 'fresh-install'],
             description: 'Leave on deploy: every develop build publishes the images and upgrades the existing dev release with them (the pinned chart, the live values), and Helm rolls back to the previous revision if the upgrade fails. fresh-install backs up the dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all dev farmer data is lost; Commons is untouched).')
-        booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
+        booleanParam(name: 'COORDINATE_SERVICES', defaultValue: true,
             description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
         booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
             description: 'Apply reviewed Commons staff identity values; requires fresh farmer-dev-identity-evidence credential.')
