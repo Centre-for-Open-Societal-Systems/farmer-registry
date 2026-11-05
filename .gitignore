@@ -221,6 +221,7 @@ local/
 .ci-services-venv/
 .ci-services-work/
 service-outcomes/
+built-chart/
 
 # Operator exports and local acceptance artifacts never belong in Git.
 /private-exports/

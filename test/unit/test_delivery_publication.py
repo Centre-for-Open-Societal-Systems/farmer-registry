@@ -135,23 +135,25 @@ def test_native_worker_probe_rejects_other_jobs_and_local_fallback(key, value):
     assert not worker.permitted_ci("linux", {**JENKINS, key: value})
 
 
-def test_the_pin_proposal_is_followed_only_by_chart_publication_and_cannot_fail_the_build():
+def test_the_chart_the_build_packaged_is_the_one_it_deploys_and_publishes():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
-    tail = pipeline.split("stage('Propose chart pin update')", 1)[1].split("    post {", 1)[0]
-    stage = tail.split("stage('Publish chart')", 1)[0]
-    assert tail.count("stage(") == 1                                # only the chart publication follows it
-    definition = stage.split("steps {", 1)[0]
-    assert "branch 'develop'" in definition and "not { changeRequest() }" in definition
-    assert "env.DELIVERY_ACTION == 'deploy'" in definition         # not after a fresh install
-    assert "agent { label 'vpn-agent2' }" in definition
-    assert "catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE')" in stage
-    assert "PIN_PR_CRED_ID = 'oan-ci-app'" in pipeline
-    assert "credentialsId: \"${PIN_PR_CRED_ID}\"" in stage
-    assert "ci/deploy/propose_pin_pr.py" in stage
-    assert "VALIDATION_IMAGE" in stage
+    packaged = pipeline.split("stage('Package chart')", 1)[1].split("stage('Deploy (package)')", 1)[0]
+    assert "ci/deploy/package_chart.py package" in packaged and "stash name: 'built-chart'" in packaged
+    assert "catchError" not in packaged                            # no chart, no deploy
+    deploy = pipeline.split("stage('Deploy (registry)')", 1)[1].split("stage('Build (services)')", 1)[0]
+    assert "unstash 'built-chart'" in deploy and deploy.count('export BUILT_CHART_DIR="$PWD/built-chart"') == 2
+    publish = pipeline.split("stage('Publish chart')", 1)[1].split("    post {", 1)[0]
+    assert "unstash 'built-chart'" in publish and "ci/deploy/package_chart.py publish" in publish
+    assert "Propose chart pin update" not in pipeline
 
 
-def test_a_failed_deploy_never_reaches_the_pin_proposal():
+def test_the_built_chart_is_refused_outside_dev():
+    for name in ("deploy-rc.sh", "fresh-install-dev.sh"):
+        shell = (ROOT / "ci/deploy" / name).read_text()
+        assert 'test "${DELIVERY_ENVIRONMENT:-dev}" = dev' in shell and "OAN_BUILT_CHART_PIN" in shell
+
+
+def test_a_failed_deploy_never_reaches_chart_publication():
     # Declarative pipelines skip later stages once the build has failed; the registry deploy has no catchError.
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
     deploy = pipeline.split("stage('Deploy (registry)')", 1)[1].split("stage('Build (services)')", 1)[0]

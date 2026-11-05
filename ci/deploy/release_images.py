@@ -15,7 +15,7 @@ merged: the stage, and the build, are a success once the pull request is open.
 
 A person with write access reviews and merges that pull request. oan-helm's release workflow then publishes the next
 chart version and writes the CHANGELOG entry. Nothing here touches the cluster; the chart pin of this repository
-moves in the separate "Propose chart pin update" stage.
+is moved by hand with ci/deploy/bump_pin.py.
 
 A commit whose images oan-helm main already carries is left alone (a re-run, Replay or rebuild would only give new digests
 for the same tag): one pull request per commit merged to develop. The commit that merges a chart-pin pull request (it
@@ -50,7 +50,7 @@ PR_FILE = "service-outcomes/oan-helm-pr.txt"
 # chart values section under `registry:` -> ECR component (one repository per component: <registry>/<repository>/<component>)
 REGISTRY = (("staffUi", "staff-ui"), ("staffApi", "staff-api"), ("partnerApi", "partner-api"), ("celeryWorker", "celery"),
             ("celeryBeat", "celery"), ("dbSeed", "db-seed"), ("sanity", "sanity-tests"))
-# A commit that changes only these files is the merge of a chart-pin pull request (propose_pin_pr.py). It is not left
+# A commit that changes only these files is the merge of a chart-pin pull request. It is not left
 # without an image pull request by accident: the pin follows an oan-helm release, and a release follows an image pull
 # request, so recording images for the pin commit too would start the cycle again, one commit per lap.
 PIN_ONLY_FILES = frozenset(["ci/deploy/oan-chart.json"])

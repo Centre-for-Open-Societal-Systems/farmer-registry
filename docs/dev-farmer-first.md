@@ -21,43 +21,25 @@ recovered by the next build without the automatic rollback (it would restore an
 older revision over database changes the failed one already made).
 
 The chart is published by [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm);
-`oan-chart.json` pins its version and SHA-256, and `deploy-rc.sh` refuses any
-other archive. The pin moves in a reviewed pull request that the build opens
-itself (next section).
+A develop build installs the chart it packaged itself (next section). `oan-chart.json` is the fallback
+for a deploy run by hand without `BUILT_CHART_DIR`: it pins a version and SHA-256, and `deploy-rc.sh`
+refuses any other archive. `ci/deploy/bump_pin.py` moves it.
 
-## Chart pin updates
+## Chart packaging and publication
 
-The last stage of a successful `deploy` build (`Propose chart pin update`) runs
-`ci/deploy/propose_pin_pr.py`. It compares the pin with the newest Farmer chart on
-the head of oan-helm `main`:
+A develop `deploy` or `fresh-install` build runs `ci/deploy/package_chart.py` twice:
 
-- same chart: "up to date", nothing happens;
-- newer chart, same platform: it writes the new pin on a branch
-  `bot/oan-chart-pin-<version>-<sha8>`, verifies the archive and runs the pin tests in
-  the validation container, and opens a pull request to `develop`. Merging it is the
-  deploy of the new chart; the PR text says what to read first;
-- newer chart with another platform version: reported, nothing proposed (the images,
-  `oan_compat.py` and the chart dependency must move with it; see
-  `ci/deploy/bump_pin.py --help`);
-- an older chart, or a different archive for the same version: refused.
+- `Package chart`, before the deploy: the version comes from git (`0.0.0-develop.<commit count>`, using
+  `scripts/ci/derive-version.sh` of oan-helm). The stage packages `helm/openg2p-farmer-registry`, with the
+  tag `<commit12>@sha256:<digest>` of `staffUi`, `staffApi`, `partnerApi`, `celeryWorker`, `celeryBeat`,
+  `dbSeed` and `sanity` written into the packaged copy only, and writes `built-chart/` with the archive and
+  its `pin.json`. If this stage fails nothing is deployed.
+- The deploy installs that archive (`BUILT_CHART_DIR`, verified against `pin.json` by `oan_chart.py`).
+- `Publish chart`, last, `deploy` builds only: the same archive goes to `repository/develop/` of oan-helm,
+  where a workflow updates the index, changelog and rollback history.
 
-It needs the Jenkins credential `oan-ci-app` (GitHub App, Contents and Pull requests
-write on this repository). Without it the stage is UNSTABLE and the build still passes.
-By hand: `python3 ci/deploy/bump_pin.py --latest` (dry run) or `<commit> --write`.
-The staging pin (`oan-chart-staging.json`) is never touched by this stage.
-
-## Chart publication
-
-After the pin stage, the very last stage of a successful `deploy` build (`Publish chart`, `develop` only, never for a fresh
-install or a pull request) runs `ci/deploy/package_chart.py`:
-
-- the version comes from git: `0.0.0-develop.<commit count>`, using `scripts/ci/derive-version.sh` of oan-helm;
-- the stage packages `helm/openg2p-farmer-registry`, with the tag `<commit12>@sha256:<digest>` of `staffUi`, `staffApi`,
-  `partnerApi`, `celeryWorker`, `celeryBeat`, `dbSeed` and `sanity` written into the packaged copy only;
-- it adds the archive to `repository/develop/` of oan-helm, where a workflow updates the index, changelog and rollback history.
-
-Nothing is committed back here, and no pull request is needed. If publishing fails the stage is UNSTABLE and the build still
-passes. See `docs/chart-channels.md` and `docs/rollback.md` in oan-helm.
+Nothing is committed back here, and no pull request is needed. If publishing fails the stage is UNSTABLE
+and the build still passes. See `docs/chart-channels.md` and `docs/rollback.md` in oan-helm.
 
 ## Fresh install
 

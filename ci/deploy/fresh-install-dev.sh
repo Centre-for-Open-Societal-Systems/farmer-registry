@@ -43,11 +43,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# A develop build installs the chart it packaged (built-chart/ of ci/deploy/package_chart.py), with that chart's pin.
+if [[ -n "${BUILT_CHART_DIR:-}" ]]; then
+  test "${DELIVERY_ENVIRONMENT:-dev}" = dev
+  cp "$BUILT_CHART_DIR/pin.json" "$STATE/built-chart-pin.json"
+  export OAN_BUILT_CHART_PIN="$STATE/built-chart-pin.json"
+fi
+
 # Python dependencies live in Docker on the agent; host Helm/kubectl keep the
 # existing VPN access. The helper receives no kubeconfig or Docker socket.
 guard() {
   docker run --rm --network none --user "$(id -u):$(id -g)" \
-    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE \
+    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE -e OAN_BUILT_CHART_PIN \
     -e DELIVERY_ENVIRONMENT -e HELM_NAMESPACE -e HELM_RELEASE \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
     "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
@@ -72,8 +79,12 @@ if [[ -n "${REGISTRY_OUTCOME_FILE:-}" ]]; then
   guard provenance
 fi
 CHART="$STATE/oan-farmer.tgz"
-URL=$(GUARD_SCRIPT=ci/deploy/oan_chart.py guard url)
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --output "$CHART" "$URL"
+if [[ -n "${BUILT_CHART_DIR:-}" ]]; then
+  cp "$BUILT_CHART_DIR"/*.tgz "$CHART"
+else
+  URL=$(GUARD_SCRIPT=ci/deploy/oan_chart.py guard url)
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --output "$CHART" "$URL"
+fi
 GUARD_SCRIPT=ci/deploy/oan_chart.py guard verify "$CHART"
 export OAN_CHART_ARCHIVE="$CHART"
 guard prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
