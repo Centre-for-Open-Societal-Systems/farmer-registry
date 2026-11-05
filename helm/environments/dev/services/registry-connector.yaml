@@ -13,6 +13,13 @@ cossSigning:
   partnerId: farmer-partner
   keyId: farmer-connector-v2-52da0fc34e90
   secret: farmer-connector-v2-signing
+# Admin access (Keycloak realm staff), passed to the connector as CONNECTOR_ADMIN_AUTH_*.
+adminAuth:
+  issuer: https://keycloak.development.oanstaging.com/realms/staff
+  jwksUrl: http://commons-keycloak.commons.svc.cluster.local:80/realms/staff/protocol/openid-connect/certs
+  clientId: registry-connector
+  role: REGISTRY_CONNECTOR_ADMIN
+  uiClientId: registry-connector-ui
 global:
   hostname: connector-farmer-registry-development.oanstaging.com
   postgresqlHost: commons-postgresql.commons.svc.cluster.local
