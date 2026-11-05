@@ -11,7 +11,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CHART = ROOT / "helm/farmer-registry-dashboard"
 VALUES = ROOT / "helm/environments/dev/services/farmer-registry-dashboard.yaml"
-REPOSITORY = "123456789012.dkr.ecr.ap-south-1.amazonaws.com/oan/farmer-registry/dashboard-ui"
+REPOSITORY = "123456789012.dkr.ecr.ap-south-1.amazonaws.com/openg2p/farmer-registry/dashboard-ui"
 pytestmark = pytest.mark.skipif(not shutil.which("helm"), reason="Helm required")
 
 
