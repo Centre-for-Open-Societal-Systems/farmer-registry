@@ -99,7 +99,7 @@ def test_every_cluster_or_optional_stage_runs_for_develop_only():
     publication = pipeline.split("stage('Publish')", 1)[1].split("steps {", 1)[0]
     assert "branch 'develop'" in publication and "not { changeRequest() }" in publication
     assert "DELIVERY_ACTION" not in publication
-    assert "COORDINATE_SERVICES', defaultValue: false" in pipeline
+    assert "COORDINATE_SERVICES', defaultValue: true" in pipeline
     assert "ci-output/native-worker-save/**" in pipeline
     assert "check_native_worker_save.py" in (ROOT / "ci/build/images.sh").read_text()
     assert "choices: ['deploy', 'fresh-install']" in pipeline
