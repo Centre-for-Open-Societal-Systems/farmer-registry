@@ -5,8 +5,10 @@ Python (3.7); this file runs in the validation container.
 """
 import base64
 import contextlib
+import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -383,7 +385,7 @@ class PipelineWiringTests(unittest.TestCase):
 
     def test_the_image_pull_request_is_the_last_stage_after_deploy_and_pin(self):
         order = [self.text.index("stage('%s')" % n) for n in
-                 ("Publish", "Deploy (registry)", "Propose chart pin update", "Publish chart")]
+                 ("Publish", "Package chart", "Deploy (registry)", "Publish chart")]
         self.assertEqual(order, sorted(order))
         self.assertLess(self.text.index("stage('Publish chart')"), self.text.index("\n    post {"))
 
@@ -397,7 +399,7 @@ class PipelineWiringTests(unittest.TestCase):
     def test_the_stage_cannot_fail_the_build_and_runs_only_for_a_normal_develop_deploy(self):
         stage = self.stage()
         self.assertIn("catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE')", stage)
-        self.assertIn("python3 ci/deploy/package_chart.py", stage)
+        self.assertIn("python3 ci/deploy/package_chart.py publish", stage)
         self.assertIn("branch 'develop'", stage)
         self.assertIn("not { changeRequest() }", stage)
         self.assertIn("env.DELIVERY_ACTION == 'deploy'", stage)          # not after a fresh install
@@ -406,7 +408,6 @@ class PipelineWiringTests(unittest.TestCase):
         for absent in ("KUBECONFIG", "helm upgrade", "kubectl", "docker ", "aws "):
             self.assertNotIn(absent, stage)
         self.assertIn("OAN_HELM_FORK_CRED_ID = 'oan-helm-fork-token'", self.text)
-        self.assertIn("PIN_PR_CRED_ID = 'oan-ci-app'", self.text)
 
     def test_the_stage_uses_this_pipelines_ecr_names(self):
         self.assertIn("ECR_REPOSITORY = 'openg2p/farmer-registry'", self.text)
@@ -420,6 +421,20 @@ class PipelineWiringTests(unittest.TestCase):
         spec.loader.exec_module(package_chart)
         text = package_chart.annotate("name: x\nannotations:\n  a: b\n", {"oan.org/source-subject": 'Say "hi"'})
         self.assertEqual(text, 'name: x\nannotations:\n  oan.org/source-subject: "Say \\"hi\\""\n  a: b\n')
+
+    def test_the_pin_of_the_built_chart_has_the_shape_the_deploy_verifies(self):
+        spec = importlib.util.spec_from_file_location("package_chart_pin", ROOT / "ci/deploy/package_chart.py")
+        package_chart = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(package_chart)
+        with tempfile.TemporaryDirectory() as folder:
+            archive = Path(folder) / "chart.tgz"
+            archive.write_bytes(b"chart")
+            built = package_chart.pin(archive, "0.0.0-develop.9")
+        committed = json.loads((ROOT / "ci/deploy/oan-chart.json").read_text())
+        self.assertEqual(built["version"], "0.0.0-develop.9")
+        self.assertEqual(built["sha256"], hashlib.sha256(b"chart").hexdigest())
+        for key in ("name", "platformVersion", "environment", "namespace", "release"):
+            self.assertEqual(built[key], committed[key], key)
 
     def test_the_published_chart_has_no_fixed_version(self):
         self.assertIn("version: 0.0.0\n", (ROOT / "helm/openg2p-farmer-registry/Chart.yaml").read_text())

@@ -19,6 +19,10 @@ def profile(environment=None):
     environment = environment or os.environ.get('DELIVERY_ENVIRONMENT') or 'dev'
     if environment not in ENVIRONMENTS:
         raise ValueError('No OAN chart pin for this environment')
+    # A develop build deploys the chart it packaged itself (ci/deploy/package_chart.py), with that chart's own pin.
+    built = os.environ.get('OAN_BUILT_CHART_PIN')
+    if built and environment == 'dev':
+        return json.loads(Path(built).read_text(encoding='utf-8'))
     name = 'oan-chart.json' if environment == 'dev' else 'oan-chart-%s.json' % environment
     return json.loads(Path(__file__).with_name(name).read_text(encoding='utf-8'))
 

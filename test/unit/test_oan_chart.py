@@ -78,7 +78,7 @@ def test_normal_guard_checks_init_environment_and_new_pvc():
 def test_pin_is_the_deployed_dev_chart_without_promotion_flags():
     pin = oan_chart.profile()
     assert (pin['environment'], pin['namespace'], pin['release']) == ('dev', 'farmer', 'farmer-registry')
-    # The version moves with reviewed pin pull requests (ci/deploy/propose_pin_pr.py); the platform only with the images.
+    # The version moves with reviewed pin pull requests (ci/deploy/bump_pin.py); the platform only with the images.
     assert re.fullmatch(r'1\.0\.0-dev\.\d+', pin['version'])
     assert pin['platformVersion'] in oan_compat.REVIEWED_PLATFORMS
     assert 'promotionReady' not in pin and 'freshDatabaseEpoch' not in pin

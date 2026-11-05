@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared upgrade of the pinned OAN chart for explicit environment/namespace pairs (dev/farmer and
+# Shared upgrade of the OAN chart (built by this develop build, or the pinned one) for explicit environment/namespace pairs (dev/farmer and
 # staging/farmer). No schema writes.
 set -euo pipefail
 set +x
@@ -21,6 +21,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# A develop build installs the chart it packaged (built-chart/ of ci/deploy/package_chart.py), with that chart's pin.
+if [[ -n "${BUILT_CHART_DIR:-}" ]]; then
+  test "${DELIVERY_ENVIRONMENT:-dev}" = dev
+  cp "$BUILT_CHART_DIR/pin.json" "$STATE/built-chart-pin.json"
+  export OAN_BUILT_CHART_PIN="$STATE/built-chart-pin.json"
+fi
+
 # Python dependencies live in Docker on both agents; host Helm/kubectl keep the
 # existing VPN access. The helper receives no kubeconfig or Docker socket.
 guard() {
@@ -34,7 +41,7 @@ guard() {
     evidence_args+=(-v "$IDENTITY_EVIDENCE_FILE:/identity-evidence.json:ro" -e IDENTITY_EVIDENCE_FILE=/identity-evidence.json)
   fi
   docker run --rm --network none --user "$(id -u):$(id -g)" \
-    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE "${evidence_args[@]}" \
+    -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE -e OAN_BUILT_CHART_PIN "${evidence_args[@]}" \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
     "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
 }
@@ -76,9 +83,13 @@ if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
   GUARD_SCRIPT=ci/deploy/staging.py guard cutover "$STATE/status.json" "$STATE/values.json" "$STATE/before.yaml"
 fi
 CHART="$STATE/oan-farmer.tgz"
-URL=$(GUARD_SCRIPT=ci/deploy/oan_chart.py guard url)
-curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
-  --output "$CHART" "$URL"
+if [[ -n "${BUILT_CHART_DIR:-}" ]]; then
+  cp "$BUILT_CHART_DIR"/*.tgz "$CHART"
+else
+  URL=$(GUARD_SCRIPT=ci/deploy/oan_chart.py guard url)
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    --output "$CHART" "$URL"
+fi
 GUARD_SCRIPT=ci/deploy/oan_chart.py guard verify "$CHART"
 export OAN_CHART_ARCHIVE="$CHART"
 guard prepare "$STATE/values.json" "$STATE/before.yaml" "$STATE/values.yaml"
