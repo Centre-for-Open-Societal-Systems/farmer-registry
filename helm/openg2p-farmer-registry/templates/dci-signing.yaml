@@ -1,0 +1,207 @@
+{{- if .Values.dciSigning.enabled }}
+{{/*
+DCI response signing for the partner API, as chart configuration.
+
+Consumers of this registry's DCI search (Crop Sown's Farmer reference, later
+Livestock) verify the response signature against a pinned public key, so the
+partner API needs a stable RSA signing key. The key is generated in the cluster
+and lives only in the Secret named by dciSigning.keySecret: a PKCS#12 bundle
+(signing.p12, key only, no certificate, so the configured kid is used), its
+random password, the public key and the kid. It never appears in values, logs or
+Git; only the public key is printed and published in the ConfigMap
+<release>-dci-signing-public for the consuming registries to copy.
+
+The Job runs before install and upgrade (weight -10) so that the Secret exists
+before the partner API pods mount it:
+
+  1. key (init): when the Secret is mounted (optional volume), derive the public
+     key from it; otherwise generate the key, a password and the bundle.
+  2. publish: store a newly generated key in the Secret, then write the public
+     ConfigMap and print the public key.
+
+Mount the Secret on the partner API and set
+REGISTRY_PARTNER_API_CRYPTO_SIGNING_KEY_PATH / _PASSWORD / _KID per environment
+(see README "DCI response signing").
+*/}}
+{{- $v := .Values.dciSigning }}
+{{- $public := printf "%s-dci-signing-public" .Release.Name }}
+{{- $hook := dict "helm.sh/hook" "pre-install,pre-upgrade" "helm.sh/hook-weight" "-12" "helm.sh/hook-delete-policy" "before-hook-creation" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-dci-signing
+  annotations: {{- toYaml $hook | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-dci-signing
+  annotations: {{- toYaml $hook | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+    resourceNames: [{{ $v.keySecret.name | quote }}]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "patch"]
+    resourceNames: [{{ $public | quote }}]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-dci-signing
+  annotations: {{- toYaml $hook | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-dci-signing
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-dci-signing
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-dci-signing
+  annotations: {{- toYaml $hook | nindent 4 }}
+data:
+  key.sh: |
+    #!/bin/bash
+    # Use the mounted bundle or generate one; derive the public key either way.
+    set -euo pipefail
+    umask 077
+    if [ -s /keysecret/signing.p12 ] && [ -s /keysecret/password ]; then
+      openssl pkcs12 -in /keysecret/signing.p12 -passin file:/keysecret/password -nocerts -nodes 2> /dev/null \
+        | openssl pkey -pubout -out /work/public.pem
+      echo "[dci-signing] Using the key in Secret $SECRET_NAME."
+    else
+      openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out /work/private.pem 2> /dev/null
+      printf '%s' "$(openssl rand -hex 24)" > /work/password
+      openssl pkcs12 -export -inkey /work/private.pem -nocerts -passout file:/work/password -out /work/signing.p12
+      openssl pkey -in /work/private.pem -pubout -out /work/public.pem
+      rm -f /work/private.pem
+      touch /work/store-key
+      echo "[dci-signing] Secret $SECRET_NAME is absent; generated a new RSA key."
+    fi
+    openssl pkey -pubin -in /work/public.pem -noout > /dev/null
+    chmod 644 /work/public.pem
+  publish.sh: |
+    #!/bin/sh
+    # Store a newly generated key in the Secret, then publish the public key.
+    set -eu
+    if [ -f /work/store-key ]; then
+      if kubectl -n "$NAMESPACE" get secret "$SECRET_NAME" > /dev/null 2>&1; then
+        echo "[dci-signing] Secret $SECRET_NAME appeared meanwhile; this run must be repeated to use it." >&2
+        exit 1
+      fi
+      kubectl -n "$NAMESPACE" create secret generic "$SECRET_NAME" \
+        --from-file=signing.p12=/work/signing.p12 --from-file=password=/work/password \
+        --from-file=public-key.pem=/work/public.pem --from-literal=kid="$KEY_ID" > /dev/null
+      echo "[dci-signing] Stored the new key in Secret $SECRET_NAME."
+    fi
+    kubectl -n "$NAMESPACE" create configmap "$PUBLIC_CONFIGMAP" \
+      --from-file=public-key.pem=/work/public.pem --from-literal=kid="$KEY_ID" \
+      --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f - > /dev/null
+    echo "[dci-signing] Public key (kid=$KEY_ID) published in ConfigMap $PUBLIC_CONFIGMAP:"
+    cat /work/public.pem
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-dci-signing
+  labels:
+    app.kubernetes.io/name: dci-signing
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dci-signing
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Release.Name }}-dci-signing
+      {{- with $v.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        - name: key
+          image: {{ include "coss.image" $v.images.postgres | quote }}
+          command: ["bash", "/scripts/key.sh"]
+          env:
+            - name: SECRET_NAME
+              value: {{ $v.keySecret.name | quote }}
+          volumeMounts:
+            - name: work
+              mountPath: /work
+            - name: keysecret
+              mountPath: /keysecret
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources: {{- toYaml $v.resources | nindent 12 }}
+      containers:
+        - name: publish
+          image: {{ include "coss.image" $v.images.kubectl | quote }}
+          command: ["sh", "/scripts/publish.sh"]
+          env:
+            - name: NAMESPACE
+              value: {{ .Release.Namespace | quote }}
+            - name: SECRET_NAME
+              value: {{ $v.keySecret.name | quote }}
+            - name: PUBLIC_CONFIGMAP
+              value: {{ $public | quote }}
+            - name: KEY_ID
+              value: {{ $v.kid | quote }}
+          volumeMounts:
+            - name: work
+              mountPath: /work
+              readOnly: true
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources: {{- toYaml $v.resources | nindent 12 }}
+      volumes:
+        - name: work
+          emptyDir:
+            medium: Memory
+        - name: keysecret
+          secret:
+            secretName: {{ $v.keySecret.name | quote }}
+            optional: true
+        - name: scripts
+          configMap:
+            name: {{ .Release.Name }}-dci-signing
+            defaultMode: 0555
+{{- end }}

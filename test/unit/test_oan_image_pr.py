@@ -373,19 +373,19 @@ class ImagePullRequestTests(unittest.TestCase):
 
 
 class PipelineWiringTests(unittest.TestCase):
-    """ci/pipelines/dev.groovy: ... deploy (atomic rollback) -> pin pull request -> oan-helm image pull request, last."""
+    """ci/pipelines/dev.groovy: ... deploy (atomic rollback) -> pin pull request -> chart published to oan-helm, last."""
 
     def setUp(self):
         self.text = (ROOT / "ci/pipelines/dev.groovy").read_text()
 
     def stage(self):
-        return self.text.split("stage('Open oan-helm image PR')", 1)[1].split("\n    post {", 1)[0]
+        return self.text.split("stage('Publish chart')", 1)[1].split("\n    post {", 1)[0]
 
     def test_the_image_pull_request_is_the_last_stage_after_deploy_and_pin(self):
         order = [self.text.index("stage('%s')" % n) for n in
-                 ("Publish", "Deploy (registry)", "Propose chart pin update", "Open oan-helm image PR")]
+                 ("Publish", "Deploy (registry)", "Propose chart pin update", "Publish chart")]
         self.assertEqual(order, sorted(order))
-        self.assertLess(self.text.index("stage('Open oan-helm image PR')"), self.text.index("\n    post {"))
+        self.assertLess(self.text.index("stage('Publish chart')"), self.text.index("\n    post {"))
 
     def test_the_digests_the_publish_stage_wrote_are_stashed_for_it(self):
         publish = self.text.split("stage('Publish')", 1)[1].split("stage('Deploy (package)')", 1)[0]
@@ -397,7 +397,7 @@ class PipelineWiringTests(unittest.TestCase):
     def test_the_stage_cannot_fail_the_build_and_runs_only_for_a_normal_develop_deploy(self):
         stage = self.stage()
         self.assertIn("catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE')", stage)
-        self.assertIn("python3 ci/deploy/release_images.py", stage)
+        self.assertIn("python3 ci/deploy/package_chart.py", stage)
         self.assertIn("branch 'develop'", stage)
         self.assertIn("not { changeRequest() }", stage)
         self.assertIn("env.DELIVERY_ACTION == 'deploy'", stage)          # not after a fresh install
@@ -413,6 +413,16 @@ class PipelineWiringTests(unittest.TestCase):
         for component in COMPONENTS:
             self.assertIn(component, self.text.split("stage('Publish')", 1)[1].split("stage('Deploy (package)')", 1)[0])
         self.assertIn("CHART = \"openg2p-farmer-registry\"", (ROOT / "ci/deploy/release_images.py").read_text())
+
+    def test_the_chart_is_annotated_for_the_rollback_history(self):
+        spec = importlib.util.spec_from_file_location("package_chart_under_test", ROOT / "ci/deploy/package_chart.py")
+        package_chart = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(package_chart)
+        text = package_chart.annotate("name: x\nannotations:\n  a: b\n", {"oan.org/source-subject": 'Say "hi"'})
+        self.assertEqual(text, 'name: x\nannotations:\n  oan.org/source-subject: "Say \\"hi\\""\n  a: b\n')
+
+    def test_the_published_chart_has_no_fixed_version(self):
+        self.assertIn("version: 0.0.0\n", (ROOT / "helm/openg2p-farmer-registry/Chart.yaml").read_text())
 
     def test_braces_balance(self):
         self.assertEqual(self.text.count("{"), self.text.count("}"))
