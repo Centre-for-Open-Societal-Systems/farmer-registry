@@ -61,7 +61,7 @@ def test_hook_wraps_the_published_ingestion_service():
 
 
 def test_signature_equals_the_scheme_the_registry_verifies_today():
-    data = {"event_type": "farmer_reference.changed.v1", "farmer_id": "FR-245216494759", "fayda_fan_id": "9988998899889988"}
+    data = {"event_type": "farmer-registry.farmer-profile.changed.v1", "farmer_id": "FR-245216494759", "fayda_fan_id": "9988998899889988"}
     env = svc()._wrap_in_g2p_envelope(Connector(secrets=STORED, sign_registry_payload=True), data, "evt-1")
     assert env["header"]["signature_algorithm"] == "EdDSA"
     assert env["header"]["signature"] == crop_d0cd4f9_signature(env["message"]["payload"])
@@ -107,8 +107,8 @@ def test_prewrapped_payload_is_refused_by_a_signing_connector():
 
 
 def test_websub_content_string_is_read_before_data_path():
-    notice = {"event_type": "farmer_reference.changed.v1", "farmer_id": "FR-245216494759"}
-    raw = {"hub.topic": "oan.farmer-reference.changed.v1", "hub.content": json.dumps(notice)}
+    notice = {"event_type": "farmer-registry.farmer-profile.changed.v1", "farmer_id": "FR-245216494759"}
+    raw = {"hub.topic": "farmer-registry.farmer-profile.changed.v1", "hub.content": json.dumps(notice)}
     assert svc()._extract_envelope(Connector(websub_content_envelope=True), raw) == notice
     assert svc()._extract_envelope(Connector(websub_content_envelope=True, data_path="farmer_id"), raw) == notice  # non-dict result falls back
     assert svc()._extract_envelope(Connector(), raw) == raw  # switch off: published behaviour

@@ -95,14 +95,16 @@ BEGIN
                    AND d.document_store_id = 'farmer_dci_search_response.j2')
      OR NOT EXISTS (SELECT 1 FROM "public"."outgoing_templates" t
                     JOIN "public"."g2p_registry_documents" d ON d.document_id = t.template_document_id
-                    WHERE t.template_id = 'farmer_reference_changed_v1_template'
-                      AND t.data_model_id = '873c2342-cfde-5db4-9f9f-6e491a5001f7'
-                      AND d.document_store_id = 'farmer_reference_changed_v1.j2')
+                    WHERE t.template_id = 'farmer_registry_farmer_profile_changed_v1_template'
+                      AND t.data_model_id = 'dfa42fcf-d9f2-5d75-9c11-41ace99c105e'
+                      AND d.document_store_id = 'farmer_registry_farmer_profile_changed_v1.j2')
      OR NOT EXISTS (SELECT 1 FROM "public"."outgoing_topics"
-                    WHERE topic_id = 'farmer_reference_changed_v1_topic'
-                      AND data_model_id = '873c2342-cfde-5db4-9f9f-6e491a5001f7'
-                      AND websub_topic = 'oan.farmer-reference.changed.v1') THEN
-    RAISE EXCEPTION 'Outgestion rows (OUT-TMPL-1, farmer_reference_changed_v1_*) are missing or inconsistent (50_outgestion.sql)';
+                    WHERE topic_id = 'farmer_registry_farmer_profile_changed_v1_topic'
+                      AND data_model_id = 'dfa42fcf-d9f2-5d75-9c11-41ace99c105e'
+                      AND websub_topic = 'farmer-registry.farmer-profile.changed.v1')
+     OR EXISTS (SELECT 1 FROM "public"."outgoing_topics"
+                WHERE topic_id = 'farmer_reference_changed_v1_topic' AND is_active) THEN
+    RAISE EXCEPTION 'Outgestion rows (OUT-TMPL-1, farmer_registry_farmer_profile_changed_v1_*, or the retired farmer_reference_changed_v1_topic is still active) are missing or inconsistent (50_outgestion.sql)';
   END IF;
 END $$;
 
