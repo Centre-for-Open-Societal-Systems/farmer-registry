@@ -1,6 +1,6 @@
 {
   "event_id": {{ ((expanded.internal_record_id | string) ~ ':' ~ (expanded.last_approved_at | string)) | tojson }},
-  "event_type": "farmer_reference.changed.v1",
+  "event_type": "farmer-registry.farmer.changed.v1",
   "farmer_id": {{ expanded.functional_record_id | tojson }},
   "fayda_fan_id": {{ expanded.foundational_id | tojson }}
 }
