@@ -1,0 +1,21 @@
+{#- The notice Crop and Livestock receive when a farmer change is approved
+    (WebSub topic farmer-registry.farmer-profile.changed.v1). It names the farmer only;
+    receivers fetch the details, the photo included, through the signed DCI
+    search. The event id carries the latest approval of the farmer or of one
+    of its phone numbers, the same time the DCI farmer_reference block gives
+    as approved_at, so a phone-only change is a new event too. -#}
+{%- set identifier = (expanded.foundational_id or '') | string | replace(' ', '') -%}
+{%- set latest = namespace(approved=(expanded.last_approved_at or '') | string) -%}
+{%- for item in expanded.farmer_phone or [] -%}
+{%- if (item.last_approved_at or '') | string > latest.approved -%}{%- set latest.approved = item.last_approved_at | string -%}{%- endif -%}
+{%- endfor -%}
+{
+  "event_id": {{ ((expanded.internal_record_id | string) ~ ':' ~ latest.approved) | tojson }},
+  "event_type": "farmer-registry.farmer-profile.changed.v1",
+  "farmer_id": {{ expanded.functional_record_id | tojson }}
+  {%- if identifier | length == 16 %},
+  "fayda_fan_id": {{ identifier | tojson }}
+  {%- elif identifier | length == 12 %},
+  "fayda_fin": {{ identifier | tojson }}
+  {%- endif %}
+}
