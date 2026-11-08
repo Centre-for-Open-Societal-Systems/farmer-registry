@@ -72,6 +72,27 @@ def test_checkout_pins_resolved_develop_commit(monkeypatch, tmp_path, component)
     assert any("--detach" in args for args in calls)
 
 
+def test_checkout_uses_a_pinned_source_commit_without_resolving_a_branch(monkeypatch, tmp_path, component):
+    calls = []
+    monkeypatch.setattr(coordinator.subprocess, "run", lambda *_a, **_k: pytest.fail("Unexpected branch lookup"))
+    def run(args):
+        calls.append(args)
+        return SHA if args[-1] == "HEAD" else ""
+    pinned = dict(component, sourceCommit=SHA, sourceBranch="develop")
+    assert coordinator.checkout(pinned, "dev", tmp_path / "source", run) == SHA
+    assert any(args[-1] == SHA and "fetch" in args for args in calls)
+
+
+def test_a_malformed_pinned_source_commit_is_rejected(tmp_path, component):
+    with pytest.raises(coordinator.ServiceError, match="invalid-source-revision"):
+        coordinator.checkout(dict(component, sourceCommit="develop"), "dev", tmp_path / "source", lambda a: "")
+
+
+def test_connector_is_pinned_to_the_commit_the_release_runs():
+    connector = next(c for c in coordinator.configuration() if c["name"] == "registry-connector")
+    assert connector["sourceCommit"] == "bc565efd47c129ff0ce25809bd946afc2b5e70f5"
+
+
 def test_source_race_is_rejected(tmp_path, component):
     with pytest.raises(coordinator.ServiceError, match="revision-changed"):
         coordinator.checkout(component, "staging", tmp_path / "source", lambda a: "d" * 40, commit=SHA)
