@@ -254,6 +254,14 @@ def selected_chart(component, environment, source):
             yield chart, provenance_hash(provenance), provenance
 
 
+def built_chart_archive(name):
+    """The archive next to OAN_BUILT_CHART_PIN (built-chart/ of ci/deploy/package_chart.py), by its exact name."""
+    archive = Path(os.environ.get("OAN_BUILT_CHART_PIN", "")).with_name(name)
+    if not os.environ.get("OAN_BUILT_CHART_PIN") or not archive.is_file():
+        raise ValueError("Built chart archive missing")
+    return archive
+
+
 def prepare_dashboard_chart(state, values, before, installed_chart):
     """Render the installed OAN chart with its existing bounded compatibility fixes."""
     from oan_chart import profile, verify
@@ -264,8 +272,12 @@ def prepare_dashboard_chart(state, values, before, installed_chart):
         raise ServiceError("dashboard-api-installed-chart-mismatch")
     archive = state / (pin["name"] + "-" + pin["version"] + ".tgz")
     try:
-        with urllib.request.urlopen(pin["repository"] + archive.name, timeout=30) as response:
-            content = response.read(20 * 1024 * 1024 + 1)
+        if "repository" in pin:
+            with urllib.request.urlopen(pin["repository"] + archive.name, timeout=30) as response:
+                content = response.read(20 * 1024 * 1024 + 1)
+        else:
+            # A develop build's own chart (OAN_BUILT_CHART_PIN) is not published yet: read the archive it packaged.
+            content = built_chart_archive(archive.name).read_bytes()
         if len(content) > 20 * 1024 * 1024:
             raise ValueError("Chart archive too large")
         archive.write_bytes(content)

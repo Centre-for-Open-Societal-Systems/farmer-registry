@@ -386,6 +386,52 @@ def test_embedded_api_restores_selected_digest_after_registry_reconciliation(tmp
     assert archive.is_file() and renderer.is_file()
 
 
+def built_chart(tmp_path, monkeypatch, content=b"built chart bytes"):
+    """A develop build's built-chart/: pin.json without a repository, and the archive next to it."""
+    built = tmp_path / "built-chart"
+    built.mkdir()
+    (built / "openg2p-farmer-registry-0.0.0-develop.900.tgz").write_bytes(content)
+    (built / "pin.json").write_text(json.dumps({
+        "name": "openg2p-farmer-registry", "version": "0.0.0-develop.900", "sha256": "c" * 64,
+        "platformVersion": "1.2.2-rc.625", "environment": "dev", "namespace": "farmer", "release": "farmer-registry"}))
+    monkeypatch.setenv("OAN_BUILT_CHART_PIN", str(built / "pin.json"))
+    monkeypatch.delenv("DELIVERY_ENVIRONMENT", raising=False)
+    return built
+
+
+def test_embedded_api_uses_the_chart_this_build_packaged(tmp_path, monkeypatch):
+    import deployment
+    import oan_chart
+    built_chart(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    state.mkdir()
+    monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: pytest.fail("Unexpected download"))
+    verified = []
+    monkeypatch.setattr(oan_chart, "verify", lambda path: verified.append(path.read_bytes()) or oan_chart.profile())
+    monkeypatch.setattr(deployment, "reconcile_dev", lambda _candidate, _before: None)
+    values = {"dashboardApi": {"image": {"repository": ECR + "/openg2p/farmer-registry/dashboard-api", "tag": SHA[:12]}}}
+    assert coordinator.dashboard_chart_provenance()["version"] == "0.0.0-develop.900"
+    archive, renderer = coordinator.prepare_dashboard_chart(state, values, [], "openg2p-farmer-registry-0.0.0-develop.900")
+    assert archive.read_bytes() == b"built chart bytes" and verified == [b"built chart bytes"]
+    assert renderer.is_file()
+
+
+def test_embedded_api_rejects_the_old_pin_when_this_build_installed_its_own_chart(tmp_path, monkeypatch):
+    built_chart(tmp_path, monkeypatch)
+    monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: pytest.fail("Unexpected download"))
+    with pytest.raises(coordinator.ServiceError, match="installed-chart-mismatch"):
+        coordinator.prepare_dashboard_chart(tmp_path, {}, [], "openg2p-farmer-registry-1.0.0-dev.21")
+
+
+def test_embedded_api_fails_closed_when_the_built_archive_is_missing(tmp_path, monkeypatch):
+    built = built_chart(tmp_path, monkeypatch)
+    (built / "openg2p-farmer-registry-0.0.0-develop.900.tgz").unlink()
+    state = tmp_path / "state"
+    state.mkdir()
+    with pytest.raises(coordinator.ServiceError, match="download-or-checksum-failed"):
+        coordinator.prepare_dashboard_chart(state, {}, [], "openg2p-farmer-registry-0.0.0-develop.900")
+
+
 @pytest.mark.parametrize("field", [None, "commit", "digest", "chartHash", "environment", "valuesHash", "harnessHash",
                                  "noExternalNetwork", "hookJobs", "everyEnabledHook", "rerun", "failureRecovery", "isolatedDatabases"])
 def test_dashboard_hook_evidence_binds_image_chart_configuration_and_executed_checks(field):
