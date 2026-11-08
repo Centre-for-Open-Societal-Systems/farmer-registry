@@ -140,6 +140,8 @@ def branch(environment, component):
 
 def checkout(component, environment, destination, run=command, commit=None):
     repo = component["repository"]
+    # A component may pin an exact upstream commit (sourceCommit) instead of following a branch.
+    commit = commit or component.get("sourceCommit")
     if commit is None:
         wanted = branch(environment, component)
         # ls-remote --exit-code returns 2 ONLY for no matching reference.
