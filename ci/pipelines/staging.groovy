@@ -131,7 +131,7 @@ def call() {
                             sh 'bash ci/services/run-container.sh build --environment staging --registry "$ECR_REGISTRY" --input "$DEV_MANIFEST" --acceptance "$DEV_ACCEPTANCE" --output service-outcomes/staging-build.json'
                         }
                     }
-                    stash name: 'staging-services', includes: 'helm/**,ci/**,scripts/**,integrations/**,service-outcomes/staging-build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
+                    stash name: 'staging-services', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/registry-connector-ui/**,service-outcomes/staging-build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
                 }
             }
             stage('Deploy (services)') {
