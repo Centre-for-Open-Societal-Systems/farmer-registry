@@ -926,3 +926,23 @@ def test_an_unlisted_docker_subcommand_keeps_the_general_reason(monkeypatch):
     failing_run(monkeypatch, "boom")
     with pytest.raises(coordinator.ServiceError, match="^command-failed-docker$"):
         coordinator.command(["docker", "login", "registry"])
+
+
+def test_a_missing_role_repository_is_created_like_the_component_repository():
+    calls = []
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[:2] == ["aws", "ecr"] and args[2] == "describe-repositories":
+            return json.dumps({"repositories": [{"imageTagMutability": "IMMUTABLE",
+                                                 "imageScanningConfiguration": {"scanOnPush": True},
+                                                 "encryptionConfiguration": {"encryptionType": "AES256"}}]})
+        return ""
+    coordinator.ensure_image_repository("openg2p/farmer-registry/registry-connector-api",
+                                        "openg2p/farmer-registry/registry-connector", run)
+    assert calls[0][calls[0].index("--repository-names") + 1] == "openg2p/farmer-registry/registry-connector"
+    create = calls[1]
+    assert create[:3] == ["aws", "ecr", "create-repository"]
+    assert create[create.index("--repository-name") + 1] == "openg2p/farmer-registry/registry-connector-api"
+    assert create[create.index("--image-tag-mutability") + 1] == "IMMUTABLE"
+    assert create[create.index("--image-scanning-configuration") + 1] == "scanOnPush=true"
+    assert create[create.index("--encryption-configuration") + 1] == "encryptionType=AES256"
