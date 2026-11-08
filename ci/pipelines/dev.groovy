@@ -197,17 +197,21 @@ pipeline {
         stage('Build (services)') {
             when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && (env.COORDINATE_SERVICES ?: 'true') != 'false' } } }
             steps {
+                // The dashboard API is part of the registry chart this build packaged and "Deploy (registry)" installed;
+                // its pin (built-chart/pin.json) replaces ci/deploy/oan-chart.json for both services stages.
+                unstash 'built-chart'
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
                         sh '''
                             set -eu
                             set +x
+                            export OAN_BUILT_CHART_PIN="$PWD/built-chart/pin.json"
                             bash ci/services/run-container.sh build \
                               --environment dev --registry "$ECR_REGISTRY" --output service-outcomes/build.json
                         '''
                     }
                 }
-                stash name: 'optional-deployment', includes: 'ci/**,helm/**,scripts/**,integrations/**,test/runtime/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
+                stash name: 'optional-deployment', includes: 'built-chart/**,ci/**,helm/**,scripts/**,integrations/**,test/runtime/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
         }
         stage('Deploy (services)') {
@@ -233,6 +237,7 @@ pipeline {
                             sh '''
                                 set -eu
                                 if ! test -d "$CONNECTOR_BACKUP_DIRECTORY"; then unset CONNECTOR_BACKUP_DIRECTORY; fi
+                                export OAN_BUILT_CHART_PIN="$PWD/built-chart/pin.json"
                                 bash ci/services/run-container.sh deploy \
                                   --environment dev --registry "$ECR_REGISTRY" \
                                   --input service-outcomes/build.json --output service-outcomes/deploy.json
