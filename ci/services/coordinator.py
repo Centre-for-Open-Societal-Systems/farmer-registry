@@ -47,6 +47,9 @@ class SkipService(Exception):
     pass
 
 
+DOCKER_STEPS = ("build", "run", "push", "pull", "exec", "network")
+
+
 def command(args, cwd=None, input=None):
     # No shell expansion; Git/Helm output may contain credentials or private values.
     try:
@@ -58,13 +61,17 @@ def command(args, cwd=None, input=None):
     if result.returncode:
         if re.search(r"AccessDenied|Unauthorized|forbidden|authentication failed|permission denied", result.stderr, re.I):
             raise ServiceError("tool-authentication-or-authorization-failed")
-        if "RepositoryNotFoundException" in result.stderr:
+        # docker push answers a missing ECR repository with "name unknown" rather than the AWS exception name.
+        if "RepositoryNotFoundException" in result.stderr or re.search(r"name unknown|repository with name \S+ does not exist", result.stderr, re.I):
             raise ServiceError("image-repository-missing")
         if Path(args[0]).stem == "helm":
             from deployment import upgrade_diagnostic
             raise ServiceError("command-failed-helm", {
                 "diagnostics": upgrade_diagnostic(result.stdout + "\n" + result.stderr),
             })
+        if Path(args[0]).name == "docker" and len(args) > 1 and args[1] in DOCKER_STEPS:
+            # A fixed word from our own arguments, never tool output, so a failed image build, test run or push can be told apart.
+            raise ServiceError("command-failed-docker-" + args[1])
         raise ServiceError("command-failed-" + Path(args[0]).name)
     return result.stdout
 

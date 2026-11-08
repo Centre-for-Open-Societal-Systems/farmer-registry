@@ -899,3 +899,30 @@ def test_retire_command_cannot_run_without_acceptance(accepted, tmp_path, monkey
     assert len(uninstall) == 1
     assert "--no-hooks" in uninstall[0] and "--keep-history" in uninstall[0]
     assert uninstall[0][2] == cutover.OLD
+
+
+def failing_run(monkeypatch, stderr):
+    class Result:
+        returncode = 1
+        stdout = ""
+    Result.stderr = stderr
+    monkeypatch.setattr(coordinator.subprocess, "run", lambda *args, **kwargs: Result())
+
+
+@pytest.mark.parametrize("step", ["build", "run", "push"])
+def test_a_failed_docker_command_names_its_step(monkeypatch, step):
+    failing_run(monkeypatch, "some private output")
+    with pytest.raises(coordinator.ServiceError, match="^command-failed-docker-" + step + "$"):
+        coordinator.command(["docker", step, "image"])
+
+
+def test_docker_push_to_a_missing_ecr_repository_is_named(monkeypatch):
+    failing_run(monkeypatch, "name unknown: The repository with name 'openg2p/x' does not exist in the registry")
+    with pytest.raises(coordinator.ServiceError, match="^image-repository-missing$"):
+        coordinator.command(["docker", "push", "registry/openg2p/x:tag"])
+
+
+def test_an_unlisted_docker_subcommand_keeps_the_general_reason(monkeypatch):
+    failing_run(monkeypatch, "boom")
+    with pytest.raises(coordinator.ServiceError, match="^command-failed-docker$"):
+        coordinator.command(["docker", "login", "registry"])
