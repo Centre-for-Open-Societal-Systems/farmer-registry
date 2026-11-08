@@ -29,9 +29,12 @@ def test_existing_environment_requires_matching_namespace_and_hostname(environme
 
 def test_staging_promotes_automatically_and_keeps_the_rehearsed_manual_actions():
     pipeline = (ROOT / "ci/pipelines/staging.groovy").read_text(encoding="utf-8")
-    assert "name: 'DEPLOY_STAGING', defaultValue: true" in pipeline
-    assert "choices: ['promote', 'validate-only', 'fresh-install', 'deploy']" in pipeline
-    assert "params.DEPLOY_STAGING ? params.DELIVERY_ACTION : 'validate-only'" in pipeline
+    assert "parameters {" not in pipeline and "params." not in pipeline
+    assert "env.DELIVERY_ACTION ?: 'promote'" in pipeline
+    operator = (ROOT / "ci/pipelines/operator.groovy").read_text(encoding="utf-8")
+    for action in ("fresh-install", "validate-only", "deploy-with-services"):
+        assert "'" + action + "'" in operator
+    assert "submitter: 'admin'" in operator
     assert "HELM_NAMESPACE = 'farmer'" in pipeline and "label 'vpn-agent2'" in pipeline
     assert "staging-farmer-kubeconfig" in pipeline and "ci/deploy/fresh-install-staging.sh" in pipeline
     assert "env.BRANCH_NAME != 'staging' || env.CHANGE_ID" in pipeline
