@@ -972,3 +972,25 @@ def test_only_the_api_image_runs_the_connector_schema_rehearsal(tmp_path, role, 
         return ""
     coordinator.build_image(component, role, spec, SHA, tmp_path, ECR, run)
     assert any(args[0] == sys.executable for args in calls) is rehearsed
+
+
+def test_the_services_deploy_stash_carries_every_image_overlay():
+    # Farmer develop 157: docker/registry-connector-ui was not stashed, so the deploy stage hashed an
+    # empty overlay and refused the connector with overlay-changed-since-build.
+    for path, name in [("ci/pipelines/dev.groovy", "optional-deployment"), ("ci/pipelines/staging.groovy", "staging-services")]:
+        line = next(line for line in (ROOT / path).read_text().splitlines() if "stash name: '" + name + "'" in line)
+        assert_overlays_stashed(line.split("includes: '", 1)[1].split("'", 1)[0].split(","))
+
+
+def assert_overlays_stashed(includes):
+    import fnmatch
+    catalogue = yaml.safe_load((ROOT / "ci/services/catalogue.yaml").read_text())
+    components = catalogue["cossAddons"]["components"]
+    overlays = [spec["overlay"] for c in components for spec in (c.get("images") or {}).values() if spec.get("overlay")]
+    assert overlays
+    for overlay in overlays:
+        files = [p for p in (ROOT / overlay).rglob("*") if p.is_file()]
+        assert files, overlay
+        for file in files:
+            rel = file.relative_to(ROOT).as_posix()
+            assert any(fnmatch.fnmatch(rel, pattern) for pattern in includes), rel

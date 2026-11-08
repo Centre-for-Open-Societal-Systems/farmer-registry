@@ -211,7 +211,7 @@ pipeline {
                         '''
                     }
                 }
-                stash name: 'optional-deployment', includes: 'built-chart/**,ci/**,helm/**,scripts/**,integrations/**,test/runtime/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
+                stash name: 'optional-deployment', includes: 'built-chart/**,ci/**,helm/**,scripts/**,integrations/**,docker/registry-connector-ui/**,test/runtime/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
         }
         stage('Deploy (services)') {
