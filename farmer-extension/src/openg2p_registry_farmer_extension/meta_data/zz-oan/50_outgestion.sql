@@ -18,9 +18,8 @@
 --
 -- The notice was published earlier as farmer_reference.changed.v1 on the topic
 -- oan.farmer-reference.changed.v1 (data model FARMER_REFERENCE_CHANGED_V1,
--- rows farmer_reference_changed_v1_*). Those data model, template and document
--- rows stay as history and nothing publishes through them; the old topic row is
--- deactivated below.
+-- rows farmer_reference_changed_v1_*). Those rows still publish on the old topic
+-- until the receivers move to the new one (see below).
 
 INSERT INTO "public"."g2p_registry_documents" ("document_id","document_store_id","bucket","source_filename","created_by","created_at") VALUES
 ('farmer_dci_search_response_document','farmer_dci_search_response.j2','templates','farmer_dci_search_response.j2','seeder','2026-10-25 00:00:00'),
@@ -52,13 +51,15 @@ INSERT INTO "public"."outgoing_topics" ("topic_id","topic_type","register_id","d
 ('farmer_registry_farmer_profile_changed_v1_topic','REGISTER','a1a4d25a-1cd4-4356-abac-985a0b3c6bcd','dfa42fcf-d9f2-5d75-9c11-41ace99c105e',NULL,'farmer-registry.farmer-profile.changed.v1','Approved farmer changes, for the registries that keep a Farmer reference',TRUE,'2026-11-06 00:00:00','PENDING',0)
 ON CONFLICT ("topic_id") DO NOTHING;
 
--- The one intended exception to the rule above: the retired topic
--- farmer_reference_changed_v1_topic (oan.farmer-reference.changed.v1) is
--- deactivated, so the Farmer registry stops publishing the old name and only the
--- new topic carries the notice. Its row, registration state and checkpoints are
--- left as they are. The statement only ever switches the retired topic off.
-UPDATE "public"."outgoing_topics" SET "is_active" = FALSE
-WHERE "topic_id" = 'farmer_reference_changed_v1_topic' AND "is_active";
+-- Until Crop and Livestock subscribe to farmer-registry.farmer-profile.changed.v1
+-- (their connector definitions, applied by the operator connector-upgrade), the
+-- earlier topic farmer_reference_changed_v1_topic (oan.farmer-reference.changed.v1)
+-- is kept active, so the registry publishes the notice on both topics. A deploy of
+-- the previous seed switched it off, so it is switched back on here; this is the
+-- one intended exception to the rule above. It is deactivated again in the change
+-- that follows the receivers' switch.
+UPDATE "public"."outgoing_topics" SET "is_active" = TRUE
+WHERE "topic_id" = 'farmer_reference_changed_v1_topic' AND NOT "is_active";
 
 -- Outgestion runs for the Farmer register only.
 UPDATE "public"."g2p_register_definitions" SET "outgest_applicable" = TRUE
