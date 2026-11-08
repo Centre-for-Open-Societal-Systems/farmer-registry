@@ -946,3 +946,29 @@ def test_a_missing_role_repository_is_created_like_the_component_repository():
     assert create[create.index("--image-tag-mutability") + 1] == "IMMUTABLE"
     assert create[create.index("--image-scanning-configuration") + 1] == "scanOnPush=true"
     assert create[create.index("--encryption-configuration") + 1] == "encryptionType=AES256"
+
+
+@pytest.mark.parametrize("role,rehearsed", [("api", True), ("ui", False)])
+def test_only_the_api_image_runs_the_connector_schema_rehearsal(tmp_path, role, rehearsed):
+    # Farmer develop 156: the rehearsal ran on the UI image (a static web image, no Python) and failed.
+    (tmp_path / role).mkdir()
+    (tmp_path / role / "Dockerfile").write_text("FROM scratch\n")
+    overlay = "integrations/registry-connector" if role == "api" else "docker/registry-connector-ui"
+    spec = {"dockerfile": role + "/Dockerfile", "context": role, "overlay": overlay}
+    if role == "ui":
+        spec["overlayContext"] = "repository"
+    component = {"name": "registry-connector", "repository": "https://example.invalid/c.git", "images": {role: spec}}
+    calls = []
+    passing = {name: True for name in ("schemaRerun", "failedDdlRolledBack", "failureRecovery", "duplicateSentOnce",
+                                       "failedBoundaryRetried", "rollbackReconciled", "pollTimestampPersisted", "isolatedDatabases")}
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[0] == sys.executable:
+            return json.dumps(passing)
+        if args[:2] == ["docker", "push"]:
+            return "latest: digest: sha256:" + "a" * 64 + " size: 1"
+        if args[:3] == ["aws", "ecr", "describe-images"]:
+            return "sha256:" + "a" * 64
+        return ""
+    coordinator.build_image(component, role, spec, SHA, tmp_path, ECR, run)
+    assert any(args[0] == sys.executable for args in calls) is rehearsed

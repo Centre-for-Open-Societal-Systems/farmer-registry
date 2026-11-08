@@ -391,7 +391,8 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
         if role == "api" and runtime_test.is_file():
             run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "python",
                  "-v", str(runtime_test) + ":/tests/test_media.py:ro", image, "/tests/test_media.py"])
-        if rehearsal.is_file():
+        # The schema rehearsal runs the connector's Python code; the UI role is a static web image without it.
+        if role == "api" and rehearsal.is_file():
             rehearsal_result = json.loads(run([sys.executable, str(rehearsal), image]).strip().splitlines()[-1])
             if not all(rehearsal_result.get(name) is True for name in ("schemaRerun", "failedDdlRolledBack", "failureRecovery", "duplicateSentOnce", "failedBoundaryRetried", "rollbackReconciled", "pollTimestampPersisted", "isolatedDatabases")):
                 raise ServiceError("connector-schema-rehearsal-failed")
