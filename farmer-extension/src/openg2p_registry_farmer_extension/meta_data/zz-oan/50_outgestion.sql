@@ -54,8 +54,12 @@ ON CONFLICT ("topic_id") DO NOTHING;
 -- Until Crop and Livestock subscribe to farmer-registry.farmer-profile.changed.v1
 -- (their connector definitions, applied by the operator connector-upgrade), the
 -- earlier topic farmer_reference_changed_v1_topic (oan.farmer-reference.changed.v1)
--- stays active, so the registry publishes the notice on both topics. It is
--- deactivated in the change that follows that switch.
+-- is kept active, so the registry publishes the notice on both topics. A deploy of
+-- the previous seed switched it off, so it is switched back on here; this is the
+-- one intended exception to the rule above. It is deactivated again in the change
+-- that follows the receivers' switch.
+UPDATE "public"."outgoing_topics" SET "is_active" = TRUE
+WHERE "topic_id" = 'farmer_reference_changed_v1_topic' AND NOT "is_active";
 
 -- Outgestion runs for the Farmer register only.
 UPDATE "public"."g2p_register_definitions" SET "outgest_applicable" = TRUE
