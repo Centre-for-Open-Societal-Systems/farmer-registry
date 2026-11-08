@@ -353,6 +353,20 @@ def image_repository(component, suffix):
     return component.get("imageRepository", "openg2p/farmer-registry/" + component["name"] + suffix)
 
 
+def ensure_image_repository(name, template, run):
+    """Create ECR repository `name` with the tag mutability, scan-on-push and encryption of `template`."""
+    settings = json.loads(run(["aws", "ecr", "describe-repositories", "--region", "ap-south-1",
+                               "--repository-names", template, "--output", "json"]))["repositories"][0]
+    encryption = settings.get("encryptionConfiguration") or {"encryptionType": "AES256"}
+    args = ["aws", "ecr", "create-repository", "--region", "ap-south-1", "--repository-name", name,
+            "--image-tag-mutability", settings.get("imageTagMutability", "MUTABLE"),
+            "--image-scanning-configuration",
+            "scanOnPush=" + str(bool(settings.get("imageScanningConfiguration", {}).get("scanOnPush"))).lower(),
+            "--encryption-configuration", "encryptionType=" + encryption["encryptionType"]
+            + (",kmsKey=" + encryption["kmsKey"] if encryption.get("kmsKey") else "")]
+    run(args)
+
+
 def build_image(component, role, spec, commit, source, registry, run, tag=None):
     suffix = "-" + role if component.get("images") else ""
     repository = registry + "/" + image_repository(component, suffix)
@@ -381,7 +395,14 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
             rehearsal_result = json.loads(run([sys.executable, str(rehearsal), image]).strip().splitlines()[-1])
             if not all(rehearsal_result.get(name) is True for name in ("schemaRerun", "failedDdlRolledBack", "failureRecovery", "duplicateSentOnce", "failedBoundaryRetried", "rollbackReconciled", "pollTimestampPersisted", "isolatedDatabases")):
                 raise ServiceError("connector-schema-rehearsal-failed")
-    pushed = run(["docker", "push", image])
+    try:
+        pushed = run(["docker", "push", image])
+    except ServiceError as error:
+        if str(error) != "image-repository-missing" or not suffix:
+            raise
+        # A role image (-api, -ui) whose repository was never made: create it like the component's own one, push again.
+        ensure_image_repository(image_repository(component, suffix), image_repository(component, ""), run)
+        pushed = run(["docker", "push", image])
     matches = re.findall(r"digest: (sha256:[0-9a-f]{64})\b", pushed)
     if len(set(matches)) != 1:
         raise ServiceError("missing-pushed-digest")
