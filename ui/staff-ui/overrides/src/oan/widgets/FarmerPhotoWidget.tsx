@@ -178,7 +178,7 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
     return (
         <div className="oan-photo">
             <style>{`
-                .oan-photo { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+                .oan-photo { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
                 .oan-photo-frame {
                     width: ${size}px; height: ${size}px; border-radius: 12px; overflow: hidden;
                     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
@@ -189,11 +189,11 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
                 .oan-photo-frame.has-photo { border-style: solid; }
                 .oan-photo-frame.dragging { border-color: var(--owt-color-primary, #ed7c22); }
                 .oan-photo-frame img { width: 100%; height: 100%; object-fit: cover; }
-                .oan-photo-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+                .oan-photo-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
                 .oan-photo-title { font-weight: 600; color: var(--owt-color-text, #111827); }
                 .oan-photo-actions { display: flex; gap: 8px; flex-wrap: wrap; }
                 .oan-photo-actions button {
-                    padding: 6px 14px; font-size: 14px; cursor: pointer;
+                    height: 30px; padding: 0 12px; font-size: 14px; cursor: pointer;
                     border-radius: var(--owt-btn-border-radius, 6px);
                     background: var(--owt-btn-secondary-bg, #fff);
                     color: var(--owt-btn-secondary-color, #374151);

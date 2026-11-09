@@ -426,27 +426,27 @@ export function GeoPointWidget({ config }: { config: Config }) {
     const title = config['widget-label'] ? label(String(config['widget-label'])) : '';
 
     return (
-        <div className="mb-[10px] oan-geo">
+        <div className="mb-2 oan-geo">
             <style>{`
-                .oan-geo-title { font-weight: 500; margin-bottom: 6px; color: var(--owt-color-text, #111827); }
+                .oan-geo-title { font-weight: 500; margin-bottom: 8px; color: var(--owt-color-text, #111827); }
                 .oan-geo-map {
                     position: relative; overflow: hidden; border-radius: 10px; touch-action: none; user-select: none;
                     border: 1px solid var(--owt-color-border, #d1d5db); background: #e5e3df; cursor: ${readonly ? 'grab' : 'crosshair'};
                 }
                 .oan-geo-map img.tile { position: absolute; width: ${TILE}px; height: ${TILE}px; pointer-events: none; }
                 .oan-geo-pin { position: absolute; width: 26px; height: 26px; margin: -26px 0 0 -13px; pointer-events: none; }
-                .oan-geo-zoom { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 4px; }
+                .oan-geo-zoom { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 8px; }
                 .oan-geo-zoom button, .oan-geo-actions button {
-                    min-width: 30px; height: 30px; padding: 0 10px; font-size: 14px; cursor: pointer;
+                    min-width: 30px; height: 30px; padding: 0 12px; font-size: 14px; cursor: pointer;
                     border-radius: var(--owt-btn-border-radius, 6px); background: var(--owt-btn-secondary-bg, #fff);
                     color: var(--owt-btn-secondary-color, #374151); border: 1px solid var(--owt-btn-secondary-border, #d1d5db);
                 }
                 .oan-geo-attr { position: absolute; right: 0; bottom: 0; padding: 1px 6px; font-size: 11px; background: rgba(255,255,255,.8); }
                 .oan-geo-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
-                .oan-geo-fields { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
-                .oan-geo-fields label { display: flex; flex-direction: column; font-size: 13px; color: var(--owt-color-text-muted, #6b7280); }
+                .oan-geo-fields { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 8px; }
+                .oan-geo-fields label { display: flex; flex-direction: column; flex: 1 1 0; min-width: 0; font-size: 13px; color: var(--owt-color-text-muted, #6b7280); }
                 .oan-geo-fields input {
-                    height: 30px; width: 150px; padding: 0 8px; border-radius: 10px; font-size: 14px;
+                    height: 30px; width: 100%; min-width: 0; padding: 0 8px; border-radius: 10px; font-size: 14px;
                     border: 1px solid var(--owt-color-border, #d1d5db); color: var(--owt-color-text, #111827);
                 }
                 .oan-geo-hint { font-size: 12px; color: var(--owt-widget-helptext-color, #6b7280); }
