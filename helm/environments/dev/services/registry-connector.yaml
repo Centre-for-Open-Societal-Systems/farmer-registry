@@ -7,6 +7,13 @@ _coordination:
   databaseEnv: CONNECTOR_DB_DBNAME
   oldDatabaseEnv: CONNECTOR_DB_DBNAME
   backupHash: c4cdb2bb37049b00470994d6443ec9b562c3548d267b27df3bb1e0a6eddd48c1
+  # Applied only while the connector is active (image-only rollouts keep the live values). The live
+  # release was installed with a chart that rendered the gateway as istio-system/development; the pinned
+  # chart renders istio.virtualservice.gateway as given, so it must be spelled out here.
+  activeValues:
+    istio:
+      virtualservice:
+        gateway: istio-system/development
 fullnameOverride: farmer-registry-connector
 cossSigning:
   enabled: true
