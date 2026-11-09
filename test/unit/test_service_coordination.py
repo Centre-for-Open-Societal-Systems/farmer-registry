@@ -994,3 +994,74 @@ def assert_overlays_stashed(includes):
         for file in files:
             rel = file.relative_to(ROOT).as_posix()
             assert any(fnmatch.fnmatch(rel, pattern) for pattern in includes), rel
+
+
+def active_connector(component, release_tools, monkeypatch, smoke_ok=True, override="api:\n  replicaCount: 0\n"):
+    """An active (serving) connector release, with the reviewed paused-cutover overrides on disk."""
+    source, item, state, run = release_tools
+    connector = dict(component, kind="connector")
+    monkeypatch.setattr(coordinator, "connector_settings", lambda *a: None)
+    signing = coordinator.ROOT / "scripts/operations/connector/chart_signing.py"
+    signing.parent.mkdir(parents=True, exist_ok=True)
+    signing.write_text("def apply(chart):\n    pass\n")
+    values = coordinator.ROOT / "helm/environments/dev/services/example.yaml"
+    values.write_text("_coordination:\n  namespace: farmer\n" + override)
+    probe = {"readinessProbe": {"httpGet": {"path": "/health", "port": "http"}}, "ports": [{"name": "http", "containerPort": 8000}]}
+    def with_probe(text):
+        items = [d for d in yaml.safe_load_all(text) if d]
+        for d in items:
+            for c in d.get("spec", {}).get("template", {}).get("spec", {}).get("containers", []):
+                c.update(copy.deepcopy(probe))
+        return yaml.safe_dump_all(items)
+    def active_run(args):
+        if args[:3] == ["helm", "get", "values"]:
+            state["calls"].append(args)
+            return yaml.safe_dump({"cossCutover": {"phase": "active"}})
+        if args[:2] == ["kubectl", "exec"]:
+            state["calls"].append(args)
+            if not smoke_ok:
+                raise coordinator.ServiceError("command-failed-kubectl")
+            return ""
+        if args[:2] == ["helm", "rollback"]:
+            state["calls"].append(args)
+            state["upgraded"] = False
+            return ""
+        result = run(args)
+        if args[:2] == ["helm", "template"] or args[:3] == ["helm", "get", "manifest"]:
+            return with_probe(result)
+        return result
+    return connector, source, item, state, active_run
+
+
+def test_an_active_connector_takes_an_image_only_rollout_with_its_live_values(component, release_tools, monkeypatch):
+    connector, source, item, state, run = active_connector(component, release_tools, monkeypatch)
+    assert coordinator.deploy(connector, "dev", item, source, ECR, run) == 6
+    values_file = next(a for a in state["calls"] if a[:2] == ["helm", "upgrade"])
+    assert "--atomic" in values_file
+    # The paused-cutover override (replicaCount 0) was not applied to the serving connector.
+    template = next(a for a in state["calls"] if a[:2] == ["helm", "template"])
+    assert template  # rendered from live values; guard() would refuse a replica change
+    smoke = next(a for a in state["calls"] if a[:2] == ["kubectl", "exec"])
+    assert "deploy/example" in smoke and "http://127.0.0.1:8000/health" in smoke[-1]
+    assert not any(a[:2] == ["helm", "rollback"] for a in state["calls"])
+
+
+def test_a_failed_smoke_check_rolls_the_active_connector_back(component, release_tools, monkeypatch):
+    connector, source, item, state, run = active_connector(component, release_tools, monkeypatch, smoke_ok=False)
+    with pytest.raises(coordinator.ServiceError, match="smoke-check-failed-rolled-back"):
+        coordinator.deploy(connector, "dev", item, source, ECR, run)
+    rollback = next(a for a in state["calls"] if a[:2] == ["helm", "rollback"])
+    assert rollback[2:4] == ["example", "5"]
+
+
+def test_an_active_connector_never_takes_a_hook_change(component, release_tools, monkeypatch):
+    connector, source, item, state, run = active_connector(component, release_tools, monkeypatch)
+    state["hooks"] = True
+    with pytest.raises(coordinator.SkipService, match="hook-change-requires-accepted-cutover"):
+        coordinator.deploy(connector, "dev", item, source, ECR, run)
+    assert not state["upgraded"]
+
+
+def test_smoke_check_needs_at_least_one_endpoint():
+    with pytest.raises(coordinator.ServiceError, match="no-checkable-endpoint"):
+        coordinator.smoke_check([deployment("example")], "farmer", [], lambda args: "")

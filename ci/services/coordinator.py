@@ -751,10 +751,17 @@ def deploy(component, environment, record, source, registry, run=command):
             if component.get("allowInstall") is not True:
                 raise SkipService("no-existing-release")
             before, values = [], {}
-        if component.get("kind") == "connector" and values.get("cossCutover", {}).get("phase") == "active":
-            raise SkipService("active-connector-requires-accepted-image-rollout")
+        # A connector that is already serving (cutover phase active) takes image-only rollouts: guard()
+        # refuses any other change, the upgrade is atomic, and a failed smoke check rolls it back.
+        # Chart, values or hook changes still go through the accepted cutover (connector_cutover.py).
+        active = component.get("kind") == "connector" and values.get("cossCutover", {}).get("phase") == "active"
+        if active and not status:
+            raise ServiceError("active-connector-release-missing")
         auth = dashboard_auth(overrides) if approved_dashboard else None
-        merge(values, overrides)
+        if not active:
+            # An active connector keeps its live values; the reviewed overrides describe the paused
+            # cutover preparation (no replicas, no route) and would switch the serving connector off.
+            merge(values, overrides)
         for role, spec in image_specs(component).items():
             selected = record["images"][role] if component.get("images") else record
             for value_path in spec["imageValues"]:
@@ -786,12 +793,12 @@ def deploy(component, environment, record, source, registry, run=command):
                 render_options = ["--no-hooks", "--post-renderer", str(renderer)]
             after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
                               "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
-            guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" else before
+            guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" and not active else before
             if embedded:
                 guard_dashboard_api(before, after, images["main"], namespace, auth=auth)
             else:
                 guard(guard_before, after, namespace, images.values(), release)
-            if component.get("kind") == "connector":
+            if component.get("kind") == "connector" and not active:
                 from connector_cutover import verify_backup
                 backup_dir = os.environ.get("CONNECTOR_BACKUP_DIRECTORY")
                 if not backup_dir or not (Path(backup_dir) / "backup.json").is_file():
@@ -805,7 +812,9 @@ def deploy(component, environment, record, source, registry, run=command):
             # unreviewed migrations/setup jobs during an optional image deployment.
             old_hooks = docs(run(["helm", "get", "hooks", release, *args])) if status and not embedded else []
             hooks = [d for d in after if d.get("metadata", {}).get("annotations", {}).get("helm.sh/hook")]
-            if hooks or old_hooks:
+            if active and hooks != old_hooks:
+                raise SkipService("active-connector-hook-change-requires-accepted-cutover")
+            if (hooks or old_hooks) and not active:
                 rehearsal(component, environment, record, overrides)
             if status:
                 current = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
@@ -819,12 +828,41 @@ def deploy(component, environment, record, source, registry, run=command):
         if final.get("info", {}).get("status") != "deployed":
             raise ServiceError("release-not-deployed")
         final_manifest = docs(run(["helm", "get", "manifest", release, *args]))
+        if active:
+            try:
+                smoke_check(final_manifest, namespace, args, run)
+            except ServiceError:
+                run(["helm", "rollback", release, str(status["version"]), *args, "--wait", "--timeout", "10m"])
+                raise ServiceError("active-connector-smoke-check-failed-rolled-back") from None
         if embedded:
             guard_dashboard_api(before, final_manifest, images["main"], namespace, auth=auth)
         else:
-            guard(signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" else before,
+            guard(signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" and not active else before,
                   final_manifest, namespace, images.values(), release)
         return final["version"]
+
+
+def smoke_check(manifest, namespace, args, run):
+    """Every Deployment's readiness endpoint answers 2xx from inside its own pod after the rollout."""
+    checked = 0
+    for d in manifest:
+        if d.get("kind") != "Deployment" or not d.get("spec", {}).get("replicas", 1):
+            continue
+        for container in pod(d).get("containers", []):
+            probe = (container.get("readinessProbe") or container.get("livenessProbe") or {}).get("httpGet")
+            if not probe:
+                continue
+            port = probe.get("port")
+            if not isinstance(port, int):
+                port = next((p["containerPort"] for p in container.get("ports", []) if p.get("name") == port), None)
+            if not isinstance(port, int):
+                continue
+            url = "http://127.0.0.1:%d%s" % (port, probe.get("path", "/"))
+            run(["kubectl", "exec", "-n", namespace, "deploy/" + d["metadata"]["name"], "-c", container["name"], "--",
+                 "sh", "-c", "wget -q -O /dev/null %s || curl -fsS -o /dev/null %s || python -c \"import urllib.request;urllib.request.urlopen('%s', timeout=10)\"" % (url, url, url)])
+            checked += 1
+    if not checked:
+        raise ServiceError("active-connector-has-no-checkable-endpoint")
 
 
 def merge(target, overlay):
