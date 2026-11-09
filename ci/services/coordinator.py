@@ -762,6 +762,10 @@ def deploy(component, environment, record, source, registry, run=command):
             # An active connector keeps its live values; the reviewed overrides describe the paused
             # cutover preparation (no replicas, no route) and would switch the serving connector off.
             merge(values, overrides)
+        else:
+            # Values the live release needs because the pinned chart renders them differently from the
+            # chart it was installed with (for example the Istio gateway). Reviewed in the environment file.
+            merge(values, settings.get("activeValues") or {})
         for role, spec in image_specs(component).items():
             selected = record["images"][role] if component.get("images") else record
             for value_path in spec["imageValues"]:
