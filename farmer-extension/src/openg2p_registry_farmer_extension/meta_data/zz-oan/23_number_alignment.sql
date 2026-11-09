@@ -15,7 +15,7 @@ BEGIN
       INTO result FROM jsonb_each(node);
     IF node->>'widget' = 'number' THEN
       fmt := COALESCE(node->'widget-data-format', '{}'::jsonb);
-      IF NOT (fmt ? 'numericType') THEN
+      IF node->>'widget-id' = 'estimated_age' AND NOT (fmt ? 'numericType') THEN
         fmt := fmt || '{"numericType":"integer","minimum":0}'::jsonb;
       END IF;
       fmt := fmt || '{"textAlign":"right","thousandSeparator":","}'::jsonb;
