@@ -212,7 +212,7 @@ export default function Home() {
                         action={activeStatsCard === 'tasks' ? undefined : viewAction}
                         anyOf={activeStatsCard === 'tasks' ? taskSearchAnyOf : undefined}
                         fallback={
-                            <div className="relative border border-primary-second flex h-14 w-full min-w-0 md:w-4/5 items-center rounded-[10px] bg-neutral-second overflow-visible">
+                            <div className="relative border border-primary-second flex h-14 w-full min-w-0 md:w-4/5 items-center rounded-lg bg-neutral-second overflow-visible">
                                 <div className="relative flex items-center w-full min-w-0 h-full">
                                     <SearchBar
                                         placeholder={searchPlaceholders[activeStatsCard]}
@@ -226,7 +226,7 @@ export default function Home() {
                             </div>
                         }
                     >
-                        <div className="relative border border-primary-second flex h-14 w-full min-w-0 md:w-4/5 items-center rounded-[10px] bg-neutral-second overflow-visible">
+                        <div className="relative border border-primary-second flex h-14 w-full min-w-0 md:w-4/5 items-center rounded-lg bg-neutral-second overflow-visible">
 
                             {(activeStatsCard === 'registers' || activeStatsCard === 'form-submissions') &&
                                 registerList?.length > 0 && (
