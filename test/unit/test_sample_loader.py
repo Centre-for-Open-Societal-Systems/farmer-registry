@@ -347,3 +347,39 @@ def test_names_in_the_farmers_script_are_passed_and_empty_ones_skipped(loader):
     assert "last_name_local" not in person
     plain = plan(loader)[0]["sections"]["farmer_personal_details"][0]
     assert not any(key.endswith("_local") for key in plain)
+
+
+def test_a_missing_master_data_setting_ends_the_load_without_failing_the_upgrade(loader, monkeypatch, capsys):
+    for name in ("MDS_API_URL", "MDS_TOKEN_URL", "MDS_CLIENT_ID", "MDS_CLIENT_SECRET", "STAFF_CLIENT_SECRET"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(loader.mds_client.MdsClient, "from_env", lambda **_: pytest.fail("Master Data called"))
+    assert loader.run() == 0
+    assert "SKIPPED, nothing loaded: MDS_API_URL is not set" in capsys.readouterr().err
+
+
+def test_the_staff_client_secret_is_master_datas_secret(loader, monkeypatch):
+    for name, value in (("MDS_API_URL", "http://mds"), ("MDS_TOKEN_URL", "http://kc/token"), ("MDS_CLIENT_ID", "farmer")):
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("MDS_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("STAFF_CLIENT_SECRET", "s3cret")
+    seen = {}
+
+    def from_env(**_):
+        seen["secret"] = loader.os.environ["MDS_CLIENT_SECRET"]
+        raise loader.mds_client.MdsError("CONFIG", "stop here")
+
+    monkeypatch.setattr(loader.mds_client.MdsClient, "from_env", from_env)
+    assert loader.run() == 0
+    assert seen == {"secret": "s3cret"}
+
+
+def test_a_master_data_refusal_still_fails_the_load(loader, monkeypatch):
+    for name in ("MDS_API_URL", "MDS_TOKEN_URL", "MDS_CLIENT_ID", "MDS_CLIENT_SECRET"):
+        monkeypatch.setenv(name, "set")
+
+    def from_env(**_):
+        raise loader.mds_client.MdsError("AUTH", "token refused")
+
+    monkeypatch.setattr(loader.mds_client.MdsClient, "from_env", from_env)
+    with pytest.raises(loader.mds_client.MdsError):
+        loader.run()

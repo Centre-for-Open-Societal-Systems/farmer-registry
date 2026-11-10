@@ -59,6 +59,28 @@ def seed_environment(result, values):
     containers[0]['env'].extend(additions)
 
 
+def seed_settings(result):
+    """Give the db-seed container the sample loader's settings when sample data is on.
+
+    The platform Job passes LOAD_SAMPLE_DATA but not Master Data's API settings or the staff IAM
+    URL; templates/db-seed-settings.yaml renders them into a ConfigMap (and fails the render if one
+    would be empty). With sample data off nothing changes.
+    """
+    jobs = [d for d in result if d.get('kind') == 'Job' and d['metadata']['name'] == RELEASE + '-db-seed']
+    containers = [c for job in jobs for c in pod(job).get('containers', []) if c['name'] == 'db-seed']
+    if not any(e.get('name') == 'LOAD_SAMPLE_DATA' and str(e.get('value')).lower() == 'true'
+               for c in containers for e in c.get('env', [])):
+        return
+    name = RELEASE + '-db-seed-settings'
+    if not any(d.get('kind') == 'ConfigMap' and d['metadata']['name'] == name for d in result):
+        raise ValueError('sample data is on but the db-seed settings ConfigMap is not rendered')
+    if len(containers) != 1:
+        raise ValueError('db-seed container required')
+    sources = containers[0].setdefault('envFrom', [])
+    if not any(s.get('configMapRef', {}).get('name') == name for s in sources):
+        sources.append({'configMapRef': {'name': name}})
+
+
 def render(documents, values, environment=None):
     result = copy.deepcopy(documents)
     resources = index(result)
@@ -78,6 +100,7 @@ def render(documents, values, environment=None):
                 container['env'] = [entry for entry in container['env'] if entry['name'] not in omitted]
     if environment == 'staging':
         seed_environment(result, values)
+    seed_settings(result)
     return result
 
 
