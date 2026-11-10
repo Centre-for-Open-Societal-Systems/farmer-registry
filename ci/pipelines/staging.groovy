@@ -163,6 +163,12 @@ def call() {
                                 sh 'bash ci/services/run-container.sh deploy --environment staging --registry "$ECR_REGISTRY" --input service-outcomes/staging-build.json --acceptance "$DEV_ACCEPTANCE" --output service-outcomes/staging-deploy.json'
                             }
                         }
+                        // The connector definitions declared in git (helm/environments/staging/farmer-connector-definitions.yaml).
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                            withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                                sh 'bash ci/deploy/connector-definitions.sh staging'
+                            }
+                        }
                         archiveArtifacts artifacts: 'service-outcomes/*.json', allowEmptyArchive: true
                     }
                 }
