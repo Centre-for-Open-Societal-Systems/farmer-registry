@@ -29,7 +29,9 @@ def test_existing_environment_requires_matching_namespace_and_hostname(environme
 
 def test_staging_promotes_automatically_and_keeps_the_rehearsed_manual_actions():
     pipeline = (ROOT / "ci/pipelines/staging.groovy").read_text(encoding="utf-8")
-    assert "parameters {" not in pipeline and "params." not in pipeline
+    # The one build option is LOAD_SAMPLE_DATA, default off; any other parameter is refused.
+    assert pipeline.count("booleanParam(") == 1 and "choice(name" not in pipeline and "string(name" not in pipeline
+    assert "booleanParam(name: 'LOAD_SAMPLE_DATA', defaultValue: false" in pipeline and "params." not in pipeline
     assert "env.DELIVERY_ACTION ?: 'promote'" in pipeline
     operator = (ROOT / "ci/pipelines/operator.groovy").read_text(encoding="utf-8")
     for action in ("fresh-install", "validate-only", "deploy-with-services"):
