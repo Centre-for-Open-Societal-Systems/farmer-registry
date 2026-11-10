@@ -1,7 +1,14 @@
 # Dev ODK hostname and old-VM archive
 
-Executed on 16 October 2026. Canonical Central is now
-[odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com).
+Executed on 16 October 2026. Canonical Central was then
+`odk-central-development.oanstaging.com`.
+
+Update, 9 November 2026: the old `<name>-development.oanstaging.com` records are gone from
+Route 53, so those names fall through to the `*.oanstaging.com` wildcard and reach staging.
+The canonical New Dev Central is now
+[odk-central.development.oanstaging.com](https://odk-central.development.oanstaging.com)
+(same Central, covered by the `*.development.oanstaging.com` certificate). The record of the
+16 October change below keeps the old name.
 The user changed Route 53 from `13.207.43.8` to `13.201.58.55`, TTL 300.
 Authoritative and application-side DNS returned the new address. Staging remains
 on its separate VM at `odk-central.oanstaging.com`.
@@ -79,7 +86,7 @@ content decision; its connector stays paused pending that decision.
 - Canonical and compatibility HTTPS endpoints passed normal TLS verification
   and returned 200.
 - Login reaches the staff-realm Keycloak login page with
-  `redirect_uri=https://odk-central-development.oanstaging.com/v1/oidc/callback`.
+  `redirect_uri=https://odk-central.development.oanstaging.com/v1/oidc/callback`.
   This verifies redirect acceptance, not a complete credential-based SSO login.
 - Authenticated Chrome and Firefox rendered all visible map tiles with HTTP 200
   and canonical-origin Referer headers. Clicking saved a point. No synthetic

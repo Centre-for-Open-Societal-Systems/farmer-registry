@@ -4,7 +4,7 @@ Form assets remain under odk/: the XLSForm, location media, ingestion transform,
 and legacy setup assets. The published live form is farmer_profile; its permanent
 connector configuration is private.
 
-The canonical dev ODK Central is [odk-central-development.oanstaging.com](https://odk-central-development.oanstaging.com), with Farmer project `1`, Crop project `2` and migrated Livestock project `6`. See [hostname migration and archived old projects](../operations/odk-dev-hostname.md). The former Commons hostname remains a compatibility alias. Public staging remains the separate `odk-central.oanstaging.com` VM.
+The canonical dev ODK Central is [odk-central.development.oanstaging.com](https://odk-central.development.oanstaging.com), with Farmer project `1`, Crop project `2` and migrated Livestock project `6`. See [hostname migration and archived old projects](../operations/odk-dev-hostname.md). The former Commons hostname remains a compatibility alias. Public staging remains the separate `odk-central.oanstaging.com` VM.
 
 ```sh
 python odk/build_location_media.py --check
