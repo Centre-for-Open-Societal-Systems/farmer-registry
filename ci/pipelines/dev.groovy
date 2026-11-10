@@ -17,14 +17,6 @@ pipeline {
         // "Username with password" for the very last stage: a maintainer account with push access to oan-helm.
         OAN_HELM_FORK_CRED_ID = 'oan-helm-fork-token'
     }
-    parameters {
-        choice(name: 'DELIVERY_ACTION', choices: ['deploy', 'fresh-install'],
-            description: 'Leave on deploy: every develop build publishes the images and upgrades the existing dev release with them (the pinned chart, the live values), and Helm rolls back to the previous revision if the upgrade fails. fresh-install backs up the dev registry databases, uninstalls the release, drops the databases and installs the pinned chart again on an empty database (all dev farmer data is lost; Commons is untouched).')
-        booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
-            description: 'Build and independently upgrade available optional services; failures mark UNSTABLE.')
-        booleanParam(name: 'APPLY_COMMONS_IDENTITY', defaultValue: false,
-            description: 'Apply reviewed Commons staff identity values; requires fresh farmer-dev-identity-evidence credential.')
-    }
     stages {
         stage('Test') {
             steps {
@@ -187,8 +179,8 @@ pipeline {
                               archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
                             }
                           }
-                          withEnv(["APPLY_COMMONS_IDENTITY=${params.APPLY_COMMONS_IDENTITY}"]) {
-                            if (params.APPLY_COMMONS_IDENTITY) {
+                          withEnv(["APPLY_COMMONS_IDENTITY=${env.APPLY_COMMONS_IDENTITY == 'true'}"]) {
+                            if (env.APPLY_COMMONS_IDENTITY == 'true') {
                               withCredentials([file(credentialsId: 'farmer-dev-identity-evidence', variable: 'IDENTITY_EVIDENCE_FILE')]) {
                                 deployRegistry()
                               }
@@ -203,25 +195,29 @@ pipeline {
             }
         }
         stage('Build (services)') {
-            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } } }
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && (env.COORDINATE_SERVICES ?: 'true') != 'false' } } }
             steps {
+                // The dashboard API is part of the registry chart this build packaged and "Deploy (registry)" installed;
+                // its pin (built-chart/pin.json) replaces ci/deploy/oan-chart.json for both services stages.
+                unstash 'built-chart'
                 catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
                         sh '''
                             set -eu
                             set +x
+                            export OAN_BUILT_CHART_PIN="$PWD/built-chart/pin.json"
                             bash ci/services/run-container.sh build \
                               --environment dev --registry "$ECR_REGISTRY" --output service-outcomes/build.json
                         '''
                     }
                 }
-                stash name: 'optional-deployment', includes: 'ci/**,helm/**,scripts/**,integrations/**,test/runtime/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
+                stash name: 'optional-deployment', includes: 'built-chart/**,ci/**,helm/**,scripts/**,integrations/**,docker/registry-connector-ui/**,test/runtime/**,service-outcomes/build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
             }
         }
         stage('Deploy (services)') {
             when {
                 beforeAgent true
-                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
+                allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && (env.COORDINATE_SERVICES ?: 'true') != 'false' } }
             }
             agent { label 'vpn-agent2' }
             steps {
@@ -241,6 +237,7 @@ pipeline {
                             sh '''
                                 set -eu
                                 if ! test -d "$CONNECTOR_BACKUP_DIRECTORY"; then unset CONNECTOR_BACKUP_DIRECTORY; fi
+                                export OAN_BUILT_CHART_PIN="$PWD/built-chart/pin.json"
                                 bash ci/services/run-container.sh deploy \
                                   --environment dev --registry "$ECR_REGISTRY" \
                                   --input service-outcomes/build.json --output service-outcomes/deploy.json
@@ -276,6 +273,24 @@ pipeline {
         }
     }
     post {
+        failure {
+            script {
+                // Mail the DevOps list and the commit author; a controller without SMTP must not hide the failure.
+                try {
+                    def author = ''
+                    try { author = sh(script: "git log -1 --pretty=format:'%ae'", returnStdout: true).trim() } catch (ignored) { author = '' }
+                    def recipients = ['simretyibeltal@gmail.com', 'pavanns.ns@gmail.com']
+                    if (author && !author.contains('noreply')) { recipients = [author] + recipients }
+                    mail(
+                        to: recipients.unique().join(', '),
+                        subject: "Build FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: "Farmer Registry build or deploy failed.\n\nJob:     ${env.JOB_NAME}\nBranch:  ${env.BRANCH_NAME}\nBuild:   #${env.BUILD_NUMBER}\nURL:     ${env.BUILD_URL}\nConsole: ${env.BUILD_URL}console\n\nJenkins"
+                    )
+                } catch (err) {
+                    echo "notification not sent: ${err.message}"
+                }
+            }
+        }
         always {
             archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
             archiveArtifacts artifacts: 'ci-output/native-worker-save/**', allowEmptyArchive: true

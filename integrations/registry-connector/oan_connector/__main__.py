@@ -14,6 +14,11 @@ install_signing()
 
 role, *extra = sys.argv[1:] or ["api"]
 if role == "api":
+    # uvicorn serves openg2p_connector_service.main:app from this imported module, so the login guards that app.
+    from openg2p_connector_service.main import app
+    from .admin_auth import install as install_admin_auth
+
+    install_admin_auth(app)
     sys.argv = ["openg2p_connector_service.main", *extra]
     runpy.run_module("openg2p_connector_service.main", run_name="__main__")
 elif role in ("worker", "beat"):

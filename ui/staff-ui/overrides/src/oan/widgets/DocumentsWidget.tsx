@@ -124,25 +124,25 @@ export function DocumentsWidget({ config }: { config: Config }) {
     const showError = base.touched && base.error.length > 0;
 
     return (
-        <div className="mb-[10px] oan-docs">
+        <div className="mb-2 oan-docs">
             <style>{`
-                .oan-docs-title { font-weight: 500; margin-bottom: 6px; color: var(--owt-color-text, #111827); }
+                .oan-docs-title { font-weight: 500; margin-bottom: 8px; color: var(--owt-color-text, #111827); }
                 .oan-docs-title .req { color: var(--owt-widget-error-color, #dc2626); margin-left: 2px; }
-                .oan-docs-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 6px; }
+                .oan-docs-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
                 .oan-docs-file {
-                    display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 13px;
+                    display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-size: 13px;
                     border: 1px solid var(--owt-color-border, #d1d5db); border-radius: 8px;
                 }
                 .oan-docs-file span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
                 .oan-docs button {
-                    padding: 2px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
+                    height: 30px; padding: 0 12px; font-size: 14px; cursor: pointer; white-space: nowrap;
                     background: var(--owt-btn-secondary-bg, #fff); color: var(--owt-btn-secondary-color, #374151);
                     border: 1px solid var(--owt-color-primary-dark, #d1d5db); border-radius: 6px;
                 }
                 .oan-docs button:disabled { opacity: 0.5; cursor: default; }
                 .oan-docs-add { border-style: dashed !important; }
-                .oan-docs-note { font-size: 12px; color: var(--owt-widget-helptext-color, #6b7280); margin-top: 4px; }
-                .oan-docs-error { font-size: 12px; color: var(--owt-widget-error-color, #dc2626); margin-top: 4px; }
+                .oan-docs-note { font-size: 12px; color: var(--owt-widget-helptext-color, #6b7280); margin-top: 8px; }
+                .oan-docs-error { font-size: 12px; color: var(--owt-widget-error-color, #dc2626); margin-top: 8px; }
             `}</style>
             {title && (
                 <div className="oan-docs-title owt-field-label">

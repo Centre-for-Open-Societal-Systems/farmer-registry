@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import httpx
-from coss_connector.odk_media import AttachmentTransferError, FarmerOdkTransport, embed
+from oan_connector.odk_media import AttachmentTransferError, FarmerOdkTransport, embed
 from openg2p_connector_service.models import ConnectorDefinition
 from openg2p_connector_service.transports.base import SourceRecord
 from openg2p_connector_service.transports.checkpoints import Checkpoint, CheckpointMode
@@ -21,19 +21,19 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         import jwt
         from cryptography.hazmat.primitives.asymmetric import rsa
         from cryptography.hazmat.primitives import serialization
-        from coss_connector.signing import signed_envelope
+        from oan_connector.signing import signed_envelope
         key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         private = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
         settings = SimpleNamespace(signing_enabled=True, signing_private_key_pem=private, signing_algorithm="RS256", signing_issuer="farmer-partner")
         envelope = {"header": {"sender_id": "farmer-partner", "message_id": "synthetic"}, "message": {"payload": {"name": "Synthetic"}}}
-        with patch("coss_connector.signing.get_settings", return_value=settings), patch.dict(os.environ, CONNECTOR_SIGNING_KEY_ID="test-key"):
+        with patch("oan_connector.signing.get_settings", return_value=settings), patch.dict(os.environ, CONNECTOR_SIGNING_KEY_ID="test-key"):
             result = signed_envelope(envelope)
         claims = jwt.decode(result["header"]["signature"], key.public_key(), algorithms=["RS256"], issuer="farmer-partner")
         self.assertEqual(claims["message_id"], "synthetic")
         self.assertEqual(claims["body_sha256"], hashlib.sha256(json.dumps(result["message"], sort_keys=True, separators=(",", ":")).encode()).hexdigest())
         self.assertEqual(jwt.get_unverified_header(result["header"]["signature"])["kid"], "test-key")
         settings.signing_enabled = False
-        with patch("coss_connector.signing.get_settings", return_value=settings), patch.dict(os.environ, CONNECTOR_REQUIRE_SIGNING="true"):
+        with patch("oan_connector.signing.get_settings", return_value=settings), patch.dict(os.environ, CONNECTOR_REQUIRE_SIGNING="true"):
             with self.assertRaises(ValueError): signed_envelope(envelope)
 
     async def test_nested_attachments_preserve_source_identity(self):
@@ -80,7 +80,7 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         actual_client = httpx.AsyncClient
         connector = ConnectorDefinition(auth_type="none", source_config_json=json.dumps({"base_url": "https://odk.example", "project_id": 1, "form_id": "farmer"}))
         auth = SimpleNamespace(get_auth_context=AsyncMock(return_value=SimpleNamespace(headers={}, base_url=None)))
-        with patch.object(OdkCentralTransport, "fetch", fetch), patch("coss_connector.odk_media.get_auth_strategy", return_value=auth), patch("coss_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(handle), **kw)):
+        with patch.object(OdkCentralTransport, "fetch", fetch), patch("oan_connector.odk_media.get_auth_strategy", return_value=auth), patch("oan_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(handle), **kw)):
             result = [item async for item in FarmerOdkTransport().fetch(connector)]
         self.assertEqual(len(result), 1)
         self.assertIs(result[0].checkpoint, checkpoint)
@@ -110,7 +110,7 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
             return json.dumps(data)
 
         self.assertNotIn("hhm_land_cert_1_1.jpg", await resolve(4))
-        from coss_connector.odk_media import NAV_LINK_MAX_DEPTH
+        from oan_connector.odk_media import NAV_LINK_MAX_DEPTH
         self.assertIn("hhm_land_cert_1_1.jpg", await resolve(NAV_LINK_MAX_DEPTH))
 
     async def test_transport_gives_upstream_the_farmer_depth_unless_the_connector_sets_one(self):
@@ -123,7 +123,7 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         for extra, expected in (({}, 8), ({"nav_link_max_depth": 3}, 3)):
             connector = ConnectorDefinition(auth_type="none", source_config_json=json.dumps(
                 {"base_url": "https://odk.example", "project_id": 1, "form_id": "farmer", **extra}))
-            with patch.object(OdkCentralTransport, "fetch", fetch), patch("coss_connector.odk_media.get_auth_strategy", return_value=auth):
+            with patch.object(OdkCentralTransport, "fetch", fetch), patch("oan_connector.odk_media.get_auth_strategy", return_value=auth):
                 [item async for item in FarmerOdkTransport().fetch(connector)]
             self.assertEqual(seen[-1], expected)
 
@@ -134,7 +134,7 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         actual_client = httpx.AsyncClient
         connector = ConnectorDefinition(auth_type="none", source_config_json=json.dumps({"base_url": "https://odk.example", "project_id": 1, "form_id": "farmer"}))
         auth = SimpleNamespace(get_auth_context=AsyncMock(return_value=SimpleNamespace(headers={}, base_url=None)))
-        with patch.object(OdkCentralTransport, "fetch", fetch), patch("coss_connector.odk_media.get_auth_strategy", return_value=auth), patch("coss_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(lambda req: httpx.Response(503)), **kw)):
+        with patch.object(OdkCentralTransport, "fetch", fetch), patch("oan_connector.odk_media.get_auth_strategy", return_value=auth), patch("oan_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(lambda req: httpx.Response(503)), **kw)):
             with self.assertRaises(httpx.HTTPStatusError):
                 _ = [item async for item in FarmerOdkTransport().fetch(connector)]
 
@@ -151,7 +151,7 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         actual_client = httpx.AsyncClient
         connector = ConnectorDefinition(auth_type="none", source_config_json=json.dumps({"base_url": "https://odk.example", "project_id": 1, "form_id": "farmer", "use_draft": True}))
         auth = SimpleNamespace(get_auth_context=AsyncMock(return_value=SimpleNamespace(headers={}, base_url=None)))
-        with patch.object(OdkCentralTransport, "fetch", fetch), patch("coss_connector.odk_media.get_auth_strategy", return_value=auth), patch("coss_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(handle), **kw)):
+        with patch.object(OdkCentralTransport, "fetch", fetch), patch("oan_connector.odk_media.get_auth_strategy", return_value=auth), patch("oan_connector.odk_media.httpx.AsyncClient", side_effect=lambda **kw: actual_client(transport=httpx.MockTransport(handle), **kw)):
             with self.assertRaises(httpx.HTTPStatusError):
                 _ = [item async for item in FarmerOdkTransport().fetch(connector)]
         self.assertTrue(all('/draft/' in path for path in requested))
@@ -161,7 +161,7 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(issubclass(FarmerOdkTransport, OdkCentralTransport))
 
     def test_replacement_worker_and_dispatch_do_not_consume_old_celery_queue(self):
-        from coss_connector.celery_config import configure
+        from oan_connector.celery_config import configure
         from openg2p_connector_service.worker import celery_app
         configure(celery_app)
         route = celery_app.amqp.router.route({}, 'connector.poll', args=('synthetic',), kwargs={})
@@ -170,7 +170,7 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
 
     def test_poll_clock_is_stored_as_naive_utc_without_changing_existing_values(self):
         from datetime import datetime, timedelta, timezone
-        from coss_connector import utc_timestamps  # noqa: F401
+        from oan_connector import utc_timestamps  # noqa: F401
         connector = ConnectorDefinition()
         connector.last_poll_at = datetime(2026, 10, 15, 12, tzinfo=timezone(timedelta(hours=5, minutes=30)))
         self.assertEqual(connector.last_poll_at, datetime(2026, 10, 15, 6, 30))

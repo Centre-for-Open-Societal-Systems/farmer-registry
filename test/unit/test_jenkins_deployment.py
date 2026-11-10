@@ -160,8 +160,8 @@ def test_identity_values_are_applied_only_when_requested(release):
     assert "keycloakBaseUrl" not in default["global"]
     result = deployment.prepare(values, release[0], ECR, TAG, migrate_identity=True)
     assert result["global"]["keycloakRealm"] == "staff"
-    assert result["global"]["keycloakBaseUrl"] == "https://keycloak-development.oanstaging.com"
-    assert result["registry"]["staffUi"]["envVars"]["IAM_URL"] == "https://staff-iam-development.oanstaging.com"
+    assert result["global"]["keycloakBaseUrl"] == "https://keycloak.development.oanstaging.com"
+    assert result["registry"]["staffUi"]["envVars"]["IAM_URL"] == "https://staff-iam.development.oanstaging.com"
 
 
 def test_registry_provenance_rejects_wrong_or_missing_image_digest(tmp_path, monkeypatch):
@@ -197,7 +197,7 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
 
 @pytest.mark.parametrize("hostname", [
     "registry.farmer-dev.oanstaging.com",
-    "farmer-registry-development.oanstaging.com",
+    "farmer-registry.development.oanstaging.com",
     "farmer-registry.development.oanstaging.com",
 ])
 def test_dev_hostnames_are_accepted(release, hostname):

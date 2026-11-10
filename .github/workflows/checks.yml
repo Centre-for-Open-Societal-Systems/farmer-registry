@@ -37,3 +37,20 @@ jobs:
           done
           python -m pytest -q -p no:cacheprovider farmer-extension/tests/test_odk_signature_http.py test/unit/test_reporting_geography.py
 
+
+  chart:
+    # Required check: the registry chart must build its dependencies, lint and render.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.16.4
+      - name: Build chart dependencies
+        run: |
+          helm repo add openg2p https://openg2p.github.io/openg2p-helm
+          helm dependency build helm/openg2p-farmer-registry
+      - name: Lint
+        run: helm lint helm/openg2p-farmer-registry
+      - name: Render with default values
+        run: helm template oan-check helm/openg2p-farmer-registry --namespace oan-check > /dev/null

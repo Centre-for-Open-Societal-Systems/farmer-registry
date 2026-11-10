@@ -72,6 +72,27 @@ def test_checkout_pins_resolved_develop_commit(monkeypatch, tmp_path, component)
     assert any("--detach" in args for args in calls)
 
 
+def test_checkout_uses_a_pinned_source_commit_without_resolving_a_branch(monkeypatch, tmp_path, component):
+    calls = []
+    monkeypatch.setattr(coordinator.subprocess, "run", lambda *_a, **_k: pytest.fail("Unexpected branch lookup"))
+    def run(args):
+        calls.append(args)
+        return SHA if args[-1] == "HEAD" else ""
+    pinned = dict(component, sourceCommit=SHA, sourceBranch="develop")
+    assert coordinator.checkout(pinned, "dev", tmp_path / "source", run) == SHA
+    assert any(args[-1] == SHA and "fetch" in args for args in calls)
+
+
+def test_a_malformed_pinned_source_commit_is_rejected(tmp_path, component):
+    with pytest.raises(coordinator.ServiceError, match="invalid-source-revision"):
+        coordinator.checkout(dict(component, sourceCommit="develop"), "dev", tmp_path / "source", lambda a: "")
+
+
+def test_connector_is_pinned_to_the_commit_the_release_runs():
+    connector = next(c for c in coordinator.configuration() if c["name"] == "registry-connector")
+    assert connector["sourceCommit"] == "bc565efd47c129ff0ce25809bd946afc2b5e70f5"
+
+
 def test_source_race_is_rejected(tmp_path, component):
     with pytest.raises(coordinator.ServiceError, match="revision-changed"):
         coordinator.checkout(component, "staging", tmp_path / "source", lambda a: "d" * 40, commit=SHA)
@@ -384,6 +405,52 @@ def test_embedded_api_restores_selected_digest_after_registry_reconciliation(tmp
     assert values["dashboardApi"]["image"] == dict(selected, digest=None)
     assert coordinator.os.environ["OAN_CHART_ARCHIVE"] == "previous-archive"
     assert archive.is_file() and renderer.is_file()
+
+
+def built_chart(tmp_path, monkeypatch, content=b"built chart bytes"):
+    """A develop build's built-chart/: pin.json without a repository, and the archive next to it."""
+    built = tmp_path / "built-chart"
+    built.mkdir()
+    (built / "openg2p-farmer-registry-0.0.0-develop.900.tgz").write_bytes(content)
+    (built / "pin.json").write_text(json.dumps({
+        "name": "openg2p-farmer-registry", "version": "0.0.0-develop.900", "sha256": "c" * 64,
+        "platformVersion": "1.2.2-rc.625", "environment": "dev", "namespace": "farmer", "release": "farmer-registry"}))
+    monkeypatch.setenv("OAN_BUILT_CHART_PIN", str(built / "pin.json"))
+    monkeypatch.delenv("DELIVERY_ENVIRONMENT", raising=False)
+    return built
+
+
+def test_embedded_api_uses_the_chart_this_build_packaged(tmp_path, monkeypatch):
+    import deployment
+    import oan_chart
+    built_chart(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    state.mkdir()
+    monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: pytest.fail("Unexpected download"))
+    verified = []
+    monkeypatch.setattr(oan_chart, "verify", lambda path: verified.append(path.read_bytes()) or oan_chart.profile())
+    monkeypatch.setattr(deployment, "reconcile_dev", lambda _candidate, _before: None)
+    values = {"dashboardApi": {"image": {"repository": ECR + "/openg2p/farmer-registry/dashboard-api", "tag": SHA[:12]}}}
+    assert coordinator.dashboard_chart_provenance()["version"] == "0.0.0-develop.900"
+    archive, renderer = coordinator.prepare_dashboard_chart(state, values, [], "openg2p-farmer-registry-0.0.0-develop.900")
+    assert archive.read_bytes() == b"built chart bytes" and verified == [b"built chart bytes"]
+    assert renderer.is_file()
+
+
+def test_embedded_api_rejects_the_old_pin_when_this_build_installed_its_own_chart(tmp_path, monkeypatch):
+    built_chart(tmp_path, monkeypatch)
+    monkeypatch.setattr(coordinator.urllib.request, "urlopen", lambda *_args, **_kwargs: pytest.fail("Unexpected download"))
+    with pytest.raises(coordinator.ServiceError, match="installed-chart-mismatch"):
+        coordinator.prepare_dashboard_chart(tmp_path, {}, [], "openg2p-farmer-registry-1.0.0-dev.21")
+
+
+def test_embedded_api_fails_closed_when_the_built_archive_is_missing(tmp_path, monkeypatch):
+    built = built_chart(tmp_path, monkeypatch)
+    (built / "openg2p-farmer-registry-0.0.0-develop.900.tgz").unlink()
+    state = tmp_path / "state"
+    state.mkdir()
+    with pytest.raises(coordinator.ServiceError, match="download-or-checksum-failed"):
+        coordinator.prepare_dashboard_chart(state, {}, [], "openg2p-farmer-registry-0.0.0-develop.900")
 
 
 @pytest.mark.parametrize("field", [None, "commit", "digest", "chartHash", "environment", "valuesHash", "harnessHash",
@@ -832,3 +899,169 @@ def test_retire_command_cannot_run_without_acceptance(accepted, tmp_path, monkey
     assert len(uninstall) == 1
     assert "--no-hooks" in uninstall[0] and "--keep-history" in uninstall[0]
     assert uninstall[0][2] == cutover.OLD
+
+
+def failing_run(monkeypatch, stderr):
+    class Result:
+        returncode = 1
+        stdout = ""
+    Result.stderr = stderr
+    monkeypatch.setattr(coordinator.subprocess, "run", lambda *args, **kwargs: Result())
+
+
+@pytest.mark.parametrize("step", ["build", "run", "push"])
+def test_a_failed_docker_command_names_its_step(monkeypatch, step):
+    failing_run(monkeypatch, "some private output")
+    with pytest.raises(coordinator.ServiceError, match="^command-failed-docker-" + step + "$"):
+        coordinator.command(["docker", step, "image"])
+
+
+def test_docker_push_to_a_missing_ecr_repository_is_named(monkeypatch):
+    failing_run(monkeypatch, "name unknown: The repository with name 'openg2p/x' does not exist in the registry")
+    with pytest.raises(coordinator.ServiceError, match="^image-repository-missing$"):
+        coordinator.command(["docker", "push", "registry/openg2p/x:tag"])
+
+
+def test_an_unlisted_docker_subcommand_keeps_the_general_reason(monkeypatch):
+    failing_run(monkeypatch, "boom")
+    with pytest.raises(coordinator.ServiceError, match="^command-failed-docker$"):
+        coordinator.command(["docker", "login", "registry"])
+
+
+def test_a_missing_role_repository_is_created_like_the_component_repository():
+    calls = []
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[:2] == ["aws", "ecr"] and args[2] == "describe-repositories":
+            return json.dumps({"repositories": [{"imageTagMutability": "IMMUTABLE",
+                                                 "imageScanningConfiguration": {"scanOnPush": True},
+                                                 "encryptionConfiguration": {"encryptionType": "AES256"}}]})
+        return ""
+    coordinator.ensure_image_repository("openg2p/farmer-registry/registry-connector-api",
+                                        "openg2p/farmer-registry/registry-connector", run)
+    assert calls[0][calls[0].index("--repository-names") + 1] == "openg2p/farmer-registry/registry-connector"
+    create = calls[1]
+    assert create[:3] == ["aws", "ecr", "create-repository"]
+    assert create[create.index("--repository-name") + 1] == "openg2p/farmer-registry/registry-connector-api"
+    assert create[create.index("--image-tag-mutability") + 1] == "IMMUTABLE"
+    assert create[create.index("--image-scanning-configuration") + 1] == "scanOnPush=true"
+    assert create[create.index("--encryption-configuration") + 1] == "encryptionType=AES256"
+
+
+@pytest.mark.parametrize("role,rehearsed", [("api", True), ("ui", False)])
+def test_only_the_api_image_runs_the_connector_schema_rehearsal(tmp_path, role, rehearsed):
+    # Farmer develop 156: the rehearsal ran on the UI image (a static web image, no Python) and failed.
+    (tmp_path / role).mkdir()
+    (tmp_path / role / "Dockerfile").write_text("FROM scratch\n")
+    overlay = "integrations/registry-connector" if role == "api" else "docker/registry-connector-ui"
+    spec = {"dockerfile": role + "/Dockerfile", "context": role, "overlay": overlay}
+    if role == "ui":
+        spec["overlayContext"] = "repository"
+    component = {"name": "registry-connector", "repository": "https://example.invalid/c.git", "images": {role: spec}}
+    calls = []
+    passing = {name: True for name in ("schemaRerun", "failedDdlRolledBack", "failureRecovery", "duplicateSentOnce",
+                                       "failedBoundaryRetried", "rollbackReconciled", "pollTimestampPersisted", "isolatedDatabases")}
+    def run(args, **kwargs):
+        calls.append(args)
+        if args[0] == sys.executable:
+            return json.dumps(passing)
+        if args[:2] == ["docker", "push"]:
+            return "latest: digest: sha256:" + "a" * 64 + " size: 1"
+        if args[:3] == ["aws", "ecr", "describe-images"]:
+            return "sha256:" + "a" * 64
+        return ""
+    coordinator.build_image(component, role, spec, SHA, tmp_path, ECR, run)
+    assert any(args[0] == sys.executable for args in calls) is rehearsed
+
+
+def test_the_services_deploy_stash_carries_every_image_overlay():
+    # Farmer develop 157: docker/registry-connector-ui was not stashed, so the deploy stage hashed an
+    # empty overlay and refused the connector with overlay-changed-since-build.
+    for path, name in [("ci/pipelines/dev.groovy", "optional-deployment"), ("ci/pipelines/staging.groovy", "staging-services")]:
+        line = next(line for line in (ROOT / path).read_text().splitlines() if "stash name: '" + name + "'" in line)
+        assert_overlays_stashed(line.split("includes: '", 1)[1].split("'", 1)[0].split(","))
+
+
+def assert_overlays_stashed(includes):
+    import fnmatch
+    catalogue = yaml.safe_load((ROOT / "ci/services/catalogue.yaml").read_text())
+    components = catalogue["cossAddons"]["components"]
+    overlays = [spec["overlay"] for c in components for spec in (c.get("images") or {}).values() if spec.get("overlay")]
+    assert overlays
+    for overlay in overlays:
+        files = [p for p in (ROOT / overlay).rglob("*") if p.is_file()]
+        assert files, overlay
+        for file in files:
+            rel = file.relative_to(ROOT).as_posix()
+            assert any(fnmatch.fnmatch(rel, pattern) for pattern in includes), rel
+
+
+def active_connector(component, release_tools, monkeypatch, smoke_ok=True, override="api:\n  replicaCount: 0\n"):
+    """An active (serving) connector release, with the reviewed paused-cutover overrides on disk."""
+    source, item, state, run = release_tools
+    connector = dict(component, kind="connector")
+    monkeypatch.setattr(coordinator, "connector_settings", lambda *a: None)
+    signing = coordinator.ROOT / "scripts/operations/connector/chart_signing.py"
+    signing.parent.mkdir(parents=True, exist_ok=True)
+    signing.write_text("def apply(chart):\n    pass\n")
+    values = coordinator.ROOT / "helm/environments/dev/services/example.yaml"
+    values.write_text("_coordination:\n  namespace: farmer\n" + override)
+    probe = {"readinessProbe": {"httpGet": {"path": "/health", "port": "http"}}, "ports": [{"name": "http", "containerPort": 8000}]}
+    def with_probe(text):
+        items = [d for d in yaml.safe_load_all(text) if d]
+        for d in items:
+            for c in d.get("spec", {}).get("template", {}).get("spec", {}).get("containers", []):
+                c.update(copy.deepcopy(probe))
+        return yaml.safe_dump_all(items)
+    def active_run(args):
+        if args[:3] == ["helm", "get", "values"]:
+            state["calls"].append(args)
+            return yaml.safe_dump({"cossCutover": {"phase": "active"}})
+        if args[:2] == ["kubectl", "exec"]:
+            state["calls"].append(args)
+            if not smoke_ok:
+                raise coordinator.ServiceError("command-failed-kubectl")
+            return ""
+        if args[:2] == ["helm", "rollback"]:
+            state["calls"].append(args)
+            state["upgraded"] = False
+            return ""
+        result = run(args)
+        if args[:2] == ["helm", "template"] or args[:3] == ["helm", "get", "manifest"]:
+            return with_probe(result)
+        return result
+    return connector, source, item, state, active_run
+
+
+def test_an_active_connector_takes_an_image_only_rollout_with_its_live_values(component, release_tools, monkeypatch):
+    connector, source, item, state, run = active_connector(component, release_tools, monkeypatch)
+    assert coordinator.deploy(connector, "dev", item, source, ECR, run) == 6
+    values_file = next(a for a in state["calls"] if a[:2] == ["helm", "upgrade"])
+    assert "--atomic" in values_file
+    # The paused-cutover override (replicaCount 0) was not applied to the serving connector.
+    template = next(a for a in state["calls"] if a[:2] == ["helm", "template"])
+    assert template  # rendered from live values; guard() would refuse a replica change
+    smoke = next(a for a in state["calls"] if a[:2] == ["kubectl", "exec"])
+    assert "deploy/example" in smoke and "http://127.0.0.1:8000/health" in smoke[-1]
+    assert not any(a[:2] == ["helm", "rollback"] for a in state["calls"])
+
+
+def test_a_failed_smoke_check_rolls_the_active_connector_back(component, release_tools, monkeypatch):
+    connector, source, item, state, run = active_connector(component, release_tools, monkeypatch, smoke_ok=False)
+    with pytest.raises(coordinator.ServiceError, match="smoke-check-failed-rolled-back"):
+        coordinator.deploy(connector, "dev", item, source, ECR, run)
+    rollback = next(a for a in state["calls"] if a[:2] == ["helm", "rollback"])
+    assert rollback[2:4] == ["example", "5"]
+
+
+def test_an_active_connector_never_takes_a_hook_change(component, release_tools, monkeypatch):
+    connector, source, item, state, run = active_connector(component, release_tools, monkeypatch)
+    state["hooks"] = True
+    with pytest.raises(coordinator.SkipService, match="hook-change-requires-accepted-cutover"):
+        coordinator.deploy(connector, "dev", item, source, ECR, run)
+    assert not state["upgraded"]
+
+
+def test_smoke_check_needs_at_least_one_endpoint():
+    with pytest.raises(coordinator.ServiceError, match="no-checkable-endpoint"):
+        coordinator.smoke_check([deployment("example")], "farmer", [], lambda args: "")

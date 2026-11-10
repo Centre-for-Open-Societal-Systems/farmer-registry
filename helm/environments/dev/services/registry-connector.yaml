@@ -7,14 +7,28 @@ _coordination:
   databaseEnv: CONNECTOR_DB_DBNAME
   oldDatabaseEnv: CONNECTOR_DB_DBNAME
   backupHash: c4cdb2bb37049b00470994d6443ec9b562c3548d267b27df3bb1e0a6eddd48c1
+  # Applied only while the connector is active (image-only rollouts keep the live values). The live
+  # release was installed with a chart that rendered the gateway as istio-system/development; the pinned
+  # chart renders istio.virtualservice.gateway as given, so it must be spelled out here.
+  activeValues:
+    istio:
+      virtualservice:
+        gateway: istio-system/development
 fullnameOverride: farmer-registry-connector
 cossSigning:
   enabled: true
   partnerId: farmer-partner
   keyId: farmer-connector-v2-52da0fc34e90
   secret: farmer-connector-v2-signing
+# Admin access (Keycloak realm staff), passed to the connector as CONNECTOR_ADMIN_AUTH_*.
+adminAuth:
+  issuer: https://keycloak.development.oanstaging.com/realms/staff
+  jwksUrl: http://commons-keycloak.commons.svc.cluster.local:80/realms/staff/protocol/openid-connect/certs
+  clientId: registry-connector
+  role: REGISTRY_CONNECTOR_ADMIN
+  uiClientId: registry-connector-ui
 global:
-  hostname: connector-farmer-registry-development.oanstaging.com
+  hostname: connector-farmer-registry.development.oanstaging.com
   postgresqlHost: commons-postgresql.commons.svc.cluster.local
   postgresqlPort: 5432
   connectorDB: farmer_connector_v2
@@ -29,7 +43,7 @@ commonEnv:
   CONNECTOR_STORE_RUN_PAYLOADS: "false"
   CONNECTOR_STRICT_INCREMENTAL: "true"
   CONNECTOR_FULL_SCAN_ON_INCREMENTAL_UNSUPPORTED: "false"
-  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry-development.oanstaging.com
+  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry.development.oanstaging.com
 api:
   replicaCount: 0
   autoscaling:

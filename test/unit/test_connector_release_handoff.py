@@ -62,7 +62,7 @@ def test_scheduler_must_use_the_same_worker_image_secret_and_queue(fault):
 @pytest.mark.parametrize("fault", [None, "host", "gateway", "destination", "secret"])
 def test_route_handoff_preserves_environment_and_other_resources(new_owner, fault):
     route = {"kind": "VirtualService", "metadata": {"name": handoff.OLD}, "spec": {
-        "hosts": ["connector-farmer-registry-development.oanstaging.com"], "gateways": ["internal"],
+        "hosts": ["connector-farmer-registry.development.oanstaging.com"], "gateways": ["internal"],
         "http": [{"route": [{"destination": {"host": handoff.OLD+"-api", "port": {"number": 80}}}]}]}}
     secret = {"kind": "Secret", "metadata": {"name": "retained"}, "data": {"password": "fixture"}}
     before = [secret] if new_owner else [secret, route]

@@ -112,7 +112,7 @@ def test_main_uses_approved_archive_preserves_permitted_changes_and_blocks_races
         if args[:2] == ["helm", "list"]:
             return json.dumps([{"name": "farmer-registry", "chart": pin["name"] + "-" + pin["version"]}])
         if args[:3] == ["helm", "get", "values"]:
-            return yaml.safe_dump({"global": {"registryHostname": "farmer-registry-development.oanstaging.com"}})
+            return yaml.safe_dump({"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}})
         if args[:3] == ["helm", "get", "manifest"]:
             return yaml.safe_dump_all(after if state["upgraded"] else before)
         if args[:2] == ["helm", "upgrade"]:

@@ -82,16 +82,16 @@ export function FileCellWidget({ config, value, onChange, onBlur, isEnabled = tr
     return (
         <div className="oan-file-cell">
             <style>{`
-                .oan-file-cell { display: flex; align-items: center; gap: 6px; min-width: 160px; }
+                .oan-file-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
                 .oan-file-cell button {
-                    padding: 2px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
+                    height: 30px; padding: 0 12px; font-size: 14px; cursor: pointer; white-space: nowrap;
                     background: var(--owt-btn-secondary-bg, #fff);
                     color: var(--owt-btn-secondary-color, #374151);
                     border: 1px solid var(--owt-color-primary-dark, #d1d5db);
                 }
                 .oan-file-cell button:disabled { opacity: 0.5; cursor: default; }
                 .oan-file-cell-name {
-                    font-size: 12px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                    font-size: 12px; flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                 }
                 .oan-file-cell-error { font-size: 11px; color: var(--owt-widget-error-color, #dc2626); }
             `}</style>

@@ -5,12 +5,12 @@ spec:
   gateways:
   - internal
   hosts:
-  - odk-central-development.oanstaging.com
+  - odk-central.development.oanstaging.com
   http:
   - headers:
       request:
         set:
-          x-forwarded-host: odk-central-development.oanstaging.com
+          x-forwarded-host: odk-central.development.oanstaging.com
           x-forwarded-proto: https
     match:
     - uri:

@@ -18,7 +18,7 @@ RELEASE = "farmer-registry"
 # names valid during hostname migrations without rewriting the release's routes.
 DEV_HOSTNAMES = {
     "registry.farmer-dev.oanstaging.com",
-    "farmer-registry-development.oanstaging.com",
+    "farmer-registry.development.oanstaging.com",
     "farmer-registry.development.oanstaging.com",
 }
 # The staging Registry UI hostname is the one in helm/environments/staging/delivery.yaml;

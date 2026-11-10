@@ -2,9 +2,9 @@
 # Apply with values-map-tiles.yaml in the owning Commons release.
 # Both existing Istio VirtualServices are retained; see the hostname runbook.
 global:
-  odkHostname: odk-central-development.oanstaging.com
+  odkHostname: odk-central.development.oanstaging.com
 odk-central:
-  hostname: odk-central-development.oanstaging.com
+  hostname: odk-central.development.oanstaging.com
   istio:
     virtualservice:
       host: odk.commons-dev.oanstaging.com
@@ -20,7 +20,7 @@ odk-central:
             "api key": "${ENKETO_API_KEY}",
             "authentication": {
               "type": "cookie",
-              "url": "https://odk-central-development.oanstaging.com/#/login?next={RETURNURL}"
+              "url": "https://odk-central.development.oanstaging.com/#/login?next={RETURNURL}"
             },
             "name": "ODK Central",
             "server url": "${DOMAIN}"

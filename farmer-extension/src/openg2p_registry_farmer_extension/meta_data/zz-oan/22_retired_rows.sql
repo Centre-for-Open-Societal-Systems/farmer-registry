@@ -131,9 +131,7 @@ DELETE FROM "public"."incoming_model_key_paths" WHERE "key_path_id" = 'farmer_ke
 DELETE FROM "public"."data_models" WHERE "data_model_id" = 'FARMER_ODK_MODEL';
 
 -- Outgestion rows under their earlier ids, now farmer_reference_changed_v1_*
--- and farmer_dci_search_response_document (50_outgestion.sql). The data model
--- (FARMER_REFERENCE_CHANGED_V1), the event type and the WebSub topic name are
--- unchanged. Upstream's OUT-TMPL-1 is repointed by 50_outgestion.sql.
+-- and farmer_dci_search_response_document (50_outgestion.sql). Upstream's OUT-TMPL-1 is repointed by 50_outgestion.sql.
 DELETE FROM "public"."outgoing_topics" WHERE "topic_id" = '6d495cab-b513-5fd0-9bc2-d31024ee8410';
 DELETE FROM "public"."outgoing_templates" WHERE "template_id" = 'b011d78e-b003-596b-a8a1-ba5c73601635';
 DELETE FROM "public"."g2p_registry_documents"

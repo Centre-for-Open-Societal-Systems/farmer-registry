@@ -13,8 +13,8 @@ pull requests validate without publishing or deploying.
 | Registry release | `farmer-registry` | `farmer-registry` |
 | Connector release | `farmer-registry-connector` | `farmer-connector` until accepted cutover to `farmer-registry-connector` |
 | Kubeconfig credential | `farmer-dev-kubeconfig` | `staging-farmer-kubeconfig` |
-| Staff issuer | `https://keycloak-development.oanstaging.com/realms/staff` | `https://keycloak.oanstaging.com/realms/staff` |
-| Registry UI | `https://farmer-registry-development.oanstaging.com` | `https://farmer-registry.oanstaging.com` |
+| Staff issuer | `https://keycloak.development.oanstaging.com/realms/staff` | `https://keycloak.oanstaging.com/realms/staff` |
+| Registry UI | `https://farmer-registry.development.oanstaging.com` | `https://farmer-registry.oanstaging.com` |
 | Platform | `1.2.2-rc.544` | `1.2.2-rc.544` candidate; live upgrade pending |
 
 ## Dev
