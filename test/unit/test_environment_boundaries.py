@@ -32,6 +32,11 @@ def test_staging_promotes_automatically_and_keeps_the_rehearsed_manual_actions()
     # The one build option is LOAD_SAMPLE_DATA, default off; any other parameter is refused.
     assert pipeline.count("booleanParam(") == 1 and "choice(name" not in pipeline and "string(name" not in pipeline
     assert "booleanParam(name: 'LOAD_SAMPLE_DATA', defaultValue: false" in pipeline and "params." not in pipeline
+    # The sample users' password is bound from Jenkins only for a sample-data delivery and reaches helm in a file.
+    assert "if (env.LOAD_SAMPLE_DATA == 'true') {\n                            credentials << string(credentialsId: 'staging-sample-users-password'" in pipeline
+    promote = (ROOT / "ci/deploy/promote-staging.sh").read_text(encoding="utf-8")
+    assert '${SAMPLE_USERS_PASSWORD:?' in promote and '-f "$STATE/sample-users.values.json"' in promote
+    assert "aweApproverUserPassword=" not in promote  # never as --set on a command line
     assert "env.DELIVERY_ACTION ?: 'promote'" in pipeline
     operator = (ROOT / "ci/pipelines/operator.groovy").read_text(encoding="utf-8")
     for action in ("fresh-install", "validate-only", "deploy-with-services"):

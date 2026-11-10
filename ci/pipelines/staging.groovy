@@ -49,12 +49,20 @@ def call() {
                 agent { label 'vpn-agent2' }
                 steps {
                     checkout scm
-                    withCredentials([
-                        file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
-                        [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds'],
-                        usernamePassword(credentialsId: 'oan-helm-fork-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')
-                    ]) {
-                        sh 'bash ci/deploy/promote-staging.sh'
+                    script {
+                        def credentials = [
+                            file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
+                            [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds'],
+                            usernamePassword(credentialsId: 'oan-helm-fork-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')
+                        ]
+                        // The sample loader signs in as the sample staff users with global.aweApproverUserPassword, which the
+                        // staging values leave empty: bind it from Jenkins only when sample data is asked for.
+                        if (env.LOAD_SAMPLE_DATA == 'true') {
+                            credentials << string(credentialsId: 'staging-sample-users-password', variable: 'SAMPLE_USERS_PASSWORD')
+                        }
+                        withCredentials(credentials) {
+                            sh 'bash ci/deploy/promote-staging.sh'
+                        }
                     }
                     script { currentBuild.description = 'Promoted to staging in namespace farmer' }
                 }

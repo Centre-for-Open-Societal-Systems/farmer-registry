@@ -27,14 +27,21 @@ done
 export OAN_PROMOTED_VALUES
 
 # Build option LOAD_SAMPLE_DATA (default off) turns the db-seed sample records on for this delivery.
-if [ "${LOAD_SAMPLE_DATA:-false}" = true ]; then flags+=(--set registry.dbSeed.loadSampleData=true); fi
+# The sample loader signs in as the sample staff users (alex.carter, nina.patel) with global.aweApproverUserPassword,
+# which keycloak-init also sets as their password. The staging values leave it empty, so it comes from the Jenkins
+# Secret text staging-sample-users-password, in a private values file: never on a command line, in the log or in git.
+STATE=$(mktemp -d)
+trap 'rm -rf "$STATE"' EXIT
+if [ "${LOAD_SAMPLE_DATA:-false}" = true ]; then
+  : "${SAMPLE_USERS_PASSWORD:?LOAD_SAMPLE_DATA needs the Jenkins credential staging-sample-users-password}"
+  (umask 077 && python3 -c 'import json, os, sys; json.dump({"global": {"aweApproverUserPassword": os.environ["SAMPLE_USERS_PASSWORD"]}}, open(sys.argv[1], "w"))' "$STATE/sample-users.values.json")
+  flags+=(--set registry.dbSeed.loadSampleData=true -f "$STATE/sample-users.values.json")
+fi
 
 bash .oan-helm/scripts/ci/deliver_staging.sh openg2p-farmer-registry "$HELM_RELEASE" "$HELM_NAMESPACE" farmer.yaml \
   "${flags[@]}" --post-renderer ci/deploy/promote-renderer.sh
 
 # The seed applies metadata with ON_ERROR_STOP=0; fail the delivery if OAN's checks do not hold.
-STATE=$(mktemp -d)
-trap 'rm -rf "$STATE"' EXIT
 CHECKS=farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/90_checks.sql
 python3 scripts/operations/commons/check_seed_metadata.py "$CHECKS" > "$STATE/check_seed_metadata.py"
 kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- \
