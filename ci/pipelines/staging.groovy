@@ -4,7 +4,7 @@
 def call() {
     pipeline {
         agent any
-        options { skipDefaultCheckout(true); disableConcurrentBuilds(); timestamps(); timeout(time: 60, unit: 'MINUTES') }
+        options { skipDefaultCheckout(true); disableConcurrentBuilds(); retry(count: 2, conditions: [agent(), nonresumable()]); timestamps(); timeout(time: 60, unit: 'MINUTES') }
         parameters {
             booleanParam(name: 'LOAD_SAMPLE_DATA', defaultValue: false,
                 description: 'Load the sample records (db-seed hook) during this staging deploy. Leave off for a clean registry.')

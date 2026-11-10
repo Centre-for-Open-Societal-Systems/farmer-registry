@@ -4,6 +4,8 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
+        // Build agents are on-demand spot machines: if one is reclaimed mid-build, run the build again.
+        retry(count: 2, conditions: [agent(), nonresumable()])
         timestamps()
         timeout(time: 60, unit: 'MINUTES')
     }
