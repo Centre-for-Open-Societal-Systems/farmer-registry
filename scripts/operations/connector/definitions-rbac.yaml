@@ -1,0 +1,31 @@
+# The farmer-connector-definitions hook Job (helm/farmer-connector-definitions) mints a Keycloak
+# client-credentials token for the admin-only connector API. It reads the client secret from Secret
+# commons/registry-connector with its own ServiceAccount, farmer-registry-connector-definitions (namespace
+# farmer). The Role below already exists on New Dev and staging (the crop and livestock definitions Jobs use
+# it); this adds the binding for Farmer. Apply once as cluster admin on each cluster (same namespace on both):
+#
+#   kubectl apply -f scripts/operations/connector/definitions-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: connector-definitions-read-client-secret
+  namespace: commons
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["registry-connector"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: farmer-connector-definitions-client-secret
+  namespace: commons
+subjects:
+  - kind: ServiceAccount
+    name: farmer-registry-connector-definitions
+    namespace: farmer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: connector-definitions-read-client-secret

@@ -244,6 +244,12 @@ pipeline {
                             '''
                         }
                     }
+                    // The connector definitions declared in git (helm/environments/dev/farmer-connector-definitions.yaml).
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                            sh 'bash ci/deploy/connector-definitions.sh dev'
+                        }
+                    }
                     archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
                 }
             }
