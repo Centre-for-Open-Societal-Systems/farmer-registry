@@ -46,7 +46,7 @@ def call() {
             }
             stage('Promote and deploy') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'promote' } }
-                agent { label 'vpn-agent2' }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     checkout scm
                     withCredentials([
@@ -61,7 +61,7 @@ def call() {
             }
             stage('Deploy (registry)') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION in ['deploy', 'fresh-install'] } }
-                agent { label 'vpn-agent2' }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     dir('staging-deployment') {
                         deleteDir()
@@ -140,7 +140,7 @@ def call() {
             }
             stage('Deploy (services)') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'deploy' && env.COORDINATE_SERVICES == 'true' } }
-                agent { label 'vpn-agent2' }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     dir('staging-services') {
                         deleteDir()

@@ -118,7 +118,7 @@ pipeline {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION in ['deploy', 'fresh-install'] } }
             }
-            agent { label 'vpn-agent2' }
+            agent { label 'oan-ci-deploy' }
             options { timeout(time: 15, unit: 'MINUTES') }
             steps {
                 checkout scm
@@ -144,7 +144,7 @@ pipeline {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION in ['deploy', 'fresh-install'] } }
             }
-            agent { label 'vpn-agent2' }
+            agent { label 'oan-ci-deploy' }
             steps {
                 dir('dev-deployment') {
                     deleteDir()
@@ -219,7 +219,7 @@ pipeline {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && (env.COORDINATE_SERVICES ?: 'true') != 'false' } }
             }
-            agent { label 'vpn-agent2' }
+            agent { label 'oan-ci-deploy' }
             steps {
                 dir('optional-dev-deployment') {
                     deleteDir()
@@ -257,7 +257,7 @@ pipeline {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' } }
             }
-            agent { label 'vpn-agent2' }
+            agent { label 'oan-ci-deploy' }
             options { timeout(time: 15, unit: 'MINUTES') }
             steps {
                 checkout scm
