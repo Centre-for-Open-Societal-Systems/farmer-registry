@@ -550,14 +550,24 @@ class Loader:
         return done
 
 
+class SettingMissing(RuntimeError):
+    """A setting the loader needs is not set: the deployment, not the data, has to change."""
+
+
 def env(name: str, default: str | None = None) -> str:
     value = os.environ.get(name, "").strip() or default
     if not value:
-        raise RuntimeError(f"{name} is not set")
+        raise SettingMissing(f"{name} is not set")
     return value
 
 
 def main() -> None:
+    # The platform Job carries this registry's client secret as STAFF_CLIENT_SECRET; Master Data's
+    # token is the same client's (global.authClientSecret), so it is not passed a second time.
+    if not os.environ.get("MDS_CLIENT_SECRET") and os.environ.get("STAFF_CLIENT_SECRET"):
+        os.environ["MDS_CLIENT_SECRET"] = os.environ["STAFF_CLIENT_SECRET"]
+    for name in ("MDS_API_URL", "MDS_TOKEN_URL", "MDS_CLIENT_ID", "MDS_CLIENT_SECRET"):
+        env(name)
     mds = mds_client.MdsClient.from_env(required=True)
     people, households = mds.sample_individuals(), mds.sample_households()
     if not people:
@@ -592,9 +602,28 @@ def main() -> None:
         f"{done['skipped']} already farmers.")
 
 
-if __name__ == "__main__":
+def run() -> int:
+    """Run the load as the Job's command; the exit status is what the upgrade sees.
+
+    A missing setting or no sample people in Master Data is not a reason to fail the upgrade this
+    Job rides on (a post-upgrade hook): say what to change and end without loading. Any other error
+    is a real failure of the load and is raised.
+    """
     try:
         main()
+    except SettingMissing as exc:
+        print(f"[load-sample-data] SKIPPED, nothing loaded: {exc}. Set it in the release values "
+              "(templates/db-seed-settings.yaml renders the Master Data and staff IAM settings).", file=sys.stderr)
+    except mds_client.MdsError as exc:
+        if exc.code != "CONFIG":
+            print(f"[load-sample-data] FAILED: {exc}", file=sys.stderr)
+            raise
+        print(f"[load-sample-data] SKIPPED, nothing loaded: {exc}", file=sys.stderr)
     except Exception as exc:
         print(f"[load-sample-data] FAILED: {exc}", file=sys.stderr)
         raise
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())
