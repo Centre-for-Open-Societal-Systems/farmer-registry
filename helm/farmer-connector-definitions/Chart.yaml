@@ -1,0 +1,8 @@
+apiVersion: v2
+name: farmer-connector-definitions
+description: Applies the declared connector definitions of the Farmer registry connector through its admin API.
+type: application
+version: 0.1.0
+sources:
+  - https://github.com/Centre-for-Open-Societal-Systems/farmer-registry
+  - https://github.com/OpenG2P/registry-connector

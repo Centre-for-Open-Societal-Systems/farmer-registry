@@ -4,7 +4,7 @@
 def call() {
     pipeline {
         agent any
-        options { skipDefaultCheckout(true); disableConcurrentBuilds(); timestamps(); timeout(time: 60, unit: 'MINUTES') }
+        options { skipDefaultCheckout(true); disableConcurrentBuilds(); retry(count: 2, conditions: [agent(), nonresumable()]); timestamps(); timeout(time: 60, unit: 'MINUTES') }
         parameters {
             booleanParam(name: 'LOAD_SAMPLE_DATA', defaultValue: false,
                 description: 'Load the sample records (db-seed hook) during this staging deploy. Leave off for a clean registry.')
@@ -46,7 +46,7 @@ def call() {
             }
             stage('Promote and deploy') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'promote' } }
-                agent { label 'vpn-agent2' }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     checkout scm
                     withCredentials([
@@ -61,7 +61,7 @@ def call() {
             }
             stage('Deploy (registry)') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION in ['deploy', 'fresh-install'] } }
-                agent { label 'vpn-agent2' }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     dir('staging-deployment') {
                         deleteDir()
@@ -140,7 +140,7 @@ def call() {
             }
             stage('Deploy (services)') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'deploy' && env.COORDINATE_SERVICES == 'true' } }
-                agent { label 'vpn-agent2' }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     dir('staging-services') {
                         deleteDir()
@@ -161,6 +161,12 @@ def call() {
                                 // Missing protected connector backup fails that service;
                                 // dashboards still run independently. Scheduling stays off.
                                 sh 'bash ci/services/run-container.sh deploy --environment staging --registry "$ECR_REGISTRY" --input service-outcomes/staging-build.json --acceptance "$DEV_ACCEPTANCE" --output service-outcomes/staging-deploy.json'
+                            }
+                        }
+                        // The connector definitions declared in git (helm/environments/staging/farmer-connector-definitions.yaml).
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                            withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                                sh 'bash ci/deploy/connector-definitions.sh staging'
                             }
                         }
                         archiveArtifacts artifacts: 'service-outcomes/*.json', allowEmptyArchive: true

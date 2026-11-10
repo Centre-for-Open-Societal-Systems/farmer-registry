@@ -211,7 +211,7 @@ def test_the_real_pin_is_a_pin_the_updater_understands():
 # ---- the pull request stage ----------------------------------------------------------------------------------
 
 def test_the_stage_scripts_use_only_what_the_deploy_nodes_python_has():
-    # vpn-agent2 runs an old Python: no str.removesuffix, no third-party imports.
+    # oan-ci-deploy-agent-1 runs an old Python: no str.removesuffix, no third-party imports.
     for name in ("bump_pin.py", "package_chart.py"):
         source = (ROOT / "ci/deploy" / name).read_text()
         assert "removesuffix" not in source and "removeprefix" not in source

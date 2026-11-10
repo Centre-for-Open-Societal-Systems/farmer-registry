@@ -4,6 +4,8 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
+        // Build agents are on-demand spot machines: if one is reclaimed mid-build, run the build again.
+        retry(count: 2, conditions: [agent(), nonresumable()])
         timestamps()
         timeout(time: 60, unit: 'MINUTES')
     }
@@ -118,7 +120,7 @@ pipeline {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION in ['deploy', 'fresh-install'] } }
             }
-            agent { label 'vpn-agent2' }
+            agent { label 'oan-ci-deploy' }
             options { timeout(time: 15, unit: 'MINUTES') }
             steps {
                 checkout scm
@@ -144,7 +146,7 @@ pipeline {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION in ['deploy', 'fresh-install'] } }
             }
-            agent { label 'vpn-agent2' }
+            agent { label 'oan-ci-deploy' }
             steps {
                 dir('dev-deployment') {
                     deleteDir()
@@ -219,7 +221,7 @@ pipeline {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' && (env.COORDINATE_SERVICES ?: 'true') != 'false' } }
             }
-            agent { label 'vpn-agent2' }
+            agent { label 'oan-ci-deploy' }
             steps {
                 dir('optional-dev-deployment') {
                     deleteDir()
@@ -244,6 +246,12 @@ pipeline {
                             '''
                         }
                     }
+                    // The connector definitions declared in git (helm/environments/dev/farmer-connector-definitions.yaml).
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                            sh 'bash ci/deploy/connector-definitions.sh dev'
+                        }
+                    }
                     archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true
                 }
             }
@@ -257,7 +265,7 @@ pipeline {
                 beforeAgent true
                 allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION == 'deploy' } }
             }
-            agent { label 'vpn-agent2' }
+            agent { label 'oan-ci-deploy' }
             options { timeout(time: 15, unit: 'MINUTES') }
             steps {
                 checkout scm

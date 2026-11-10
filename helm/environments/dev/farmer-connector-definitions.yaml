@@ -1,0 +1,30 @@
+# Connector definitions of the farmer-registry-connector release in New Dev (namespace farmer), applied by the
+# farmer-connector-definitions release (helm/farmer-connector-definitions) after every services deploy. Git is
+# the source of truth: each deploy creates or PATCHes these rows by name. Secret values are never here; they
+# are named and read from Kubernetes Secrets.
+adminAuth:
+  tokenUrl: https://keycloak.development.oanstaging.com/realms/staff/protocol/openid-connect/token
+definitions:
+  # The row that existed before this file, made by hand: same name, same source configuration, except the
+  # ODK Central host, which is now the reviewed New Dev one (odk-central.development.oanstaging.com, as crop
+  # and livestock use).
+  - name: Farmer Registry - ODK Central Ingestion
+    platform: odk_central
+    transport_type: odk_central
+    data_model_mnemonic: ODK_TO_FARMER_INTAKE
+    g2p_sender_id: farmer-partner
+    g2p_register_mnemonic: Farmer
+    auth_type: odk_session
+    # The stored credentials stay in place while this Secret is missing (keys email, password).
+    auth_secret_from:
+      email: {secret: farmer-connector-odk, key: email}
+      password: {secret: farmer-connector-odk, key: password}
+    source_config:
+      base_url: https://odk-central.development.oanstaging.com
+      project_id: 1
+      form_id: farmer_profile
+      resolve_nav_links: true
+      strict_incremental: false
+      poll_interval_seconds: 30
+      target_url: http://farmer-registry-partner-api:8000/partner/ingest_data
+      target_headers: {partner-id: farmer-partner, Content-Type: application/json}

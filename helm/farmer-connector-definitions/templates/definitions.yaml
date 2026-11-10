@@ -1,0 +1,108 @@
+{{- /*
+The connector definitions in .Values.definitions are applied through the connector's own API after every
+install and upgrade of this release. This follows OpenG2P's registry-connector guidance to move per-connector
+configuration into API calls. files/apply_definitions.py creates or PATCHes each definition by name, then asks
+the connector to subscribe every WebSub receiver at its hub. Re-running is safe. Secret values come only from
+existing Kubernetes Secrets (secretKeyRef); the Keycloak client secret is read at run time with the Job's
+ServiceAccount.
+*/ -}}
+{{- if not .Values.image }}
+{{- fail "image is required: the farmer-registry-connector-api image (ci/deploy/connector-definitions.sh sets it)" }}
+{{- end }}
+{{- if not .Values.adminAuth.tokenUrl }}
+{{- fail "adminAuth.tokenUrl is required" }}
+{{- end }}
+{{- $name := printf "%s-definitions" .Values.connectorRelease }}
+{{- $apiBase := printf "http://%s-api.%s.svc.cluster.local:%v" .Values.connectorRelease .Release.Namespace .Values.apiPort }}
+{{- $config := dict "apiBase" $apiBase "adminAuth" .Values.adminAuth "retired" (.Values.retired | default list) "definitions" .Values.definitions }}
+{{- $labels := dict "app.kubernetes.io/name" "farmer-connector-definitions" "app.kubernetes.io/instance" .Release.Name "app.kubernetes.io/managed-by" .Release.Service "helm.sh/chart" (printf "%s-%s" .Chart.Name .Chart.Version) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  definitions.json: |
+    {{- $config | toPrettyJson | nindent 4 }}
+  apply_definitions.py: |
+    {{- .Files.Get "files/apply_definitions.py" | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- toYaml $labels | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 1200
+  template:
+    metadata:
+      labels:
+        {{- toYaml $labels | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $name }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: apply
+          image: {{ .Values.image | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/scripts/apply_definitions.py"]
+          env:
+            - name: CD_CONFIG
+              value: /scripts/definitions.json
+            {{- range $i, $d := .Values.definitions }}
+            {{- with $d.webhook_secret_from }}
+            {{- if .generate }}
+            {{- fail (printf "definition %q: generated WebSub secrets are not supported here; name an existing Secret" $d.name) }}
+            {{- end }}
+            - name: CD_{{ $i }}_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secret }}
+                  key: {{ .key }}
+                  optional: true
+            {{- end }}
+            {{- range $field, $ref := ($d.auth_secret_from | default dict) }}
+            - name: CD_{{ $i }}_AUTH_{{ upper $field }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $ref.secret }}
+                  key: {{ $ref.key }}
+                  optional: true
+            {{- end }}
+            {{- end }}
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: scripts
+          configMap:
+            name: {{ $name }}

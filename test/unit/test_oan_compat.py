@@ -194,6 +194,34 @@ def test_db_seed_values_never_override_or_float_without_a_job():
     assert oan_compat.render([seed_job()], {'registry': {'dbSeed': {'envVars': {'X': None}}}}, 'staging') == [seed_job()]
 
 
+def sample_job(load):
+    job = seed_job()
+    job['spec']['template']['spec']['containers'][0]['env'].append({'name': 'LOAD_SAMPLE_DATA', 'value': load})
+    return job
+
+
+SETTINGS = {'kind': 'ConfigMap', 'metadata': {'name': 'farmer-registry-db-seed-settings'}, 'data': {'MDS_API_URL': 'x'}}
+
+
+def test_sample_data_on_gives_the_seed_job_the_loader_settings():
+    for environment in ('dev', 'staging'):
+        result = oan_compat.render([sample_job('true'), SETTINGS], {}, environment)
+        assert result[0]['spec']['template']['spec']['containers'][0]['envFrom'] == [
+            {'configMapRef': {'name': 'farmer-registry-db-seed-settings'}}]
+        assert result[1] == SETTINGS
+
+
+def test_sample_data_off_leaves_the_seed_job_alone():
+    job = sample_job('false')
+    assert oan_compat.render([job], {}, 'staging') == [job]
+    assert oan_compat.render([seed_job()], {}, 'dev') == [seed_job()]
+
+
+def test_sample_data_on_without_the_settings_fails_the_render():
+    with pytest.raises(ValueError, match='settings ConfigMap'):
+        oan_compat.render([sample_job('true')], {}, 'staging')
+
+
 def test_promotion_merges_the_value_layers_and_needs_no_pin(tmp_path, monkeypatch, capsys):
     _, candidate, values = fixture()
     monkeypatch.chdir(tmp_path)

@@ -37,7 +37,7 @@ def test_staging_promotes_automatically_and_keeps_the_rehearsed_manual_actions()
     for action in ("fresh-install", "validate-only", "deploy-with-services"):
         assert "'" + action + "'" in operator
     assert "submitter: 'admin'" in operator
-    assert "HELM_NAMESPACE = 'farmer'" in pipeline and "label 'vpn-agent2'" in pipeline
+    assert "HELM_NAMESPACE = 'farmer'" in pipeline and "label 'oan-ci-deploy'" in pipeline
     assert "staging-farmer-kubeconfig" in pipeline and "ci/deploy/fresh-install-staging.sh" in pipeline
     assert "env.BRANCH_NAME != 'staging' || env.CHANGE_ID" in pipeline
     assert "staging-farmer-rehearsal" in pipeline

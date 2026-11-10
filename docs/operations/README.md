@@ -30,7 +30,7 @@ Registry failures are fatal. Available Farmer add-ons release independently;
 their failures mark Jenkins unstable. Missing branches or application files
 preserve existing deployments.
 
-The deployment agent is `vpn-agent2`. Build agents need Docker, Bash, Git and AWS
+The deployment agent is `oan-ci-deploy-agent-1`. Build agents need Docker, Bash, Git and AWS
 CLI. Helpers provide Python dependencies in containers. Publishing uses
 `aws-ecr-creds`; protected backup transfer uses `farmer-new-dev-backup-ssh`.
 Identity migration additionally requires explicit `APPLY_COMMONS_IDENTITY` and
