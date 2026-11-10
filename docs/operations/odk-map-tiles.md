@@ -17,7 +17,7 @@ some automated sessions while omitting its Referer.
 | `https://odk-central.oanstaging.com` | EC2 `odk-vm-2`, instance `i-032cfc39355e3d39b`, Central v2026.1.2 | Repaired; Chrome and Firefox passed |
 | `odk.commons.staging.openg2p.test` | Internal staging Kubernetes Commons ODK | Does not serve public staging; trial change reverted |
 
-The existing Jenkins `backend-ssh-key` credential, used through `vpn-agent2`,
+The existing Jenkins `backend-ssh-key` credential, used through `oan-ci-deploy-agent-1`,
 matches the VM's authorized SSH key. Its host key was verified against the EC2
 console's fingerprint before access. No new SSH key, IAM or network permission
 was needed. The [form API](https://docs.getodk.org/central-api-form-management/)
