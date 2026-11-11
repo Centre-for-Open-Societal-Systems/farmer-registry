@@ -25,7 +25,7 @@ Changes land in `develop` and are promoted `develop` to `staging` by PR; see
 | --- | --- |
 | Namespace / release | `farmer` / `farmer-registry` |
 | Pin | `ci/deploy/oan-chart-staging.json` (`environment: staging`, chart dev.20 at oan-helm `d7588ad`) |
-| Hosts | base domain `oanstaging.com`: `farmer-registry`, `keycloak` (issuer `https://keycloak.qa.oanstaging.com/realms/staff`), `staff-farmer`, `connector-farmer-registry`, `esignet`, `odk-central` |
+| Hosts | base domain `qa.oanstaging.com`: `farmer-registry`, `keycloak` (issuer `https://keycloak.qa.oanstaging.com/realms/staff`), `staff-farmer`, `connector-farmer-registry`, `esignet`, `odk-central` |
 | Databases | `farmer_registry`, `farmer_registry_idgen`, connector `farmer_connector_v2` |
 | Kubeconfig credential / agent | `staging-farmer-kubeconfig` / `oan-ci-deploy-agent-1`; API servers `https://10.0.1.212:6443`, `https://52.66.116.220:6443` |
 | Overlays | `helm/environments/staging/`: identity, location, outgestion, registrant auth (Fayda), DCI signing |
