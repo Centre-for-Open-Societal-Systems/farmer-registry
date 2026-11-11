@@ -65,6 +65,14 @@ def call() {
                             sh 'bash ci/deploy/sample-data-summary.sh'
                         }
                     }
+                    // The connector definitions declared in git (helm/environments/staging/farmer-connector-definitions.yaml),
+                    // applied on every promotion as crop and livestock apply theirs: the services deploy below is an
+                    // operator action, so without this a merge into staging never creates or updates them.
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                            sh 'bash ci/deploy/connector-definitions.sh staging'
+                        }
+                    }
                 }
             }
             stage('Deploy (registry)') {
