@@ -57,6 +57,14 @@ def call() {
                         sh 'bash ci/deploy/promote-staging.sh'
                     }
                     script { currentBuild.description = 'Promoted to staging in namespace farmer' }
+                    // The loader never fails the upgrade (it always exits 0), so its SUMMARY line is printed here, and
+                    // the build is UNSTABLE when not every sample farmer is in the register.
+                    // The script does nothing unless LOAD_SAMPLE_DATA is on.
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                            sh 'bash ci/deploy/sample-data-summary.sh'
+                        }
+                    }
                 }
             }
             stage('Deploy (registry)') {
