@@ -205,6 +205,7 @@ class FakeApprover:
 def runner(loader, registry, calls):
     run = loader.Loader.__new__(loader.Loader)
     run.registry, run.approve_timeout, run.ingest_timeout = registry, 5, 5
+    run.deadline = float("inf")
     run.approvers = [FakeApprover("alex.carter", 1, registry, calls), FakeApprover("nina.patel", 2, registry, calls)]
     return run
 
@@ -226,7 +227,9 @@ def run(loader, registry):
 def test_every_intake_is_approved_at_stage_1_then_stage_2_and_members_join_the_heads_household(loader):
     registry = FakeRegistry()
     done, submitted, calls = run(loader, registry)
-    assert done == {"registered": 3, "resumed": 0, "skipped": 0}
+    assert done == {"total": 3, "registered": 3, "resumed": 0, "skipped": 0, "failed": [], "not_tried": 0, "stopped": ""}
+    assert loader.summary(done) == ("[load-sample-data] SUMMARY: OK, 3 of 3 sample farmers in the register "
+                                    "(3 registered now, 0 waiting intakes approved, 0 already farmers); failed 0")
     (_, _, head_sections), (_, child_household, _), (_, other_household, _) = submitted
     assert child_household == "id-1" and other_household is None  # id-1: the household entered with ETH-IND-0001
     assert "household_information" in head_sections
@@ -240,7 +243,7 @@ def test_a_rerun_skips_farmers_resumes_waiting_intakes_and_reuses_their_househol
                             awaiting={"721996394985": ("sub-waiting", "farmer-waiting")})
     registry.pending = ["sub-waiting"]
     done, submitted, _ = run(loader, registry)
-    assert done == {"registered": 1, "resumed": 1, "skipped": 1}
+    assert (done["registered"], done["resumed"], done["skipped"], done["failed"]) == (1, 1, 1, [])
     assert [s[0] for s in submitted] == ["ETH-IND-0003"]
     assert ("g2p_register_farmers", "farmer-waiting") in registry.waited
 
@@ -256,8 +259,65 @@ def test_a_head_whose_household_a_member_already_joined_does_not_enter_it_again(
 def test_a_member_whose_household_is_not_registered_is_not_entered(loader):
     registry = FakeRegistry()
     members_only = [i for i in plan(loader) if not i["is_head"]]
-    with pytest.raises(RuntimeError, match="ETH-HH-001 is not in the register"):
-        runner(loader, registry, []).run(members_only)
+    done = runner(loader, registry, []).run(members_only)
+    assert done["registered"] == 0 and len(done["failed"]) == len(members_only)
+    assert "household ETH-HH-001 is not in the register" in done["failed"][0][1]
+
+
+def test_one_stuck_intake_is_reported_and_the_rest_still_load(loader, capsys):
+    registry = FakeRegistry(awaiting={"502628318720": ("sub-stuck", "farmer-stuck")})  # no task will ever open
+    done, submitted, _ = run(loader, registry)
+    # The stuck head's household never reaches the register, so its member is reported too; the
+    # other household still loads.
+    assert [who for who, _ in done["failed"]] == ["ETH-IND-0001", "ETH-IND-0002"]
+    assert "no stage 1 task for alex.carter on intake sub-stuck" in done["failed"][0][1]
+    assert done["registered"] == 1 and [s[0] for s in submitted] == ["ETH-IND-0003"]
+    assert "ETH-IND-0001 Given1 Father1 Assefa: FAILED, going on with the rest" in capsys.readouterr().out
+    line = loader.summary(done)
+    assert line.startswith("[load-sample-data] SUMMARY: INCOMPLETE, 1 of 3 sample farmers in the register")
+    assert "failed 2: ETH-IND-0001 (RuntimeError: no stage 1 task" in line
+
+
+def test_the_load_stops_after_three_failures_in_a_row(loader):
+    registry = FakeRegistry()
+    intakes = plan(loader) * 2  # six intakes
+    loader_run = runner(loader, registry, [])
+
+    def submit(intake, household_id):
+        raise RuntimeError("staff API down")
+
+    loader_run.submit = submit
+    done = loader_run.run(intakes)
+    assert len(done["failed"]) == 3 and done["not_tried"] == 3 and done["stopped"] == "3 failures in a row"
+    assert loader.summary(done).endswith("; not tried 3 (3 failures in a row)")
+
+
+def test_no_wait_goes_past_the_loads_time_budget(loader, monkeypatch):
+    loader_run = runner(loader, FakeRegistry(), [])
+    clock = [1000.0]
+    monkeypatch.setattr(loader.time, "monotonic", lambda: clock[0])
+    loader_run.deadline = 1000.0 + 120
+    assert loader_run.remaining(300) == 120
+    clock[0] = 1200.0
+    assert loader_run.remaining(300) == 0
+    done = loader_run.run(plan(loader), budget=0)
+    assert done["not_tried"] == 3 and "time budget (0s)" in done["stopped"]
+
+
+def test_the_summary_is_always_the_last_line(loader, monkeypatch, capsys):
+    monkeypatch.setattr(loader, "main", lambda: {"total": 21, "registered": 0, "resumed": 0, "skipped": 0,
+                                                 "failed": [], "not_tried": 0, "stopped": ""})
+    assert loader.run() == 0
+    assert capsys.readouterr().out.splitlines()[-1].startswith("[load-sample-data] SUMMARY: INCOMPLETE, 0 of 21")
+
+    def main():
+        raise RuntimeError("Keycloak refused the sign-in of alex.carter (200): Invalid username or password.")
+
+    monkeypatch.setattr(loader, "main", main)
+    assert loader.run() == 0
+    assert capsys.readouterr().out.splitlines()[-1] == (
+        "[load-sample-data] SUMMARY: FAILED, nothing loaded by this run: RuntimeError: Keycloak refused the sign-in "
+        "of alex.carter (200): Invalid username or password.")
 
 
 class FakeSubmitter:
