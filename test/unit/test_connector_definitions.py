@@ -84,5 +84,15 @@ def test_both_pipelines_apply_the_definitions_after_the_services_deploy():
     for environment in ("dev", "staging"):
         pipeline = (ROOT / f"ci/pipelines/{environment}.groovy").read_text()
         services = pipeline.index("run-container.sh deploy")
-        definitions = pipeline.index(f"bash ci/deploy/connector-definitions.sh {environment}")
+        definitions = pipeline.rindex(f"bash ci/deploy/connector-definitions.sh {environment}")
         assert services < definitions
+
+
+def test_a_staging_promotion_applies_the_definitions():
+    """A merge into staging only promotes (the services deploy is an operator action), so the promote stage
+    applies the declared definitions itself, after the registry is promoted."""
+    pipeline = (ROOT / "ci/pipelines/staging.groovy").read_text()
+    promote = pipeline.index("stage('Promote and deploy')")
+    registry_deploy = pipeline.index("stage('Deploy (registry)')")
+    stage = pipeline[promote:registry_deploy]
+    assert stage.index("bash ci/deploy/promote-staging.sh") < stage.index("bash ci/deploy/connector-definitions.sh staging")

@@ -164,7 +164,7 @@ def test_block_leaves_out_verification_documents_and_staff():
 def test_notice_event_changes_with_a_phone_only_approval():
     template = _env().from_string((TEMPLATES / "farmer_registry_farmer_profile_changed_v1.j2").read_text(encoding="utf-8"))
     notice = json.loads(template.render(expanded={**FARMER, "foundational_id": "1234567890123456"}))
-    assert notice == {"event_id": "i-1:2026-11-02T08:30:00", "event_type": "farmer-registry.farmer-profile.changed.v1",
+    assert notice == {"event_id": "i-1:2026-11-02T08:30:00:FR-000000000123", "event_type": "farmer-registry.farmer-profile.changed.v1",
                       "farmer_id": "FR-000000000123", "fayda_fan_id": "1234567890123456"}
 
 
