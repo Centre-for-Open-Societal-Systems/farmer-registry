@@ -278,6 +278,35 @@ def test_one_stuck_intake_is_reported_and_the_rest_still_load(loader, capsys):
     assert "failed 2: ETH-IND-0001 (RuntimeError: no stage 1 task" in line
 
 
+def test_a_stuck_heads_members_do_not_count_toward_the_stop_and_the_next_household_loads(loader, capsys):
+    head, member, other_head = plan(loader)
+    second_member = {**member, "individual_id": "ETH-IND-0009", "foundational_id": "999999999999",
+                     "farmer_id": "farmer-9"}
+    registry = FakeRegistry(awaiting={head["foundational_id"]: ("sub-stuck", "farmer-stuck")})  # no task ever opens
+    loader_run = runner(loader, registry, [])
+    submitted = []
+
+    def submit(intake, household_id):
+        submitted.append(intake["individual_id"])
+        registry.pending.append(f"sub-{intake['individual_id']}")
+        return f"sub-{intake['individual_id']}"
+
+    loader_run.submit = submit
+    done = loader_run.run([head, member, second_member, other_head])
+    assert [who for who, _ in done["failed"]] == ["ETH-IND-0001", "ETH-IND-0002", "ETH-IND-0009"]
+    assert done["failed"][1][1] == f"not tried: head ETH-IND-0001 of household {head['household']} failed"
+    assert done["stopped"] == "" and done["not_tried"] == 0
+    assert submitted == ["ETH-IND-0003"] and done["registered"] == 1
+    assert "ETH-IND-0009 Given2 Father2 Tesfaye: not tried: head ETH-IND-0001" in capsys.readouterr().out
+
+
+def test_no_sample_people_in_master_data_is_skipped_not_ok(loader, monkeypatch, capsys):
+    monkeypatch.setattr(loader, "main", lambda: None)
+    assert loader.run() == 0
+    last = capsys.readouterr().out.splitlines()[-1]
+    assert last.startswith("[load-sample-data] SUMMARY: SKIPPED, nothing loaded: Master Data holds no sample people")
+
+
 def test_the_load_stops_after_three_failures_in_a_row(loader):
     registry = FakeRegistry()
     intakes = plan(loader) * 2  # six intakes
@@ -288,8 +317,11 @@ def test_the_load_stops_after_three_failures_in_a_row(loader):
 
     loader_run.submit = submit
     done = loader_run.run(intakes)
-    assert len(done["failed"]) == 3 and done["not_tried"] == 3 and done["stopped"] == "3 failures in a row"
-    assert loader.summary(done).endswith("; not tried 3 (3 failures in a row)")
+    # Heads 0001, 0003 and 0001 again fail on their own; member 0002 is reported because of its head
+    # and does not count, so the stop comes after the fourth intake.
+    assert [who for who, _ in done["failed"]] == ["ETH-IND-0001", "ETH-IND-0002", "ETH-IND-0003", "ETH-IND-0001"]
+    assert done["not_tried"] == 2 and done["stopped"] == "3 failures in a row"
+    assert loader.summary(done).endswith("; not tried 2 (3 failures in a row)")
 
 
 def test_no_wait_goes_past_the_loads_time_budget(loader, monkeypatch):
