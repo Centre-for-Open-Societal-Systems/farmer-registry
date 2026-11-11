@@ -373,7 +373,7 @@ def test_the_staff_client_secret_is_master_datas_secret(loader, monkeypatch):
     assert seen == {"secret": "s3cret"}
 
 
-def test_a_master_data_refusal_still_fails_the_load(loader, monkeypatch):
+def test_a_master_data_refusal_is_reported_but_never_fails_the_upgrade(loader, monkeypatch, capsys):
     for name in ("MDS_API_URL", "MDS_TOKEN_URL", "MDS_CLIENT_ID", "MDS_CLIENT_SECRET"):
         monkeypatch.setenv(name, "set")
 
@@ -381,5 +381,27 @@ def test_a_master_data_refusal_still_fails_the_load(loader, monkeypatch):
         raise loader.mds_client.MdsError("AUTH", "token refused")
 
     monkeypatch.setattr(loader.mds_client.MdsClient, "from_env", from_env)
-    with pytest.raises(loader.mds_client.MdsError):
-        loader.run()
+    assert loader.run() == 0
+    assert "[load-sample-data] FAILED, the upgrade goes on:" in capsys.readouterr().err
+
+
+def test_any_other_error_is_reported_but_never_fails_the_upgrade(loader, monkeypatch, capsys):
+    def main():
+        raise RuntimeError("Keycloak refused the sign-in of alex.carter (200): Invalid username or password.")
+
+    monkeypatch.setattr(loader, "main", main)
+    assert loader.run() == 0
+    err = capsys.readouterr().err
+    assert ("[load-sample-data] FAILED, the upgrade goes on: RuntimeError: Keycloak refused the sign-in "
+            "of alex.carter (200): Invalid username or password.") in err
+    assert "Traceback" in err
+
+
+def test_the_staff_portal_themes_login_error_is_read(loader):
+    staff_portal = ('<div class="custom-message error">\n  Invalid username or password.</div>'
+                    '<span class="input-error" aria-live="polite">Invalid username or password.</span>')
+    assert loader.login_page_error(staff_portal) == "Invalid username or password."
+    keycloak = '<span id="input-error" class="kc-feedback-text">Account is disabled, contact your administrator.</span>'
+    assert loader.login_page_error(keycloak) == "Account is disabled, contact your administrator."
+    assert loader.login_page_error('<form id="kc-form-login" class="login-form"></form>') == ""
+    assert loader.login_page_error('<p class="terrors">x</p>') == ""

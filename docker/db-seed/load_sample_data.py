@@ -45,6 +45,7 @@ import os
 import re
 import sys
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -276,6 +277,21 @@ def plan(people: list[dict], households: list[dict], farms: dict, geo: Geography
     return intakes
 
 
+def login_page_error(page: str) -> str:
+    """The message a re-rendered Keycloak login page shows the user, or "" if it shows none.
+
+    Keycloak's own theme puts it in kc-feedback-text; the staff-portal login theme in an element whose
+    class includes "error" (for example "custom-message error").
+    """
+    found = re.findall(r'class="[^"]*kc-feedback-text[^"]*"[^>]*>\s*([^<]+)', page)
+    found += re.findall(r'class="[^"]*\berror\b[^"]*"[^>]*>\s*([^<]+)', page)
+    seen: list[str] = []
+    for text in (html.unescape(t).strip() for t in found):
+        if text and text not in seen:
+            seen.append(text)
+    return " ".join(seen)
+
+
 class StaffSession:
     """One staff user signed in like the staff portal: IAM, the Keycloak login form, IAM's callback."""
 
@@ -315,8 +331,8 @@ class StaffSession:
             headers={"Content-Type": "application/x-www-form-urlencoded"}))
         callback = headers.get("Location") or ""
         if not callback.startswith(f"{self.iam_url}/auth/callback"):
-            said = " ".join(re.findall(r'kc-feedback-text[^>]*>([^<]+)', body.decode("utf-8", "replace")))
-            raise RuntimeError(f"Keycloak refused the sign-in of {self.username} ({status}): {said.strip()[:200]}")
+            said = login_page_error(body.decode("utf-8", "replace"))
+            raise RuntimeError(f"Keycloak refused the sign-in of {self.username} ({status}): {said[:200]}")
         status, _, _ = self._open(opener, urllib.request.Request(callback))
         token = next((c.value for c in jar if c.name == "X-Access-Token"), None)
         if status not in (302, 303, 307) or not token:
@@ -603,25 +619,23 @@ def main() -> None:
 
 
 def run() -> int:
-    """Run the load as the Job's command; the exit status is what the upgrade sees.
+    """Run the load as the Job's command; the exit status is what the upgrade sees, and it is always 0.
 
-    A missing setting or no sample people in Master Data is not a reason to fail the upgrade this
-    Job rides on (a post-upgrade hook): say what to change and end without loading. Any other error
-    is a real failure of the load and is raised.
+    The load rides on a post-upgrade hook, and sample data never decides whether a registry upgrade
+    succeeds: a missing setting prints SKIPPED, any other error prints FAILED with the reason, and
+    the Job still ends 0. Read the Job's log (or grep for "[load-sample-data] FAILED") to see why.
     """
     try:
         main()
     except SettingMissing as exc:
         print(f"[load-sample-data] SKIPPED, nothing loaded: {exc}. Set it in the release values "
-              "(templates/db-seed-settings.yaml renders the Master Data and staff IAM settings).", file=sys.stderr)
+              "(templates/sample-data-loader.yaml renders the Master Data and staff IAM settings).", file=sys.stderr)
     except mds_client.MdsError as exc:
-        if exc.code != "CONFIG":
-            print(f"[load-sample-data] FAILED: {exc}", file=sys.stderr)
-            raise
-        print(f"[load-sample-data] SKIPPED, nothing loaded: {exc}", file=sys.stderr)
-    except Exception as exc:
-        print(f"[load-sample-data] FAILED: {exc}", file=sys.stderr)
-        raise
+        word = "SKIPPED, nothing loaded" if exc.code == "CONFIG" else "FAILED, the upgrade goes on"
+        print(f"[load-sample-data] {word}: {exc}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 - reported, never raised: samples never fail the upgrade
+        traceback.print_exc()
+        print(f"[load-sample-data] FAILED, the upgrade goes on: {type(exc).__name__}: {exc}", file=sys.stderr)
     return 0
 
 
