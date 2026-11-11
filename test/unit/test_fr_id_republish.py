@@ -165,3 +165,88 @@ def test_install_does_nothing_outside_celery(monkeypatch):
     monkeypatch.delitem(sys.modules, "openg2p_registry_celery_worker.app", raising=False)
     monkeypatch.delitem(sys.modules, "openg2p_registry_celery_beat.app", raising=False)
     _load().install()
+
+
+class _Session:
+    def __init__(self):
+        self.commits, self.rollbacks = 0, 0
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def commit(self):
+        self.commits += 1
+
+    async def rollback(self):
+        self.rollbacks += 1
+
+
+class _Queries:
+    def __init__(self, ids):
+        self.ids = ids
+
+    async def pending(self, session):
+        return list(self.ids)
+
+    async def definition(self, session):
+        return "farmer-definition"
+
+    async def farmer(self, session, irid):
+        return types.SimpleNamespace(internal_record_id=irid, functional_record_id=f"FR-{irid}",
+                                     last_approved_by="Nina Patel", last_approved_at="2026-11-11 07:07:57")
+
+
+def _run(coro):
+    import asyncio
+
+    return asyncio.run(coro)
+
+
+def test_republish_fans_out_each_farmer_from_its_live_row_with_the_republish_source_id():
+    calls, session = [], _Session()
+
+    async def fanout(definition, row, session_, **kwargs):
+        calls.append((definition, row.internal_record_id, kwargs))
+
+    done = _run(republish._republish(lambda: session, fanout, _Queries(["f-1", "f-2"])))
+    assert done == 2 and session.commits == 2 and session.rollbacks == 0
+    assert [(d, irid, k["change_request_id"]) for d, irid, k in calls] == [
+        ("farmer-definition", "f-1", "republish-fr-id:f-1"), ("farmer-definition", "f-2", "republish-fr-id:f-2")]
+    kwargs = calls[0][2]
+    assert "intake_form_submission_id" not in kwargs
+    assert kwargs["changed_by"] == republish.CHANGED_BY
+    assert (kwargs["approved_by"], kwargs["approved_at"]) == ("Nina Patel", "2026-11-11 07:07:57")
+
+
+def test_a_failing_farmer_rolls_back_alone():
+    session = _Session()
+
+    async def fanout(definition, row, session_, **kwargs):
+        if row.internal_record_id == "f-1":
+            raise TypeError("Object of type Decimal is not JSON serializable")
+
+    done = _run(republish._republish(lambda: session, fanout, _Queries(["f-1", "f-2"])))
+    assert done == 1 and session.commits == 1 and session.rollbacks == 1
+
+
+def test_republish_uses_the_json_safe_fanout_by_default(monkeypatch):
+    calls, session = [], _Session()
+
+    async def fanout_outgest_rows_json(*args, **kwargs):
+        calls.append(kwargs)
+
+    stub = types.ModuleType("openg2p_registry_farmer_extension.register_domain.services.outgest_json")
+    stub.fanout_outgest_rows_json = fanout_outgest_rows_json
+    monkeypatch.setitem(sys.modules, stub.__name__, stub)
+    assert republish.json_safe_fanout() is fanout_outgest_rows_json
+    assert _run(republish._republish(lambda: session, queries=_Queries(["f-1"]))) == 1
+    assert len(calls) == 1
+
+
+def test_the_republish_never_calls_the_native_fanout_directly():
+    source = (EXTENSION / "fr_id_republish.py").read_text(encoding="utf-8")
+    assert "g2p_outgest_fanout_service" not in source
+    assert "fanout_outgest_rows_json" in source

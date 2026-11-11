@@ -9,7 +9,8 @@ later approved change, which fans out from the live row, sends the FR- id.
 
 This task closes that gap without touching platform code or tables directly. It finds Farmer
 rows whose live functional id is FR- while every outgestion snapshot of them carries TEMP-,
-and fans out once more through the platform's own fanout_outgest_rows, from the live row.
+and fans out once more from the live row through the platform's fanout_outgest_rows, with the
+JSON-safe hierarchy the extension's own paths use (outgest_json.fanout_outgest_rows_json).
 The platform's transformation and publish workers then send the notice as usual.
 
 The platform keys an outgestion payload by "<source id>:<register id>:<internal record id>".
@@ -84,27 +85,56 @@ def add_schedule(beat_app, worker_queue: str) -> None:
     beat_app.conf.beat_schedule = schedule
 
 
-async def _republish(session_maker) -> int:
-    from openg2p_registry_core.models import G2PRegisterDefinition
-    from openg2p_registry_core.services.g2p_outgest_fanout_service import (
-        fanout_outgest_rows,
+def json_safe_fanout():
+    """The fan-out both native paths use in this extension (outgest_json.py).
+
+    The native hierarchy leaves Decimal and date values in the record, json.dumps refuses
+    them and the payload write rolls back; fanout_outgest_rows_json passes the JSON-safe
+    hierarchy that runtime.install() creates.
+    """
+    from openg2p_registry_farmer_extension.register_domain.services.outgest_json import (
+        fanout_outgest_rows_json,
     )
-    from sqlalchemy import select, text
 
-    from .register_domain.models import G2PRegisterFarmer
+    return fanout_outgest_rows_json
 
+
+class _Queries:
+    """The task's reads, on the platform's models."""
+
+    async def pending(self, session) -> list:
+        from sqlalchemy import text
+
+        return (await session.execute(text(PENDING_SQL), pending_params())).scalars().all()
+
+    async def definition(self, session):
+        from openg2p_registry_core.models import G2PRegisterDefinition
+        from sqlalchemy import select
+
+        return (await session.execute(select(G2PRegisterDefinition).where(
+            G2PRegisterDefinition.register_id == FARMER_REGISTER_ID))).scalar_one()
+
+    async def farmer(self, session, internal_record_id: str):
+        from openg2p_registry_farmer_extension.register_domain.models import G2PRegisterFarmer
+        from sqlalchemy import select
+
+        return (await session.execute(select(G2PRegisterFarmer).where(
+            G2PRegisterFarmer.internal_record_id == internal_record_id))).scalar_one()
+
+
+async def _republish(session_maker, fanout=None, queries=None) -> int:
+    fanout = fanout or json_safe_fanout()
+    queries = queries or _Queries()
     done = 0
     async with session_maker() as session:
-        ids = (await session.execute(text(PENDING_SQL), pending_params())).scalars().all()
+        ids = await queries.pending(session)
         if not ids:
             return 0
-        definition = (await session.execute(select(G2PRegisterDefinition).where(
-            G2PRegisterDefinition.register_id == FARMER_REGISTER_ID))).scalar_one()
+        definition = await queries.definition(session)
         for internal_record_id in ids:
-            row = (await session.execute(select(G2PRegisterFarmer).where(
-                G2PRegisterFarmer.internal_record_id == internal_record_id))).scalar_one()
+            row = await queries.farmer(session, internal_record_id)
             try:
-                await fanout_outgest_rows(
+                await fanout(
                     definition, row, session,
                     changed_by=CHANGED_BY,
                     changed_at=datetime.now(UTC).replace(tzinfo=None),
