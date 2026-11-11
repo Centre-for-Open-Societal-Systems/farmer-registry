@@ -469,6 +469,11 @@ class Loader:
         self.registry, self.submitter, self.approvers = registry, submitter, approvers
         self.approve_timeout, self.ingest_timeout = approve_timeout, ingest_timeout
         self.form_id, self.register_id, self.section_registers = registry.form()
+        self.deadline = float("inf")  # run() sets the end of its time budget; no wait goes past it
+
+    def remaining(self, timeout: int) -> int:
+        """A wait of `timeout` seconds, cut to what is left of the load's time budget."""
+        return max(0, int(min(timeout, self.deadline - time.monotonic())))
 
     def submit(self, intake: dict, household_id: str | None) -> str:
         submission_id = None
@@ -498,7 +503,7 @@ class Loader:
 
     def approve(self, submission_id: str) -> None:
         """Stage 1 as the first approver, then stage 2 as the second, each once its task opens."""
-        deadline = time.time() + self.approve_timeout
+        deadline = time.time() + self.remaining(self.approve_timeout)
         for stage, approver in enumerate(self.approvers, 1):
             while True:
                 if self.registry.approval_status(submission_id) == "APPROVED":
@@ -524,46 +529,90 @@ class Loader:
                 raise RuntimeError(f"intake {submission_id} is not approved after both stages")
             time.sleep(3)
 
-    def run(self, intakes: list[dict]) -> dict:
+    def run(self, intakes: list[dict], budget: int = 900, max_failures_in_a_row: int = 3) -> dict:
+        """Load each intake on its own: one that fails is reported and the rest still load.
+
+        The load stops early, leaving the rest "not tried", once `budget` seconds have passed (every wait
+        is cut to it too: the load must end inside the Job's activeDeadlineSeconds and the upgrade's own
+        Helm --timeout, or the hook and so the upgrade would fail) or after
+        `max_failures_in_a_row` failures in a row (then the cause is the environment, not one person,
+        and each further try would only spend the approve/ingest timeouts again).
+        """
         farmers, awaiting = self.registry.farmers(), self.registry.awaiting_approval()
         households = {}  # pack household id -> its household in the register
         for intake in intakes:
             if intake["foundational_id"] in farmers:
                 households.setdefault(intake["household"], farmers[intake["foundational_id"]])
-        done = {"registered": 0, "resumed": 0, "skipped": 0}
-        for intake in intakes:
-            who, fid = f"{intake['individual_id']} {intake['name']}", intake["foundational_id"]
-            if fid in farmers:
-                done["skipped"] += 1
-                log(f"  {who}: already a farmer")
+        done = {"total": len(intakes), "registered": 0, "resumed": 0, "skipped": 0, "failed": [], "not_tried": 0,
+                "stopped": ""}
+        self.deadline, in_a_row = time.monotonic() + budget, 0
+        for position, intake in enumerate(intakes):
+            if time.monotonic() >= self.deadline:
+                done["stopped"] = f"the load's time budget ({budget}s) ran out"
+            elif in_a_row >= max_failures_in_a_row:
+                done["stopped"] = f"{in_a_row} failures in a row"
+            if done["stopped"]:
+                done["not_tried"] = len(intakes) - position
+                log(f"  stopping: {done['stopped']}; {done['not_tried']} not tried")
+                break
+            who = f"{intake['individual_id']} {intake['name']}"
+            try:
+                outcome = self.load_one(intake, farmers, awaiting, households)
+            except Exception as exc:  # noqa: BLE001 - one person's failure is reported, the rest still load
+                in_a_row += 1
+                done["failed"].append((intake["individual_id"], f"{type(exc).__name__}: {exc}"))
+                log(f"  {who}: FAILED, going on with the rest: {type(exc).__name__}: {exc}")
                 continue
-            if fid in awaiting:
-                submission_id, farmer_id = awaiting[fid]
-                log(f"  {who}: intake {submission_id} waits for approval; approving it")
-                self.approve(submission_id)
-                self.registry.wait_for("g2p_register_farmers", farmer_id, self.ingest_timeout)
-                farmers = self.registry.farmers()
-                households.setdefault(intake["household"], farmers.get(fid))
-                done["resumed"] += 1
-                continue
-            household_id = households.get(intake["household"])
-            if household_id is None and not intake["is_head"]:
-                raise RuntimeError(f"{who}: household {intake['household']} is not in the register, so this "
-                                   "member cannot be picked into it")
-            if household_id is not None and intake["is_head"]:
-                # A member registered first: the head joins that household instead of entering it again.
-                intake = {**intake, "sections": without(intake["sections"], *HOUSEHOLD_SECTIONS)}
-            submission_id = self.submit(intake, household_id)
-            log(f"  {who}: intake {submission_id} submitted")
-            self.approve(submission_id)
-            self.registry.wait_for("g2p_register_farmers", intake["farmer_id"], self.ingest_timeout)
-            if household_id is None:
-                self.registry.wait_for("g2p_register_households", intake["household_id"], self.ingest_timeout)
-                households[intake["household"]] = household_id = intake["household_id"]
-            farmers[fid] = household_id
-            done["registered"] += 1
-            log(f"  {who}: in the register")
+            in_a_row = 0
+            done[outcome] += 1
         return done
+
+    def load_one(self, intake: dict, farmers: dict, awaiting: dict, households: dict) -> str:
+        """Bring one person into the register; returns which count of run()'s summary it adds to."""
+        who, fid = f"{intake['individual_id']} {intake['name']}", intake["foundational_id"]
+        if fid in farmers:
+            log(f"  {who}: already a farmer")
+            return "skipped"
+        if fid in awaiting:
+            submission_id, farmer_id = awaiting.pop(fid)
+            log(f"  {who}: intake {submission_id} waits for approval; approving it")
+            self.approve(submission_id)
+            self.registry.wait_for("g2p_register_farmers", farmer_id, self.remaining(self.ingest_timeout))
+            farmers.update(self.registry.farmers())
+            households.setdefault(intake["household"], farmers.get(fid))
+            return "resumed"
+        household_id = households.get(intake["household"])
+        if household_id is None and not intake["is_head"]:
+            raise RuntimeError(f"household {intake['household']} is not in the register, so this "
+                               "member cannot be picked into it")
+        if household_id is not None and intake["is_head"]:
+            # A member registered first: the head joins that household instead of entering it again.
+            intake = {**intake, "sections": without(intake["sections"], *HOUSEHOLD_SECTIONS)}
+        submission_id = self.submit(intake, household_id)
+        log(f"  {who}: intake {submission_id} submitted")
+        self.approve(submission_id)
+        self.registry.wait_for("g2p_register_farmers", intake["farmer_id"], self.remaining(self.ingest_timeout))
+        if household_id is None:
+            self.registry.wait_for("g2p_register_households", intake["household_id"],
+                                   self.remaining(self.ingest_timeout))
+            households[intake["household"]] = household_id = intake["household_id"]
+        farmers[fid] = household_id
+        log(f"  {who}: in the register")
+        return "registered"
+
+
+def summary(done: dict) -> str:
+    """The loader's last line, read by the pipeline (ci/deploy/sample-data-summary.sh)."""
+    in_register = done["registered"] + done["resumed"] + done["skipped"]
+    line = (f"[load-sample-data] SUMMARY: {'OK' if in_register == done['total'] else 'INCOMPLETE'}, "
+            f"{in_register} of {done['total']} sample farmers in the register "
+            f"({done['registered']} registered now, {done['resumed']} waiting intakes approved, "
+            f"{done['skipped']} already farmers); failed {len(done['failed'])}")
+    if done["failed"]:
+        line += ": " + "; ".join(f"{who} ({why[:160]})" for who, why in done["failed"])
+    if done["not_tried"]:
+        line += f"; not tried {done['not_tried']} ({done['stopped']})"
+    return line
 
 
 class SettingMissing(RuntimeError):
@@ -577,7 +626,8 @@ def env(name: str, default: str | None = None) -> str:
     return value
 
 
-def main() -> None:
+def main() -> dict | None:
+    """Load the samples; returns run()'s counts, or None when Master Data holds no sample people."""
     # The platform Job carries this registry's client secret as STAFF_CLIENT_SECRET; Master Data's
     # token is the same client's (global.authClientSecret), so it is not passed a second time.
     if not os.environ.get("MDS_CLIENT_SECRET") and os.environ.get("STAFF_CLIENT_SECRET"):
@@ -589,7 +639,7 @@ def main() -> None:
     if not people:
         log("Master Data holds no sample people (load the country pack's samples on commons-services): "
             "nothing to load.")
-        return
+        return None
     farms_file = OPENG2P_DATA_DIR / "packs" / PACK / "samples" / "farms.json"
     farms = {f["individual_id"]: f for f in json.loads(farms_file.read_text(encoding="utf-8"))}
     log(f"{len(people)} sample people in {len(households)} households from Master Data; "
@@ -611,11 +661,9 @@ def main() -> None:
             [session(env("INTAKE_SEED_APPROVER_1", "alex.carter")),
              session(env("INTAKE_SEED_APPROVER_2", "nina.patel"))],
             int(env("INTAKE_SEED_APPROVE_TIMEOUT", "300")), int(env("INTAKE_SEED_INGEST_TIMEOUT", "300")))
-        done = loader.run(intakes)
+        return loader.run(intakes, budget=int(env("INTAKE_SEED_TOTAL_TIMEOUT", "900")))
     finally:
         registry.conn.close()
-    log(f"Done: {done['registered']} farmers registered, {done['resumed']} waiting intakes approved, "
-        f"{done['skipped']} already farmers.")
 
 
 def run() -> int:
@@ -623,19 +671,27 @@ def run() -> int:
 
     The load rides on a post-upgrade hook, and sample data never decides whether a registry upgrade
     succeeds: a missing setting prints SKIPPED, any other error prints FAILED with the reason, and
-    the Job still ends 0. Read the Job's log (or grep for "[load-sample-data] FAILED") to see why.
+    the Job still ends 0. The last line is always "[load-sample-data] SUMMARY: ...", which the staging
+    pipeline prints (ci/deploy/sample-data-summary.sh), so a run that loaded nothing is visible there.
     """
+    final = "[load-sample-data] SUMMARY: FAILED, nothing loaded by this run"
     try:
-        main()
+        done = main()
+        final = summary(done) if done else "[load-sample-data] SUMMARY: OK, Master Data holds no sample people"
     except SettingMissing as exc:
         print(f"[load-sample-data] SKIPPED, nothing loaded: {exc}. Set it in the release values "
               "(templates/sample-data-loader.yaml renders the Master Data and staff IAM settings).", file=sys.stderr)
+        final = f"[load-sample-data] SUMMARY: SKIPPED, nothing loaded: {exc}"
     except mds_client.MdsError as exc:
         word = "SKIPPED, nothing loaded" if exc.code == "CONFIG" else "FAILED, the upgrade goes on"
         print(f"[load-sample-data] {word}: {exc}", file=sys.stderr)
+        final = f"[load-sample-data] SUMMARY: {word.split(',')[0]}, nothing loaded: {exc}"
     except Exception as exc:  # noqa: BLE001 - reported, never raised: samples never fail the upgrade
         traceback.print_exc()
         print(f"[load-sample-data] FAILED, the upgrade goes on: {type(exc).__name__}: {exc}", file=sys.stderr)
+        final = f"[load-sample-data] SUMMARY: FAILED, nothing loaded by this run: {type(exc).__name__}: {str(exc)[:300]}"
+    sys.stderr.flush()
+    print(final, flush=True)
     return 0
 
 
