@@ -585,6 +585,53 @@ def signing_preparation_before(before, after, environment="dev"):
     return result
 
 
+ADMIN_AUTH_ENV = {"issuer": "CONNECTOR_ADMIN_AUTH_ISSUER", "jwksUrl": "CONNECTOR_ADMIN_AUTH_JWKS_URL",
+                  "clientId": "CONNECTOR_ADMIN_AUTH_CLIENT_ID", "role": "CONNECTOR_ADMIN_AUTH_ROLE",
+                  "uiClientId": "CONNECTOR_ADMIN_AUTH_UI_CLIENT_ID"}
+
+
+def admin_auth_preparation_before(before, after, admin_auth):
+    """Allow only the reviewed connector admin login env (adminAuth, rendered by chart_signing) as a change.
+
+    The connector image refuses every admin route (503) until it knows its issuer, so the reviewed adminAuth
+    must reach the release even while it only takes image-only rollouts. Every container that renders any
+    CONNECTOR_ADMIN_AUTH_* entry must render exactly the reviewed five; the returned copy of the old manifest
+    carries them in the new order, so guard() still refuses any other configuration change.
+    """
+    if not admin_auth:
+        return before
+    if not isinstance(admin_auth, dict) or any(not isinstance(admin_auth.get(k), str) or not admin_auth[k].strip()
+                                               for k in ADMIN_AUTH_ENV):
+        raise ServiceError("connector-admin-auth-not-reviewed")
+    expected = {name: {"name": name, "value": admin_auth[key]} for key, name in ADMIN_AUTH_ENV.items()}
+    result = copy.deepcopy(before)
+    newer = {(d["kind"], d["metadata"]["name"]): d for d in after}
+    rendered = False
+    for document in result:
+        current = newer.get((document["kind"], document["metadata"]["name"]))
+        if document["kind"] != "Deployment" or current is None:
+            continue
+        olds = {c["name"]: c for c in pod(document).get("containers", [])}
+        for new in pod(current).get("containers", []):
+            env = {e["name"]: e for e in new.get("env", [])}
+            if not set(env) & set(expected):
+                continue
+            if any(env.get(name) != value for name, value in expected.items()):
+                raise ServiceError("connector-admin-auth-config-not-verified")
+            old = olds.get(new["name"])
+            if old is None:
+                continue
+            rendered = True
+            previous = {e["name"]: e for e in old.get("env", [])}
+            aligned = [expected[e["name"]] if e["name"] in expected else previous[e["name"]]
+                       for e in new.get("env", []) if e["name"] in expected or e["name"] in previous]
+            aligned += [e for e in old.get("env", []) if e["name"] not in env]
+            old["env"] = aligned
+    if not rendered:
+        raise ServiceError("connector-admin-auth-not-rendered")
+    return result
+
+
 def dashboard_auth(overrides):
     """Only reviewed dev authentication literals may accompany the API image."""
     auth = overrides.get("dashboardApi", {}).get("env", {})
@@ -766,6 +813,9 @@ def deploy(component, environment, record, source, registry, run=command):
             # Values the live release needs because the pinned chart renders them differently from the
             # chart it was installed with (for example the Istio gateway). Reviewed in the environment file.
             merge(values, settings.get("activeValues") or {})
+            # The reviewed admin login (admin_auth_preparation_before lets exactly this env through guard()).
+            if component.get("kind") == "connector" and overrides.get("adminAuth"):
+                values["adminAuth"] = copy.deepcopy(overrides["adminAuth"])
         for role, spec in image_specs(component).items():
             selected = record["images"][role] if component.get("images") else record
             for value_path in spec["imageValues"]:
@@ -798,6 +848,8 @@ def deploy(component, environment, record, source, registry, run=command):
             after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
                               "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
             guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" and not active else before
+            if component.get("kind") == "connector":
+                guard_before = admin_auth_preparation_before(guard_before, after, overrides.get("adminAuth"))
             if embedded:
                 guard_dashboard_api(before, after, images["main"], namespace, auth=auth)
             else:
@@ -841,8 +893,10 @@ def deploy(component, environment, record, source, registry, run=command):
         if embedded:
             guard_dashboard_api(before, final_manifest, images["main"], namespace, auth=auth)
         else:
-            guard(signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" and not active else before,
-                  final_manifest, namespace, images.values(), release)
+            final_before = signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" and not active else before
+            if component.get("kind") == "connector":
+                final_before = admin_auth_preparation_before(final_before, final_manifest, overrides.get("adminAuth"))
+            guard(final_before, final_manifest, namespace, images.values(), release)
         return final["version"]
 
 
