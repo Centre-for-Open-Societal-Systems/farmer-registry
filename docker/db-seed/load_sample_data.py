@@ -529,14 +529,16 @@ class Loader:
                 raise RuntimeError(f"intake {submission_id} is not approved after both stages")
             time.sleep(3)
 
-    def run(self, intakes: list[dict], budget: int = 900, max_failures_in_a_row: int = 3) -> dict:
+    def run(self, intakes: list[dict], budget: int = 1200, max_failures_in_a_row: int = 3) -> dict:
         """Load each intake on its own: one that fails is reported and the rest still load.
 
         The load stops early, leaving the rest "not tried", once `budget` seconds have passed (every wait
         is cut to it too: the load must end inside the Job's activeDeadlineSeconds and the upgrade's own
         Helm --timeout, or the hook and so the upgrade would fail) or after
         `max_failures_in_a_row` failures in a row (then the cause is the environment, not one person,
-        and each further try would only spend the approve/ingest timeouts again).
+        and each further try would only spend the approve/ingest timeouts again). Members of a household
+        whose head failed are reported as failed without being tried, and do not count toward that stop:
+        they fail because of the head, not on their own.
         """
         farmers, awaiting = self.registry.farmers(), self.registry.awaiting_approval()
         households = {}  # pack household id -> its household in the register
@@ -546,6 +548,7 @@ class Loader:
         done = {"total": len(intakes), "registered": 0, "resumed": 0, "skipped": 0, "failed": [], "not_tried": 0,
                 "stopped": ""}
         self.deadline, in_a_row = time.monotonic() + budget, 0
+        failed_heads: dict[str, str] = {}  # pack household id -> its head, whose intake failed
         for position, intake in enumerate(intakes):
             if time.monotonic() >= self.deadline:
                 done["stopped"] = f"the load's time budget ({budget}s) ran out"
@@ -556,10 +559,18 @@ class Loader:
                 log(f"  stopping: {done['stopped']}; {done['not_tried']} not tried")
                 break
             who = f"{intake['individual_id']} {intake['name']}"
+            head = failed_heads.get(intake["household"])
+            if head and not intake["is_head"] and intake["household"] not in households:
+                why = f"not tried: head {head} of household {intake['household']} failed"
+                done["failed"].append((intake["individual_id"], why))
+                log(f"  {who}: {why}")
+                continue
             try:
                 outcome = self.load_one(intake, farmers, awaiting, households)
             except Exception as exc:  # noqa: BLE001 - one person's failure is reported, the rest still load
                 in_a_row += 1
+                if intake["is_head"]:
+                    failed_heads[intake["household"]] = intake["individual_id"]
                 done["failed"].append((intake["individual_id"], f"{type(exc).__name__}: {exc}"))
                 log(f"  {who}: FAILED, going on with the rest: {type(exc).__name__}: {exc}")
                 continue
@@ -661,7 +672,7 @@ def main() -> dict | None:
             [session(env("INTAKE_SEED_APPROVER_1", "alex.carter")),
              session(env("INTAKE_SEED_APPROVER_2", "nina.patel"))],
             int(env("INTAKE_SEED_APPROVE_TIMEOUT", "300")), int(env("INTAKE_SEED_INGEST_TIMEOUT", "300")))
-        return loader.run(intakes, budget=int(env("INTAKE_SEED_TOTAL_TIMEOUT", "900")))
+        return loader.run(intakes, budget=int(env("INTAKE_SEED_TOTAL_TIMEOUT", "1200")))
     finally:
         registry.conn.close()
 
@@ -677,7 +688,9 @@ def run() -> int:
     final = "[load-sample-data] SUMMARY: FAILED, nothing loaded by this run"
     try:
         done = main()
-        final = summary(done) if done else "[load-sample-data] SUMMARY: OK, Master Data holds no sample people"
+        # Samples were asked for (this Job only runs with LOAD_SAMPLE_DATA) and none exist: not OK.
+        final = summary(done) if done else ("[load-sample-data] SUMMARY: SKIPPED, nothing loaded: Master Data holds "
+                                            "no sample people (load the country pack's samples on commons-services)")
     except SettingMissing as exc:
         print(f"[load-sample-data] SKIPPED, nothing loaded: {exc}. Set it in the release values "
               "(templates/sample-data-loader.yaml renders the Master Data and staff IAM settings).", file=sys.stderr)
