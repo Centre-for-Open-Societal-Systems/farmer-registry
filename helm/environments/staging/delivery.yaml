@@ -5,14 +5,14 @@ environment: staging
 namespace: farmer
 release: farmer-registry
 kubeconfigCredential: staging-farmer-kubeconfig
-registryHostname: farmer-registry.oanstaging.com
-staffIssuer: https://keycloak.oanstaging.com/realms/staff
+registryHostname: farmer-registry.qa.oanstaging.com
+staffIssuer: https://keycloak.qa.oanstaging.com/realms/staff
 connectorRelease: farmer-registry-connector
 registryDatabase: farmer_registry
 idGeneratorDatabase: farmer_registry_idgen
 connectorDatabase: farmer_connector_v2
 connectorQueue: farmer-registry-connector-v2
-connectorHostname: connector-farmer-registry.oanstaging.com
+connectorHostname: connector-farmer-registry.qa.oanstaging.com
 apiServers:
   - https://10.0.1.212:6443
   - https://52.66.116.220:6443

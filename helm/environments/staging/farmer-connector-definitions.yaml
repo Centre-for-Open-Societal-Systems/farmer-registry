@@ -3,7 +3,7 @@
 # the source of truth: each deploy creates or PATCHes these rows by name. Secret values are never here; they
 # are named and read from Kubernetes Secrets.
 adminAuth:
-  tokenUrl: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+  tokenUrl: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
 definitions:
   # Staging had no definition rows. The staging ODK Central serves the farmer form in project 1.
   - name: Farmer Registry - ODK Central Ingestion
@@ -20,7 +20,7 @@ definitions:
       email: {secret: farmer-odk-central-credentials, key: email}
       password: {secret: farmer-odk-central-credentials, key: password}
     source_config:
-      base_url: https://odk-central.oanstaging.com
+      base_url: https://odk-central.qa.oanstaging.com
       project_id: 1
       form_id: farmer_profile
       resolve_nav_links: true

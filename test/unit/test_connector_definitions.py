@@ -32,7 +32,7 @@ def test_environment_definitions_name_secrets_only(environment):
     assert set(odk) & {"webhook_secret", "auth_secret_json"} == set()
     for ref in odk["auth_secret_from"].values():
         assert set(ref) == {"secret", "key"}
-    host = {"dev": "https://odk-central.development.oanstaging.com", "staging": "https://odk-central.oanstaging.com"}
+    host = {"dev": "https://odk-central.development.oanstaging.com", "staging": "https://odk-central.qa.oanstaging.com"}
     assert odk["source_config"]["base_url"] == host[environment]
     assert odk["source_config"]["form_id"] == "farmer_profile"
 

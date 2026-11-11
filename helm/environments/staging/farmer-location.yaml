@@ -2,7 +2,7 @@
 # Merge over saved release values. Keep existing client IDs and Secret refs.
 global:
   masterDataApiUrl: http://commons-services-master-data-api.commons.svc.cluster.local
-  masterDataTokenUrl: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+  masterDataTokenUrl: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
 registry:
   staffUi:
     envVars:
@@ -10,17 +10,17 @@ registry:
       # The farmer location map: OpenStreetMap tiles (img) and the pin's
       # elevation lookup (connect). CSP_SRC_IMG repeats the release's MinIO
       # source because a per-directive value replaces the whole list.
-      CSP_SRC_IMG: 'self blob: data: https://minio-farmer.oanstaging.com https://tile.openstreetmap.org'
+      CSP_SRC_IMG: 'self blob: data: https://minio-farmer.qa.oanstaging.com https://tile.openstreetmap.org'
       CSP_SRC_CONNECT: 'self https://api.open-meteo.com'
   staffApi:
     envVars:
       REGISTRY_STAFF_PORTAL_API_MASTER_DATA_API_URL: http://commons-services-master-data-api.commons.svc.cluster.local
-      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
   partnerApi:
     envVars:
       REGISTRY_PARTNER_API_MASTER_DATA_API_URL: http://commons-services-master-data-api.commons.svc.cluster.local
-      REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
   celeryWorker:
     envVars:
       REGISTRY_CELERY_WORKERS_MASTER_DATA_API_URL: http://commons-services-master-data-api.commons.svc.cluster.local
-      REGISTRY_CELERY_WORKERS_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
