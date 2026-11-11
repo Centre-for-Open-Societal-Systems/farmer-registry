@@ -39,6 +39,8 @@ SOURCE_PREFIX = "republish-fr-id:"
 CHANGED_BY = "system:republish-fr-id"
 
 # Farmers with an FR- id now whose every snapshot carries TEMP-, and no re-publish payload yet.
+# Random order: a farmer whose fan-out keeps failing (logged as a warning on every run) never
+# keeps the others out of the batch.
 PENDING_SQL = """
 SELECT f.internal_record_id
 FROM g2p_register_farmers f
@@ -56,7 +58,7 @@ WHERE f.functional_record_id LIKE 'FR-%'
   AND NOT EXISTS (
     SELECT 1 FROM outgoing_raw_data_payloads p
     WHERE p.payload_id = :prefix || f.internal_record_id || ':' || :register_id || ':' || f.internal_record_id)
-ORDER BY f.internal_record_id
+ORDER BY random()
 LIMIT :limit
 """
 
@@ -120,16 +122,17 @@ async def _republish(session_maker) -> int:
 
 
 def _register_worker_task(worker_app) -> None:
-    from openg2p_registry_celery_worker.engine import Engine
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-    from sqlalchemy.pool import NullPool
-
     state = {}
 
     def session_maker():
         # A connection per run (NullPool): the platform's tasks each run their own event loop,
-        # and pooled asyncpg connections must not cross loops.
+        # and pooled asyncpg connections must not cross loops. The database settings are the
+        # worker's own (its Engine's datasource), so no setting or Secret is added.
         if "maker" not in state:
+            from openg2p_registry_celery_worker.engine import Engine
+            from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+            from sqlalchemy.pool import NullPool
+
             engine = create_async_engine(Engine.construct_async_db_datasource(), poolclass=NullPool)
             state["maker"] = async_sessionmaker(bind=engine, expire_on_commit=False)
         return state["maker"]()

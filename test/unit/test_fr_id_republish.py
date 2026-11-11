@@ -100,7 +100,8 @@ def test_batch_is_limited():
     for n in range(3):
         _farmer(db, f"f-{n}", f"FR-00000000000{n}")
         _snapshot(db, f"intake-{n}:{REGISTER}:f-{n}", f"f-{n}", f"TEMP-{n}")
-    assert _pending(db, limit=2) == ["f-0", "f-1"]
+    picked = _pending(db, limit=2)
+    assert len(picked) == 2 and set(picked) <= {"f-0", "f-1", "f-2"}
 
 
 def test_republish_payload_id_never_collides_with_the_intake_one():
