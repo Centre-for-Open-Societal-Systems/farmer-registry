@@ -115,8 +115,11 @@ class _Queries:
             G2PRegisterDefinition.register_id == FARMER_REGISTER_ID))).scalar_one()
 
     async def farmer(self, session, internal_record_id: str):
-        from openg2p_registry_farmer_extension.register_domain.models import G2PRegisterFarmer
         from sqlalchemy import select
+
+        from openg2p_registry_farmer_extension.register_domain.models import (
+            G2PRegisterFarmer,
+        )
 
         return (await session.execute(select(G2PRegisterFarmer).where(
             G2PRegisterFarmer.internal_record_id == internal_record_id))).scalar_one()
