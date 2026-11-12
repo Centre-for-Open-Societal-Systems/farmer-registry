@@ -1,0 +1,147 @@
+{#-
+  Farmer file import. One flat row of a CSV or Excel file (every value a string) becomes the sections of one
+  farmer intake, the same sections the ODK intake fills (odk/transform.py SECTIONS). The import worker hands the
+  row over as the business payload, so the columns are the register's own field names (docs/file-import.md
+  lists them with their codes).
+  Imported: identity, personal details, phones, socio-economic answers, the household when the farmer heads it
+  (the farmer is its only member), location, membership and one land. Not imported: crops, farm inputs,
+  livestock, household members other than the farmer, the photo and the identity document file. A file cannot
+  carry a file, and the identity document is required, so an imported intake stays a draft with the reason in
+  its remarks until staff attach it and submit (register_domain/services/required_fields.py).
+  A value the template cannot read fails this row only, with the column named in the error. Codes are checked
+  by the registry when the intake is saved.
+-#}
+{% macro fail(message) %}{{ {}[message].invalid }}{% endmacro %}
+{% set row = expanded if expanded is defined else {} %}
+{% set cell = {} %}
+{% for key, raw in row.items() %}{% set _ = cell.update({(key | string | trim | lower): ((raw if raw is not none else '') | string | trim)}) %}{% endfor %}
+{% macro code(value) %}{{ value | upper | replace(' ', '_') | replace('-', '_') }}{% endmacro %}
+
+{#- yes/no columns: yes, no, true, false, 1, 0; blank is "not given". -#}
+{% set yes_no = {} %}
+{% for key in ['is_household_head', 'disabled', 'is_psnp_user', 'other_land_owner', 'is_primary_cooperative_member', 'is_cooperative_union_member', 'is_farmer_cluster_member'] %}{% set value = cell.get(key, '') | lower %}{% if value %}
+  {% if value in ['yes', 'true', '1'] %}{% set _ = yes_no.update({key: true}) %}
+  {% elif value in ['no', 'false', '0'] %}{% set _ = yes_no.update({key: false}) %}
+  {% else %}{{ fail('column ' ~ key ~ ' must be yes or no, got ' ~ cell[key]) }}{% endif %}
+{% endif %}{% endfor %}
+{% if 'is_household_head' not in yes_no %}{{ fail('column is_household_head is required (yes or no)') }}{% endif %}
+
+{% set dates = {} %}
+{% for key in ['birth_date', 'data_collection_date'] %}{% set value = cell.get(key, '')[:10] %}{% if value %}
+  {% set parts = value.split('-') %}
+  {% if not (parts | length == 3 and parts[0] | length == 4 and parts[1] | length == 2 and parts[2] | length == 2 and (parts | join('')).isdigit()) %}{{ fail('column ' ~ key ~ ' must be a date as YYYY-MM-DD, got ' ~ value) }}{% endif %}
+  {% set _ = dates.update({key: value}) %}
+{% endif %}{% endfor %}
+
+{% set numbers = {} %}
+{% for key in ['latitude', 'longitude', 'land_size'] %}{% set value = cell.get(key, '') %}{% if value %}
+  {% if not value.replace('-', '', 1).replace('.', '', 1).isdigit() %}{{ fail('column ' ~ key ~ ' must be a number, got ' ~ value) }}{% endif %}
+  {% set _ = numbers.update({key: value | float}) %}
+{% endif %}{% endfor %}
+{% for key in ['estimated_age', 'household_size', 'number_of_male_members', 'number_of_female_members'] %}{% set value = cell.get(key, '') %}{% if value %}
+  {% if not value.isdigit() %}{{ fail('column ' ~ key ~ ' must be a whole number, got ' ~ value) }}{% endif %}
+  {% set _ = numbers.update({key: value | int}) %}
+{% endif %}{% endfor %}
+{% if 'latitude' in numbers and (numbers['latitude'] < -90 or numbers['latitude'] > 90) %}{{ fail('column latitude must be between -90 and 90, got ' ~ cell.get('latitude')) }}{% endif %}
+{% if 'longitude' in numbers and (numbers['longitude'] < -180 or numbers['longitude'] > 180) %}{{ fail('column longitude must be between -180 and 180, got ' ~ cell.get('longitude')) }}{% endif %}
+{% if ('latitude' in numbers) != ('longitude' in numbers) %}{{ fail('columns latitude and longitude must be given together') }}{% endif %}
+
+{#- Identity: the Fayda FIN (12 digits) or FAN (16 digits). The Farmer ID is never imported: the platform
+    generates it when the intake is approved. -#}
+{% set fayda_id = cell.get('fayda_id', '') | replace(' ', '') %}
+{% if fayda_id and not (fayda_id.isdigit() and fayda_id | length in [12, 16]) %}{{ fail('column fayda_id must be a 16-digit FAN or a 12-digit FIN, got ' ~ fayda_id) }}{% endif %}
+{% set identity = {'import_source': 'FILE_IMPORT', 'has_national_id': fayda_id != ''} %}
+{% if fayda_id %}{% set _ = identity.update({'foundational_id': fayda_id}) %}{% endif %}
+{% for key in ['enumerator_name', 'enumerator_user_id'] %}{% if cell.get(key) %}{% set _ = identity.update({key: cell[key]}) %}{% endif %}{% endfor %}
+{% if 'data_collection_date' in dates %}{% set _ = identity.update({'data_collection_date': dates['data_collection_date']}) %}{% endif %}
+
+{% for key in ['first_name', 'last_name', 'gender'] %}{% if not cell.get(key) %}{{ fail('column ' ~ key ~ ' is required') }}{% endif %}{% endfor %}
+{% set gender = code(cell['gender']) %}
+{% set gender = {'M': 'MALE', 'F': 'FEMALE'}.get(gender, gender) %}
+{% set personal = {'gender': gender} %}
+{% for key in ['first_name', 'middle_name', 'last_name', 'first_name_local', 'middle_name_local', 'last_name_local', 'email'] %}{% if cell.get(key) %}{% set _ = personal.update({key: cell[key]}) %}{% endif %}{% endfor %}
+{% for key in ['language_spoken', 'local_language', 'marital_status', 'farming_type'] %}{% if cell.get(key) %}{% set _ = personal.update({key: code(cell[key])}) %}{% endif %}{% endfor %}
+{% if 'birth_date' in dates %}{% set _ = personal.update({'birth_date': dates['birth_date']}) %}{% endif %}
+{% if 'estimated_age' in numbers %}{% set _ = personal.update({'estimated_age': numbers['estimated_age']}) %}{% endif %}
+{% if personal.get('email') %}{% set _ = personal.update({'emails': [{'address': personal['email'], 'is_primary': true}]}) %}{% endif %}
+
+{#- Phones: the Ethiopian number without the country code (+251 or 251 is dropped). -#}
+{% set phones = [] %}
+{% for key, kind in [('primary_phone_number', 'PRIMARY'), ('secondary_phone_number', 'SECONDARY')] %}{% set phone = cell.get(key, '') | replace(' ', '') | replace('-', '') %}{% if phone %}
+  {% if phone.startswith('+251') %}{% set phone = phone[4:] %}{% elif phone.startswith('251') %}{% set phone = phone[3:] %}{% endif %}
+  {% set _ = phones.append({'phone_number': phone, 'phone_type': kind, 'country_code': 'ET', 'is_primary': kind == 'PRIMARY'}) %}
+{% endif %}{% endfor %}
+{% if phones and not (phones | selectattr('is_primary') | list) %}{% set _ = phones[0].update({'is_primary': true}) %}{% endif %}
+{% set _ = personal.update({'has_personal_phone': phones | length > 0}) %}
+
+{% set socio = {} %}
+{% for key in ['education_level', 'disability_type', 'disability_severity'] %}{% if cell.get(key) %}{% set _ = socio.update({key: code(cell[key])}) %}{% endif %}{% endfor %}
+{% if cell.get('source_of_income') %}{% set income = code(cell['source_of_income']) %}{% set _ = socio.update({'source_of_income': income, 'income_sources': [income]}) %}{% endif %}
+{% for key in ['disabled', 'is_psnp_user'] %}{% if key in yes_no %}{% set _ = socio.update({key: yes_no[key]}) %}{% endif %}{% endfor %}
+
+{#- Household: a head starts a household with the farmer as its only member; the counts default to that one
+    member. A farmer who is not the head is linked to a household by staff after the import. -#}
+{% set is_head = yes_no['is_household_head'] %}
+{% set household = [] %}
+{% set members = [] %}
+{% if is_head %}
+  {% set member = {'first_name': personal['first_name'], 'last_name': personal['last_name'], 'gender': gender, 'is_head': true, 'relationship_to_the_head': 'SELF'} %}
+  {% if personal.get('middle_name') %}{% set _ = member.update({'middle_name': personal['middle_name']}) %}{% endif %}
+  {% if 'birth_date' in dates %}{% set _ = member.update({'birth_date': dates['birth_date']}) %}{% endif %}
+  {% set _ = members.append(member) %}
+  {% set _ = household.append({
+      'household_head': [personal['first_name'], personal.get('middle_name', ''), personal['last_name']] | select | join(' '),
+      'size_of_group': numbers.get('household_size', 1),
+      'number_of_male_members': numbers.get('number_of_male_members', 1 if gender == 'MALE' else 0),
+      'number_of_female_members': numbers.get('number_of_female_members', 1 if gender == 'FEMALE' else 0),
+      'other_land_owner': yes_no.get('other_land_owner', false)}) %}
+{% endif %}
+
+{#- Location: Master Data geo unit ids (P-codes), each level needs the one above it; the deepest level given is
+    the farmer's place and the registry fills the names from Master Data. -#}
+{% set geo = {} %}
+{% set hierarchy = [] %}
+{% for level in ['region', 'zone', 'woreda', 'kebele'] %}{% set value = cell.get(level, '') | upper %}{% if value %}
+  {% if hierarchy | length != loop.index0 %}{{ fail('column ' ~ level ~ ' needs the level above it, got ' ~ value) }}{% endif %}
+  {% set _ = hierarchy.append({'level_mnemonic': level | upper, 'level_value_id': value, 'level_value_mnemonic': value}) %}
+{% endif %}{% endfor %}
+{% if hierarchy %}{% set _ = geo.update({'geo_lowest_level_value_id': hierarchy[-1]['level_value_id'], 'geo_code_hierarchy_json': {'hierarchy': hierarchy} | tojson}) %}{% endif %}
+{% for key in ['latitude', 'longitude'] %}{% if key in numbers %}{% set _ = geo.update({key: numbers[key]}) %}{% endif %}{% endfor %}
+
+{% set membership = {} %}
+{% for key in ['is_primary_cooperative_member', 'is_cooperative_union_member', 'is_farmer_cluster_member'] %}{% if key in yes_no %}{% set _ = membership.update({key: yes_no[key]}) %}{% endif %}{% endfor %}
+{% for key in ['primary_cooperative_name', 'cooperative_union_name'] %}{% if cell.get(key) %}{% set _ = membership.update({key: cell[key]}) %}{% endif %}{% endfor %}
+{% for key in ['farmer_cluster_role', 'primary_commodity'] %}{% if cell.get(key) %}{% set _ = membership.update({key: code(cell[key])}) %}{% endif %}{% endfor %}
+
+{#- One land, when any land column is given. Its record id is new for every row (the ODK enricher does the same). -#}
+{% set lands = [] %}
+{% if cell.get('land_id') or cell.get('land_size') or cell.get('land_ownership_type') %}
+  {% set hex = [] %}{% for _ in range(32) %}{% set _ = hex.append('0123456789abcdef' | random) %}{% endfor %}
+  {% set h = hex | join('') %}
+  {% set land = {'internal_record_id': h[0:8] ~ '-' ~ h[8:12] ~ '-4' ~ h[13:16] ~ '-a' ~ h[17:20] ~ '-' ~ h[20:32], 'unit': code(cell.get('land_unit') or 'HECTARE')} %}
+  {% if cell.get('land_id') %}{% set _ = land.update({'land_id': cell['land_id']}) %}{% endif %}
+  {% if cell.get('land_ownership_type') %}{% set _ = land.update({'land_ownership_type': code(cell['land_ownership_type'])}) %}{% endif %}
+  {% if 'land_size' in numbers %}{% set _ = land.update({'land_size': numbers['land_size']}) %}{% endif %}
+  {% if personal.get('farming_type') %}{% set _ = land.update({'farming_type': personal['farming_type']}) %}{% endif %}
+  {% set _ = lands.append(land) %}
+{% endif %}
+
+{% set documents = [{'identity_document_type': code(cell['identity_document_type'])}] if cell.get('identity_document_type') else [] %}
+
+{{ {
+  'farmer_household_lookup': [{'is_household_head': is_head}],
+  'farmer_identity': [identity],
+  'farmer_personal_details': [personal],
+  'farmer_photo': [{}],
+  'farmer_phones': phones,
+  'farmer_socio_economic_health': [socio] if socio else [],
+  'household_information': household,
+  'hh_members': members,
+  'farmer_location': [geo] if geo else [],
+  'farmer_lands': lands,
+  'farmer_crops_intake': [],
+  'farmer_farm_inputs_intake': [],
+  'farmer_livestock_intake': [],
+  'farmer_membership': [membership] if membership else [],
+  'farmer_documents': documents,
+} | tojson }}

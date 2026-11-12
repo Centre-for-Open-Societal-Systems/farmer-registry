@@ -3,3 +3,4 @@
 from openg2p_registry_farmer_extension.openg2p_farmer.ingestion_pipeline.enricher_services import *
 
 from ...odk.enricher import OdkToFarmerIntakeEnricher
+from .pass_through import G2PPassThroughEnricherService
