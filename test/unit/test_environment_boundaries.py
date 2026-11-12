@@ -63,8 +63,8 @@ def test_staging_binds_backup_credentials_only_for_evidence_that_is_not_a_first_
 def test_staging_contract_is_the_oan_install_beside_the_legacy_release():
     staging = delivery.configuration("staging")
     assert (staging["namespace"], staging["release"], staging["platform"]) == ("farmer", "farmer-registry", "1.2.2-rc.614")
-    assert staging["registryHostname"] == "farmer-registry.oanstaging.com"
-    assert staging["staffIssuer"] == "https://keycloak.oanstaging.com/realms/staff"
+    assert staging["registryHostname"] == "farmer-registry.qa.oanstaging.com"
+    assert staging["staffIssuer"] == "https://keycloak.qa.oanstaging.com/realms/staff"
     assert (staging["registryDatabase"], staging["idGeneratorDatabase"], staging["connectorDatabase"]) == (
         "farmer_registry", "farmer_registry_idgen", "farmer_connector_v2")
     assert staging["apiServers"] == ["https://10.0.1.212:6443", "https://52.66.116.220:6443"]

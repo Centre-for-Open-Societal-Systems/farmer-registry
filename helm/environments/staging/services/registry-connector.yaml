@@ -19,13 +19,13 @@ cossSigning:
 # scripts/operations/connector/chart_signing.py passes these as CONNECTOR_ADMIN_AUTH_* which the
 # image honours before its baked file.
 adminAuth:
-  issuer: https://keycloak.oanstaging.com/realms/staff
+  issuer: https://keycloak.qa.oanstaging.com/realms/staff
   jwksUrl: http://commons-keycloak.commons.svc.cluster.local:80/realms/staff/protocol/openid-connect/certs
   clientId: registry-connector
   role: REGISTRY_CONNECTOR_ADMIN
   uiClientId: registry-connector-ui
 global:
-  hostname: connector-farmer-registry.oanstaging.com
+  hostname: connector-farmer-registry.qa.oanstaging.com
   postgresqlHost: commons-postgresql.commons.svc.cluster.local
   postgresqlPort: 5432
   connectorDB: farmer_connector_v2
@@ -40,7 +40,7 @@ commonEnv:
   CONNECTOR_STORE_RUN_PAYLOADS: 'false'
   CONNECTOR_STRICT_INCREMENTAL: 'true'
   CONNECTOR_FULL_SCAN_ON_INCREMENTAL_UNSUPPORTED: 'false'
-  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry.oanstaging.com
+  CONNECTOR_CORS_ORIGINS: https://connector-farmer-registry.qa.oanstaging.com
 api:
   replicaCount: 0
   autoscaling:

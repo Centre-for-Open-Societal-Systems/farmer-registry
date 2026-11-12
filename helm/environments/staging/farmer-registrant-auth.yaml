@@ -5,5 +5,5 @@
 # ci/deploy/deployment.py (hostnames are the only difference from the dev file).
 registrantAuth:
   enabled: true
-  esignetBaseUrl: https://esignet.oanstaging.com
-  callbackUrl: https://staff-farmer.oanstaging.com/registrant-auth/callback
+  esignetBaseUrl: https://esignet.qa.oanstaging.com
+  callbackUrl: https://staff-farmer.qa.oanstaging.com/registrant-auth/callback

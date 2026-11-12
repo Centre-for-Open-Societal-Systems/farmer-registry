@@ -30,7 +30,7 @@ def environment_settings(environment):
     if environment == "dev":
         return ISSUER, IAM, OVERLAY
     if environment == "staging":
-        return ("https://keycloak.oanstaging.com/realms/staff", "https://staff-iam.oanstaging.com",
+        return ("https://keycloak.qa.oanstaging.com/realms/staff", "https://staff-iam.qa.oanstaging.com",
                 Path(__file__).resolve().parents[3] / "helm/environments/staging/farmer-identity.yaml")
     raise ValueError("Unknown identity environment")
 
