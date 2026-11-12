@@ -80,6 +80,11 @@ def call() {
                             sh 'bash ci/deploy/connector-definitions.sh staging'
                         }
                     }
+                    // The dashboard UI release follows oan-helm's staging values on every promotion, as crop and livestock
+                    // deliver theirs (ci/deploy/dashboard-staging.sh). --atomic: a failed upgrade restores it and fails the build.
+                    withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                        sh 'bash ci/deploy/dashboard-staging.sh'
+                    }
                 }
             }
             stage('Deploy (registry)') {
