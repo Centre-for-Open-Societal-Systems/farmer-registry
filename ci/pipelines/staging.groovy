@@ -196,6 +196,36 @@ def call() {
                     }
                 }
             }
+            stage('Deliver dashboard') {
+                // The farmer dashboard UI from oan-helm main: chart repository/farmer-registry-dashboard-*.tgz and values
+                // environments/staging/values/farmer-dashboard.yaml, through oan-helm's scripts/ci/deliver_staging_dashboards.sh
+                // (helm upgrade --install --reset-values --atomic). Git is the only source of its host and Gateway. A failure
+                // marks the build unstable: the registry is already delivered, and --atomic restores the dashboard.
+                when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'promote' } }
+                agent { label 'oan-ci-deploy' }
+                steps {
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                            sh '''
+                              set -eu
+                              dir=.oan-helm-dashboard
+                              rm -rf "$dir"
+                              git clone --quiet --depth 1 --filter=blob:none --sparse \\
+                                https://github.com/Centre-for-Open-Societal-Systems/oan-helm.git "$dir"
+                              git -C "$dir" sparse-checkout set --no-cone /scripts/ci/ /environments/staging/values/ \\
+                                '/repository/farmer-registry-dashboard-*.tgz'
+                              echo "oan-helm main $(git -C "$dir" rev-parse --short=12 HEAD)"
+                              if grep -q '^ *farmer)' "$dir/scripts/ci/deliver_staging_dashboards.sh"; then
+                                bash "$dir/scripts/ci/deliver_staging_dashboards.sh" farmer
+                              else
+                                echo "oan-helm main cannot deliver one dashboard yet; skipped"
+                              fi
+                              rm -rf "$dir"
+                            '''
+                        }
+                    }
+                }
+            }
         }
         post {
             always { archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true }
