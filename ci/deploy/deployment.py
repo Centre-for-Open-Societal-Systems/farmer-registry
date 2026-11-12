@@ -229,6 +229,11 @@ def dci_signing_overlay(environment="dev"):
     return environment_overlay("farmer-dci-signing", environment)
 
 
+# Reviewed new persistent resources: the release's own ECR pull-secret refresher
+# (helm/openg2p-farmer-registry/templates/ecr-pull-secret.yaml, farmer-pull-secret.yaml overlay).
+ECR_REFRESHER = {(kind, RELEASE + "-ecr-refresh") for kind in ("ServiceAccount", "Role", "RoleBinding", "CronJob")}
+
+
 def pull_secret_overlay(environment="dev"):
     """The release's own ECR pull secret and its refresher."""
     return environment_overlay("farmer-pull-secret", environment)
@@ -454,7 +459,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
         # runs with) are recreated on every install/upgrade; only a new
         # resource that would persist needs a reviewed baseline.
         is_hook = key[0] == 'Job' or bool(d.get('metadata', {}).get('annotations', {}).get('helm.sh/hook'))
-        if environment in OAN_ENVIRONMENTS and not fresh and key not in old and not is_hook:
+        if environment in OAN_ENVIRONMENTS and not fresh and key not in old and not is_hook and key not in ECR_REFRESHER:
             raise ValueError(f'Unexpected persistent resource: {key}')
         if key[1].startswith(("commons-", "farmer-connector")):
             raise ValueError(f"Registry must not own shared/connector resource: {key}")
