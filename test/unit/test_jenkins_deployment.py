@@ -340,3 +340,24 @@ def test_dev_values_sign_dci_responses_with_the_chart_generated_key(release):
         environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
     assert staged["dciSigning"] == {"enabled": True, "kid": "farmer-registry-dci-rsa"}
     assert staged["registry"]["partnerApi"]["envVars"]["REGISTRY_PARTNER_API_CRYPTO_SIGNING_KEY_PATH"].startswith("/etc/dci-signing/")
+
+
+def test_both_environments_keep_their_own_ecr_pull_secret(release):
+    before, _ = release
+    wanted = {"enabled": True, "registry": "379220350808.dkr.ecr.ap-south-1.amazonaws.com", "serviceAccounts": ["default"]}
+    dev = deployment.prepare({"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}}, before, ECR, TAG)
+    assert dev["ecrPullSecret"] == wanted
+    staged = deployment.prepare(
+        {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com"}}, before, ECR, TAG,
+        environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
+    assert staged["ecrPullSecret"] == wanted
+
+
+def test_the_ecr_refresher_is_a_reviewed_new_resource(release):
+    before, after = release
+    for kind in ('ServiceAccount', 'Role', 'RoleBinding', 'CronJob'):
+        after.append({'kind': kind, 'metadata': {'name': 'farmer-registry-ecr-refresh'}})
+    deployment.validate(before, after, ECR, TAG)
+    after.append({'kind': 'CronJob', 'metadata': {'name': 'farmer-registry-other-job'}})
+    with pytest.raises(ValueError, match='Unexpected persistent resource'):
+        deployment.validate(before, after, ECR, TAG)
