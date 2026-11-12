@@ -229,6 +229,11 @@ def dci_signing_overlay(environment="dev"):
     return environment_overlay("farmer-dci-signing", environment)
 
 
+def pull_secret_overlay(environment="dev"):
+    """The release's own ECR pull secret and its refresher."""
+    return environment_overlay("farmer-pull-secret", environment)
+
+
 def merge(target, overlay):
     for key, value in overlay.items():
         if isinstance(value, dict) and isinstance(target.get(key), dict):
@@ -327,6 +332,7 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     merge(values, outgestion_overlay(environment))
     merge(values, registrant_auth_overlay(environment))
     merge(values, dci_signing_overlay(environment))
+    merge(values, pull_secret_overlay(environment))
     if environment == "staging":
         if not images:
             raise ValueError("Staging requires a tested image set pinned by digest")
