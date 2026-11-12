@@ -63,13 +63,19 @@ def test_data_model_key_paths_pattern_and_template_rows_are_upserts_on_the_impor
     assert not re.search(r"odk_to_farmer_intake'?[,)]", re.sub(r'^--.*$', '', seed, flags=re.MULTILINE))
 
 
-def test_pass_through_enricher_returns_the_row_unchanged():
-    from openg2p_registry_farmer_extension.ingestion_pipeline.enricher_services import (
-        G2PPassThroughEnricherService,
-    )
+def test_pass_through_enricher_returns_the_row_unchanged_and_is_exported_by_name():
+    # Loaded by path: the enricher package itself also imports the farmer models under their alias, which a plain
+    # test run does not install. Core resolves the class by name on the package, so the export is checked as text.
+    pytest.importorskip('openg2p_registry_core')
+    import importlib.util
 
+    package = ROOT / 'ingestion_pipeline' / 'enricher_services'
+    spec = importlib.util.spec_from_file_location('farmer_pass_through', package / 'pass_through.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
     payload = {'first_name': 'Sample'}
-    assert G2PPassThroughEnricherService().enrich(payload, None) is payload
+    assert module.G2PPassThroughEnricherService().enrich(payload, None) is payload
+    assert 'from .pass_through import G2PPassThroughEnricherService' in (package / '__init__.py').read_text(encoding='utf-8')
 
 
 def test_blank_file_is_header_only_and_every_column_is_documented():
