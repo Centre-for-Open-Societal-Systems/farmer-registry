@@ -181,14 +181,14 @@ def test_registry_provenance_rejects_wrong_or_missing_image_digest(tmp_path, mon
 def test_prepare_retains_values_and_worker_awe_secrets(release):
     values = {"global": {"registryHostname": "registry.farmer-dev.oanstaging.com"},
               "dashboardApi": {"image": {"tag": "existing"}},
-              "registry": {"staffUi": {"envVars": {"COOKIE_DOMAIN": ".oanstaging.com"}}}}
+              "registry": {"staffUi": {"envVars": {"COOKIE_DOMAIN": ".qa.oanstaging.com"}}}}
     result = deployment.prepare(values, release[0], ECR, TAG)
     assert "celeryWorker" not in values["registry"], "Must not mutate source values"
     worker = result["registry"]["celeryWorker"]
     assert worker["envVars"]["REGISTRY_CELERY_WORKERS_AWE_BASE_URL"] == "http://commons-services-awe"
     assert worker["envVarsFrom"]["REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET"]["secretKeyRef"]["key"] == "client_secret"
     assert result['dashboardApi']['image'] == {'repository': 'independent/dashboard', 'tag': 'existing', 'digest': None}
-    assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".oanstaging.com"
+    assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".qa.oanstaging.com"
     assert result["registry"]["dbSeed"]["loadSampleData"] is False  # the sample loader stays off on dev too
     assert result["registry"]["dbSeed"]["loadImages"] is False
     assert result["registry"]["sanity"]["runE2e"] is False
@@ -308,11 +308,11 @@ def test_dev_values_enable_registrant_authentication_with_the_dev_hosts(release)
     assert result["registrantAuth"]["esignetBaseUrl"] == "https://esignet.development.oanstaging.com"
     assert result["registrantAuth"]["callbackUrl"].endswith("/registrant-auth/callback")
     staged = deployment.prepare(
-        {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}, before, ECR, TAG,
+        {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com"}}, before, ECR, TAG,
         environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
     assert staged["registrantAuth"]["enabled"] is True
-    assert staged["registrantAuth"]["esignetBaseUrl"] == "https://esignet.oanstaging.com"
-    assert staged["registrantAuth"]["callbackUrl"] == "https://staff-farmer.oanstaging.com/registrant-auth/callback"
+    assert staged["registrantAuth"]["esignetBaseUrl"] == "https://esignet.qa.oanstaging.com"
+    assert staged["registrantAuth"]["callbackUrl"] == "https://staff-farmer.qa.oanstaging.com/registrant-auth/callback"
 
 
 def test_dev_values_sign_dci_responses_with_the_chart_generated_key(release):
@@ -328,7 +328,7 @@ def test_dev_values_sign_dci_responses_with_the_chart_generated_key(release):
     assert [v["secret"]["secretName"] for v in partner["extraVolumes"]] == ["farmer-registry-dci-signing"]
     assert all(m["readOnly"] for m in partner["extraVolumeMounts"])
     staged = deployment.prepare(
-        {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}, before, ECR, TAG,
+        {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com"}}, before, ECR, TAG,
         environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
     assert staged["dciSigning"] == {"enabled": True, "kid": "farmer-registry-dci-rsa"}
     assert staged["registry"]["partnerApi"]["envVars"]["REGISTRY_PARTNER_API_CRYPTO_SIGNING_KEY_PATH"].startswith("/etc/dci-signing/")

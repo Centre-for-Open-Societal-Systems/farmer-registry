@@ -37,7 +37,7 @@ credentials, evidence) are listed in [the staging procedure](staging-upgrade.md)
 
 ## ODK target
 
-Staging ODK Central runs inside Commons at `odk-central.oanstaging.com`, as on dev; the former separate VM is
+Staging ODK Central runs inside Commons at `odk-central.qa.oanstaging.com`, as on dev; the former separate VM is
 retired and its form `farmer_profile` 1.0.5 is not migrated by this change. See [map configuration](odk-map-tiles.md).
 
 ## Verification for merge review

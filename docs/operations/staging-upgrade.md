@@ -25,7 +25,7 @@ Changes land in `develop` and are promoted `develop` to `staging` by PR; see
 | --- | --- |
 | Namespace / release | `farmer` / `farmer-registry` |
 | Pin | `ci/deploy/oan-chart-staging.json` (`environment: staging`, chart dev.20 at oan-helm `d7588ad`) |
-| Hosts | base domain `oanstaging.com`: `farmer-registry`, `keycloak` (issuer `https://keycloak.oanstaging.com/realms/staff`), `staff-farmer`, `connector-farmer-registry`, `esignet`, `odk-central` |
+| Hosts | base domain `qa.oanstaging.com`: `farmer-registry`, `keycloak` (issuer `https://keycloak.qa.oanstaging.com/realms/staff`), `staff-farmer`, `connector-farmer-registry`, `esignet`, `odk-central` |
 | Databases | `farmer_registry`, `farmer_registry_idgen`, connector `farmer_connector_v2` |
 | Kubeconfig credential / agent | `staging-farmer-kubeconfig` / `oan-ci-deploy-agent-1`; API servers `https://10.0.1.212:6443`, `https://52.66.116.220:6443` |
 | Overlays | `helm/environments/staging/`: identity, location, outgestion, registrant auth (Fayda), DCI signing |
@@ -99,6 +99,6 @@ Connector values are `helm/environments/staging/services/registry-connector.yaml
 replicas, `farmer-partner` signing with `farmer-connector-v2-staging`, Secrets
 `farmer-connector-v2-staging-db` and `-signing` (created by `helm/farmer-connector-credentials`
 with `environment: staging`), admin access through `CONNECTOR_ADMIN_AUTH_*` from `adminAuth`. The ODK
-Central server is the one inside Commons (`odk-central.oanstaging.com`); the form is rebuilt from the
+Central server is the one inside Commons (`odk-central.qa.oanstaging.com`); the form is rebuilt from the
 staging Master Data geography, see [the ODK documentation](../odk/README.md). The connector pipeline
 row and handoff (`release_handoff.py --environment staging`) are separate operator steps.

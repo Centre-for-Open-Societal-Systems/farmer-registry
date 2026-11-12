@@ -29,7 +29,7 @@ def test_prepare_repairs_saved_dev_routes_and_approved_service_binding(release):
     assert "keycloakBaseUrl" not in prepared["global"]
     assert deployment.location_overlay("staging-legacy") == {}
     staged = deployment.location_overlay("staging")
-    assert staged["global"]["masterDataTokenUrl"] == "https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token"
+    assert staged["global"]["masterDataTokenUrl"] == "https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token"
     assert "development" not in str(staged)
 
 

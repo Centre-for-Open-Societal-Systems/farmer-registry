@@ -579,6 +579,72 @@ def test_guard_allows_only_intended_image_change():
     coordinator.guard([old], [new], "farmer", "new@" + DIGEST)
 
 
+ADMIN_AUTH = {"issuer": "https://keycloak.example/realms/staff",
+              "jwksUrl": "http://keycloak.svc/realms/staff/protocol/openid-connect/certs",
+              "clientId": "registry-connector", "role": "REGISTRY_CONNECTOR_ADMIN", "uiClientId": "registry-connector-ui"}
+
+
+def with_admin_auth(document, admin_auth=ADMIN_AUTH):
+    """The connector Deployment as chart_signing renders it with adminAuth: the five entries after the existing env."""
+    result = copy.deepcopy(document)
+    env = result["spec"]["template"]["spec"]["containers"][0]["env"]
+    env += [{"name": name, "value": admin_auth[key]} for key, name in coordinator.ADMIN_AUTH_ENV.items()]
+    result["spec"]["template"]["spec"]["containers"][0]["image"] = "new@" + DIGEST
+    return result
+
+
+def test_active_connector_takes_the_reviewed_admin_login_with_its_image():
+    old = deployment("farmer-registry-connector-api")
+    new = with_admin_auth(old)
+    before = coordinator.admin_auth_preparation_before([old], [new], ADMIN_AUTH)
+    coordinator.guard(before, [new], "farmer", "new@" + DIGEST)
+    assert old["spec"]["template"]["spec"]["containers"][0]["env"] == deployment("x")["spec"]["template"]["spec"]["containers"][0]["env"]
+
+
+def test_admin_login_change_follows_the_reviewed_issuer():
+    old = with_admin_auth(deployment("farmer-registry-connector-api"))
+    old["spec"]["template"]["spec"]["containers"][0]["image"] = "old:v1"
+    moved = dict(ADMIN_AUTH, issuer="https://keycloak.qa.example/realms/staff")
+    new = with_admin_auth(deployment("farmer-registry-connector-api"), moved)
+    coordinator.guard(coordinator.admin_auth_preparation_before([old], [new], moved), [new], "farmer", "new@" + DIGEST)
+
+
+@pytest.mark.parametrize("mutation", ["unreviewed-value", "missing-entry", "other-env", "not-rendered"])
+def test_admin_login_preparation_lets_nothing_else_through(mutation):
+    old = deployment("farmer-registry-connector-api")
+    new = with_admin_auth(old)
+    env = new["spec"]["template"]["spec"]["containers"][0]["env"]
+    if mutation == "unreviewed-value":
+        env[-1]["value"] = "another-ui-client"
+    elif mutation == "missing-entry":
+        env.pop()
+    elif mutation == "other-env":
+        env.append({"name": "CONNECTOR_REQUIRE_SIGNING", "value": "false"})
+    else:
+        new = copy.deepcopy(old)
+        new["spec"]["template"]["spec"]["containers"][0]["image"] = "new@" + DIGEST
+    with pytest.raises(coordinator.ServiceError):
+        coordinator.guard(coordinator.admin_auth_preparation_before([old], [new], ADMIN_AUTH), [new], "farmer", "new@" + DIGEST)
+
+
+@pytest.mark.parametrize("admin_auth", [{"issuer": "https://keycloak.example/realms/staff"}, dict(ADMIN_AUTH, role=" "), "x"])
+def test_admin_login_must_be_fully_reviewed(admin_auth):
+    with pytest.raises(coordinator.ServiceError, match="admin-auth-not-reviewed"):
+        coordinator.admin_auth_preparation_before([deployment("api")], [deployment("api")], admin_auth)
+
+
+def test_without_reviewed_admin_login_the_guard_is_unchanged():
+    old = deployment("api")
+    assert coordinator.admin_auth_preparation_before([old], [old], None) == [old]
+
+
+@pytest.mark.parametrize("environment", ["dev", "staging"])
+def test_reviewed_connector_values_declare_the_admin_login(environment):
+    reviewed = yaml.safe_load((ROOT / f"helm/environments/{environment}/services/registry-connector.yaml").read_text())
+    assert set(reviewed["adminAuth"]) == set(coordinator.ADMIN_AUTH_ENV)
+    assert reviewed["adminAuth"]["issuer"].endswith("/realms/staff")
+
+
 def test_optional_upgrade_cannot_rotate_secret_data():
     old = {"kind": "Secret", "metadata": {"name": "example-auth"}, "data": {"password": "old"}}
     new = dict(old, data={"password": "changed"})
