@@ -297,7 +297,10 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
             if name.startswith("REGISTRY_CELERY_WORKERS_AWE_"):
                 target = "envVarsFrom" if "valueFrom" in item else "envVars"
                 config["celeryWorker"].setdefault(target, {})[name] = item.get("valueFrom", item.get("value"))
-    config["dbSeed"].update(loadGeoData=False, loadSampleData=False, loadImages=False, loadTemplates=True)
+    # Sample farmers on New Dev only, as Crop and Livestock load theirs there (their samples reference these farmers);
+    # staging loads them only with its LOAD_SAMPLE_DATA build option. The loader skips farmers already present and
+    # never fails the upgrade.
+    config["dbSeed"].update(loadGeoData=False, loadSampleData=environment == "dev", loadImages=False, loadTemplates=True)
     config["dbSeed"].setdefault("intakeSeed", {})["enabled"] = False
     # Deployment smoke only; the e2e fixture suite creates users and synthetic
     # records. Do not run those mutations on dev as a side effect of merging.

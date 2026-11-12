@@ -189,7 +189,7 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
     assert worker["envVarsFrom"]["REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET"]["secretKeyRef"]["key"] == "client_secret"
     assert result['dashboardApi']['image'] == {'repository': 'independent/dashboard', 'tag': 'existing', 'digest': None}
     assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".qa.oanstaging.com"
-    assert result["registry"]["dbSeed"]["loadSampleData"] is False  # the sample loader stays off on dev too
+    assert result["registry"]["dbSeed"]["loadSampleData"] is True  # sample farmers on New Dev, as Crop and Livestock
     assert result["registry"]["dbSeed"]["loadImages"] is False
     assert result["registry"]["sanity"]["runE2e"] is False
     assert result["analytics"]["reportingViews"]["generate"] is False

@@ -3,7 +3,8 @@
 # entrypoint and the generic machinery (load_geo_data.py, sync_geo_widgets.py,
 # upload_templates.py); this image adds the extension's metadata, approval
 # policy, templates and reporting views, and the Farmer sample loader (run only
-# with LOAD_SAMPLE_DATA=true, which no environment enables: ci/deploy/deployment.py).
+# with LOAD_SAMPLE_DATA=true: on every New Dev deploy (ci/deploy/deployment.py) and on staging only
+# when the staging build's LOAD_SAMPLE_DATA option is on).
 # Build from the repository root:  docker build -f docker/db-seed/Dockerfile .
 ARG BASE_IMAGE_VERSION=1.2.2-rc.625
 FROM openg2p/openg2p-registry-db-seed:${BASE_IMAGE_VERSION}
