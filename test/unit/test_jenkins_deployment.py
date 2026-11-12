@@ -351,3 +351,13 @@ def test_both_environments_keep_their_own_ecr_pull_secret(release):
         {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com"}}, before, ECR, TAG,
         environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
     assert staged["ecrPullSecret"] == wanted
+
+
+def test_the_ecr_refresher_is_a_reviewed_new_resource(release):
+    before, after = release
+    for kind in ('ServiceAccount', 'Role', 'RoleBinding', 'CronJob'):
+        after.append({'kind': kind, 'metadata': {'name': 'farmer-registry-ecr-refresh'}})
+    deployment.validate(before, after, ECR, TAG)
+    after.append({'kind': 'CronJob', 'metadata': {'name': 'farmer-registry-other-job'}})
+    with pytest.raises(ValueError, match='Unexpected persistent resource'):
+        deployment.validate(before, after, ECR, TAG)
