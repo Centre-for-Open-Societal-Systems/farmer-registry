@@ -13,9 +13,9 @@ definitions:
     g2p_sender_id: farmer-partner
     g2p_register_mnemonic: Farmer
     auth_type: odk_session
-    # Paused until staging Master Data serves the ETH-OAN pack geography: the form submits pack P-codes, which
-    # the legacy staging catalogue does not publish. Unpause in the change that follows the cutover.
-    paused: true
+    # Staging Master Data serves the ETH-OAN pack geography (21,037 units, the same pack as New Dev), so the
+    # P-codes the form submits resolve; the definition polls.
+    paused: false
     auth_secret_from:
       email: {secret: farmer-odk-central-credentials, key: email}
       password: {secret: farmer-odk-central-credentials, key: password}
