@@ -37,9 +37,11 @@ def test_environment_definitions_name_secrets_only(environment):
     assert odk["source_config"]["form_id"] == "farmer_profile"
 
 
-def test_staging_stays_paused_until_the_geography_cutover():
-    values = yaml.safe_load((ROOT / "helm/environments/staging/farmer-connector-definitions.yaml").read_text())
-    assert values["definitions"][0]["paused"] is True
+def test_odk_definition_polls_on_both_environments():
+    # Staging was paused until its Master Data served the ETH-OAN pack geography; the cutover is done.
+    for environment in ("dev", "staging"):
+        values = yaml.safe_load((ROOT / f"helm/environments/{environment}/farmer-connector-definitions.yaml").read_text())
+        assert values["definitions"][0].get("paused", False) is False
 
 
 def render(environment, *extra):

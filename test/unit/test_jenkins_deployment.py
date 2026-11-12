@@ -189,7 +189,7 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
     assert worker["envVarsFrom"]["REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET"]["secretKeyRef"]["key"] == "client_secret"
     assert result['dashboardApi']['image'] == {'repository': 'independent/dashboard', 'tag': 'existing', 'digest': None}
     assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".qa.oanstaging.com"
-    assert result["registry"]["dbSeed"]["loadSampleData"] is False  # the sample loader stays off on dev too
+    assert result["registry"]["dbSeed"]["loadSampleData"] is True  # sample farmers on New Dev, as Crop and Livestock
     assert result["registry"]["dbSeed"]["loadImages"] is False
     assert result["registry"]["sanity"]["runE2e"] is False
     assert result["analytics"]["reportingViews"]["generate"] is False
@@ -284,13 +284,21 @@ def test_wrong_image_commit_is_rejected(release):
         deployment.validate(before, after, ECR, TAG)
 
 
-@pytest.mark.parametrize("loader", ["LOAD_GEO_DATA", "LOAD_SAMPLE_DATA", "LOAD_IMAGES"])
+@pytest.mark.parametrize("loader", ["LOAD_GEO_DATA", "LOAD_IMAGES"])
 def test_demo_seed_is_rejected(release, loader):
     before, after = release
     seed = next(d for d in after if d["metadata"]["name"] == "farmer-registry-db-seed")
     deployment.pod(seed)["containers"][0]["env"].append({"name": loader, "value": "true"})
     with pytest.raises(ValueError, match="loader"):
         deployment.validate(before, after, ECR, TAG)
+
+
+def test_sample_loader_is_allowed_on_new_dev(release):
+    # New Dev loads the sample farmers on every deploy (prepare sets dbSeed.loadSampleData there only)
+    before, after = release
+    seed = next(d for d in after if d["metadata"]["name"] == "farmer-registry-db-seed")
+    deployment.pod(seed)["containers"][0]["env"].append({"name": "LOAD_SAMPLE_DATA", "value": "true"})
+    deployment.validate(before, after, ECR, TAG)
 
 
 def test_dashboard_image_is_not_silently_upgraded(release):
