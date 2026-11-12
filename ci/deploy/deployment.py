@@ -463,8 +463,11 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                     image = container.get('image', '')
                     if image.startswith((prefix + ':', prefix + '@')) and image != prefix + ':' + images[component]['tag'] + '@' + images[component]['digest']:
                         raise ValueError(f'Built component did not use recorded digest: {key}')
+            # The geography and image loaders never run from a deploy. The sample loader runs on New Dev
+            # (prepare() turns it on there only); staging turns it on with its build option, outside this check.
+            refused = ("LOAD_GEO_DATA", "LOAD_IMAGES") if environment == "dev" else ("LOAD_GEO_DATA", "LOAD_SAMPLE_DATA", "LOAD_IMAGES")
             for e in container.get("env", []):
-                if e["name"] in ("LOAD_GEO_DATA", "LOAD_SAMPLE_DATA", "LOAD_IMAGES") and e.get("value") != "false":
+                if e["name"] in refused and e.get("value") != "false":
                     raise ValueError(f"Demo/geography loader enabled: {key}/{e['name']}")
 
 
