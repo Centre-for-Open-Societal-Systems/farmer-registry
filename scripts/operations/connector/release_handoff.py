@@ -133,9 +133,9 @@ def handoff_route(directory, new_route=False, environment="dev"):
         for scope in ("$", "."):
             anchor = '{{ include "openg2p-connector.fullname" '+scope+' }}'
             for role in ("api", "ui"):
-                source = source.replace('host: '+anchor+'-'+role, 'host: {{ .Values.cossRoutingTarget | default "'+NEW+'" }}-'+role if scope=="." else 'host: {{ $.Values.cossRoutingTarget | default "'+NEW+'" }}-'+role)
+                source = source.replace('host: '+anchor+'-'+role, 'host: {{ .Values.oanRoutingTarget | default "'+NEW+'" }}-'+role if scope=="." else 'host: {{ $.Values.oanRoutingTarget | default "'+NEW+'" }}-'+role)
         template.write_text(source)
-        values["cossRoutingTarget"] = NEW
+        values["oanRoutingTarget"] = NEW
     path = directory / "values.yaml"; path.write_text(yaml.safe_dump(values))
     options = [release, str(chart), "-n", selected_namespace, "-f", str(path), "--no-hooks"]
     after = documents(run(["helm", "template", *options, "--is-upgrade", "--dry-run=server"]))
@@ -237,7 +237,7 @@ def activate_scheduler(directory, checkpoint_evidence, environment="dev"):
     export_chart(NEW, status["version"], chart, environment)
     values["beat"]["enabled"] = True
     values["beat"]["replicaCount"] = 1
-    values["cossCutover"] = {"phase": "active", "checkpointBackupHash": checkpoint_evidence["snapshotHash"]}
+    values["oanCutover"] = {"phase": "active", "checkpointBackupHash": checkpoint_evidence["snapshotHash"]}
     path = directory / "values.yaml"; path.write_text(yaml.safe_dump(values))
     options = [NEW, str(chart), "-n", selected_namespace, "-f", str(path), "--no-hooks"]
     after = documents(run(["helm", "template", *options, "--is-upgrade", "--dry-run=server"]))

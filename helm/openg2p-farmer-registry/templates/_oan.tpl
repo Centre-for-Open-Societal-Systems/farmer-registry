@@ -1,4 +1,4 @@
-{{- define "coss.image" -}}
+{{- define "oan.image" -}}
 {{- $repository := required "enabled component requires image.repository" .repository -}}
 {{- if .digest -}}
 {{- if not (regexMatch "^sha256:[a-f0-9]{64}$" .digest) -}}

@@ -9,8 +9,8 @@ _coordination:
   oldDatabaseEnv: CONNECTOR_DB_DBNAME
   queue: farmer-registry-connector-v2
 fullnameOverride: farmer-registry-connector
-cossQueue: farmer-registry-connector-v2
-cossSigning:
+oanQueue: farmer-registry-connector-v2
+oanSigning:
   enabled: true
   partnerId: farmer-partner
   keyId: farmer-connector-v2-staging

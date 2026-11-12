@@ -20,7 +20,7 @@ retired `publish-only` value to `deploy`. A release left in the `failed` state i
 recovered by the next build without the automatic rollback (it would restore an
 older revision over database changes the failed one already made).
 
-The chart is published by [COSS oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm);
+The chart is published by [OAN oan-helm](https://github.com/Centre-for-Open-Societal-Systems/oan-helm);
 A develop build installs the chart it packaged itself (next section). `oan-chart.json` is the fallback
 for a deploy run by hand without `BUILT_CHART_DIR`: it pins a version and SHA-256, and `deploy-rc.sh`
 refuses any other archive. `ci/deploy/bump_pin.py` moves it.

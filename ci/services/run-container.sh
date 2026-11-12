@@ -6,14 +6,14 @@ umask 077
 action=${1:?Expected build or deploy}
 case "$action" in build|deploy) ;; *) exit 1 ;; esac
 tag=${IMAGE_TAG:-$(git rev-parse --short=12 HEAD)}
-docker build -t "coss-ci/services:$tag" ci/services
+docker build -t "oan-ci/services:$tag" ci/services
 # Sibling Docker containers resolve bind sources on the host, so temporary
 # checkouts must stay inside the workspace mounted at the same path below.
 work_root="$PWD/.ci-services-work"
 mkdir -p "$work_root"
 args=(--rm --network host --user "$(id -u):$(id -g)" -e HOME=/tmp/services-home
       -e "TMPDIR=$work_root"
-      -e "COORDINATOR_IMAGE=coss-ci/services:$tag"
+      -e "COORDINATOR_IMAGE=oan-ci/services:$tag"
       -e ECR_REGISTRY -e AWS_REGION -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY
       -e AWS_SESSION_TOKEN -e CONNECTOR_BACKUP_DIRECTORY
       -e KUBECONFIG_CREDENTIAL
@@ -42,4 +42,4 @@ if [[ -n "${CONNECTOR_BACKUP_DIRECTORY:-}" ]]; then
     unset CONNECTOR_BACKUP_DIRECTORY
   fi
 fi
-docker run "${args[@]}" "coss-ci/services:$tag" bash ci/services/run.sh "$@"
+docker run "${args[@]}" "oan-ci/services:$tag" bash ci/services/run.sh "$@"

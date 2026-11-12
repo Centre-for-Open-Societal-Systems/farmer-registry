@@ -37,9 +37,9 @@ def call() {
                     }
                     sh '''
                       set -eu
-                      docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                      docker build -t "oan-ci/validation:$IMAGE_TAG" ci/validation
                       docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" \
-                        "coss-ci/validation:$IMAGE_TAG" bash ci/validation/validate.sh
+                        "oan-ci/validation:$IMAGE_TAG" bash ci/validation/validate.sh
                     '''
                     stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,test/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
                 }
@@ -105,7 +105,7 @@ def call() {
                                           set -eu
                                           set +x
                                           mkdir -p service-outcomes
-                                          docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                                          docker build -t "oan-ci/validation:$IMAGE_TAG" ci/validation
                                           export ECR_REGISTRY=recorded-in-protected-evidence
                                           export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
                                           bash "$DELIVERY_ENTRY"

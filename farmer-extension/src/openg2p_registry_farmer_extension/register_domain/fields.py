@@ -9,7 +9,7 @@ schemas/ subclasses the register and intake schemas under their own names,
 which is how core finds them. Everything else about a field (label, widget,
 validation, dropdown list) is seed metadata.
 
-Every field the previous registries kept (Gen1 g2p_ati and the COSS farmer
+Every field the previous registries kept (Gen1 g2p_ati and the legacy OAN (Gen1) farmer
 registry) has a column here or upstream, so a migration loses nothing; the
 README's migration map names the column for each.
 """
@@ -75,7 +75,7 @@ OAN_FIELDS: dict[str, dict[str, tuple]] = {
         "is_farmer": (Boolean, bool),
         "farming_type": (String, str),  # FARMING_TYPE list
         # Kept from the previous registries, not asked on the form: the father's
-        # own name (COSS kept it apart from the farmer's middle name), where the
+        # own name (the legacy registry kept it apart from the farmer's middle name), where the
         # record came from, the ODK submission, the duplicate flag and the
         # record's workflow state there.
         "father_first_name": (String, str),
@@ -100,7 +100,7 @@ OAN_FIELDS: dict[str, dict[str, tuple]] = {
     "HouseholdMember": {
         "odk_member_id": (String, str),  # the ODK Member ID, as an attribute
         "birth_date_ec": (String, str),  # Ethiopian calendar twin of birth_date
-        # A member's own land certificate, as COSS kept it.
+        # A member's own land certificate, as the legacy registry kept it.
         "certificate_storage_id": (Text, str),
         "certificate_provided": (Boolean, bool),
     },

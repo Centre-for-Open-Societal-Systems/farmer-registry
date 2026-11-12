@@ -6,7 +6,7 @@ securityContext:
   runAsUser: 65534
 containers:
   - name: odk-geo-sync
-    image: {{ include "coss.image" $v.image | quote }}
+    image: {{ include "oan.image" $v.image | quote }}
     env:
       - name: MDS_API_URL
         value: {{ tpl $v.masterData.apiUrl . | quote }}

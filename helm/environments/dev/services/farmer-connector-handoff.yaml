@@ -19,6 +19,6 @@ istio:
   virtualservice:
     enabled: true
     gateway: internal
-cossCutover:
+oanCutover:
   phase: active
   checkpointBackupHash: 261ca69a23e704d7c80b25a2420ad955eba6063323ceaf88f7e9d2f6e2c3270c

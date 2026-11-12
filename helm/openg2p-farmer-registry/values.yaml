@@ -326,7 +326,7 @@ dashboardApi:
       memory: 256Mi
     limits:
       memory: 512Mi
-cossAddons:
+oanAddons:
   components:
     - name: registry-connector
       repository: https://github.com/OpenG2P/registry-connector.git

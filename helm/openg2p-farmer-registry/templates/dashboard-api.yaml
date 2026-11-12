@@ -58,7 +58,7 @@ spec:
       {{- end }}
       containers:
         - name: dashboard-api
-          image: {{ include "coss.image" $image | quote }}
+          image: {{ include "oan.image" $image | quote }}
           imagePullPolicy: {{ $image.pullPolicy | default "IfNotPresent" }}
           {{/* The image's own CMD, with the worker count made configurable.
                Each worker holds its own asyncpg pool (dbPool.minSize open,

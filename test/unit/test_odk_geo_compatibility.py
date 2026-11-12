@@ -1,4 +1,4 @@
-"""Offline compatibility checks using the checked-in COSS hierarchy, never a DB."""
+"""Offline compatibility checks using the checked-in legacy OAN (Gen1) hierarchy, never a DB."""
 
 import copy
 import importlib.util
@@ -58,10 +58,10 @@ def test_real_cli_exact_catalog_and_references_are_read_only(tmp_path, canonical
     assert result.returncode == 0, result.stderr or result.stdout
     report = json.loads(result.stdout)
     assert report["compatible"] is True
-    assert report["catalog"]["counts_by_level"] == report["catalog"]["expected_coss_counts"] == {
+    assert report["catalog"]["counts_by_level"] == report["catalog"]["expected_oan_counts"] == {
         "region": 14, "zone": 125, "woreda": 1379, "kebele": 19535,
     }
-    assert report["references"]["exact_coss_ids"] == {"groups": 3, "records": 12}
+    assert report["references"]["exact_oan_ids"] == {"groups": 3, "records": 12}
     assert report["references"]["tables"] == 2
     assert "geo_lowest_level_value_id" not in result.stdout
     assert "ET010103201001" not in result.stdout
@@ -115,7 +115,7 @@ def test_candidates_preserve_zeros_and_exceptional_woreda_without_guessing(tmp_p
     code, report = run_cli(tmp_path, capsys, canonical, refs)
     assert code == 1 and report["catalog"]["compatible"] is True
     summary = report["references"]
-    assert summary["exact_coss_ids"] == {"groups": 1, "records": 11}
+    assert summary["exact_oan_ids"] == {"groups": 1, "records": 11}
     assert summary["legacy_et_pcode_candidates"] == {"groups": 4, "records": 17}
     assert summary["unmappable"] == {"groups": 5, "records": 101}
     assert summary["records"] == 129
@@ -143,10 +143,10 @@ def test_labels_and_valid_but_wrong_parents_are_incompatible(catalog):
 
 def test_equal_counts_do_not_hide_wrong_ids(catalog):
     kebele = next(r for r in catalog["values"] if r["level_id"] == "level-kebele")
-    kebele["level_value_id"] = "kebele-not-a-coss-id"
+    kebele["level_value_id"] = "kebele-not-an-oan-id"
     report = audit.audit(catalog, [])
     assert not report["compatible"]
-    assert report["catalog"]["counts_by_level"] == report["catalog"]["expected_coss_counts"]
+    assert report["catalog"]["counts_by_level"] == report["catalog"]["expected_oan_counts"]
     assert report["catalog"]["values"]["missing_ids"] == 1
     assert report["catalog"]["values"]["extra_ids"] == 1
 
@@ -240,7 +240,7 @@ def test_same_reference_id_in_different_tables_is_not_a_duplicate(canonical):
     report = audit.audit(canonical, [reference("region-ET01", 2, "first_table"),
                                      reference("region-ET01", 3, "second_table")])
     assert report["compatible"]
-    assert report["references"]["exact_coss_ids"] == {"groups": 2, "records": 5}
+    assert report["references"]["exact_oan_ids"] == {"groups": 2, "records": 5}
 
 
 @pytest.mark.parametrize("raw", [

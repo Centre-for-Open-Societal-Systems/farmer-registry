@@ -222,7 +222,7 @@ def promoted(record):
     remote = 'https://github.com/Centre-for-Open-Societal-Systems/farmer-registry.git'
     refs = dict((ref, commit) for commit, ref in (line.split() for line in command(['git', 'ls-remote', remote, 'refs/heads/develop', 'refs/heads/staging']).splitlines()))
     if refs.get('refs/heads/staging') != sha or command(['git', 'rev-parse', 'HEAD']).strip() != sha:
-        raise ValueError('Reset requires the current promoted COSS staging checkout')
+        raise ValueError('Reset requires the current promoted OAN staging checkout')
     for target in (sha, refs['refs/heads/develop']):
         command(['git', 'merge-base', '--is-ancestor', implementation, target])
     command(['git', 'diff', '--exit-code', implementation, sha, '--',
