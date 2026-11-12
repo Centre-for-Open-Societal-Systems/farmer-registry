@@ -1,0 +1,89 @@
+{{/*
+Farmer sample-data loader (docker/db-seed/load_sample_data.py), run as this chart's own hook Job.
+
+The loader needs Master Data's API settings and the public staff IAM URL. The platform's db-seed
+Job (openg2p-registry 1.2.x) does not pass them and has no setting for extra environment. Helm 3
+does not post-render hooks, so they cannot be added to that Job afterwards either. This Job runs the
+same Farmer db-seed image after it (weight 20 > 10) with every setting the loader reads, the way
+reporting-views.yaml runs the reporting step. In the platform Job the same loader finds no Master
+Data settings, prints SKIPPED and exits 0.
+
+Rendered only when registry.dbSeed.loadSampleData is true (the LOAD_SAMPLE_DATA build option); the
+render fails if a setting would be empty.
+*/}}
+{{- $seed := .Values.registry.dbSeed | default dict }}
+{{- if $seed.loadSampleData }}
+{{- $platform := .Subcharts.registry.Values }}
+{{- $intake := $seed.intakeSeed | default dict }}
+{{- $staffUi := .Values.registry.staffUi | default dict }}
+{{- $settings := dict
+  "MDS_API_URL" (tpl (.Values.global.masterDataApiUrl | default "") .)
+  "MDS_TOKEN_URL" (tpl (.Values.global.masterDataTokenUrl | default "") .)
+  "MDS_CLIENT_ID" (tpl (.Values.global.authClientId | default "") .)
+  "STAFF_IAM_URL" (tpl ($staffUi.iamPublicUrl | default "") .)
+  "INTAKE_SEED_PASSWORD" ($platform.global.aweApproverUserPassword | default "" | toString) }}
+{{- range $name, $value := $settings }}
+{{- if not $value }}
+{{- fail (printf "registry.dbSeed.loadSampleData is true but the sample loader's %s would be empty" $name) }}
+{{- end }}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-sample-data-loader
+  labels:
+    app.kubernetes.io/name: sample-data-loader
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "20"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sample-data-loader
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      restartPolicy: Never
+      {{- with $platform.global.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: sample-data-loader
+          image: {{ printf "%s:%s" $seed.image.repository $seed.image.tag | quote }}
+          command: ["python3", "/seed/load_sample_data.py"]
+          env:
+            - name: PGHOST
+              value: {{ tpl .Values.global.postgresqlHost $ | quote }}
+            - name: PGPORT
+              value: {{ .Values.global.registryDBPort | quote }}
+            - name: PGDATABASE
+              value: {{ tpl .Values.global.registryDB $ | quote }}
+            - name: PGUSER
+              value: {{ tpl .Values.global.registryDBUser $ | quote }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ tpl .Values.global.registryDBSecret $ | quote }}
+                  key: {{ tpl .Values.global.registryDBUserPasswordKey $ | quote }}
+            {{- include "fr.mdsApiEnv" . | nindent 12 }}
+            - name: STAFF_API_URL
+              value: {{ printf "http://%s-staff-portal-api:%v" .Release.Name ($platform.staffApi.service.port | default 80) | quote }}
+            - name: STAFF_IAM_URL
+              value: {{ get $settings "STAFF_IAM_URL" | quote }}
+            - name: INTAKE_SEED_SUBMIT_USER
+              value: {{ $intake.submitUser | default "alex.carter" | quote }}
+            - name: INTAKE_SEED_APPROVER_1
+              value: {{ $intake.approver1 | default "alex.carter" | quote }}
+            - name: INTAKE_SEED_APPROVER_2
+              value: {{ $intake.approver2 | default "nina.patel" | quote }}
+            - name: INTAKE_SEED_PASSWORD
+              value: {{ get $settings "INTAKE_SEED_PASSWORD" | quote }}
+          {{- with $seed.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

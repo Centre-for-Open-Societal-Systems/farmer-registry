@@ -330,7 +330,10 @@ oanAddons:
   components:
     - name: registry-connector
       repository: https://github.com/OpenG2P/registry-connector.git
-      sourceBranch: develop
+      # The release runs this upstream commit, the last one with the api/ chart and Dockerfile layout. Upstream
+      # moved packaging to docker/ and deployments/charts/registry-connector (chart renamed, DB names derived
+      # from the release name); moving to it is its own change, made against the live release values.
+      sourceCommit: bc565efd47c129ff0ce25809bd946afc2b5e70f5
       dockerfile: api/Dockerfile
       context: api
       chart: api/deploy/charts/openg2p-connector
@@ -510,3 +513,33 @@ registrantAuth:
   resources:
     requests: {cpu: 25m, memory: 64Mi}
     limits: {memory: 256Mi}
+
+# Sample approvers sign in with registry.global.aweApproverUserPassword (the platform default, `pass`).
+# keycloak-init creates them with it as a temporary password and never updates an existing user; this
+# post-install/upgrade hook makes it the permanent password for the users listed here
+# (templates/sample-approver-password.yaml). An empty aweApproverUserPassword turns it off.
+sampleApproverPassword:
+  enabled: true
+  realm: staff
+  users:
+    - alex.carter
+    - nina.patel
+  image: python:3.11.14-slim
+  imagePullSecrets: []
+  waitSeconds: 600
+
+
+# Pull secret for the ECR images, created before install/upgrade by a hook Job
+# and refreshed by a CronJob from the node's IAM role (ECR tokens last 12 h).
+# Pods use it through the ServiceAccounts named in serviceAccounts, which the
+# job patches to list the secret (the openg2p-registry subchart pods and seed
+# jobs run as "default"). global.imagePullSecrets is not used for this: with
+# the pinned subchart it renders invalid Deployment YAML.
+ecrPullSecret:
+  enabled: false
+  name: ""                 # default: <release>-ecr-pull-secret
+  registry: ""             # required when enabled: <account>.dkr.ecr.<region>.amazonaws.com
+  serviceAccounts: []      # ServiceAccounts to patch with the secret, e.g. [default]
+  schedule: "0 */6 * * *"
+  awsCliImage: amazon/aws-cli:2.36.43
+  kubectlImage: alpine/k8s:1.31.1

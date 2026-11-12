@@ -1,0 +1,30 @@
+# Connector definitions of the farmer-registry-connector release on staging (namespace farmer), applied by the
+# farmer-connector-definitions release (helm/farmer-connector-definitions) after every services deploy. Git is
+# the source of truth: each deploy creates or PATCHes these rows by name. Secret values are never here; they
+# are named and read from Kubernetes Secrets.
+adminAuth:
+  tokenUrl: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
+definitions:
+  # Staging had no definition rows. The staging ODK Central serves the farmer form in project 1.
+  - name: Farmer Registry - ODK Central Ingestion
+    platform: odk_central
+    transport_type: odk_central
+    data_model_mnemonic: ODK_TO_FARMER_INTAKE
+    g2p_sender_id: farmer-partner
+    g2p_register_mnemonic: Farmer
+    auth_type: odk_session
+    # Staging Master Data serves the ETH-OAN pack geography (21,037 units, the same pack as New Dev), so the
+    # P-codes the form submits resolve; the definition polls.
+    paused: false
+    auth_secret_from:
+      email: {secret: farmer-odk-central-credentials, key: email}
+      password: {secret: farmer-odk-central-credentials, key: password}
+    source_config:
+      base_url: https://odk-central.qa.oanstaging.com
+      project_id: 1
+      form_id: farmer_profile
+      resolve_nav_links: true
+      strict_incremental: false
+      poll_interval_seconds: 30
+      target_url: http://farmer-registry-partner-api:8000/partner/ingest_data
+      target_headers: {partner-id: farmer-partner, Content-Type: application/json}

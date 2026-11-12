@@ -1,24 +1,24 @@
 # Staging counterpart of ../dev/farmer-identity.yaml: the same OAN chart values with the staging
-# hosts (base domain oanstaging.com, no .development label). Merged over the reviewed environment
+# hosts (base domain qa.oanstaging.com: .qa in place of .development). Merged over the reviewed environment
 # values by ci/deploy/deployment.py; do not install this file by itself. Commons IAM's provider 1
 # must be configured for this SAME realm by its owning release.
 global:
-  keycloakBaseUrl: https://keycloak.oanstaging.com
+  keycloakBaseUrl: https://keycloak.qa.oanstaging.com
   keycloakRealm: staff
-  keycloakIssuerUrl: https://keycloak.oanstaging.com/realms/staff
+  keycloakIssuerUrl: https://keycloak.qa.oanstaging.com/realms/staff
 registry:
   staffUi:
-    iamPublicUrl: https://staff-iam.oanstaging.com
+    iamPublicUrl: https://staff-iam.qa.oanstaging.com
     envVars:
-      IAM_URL: https://staff-iam.oanstaging.com
-      KEYCLOAK_LOGOUT_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/logout
+      IAM_URL: https://staff-iam.qa.oanstaging.com
+      KEYCLOAK_LOGOUT_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/logout
       LOGIN_PROVIDER_ID: '1'
   staffApi:
     envVars:
       REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_ID: farmer-registry-staff-portal
       REGISTRY_STAFF_PORTAL_API_AUTH_PROVIDER_API_URL: http://commons-services-iam-staff-portal-api.commons.svc.cluster.local
-      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
-      REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_STAFF_PORTAL_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
     envVarsFrom:
       REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_SECRET:
         secretKeyRef:
@@ -30,9 +30,9 @@ registry:
       REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_ID: farmer-registry-staff-portal
       # Staging never accepts unsigned partner traffic; the pipeline checks this is rendered.
       REGISTRY_PARTNER_API_SIGNATURE_VALIDATION_ENABLED: 'true'
-      REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
-      REGISTRY_PARTNER_API_KEYMANAGER_AUTH_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
-      REGISTRY_PARTNER_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_MASTER_DATA_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_KEYMANAGER_AUTH_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_PARTNER_API_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
     envVarsFrom:
       REGISTRY_PARTNER_API_MASTER_DATA_CLIENT_SECRET:
         secretKeyRef:
@@ -42,10 +42,10 @@ registry:
   celeryWorker:
     envVars:
       REGISTRY_CELERY_WORKERS_MASTER_DATA_CLIENT_ID: farmer-registry-staff-portal
-      REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL: https://keycloak.oanstaging.com
-      REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
-      REGISTRY_CELERY_WORKERS_MASTER_DATA_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
-      REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_ISSUER_BASE_URL: https://keycloak.qa.oanstaging.com
+      REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_MASTER_DATA_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
+      REGISTRY_CELERY_WORKERS_PARTNER_MGMT_ADMIN_TOKEN_URL: https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token
     envVarsFrom:
       REGISTRY_CELERY_WORKERS_MASTER_DATA_CLIENT_SECRET:
         secretKeyRef:

@@ -1,0 +1,7 @@
+// Operator job entry point: the Script Path of the operator multibranch job (see ci/pipelines/operator.groovy).
+def operator
+node {
+    checkout scm
+    operator = load('ci/pipelines/operator.groovy')
+}
+operator.call()

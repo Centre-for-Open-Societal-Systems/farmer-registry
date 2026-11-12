@@ -8,7 +8,7 @@ from test_jenkins_deployment import ECR, TAG, deployment, release
 
 def test_prepare_repairs_saved_dev_routes_and_approved_service_binding(release):
     reference = {"secretKeyRef": {"name": "existing-client", "key": "client_secret"}}
-    values = {"global": {"registryHostname": "farmer-registry-development.oanstaging.com"},
+    values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com"},
               "registry": {"staffApi": {"envVars": {
                   "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_API_URL": "http://wrong-namespace",
                   "REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_ID": "existing-client"},
@@ -18,7 +18,7 @@ def test_prepare_repairs_saved_dev_routes_and_approved_service_binding(release):
     prepared = deployment.prepare(values, release[0], ECR, TAG)
     staff = prepared["registry"]["staffApi"]
     assert staff["envVars"]["REGISTRY_STAFF_PORTAL_API_MASTER_DATA_API_URL"] == "http://commons-services-master-data-api.commons.svc.cluster.local"
-    assert staff["envVars"]["REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL"].startswith("https://keycloak-development.oanstaging.com/")
+    assert staff["envVars"]["REGISTRY_STAFF_PORTAL_API_MASTER_DATA_TOKEN_URL"].startswith("https://keycloak.development.oanstaging.com/")
     assert staff["envVars"]["REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_ID"] == "farmer-registry-staff-portal"
     assert staff["envVarsFrom"]["REGISTRY_STAFF_PORTAL_API_MASTER_DATA_CLIENT_SECRET"] == {
         "secretKeyRef": {"name": "farmer-registry-staff-portal", "key": "client_secret", "optional": False}}
@@ -29,7 +29,7 @@ def test_prepare_repairs_saved_dev_routes_and_approved_service_binding(release):
     assert "keycloakBaseUrl" not in prepared["global"]
     assert deployment.location_overlay("staging-legacy") == {}
     staged = deployment.location_overlay("staging")
-    assert staged["global"]["masterDataTokenUrl"] == "https://keycloak.oanstaging.com/realms/staff/protocol/openid-connect/token"
+    assert staged["global"]["masterDataTokenUrl"] == "https://keycloak.qa.oanstaging.com/realms/staff/protocol/openid-connect/token"
     assert "development" not in str(staged)
 
 

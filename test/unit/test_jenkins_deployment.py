@@ -160,8 +160,8 @@ def test_identity_values_are_applied_only_when_requested(release):
     assert "keycloakBaseUrl" not in default["global"]
     result = deployment.prepare(values, release[0], ECR, TAG, migrate_identity=True)
     assert result["global"]["keycloakRealm"] == "staff"
-    assert result["global"]["keycloakBaseUrl"] == "https://keycloak-development.oanstaging.com"
-    assert result["registry"]["staffUi"]["envVars"]["IAM_URL"] == "https://staff-iam-development.oanstaging.com"
+    assert result["global"]["keycloakBaseUrl"] == "https://keycloak.development.oanstaging.com"
+    assert result["registry"]["staffUi"]["envVars"]["IAM_URL"] == "https://staff-iam.development.oanstaging.com"
 
 
 def test_registry_provenance_rejects_wrong_or_missing_image_digest(tmp_path, monkeypatch):
@@ -181,15 +181,15 @@ def test_registry_provenance_rejects_wrong_or_missing_image_digest(tmp_path, mon
 def test_prepare_retains_values_and_worker_awe_secrets(release):
     values = {"global": {"registryHostname": "registry.farmer-dev.oanstaging.com"},
               "dashboardApi": {"image": {"tag": "existing"}},
-              "registry": {"staffUi": {"envVars": {"COOKIE_DOMAIN": ".oanstaging.com"}}}}
+              "registry": {"staffUi": {"envVars": {"COOKIE_DOMAIN": ".qa.oanstaging.com"}}}}
     result = deployment.prepare(values, release[0], ECR, TAG)
     assert "celeryWorker" not in values["registry"], "Must not mutate source values"
     worker = result["registry"]["celeryWorker"]
     assert worker["envVars"]["REGISTRY_CELERY_WORKERS_AWE_BASE_URL"] == "http://commons-services-awe"
     assert worker["envVarsFrom"]["REGISTRY_CELERY_WORKERS_AWE_CLIENT_SECRET"]["secretKeyRef"]["key"] == "client_secret"
     assert result['dashboardApi']['image'] == {'repository': 'independent/dashboard', 'tag': 'existing', 'digest': None}
-    assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".oanstaging.com"
-    assert result["registry"]["dbSeed"]["loadSampleData"] is False  # the sample loader stays off on dev too
+    assert result["registry"]["staffUi"]["envVars"]["COOKIE_DOMAIN"] == ".qa.oanstaging.com"
+    assert result["registry"]["dbSeed"]["loadSampleData"] is True  # sample farmers on New Dev, as Crop and Livestock
     assert result["registry"]["dbSeed"]["loadImages"] is False
     assert result["registry"]["sanity"]["runE2e"] is False
     assert result["analytics"]["reportingViews"]["generate"] is False
@@ -197,7 +197,7 @@ def test_prepare_retains_values_and_worker_awe_secrets(release):
 
 @pytest.mark.parametrize("hostname", [
     "registry.farmer-dev.oanstaging.com",
-    "farmer-registry-development.oanstaging.com",
+    "farmer-registry.development.oanstaging.com",
     "farmer-registry.development.oanstaging.com",
 ])
 def test_dev_hostnames_are_accepted(release, hostname):
@@ -284,13 +284,21 @@ def test_wrong_image_commit_is_rejected(release):
         deployment.validate(before, after, ECR, TAG)
 
 
-@pytest.mark.parametrize("loader", ["LOAD_GEO_DATA", "LOAD_SAMPLE_DATA", "LOAD_IMAGES"])
+@pytest.mark.parametrize("loader", ["LOAD_GEO_DATA", "LOAD_IMAGES"])
 def test_demo_seed_is_rejected(release, loader):
     before, after = release
     seed = next(d for d in after if d["metadata"]["name"] == "farmer-registry-db-seed")
     deployment.pod(seed)["containers"][0]["env"].append({"name": loader, "value": "true"})
     with pytest.raises(ValueError, match="loader"):
         deployment.validate(before, after, ECR, TAG)
+
+
+def test_sample_loader_is_allowed_on_new_dev(release):
+    # New Dev loads the sample farmers on every deploy (prepare sets dbSeed.loadSampleData there only)
+    before, after = release
+    seed = next(d for d in after if d["metadata"]["name"] == "farmer-registry-db-seed")
+    deployment.pod(seed)["containers"][0]["env"].append({"name": "LOAD_SAMPLE_DATA", "value": "true"})
+    deployment.validate(before, after, ECR, TAG)
 
 
 def test_dashboard_image_is_not_silently_upgraded(release):
@@ -308,11 +316,11 @@ def test_dev_values_enable_registrant_authentication_with_the_dev_hosts(release)
     assert result["registrantAuth"]["esignetBaseUrl"] == "https://esignet.development.oanstaging.com"
     assert result["registrantAuth"]["callbackUrl"].endswith("/registrant-auth/callback")
     staged = deployment.prepare(
-        {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}, before, ECR, TAG,
+        {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com"}}, before, ECR, TAG,
         environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
     assert staged["registrantAuth"]["enabled"] is True
-    assert staged["registrantAuth"]["esignetBaseUrl"] == "https://esignet.oanstaging.com"
-    assert staged["registrantAuth"]["callbackUrl"] == "https://staff-farmer.oanstaging.com/registrant-auth/callback"
+    assert staged["registrantAuth"]["esignetBaseUrl"] == "https://esignet.qa.oanstaging.com"
+    assert staged["registrantAuth"]["callbackUrl"] == "https://staff-farmer.qa.oanstaging.com/registrant-auth/callback"
 
 
 def test_dev_values_sign_dci_responses_with_the_chart_generated_key(release):
@@ -328,7 +336,28 @@ def test_dev_values_sign_dci_responses_with_the_chart_generated_key(release):
     assert [v["secret"]["secretName"] for v in partner["extraVolumes"]] == ["farmer-registry-dci-signing"]
     assert all(m["readOnly"] for m in partner["extraVolumeMounts"])
     staged = deployment.prepare(
-        {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}, before, ECR, TAG,
+        {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com"}}, before, ECR, TAG,
         environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
     assert staged["dciSigning"] == {"enabled": True, "kid": "farmer-registry-dci-rsa"}
     assert staged["registry"]["partnerApi"]["envVars"]["REGISTRY_PARTNER_API_CRYPTO_SIGNING_KEY_PATH"].startswith("/etc/dci-signing/")
+
+
+def test_both_environments_keep_their_own_ecr_pull_secret(release):
+    before, _ = release
+    wanted = {"enabled": True, "registry": "379220350808.dkr.ecr.ap-south-1.amazonaws.com", "serviceAccounts": ["default"]}
+    dev = deployment.prepare({"global": {"registryHostname": "farmer-registry.development.oanstaging.com"}}, before, ECR, TAG)
+    assert dev["ecrPullSecret"] == wanted
+    staged = deployment.prepare(
+        {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com"}}, before, ECR, TAG,
+        environment="staging", images={c: {"tag": TAG, "digest": "sha256:" + "b" * 64} for _, _, c in deployment.COMPONENTS.values()})
+    assert staged["ecrPullSecret"] == wanted
+
+
+def test_the_ecr_refresher_is_a_reviewed_new_resource(release):
+    before, after = release
+    for kind in ('ServiceAccount', 'Role', 'RoleBinding', 'CronJob'):
+        after.append({'kind': kind, 'metadata': {'name': 'farmer-registry-ecr-refresh'}})
+    deployment.validate(before, after, ECR, TAG)
+    after.append({'kind': 'CronJob', 'metadata': {'name': 'farmer-registry-other-job'}})
+    with pytest.raises(ValueError, match='Unexpected persistent resource'):
+        deployment.validate(before, after, ECR, TAG)

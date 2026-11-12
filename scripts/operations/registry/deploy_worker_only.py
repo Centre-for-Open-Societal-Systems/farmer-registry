@@ -14,7 +14,7 @@ RELEASE = "farmer-registry"
 NAMESPACE = "farmer"
 WORKER = ("Deployment", "farmer-registry-celery-worker")
 TOKEN_NAME = "REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL"
-TOKEN_URL = "https://keycloak-development.oanstaging.com/realms/staff/protocol/openid-connect/token"
+TOKEN_URL = "https://keycloak.development.oanstaging.com/realms/staff/protocol/openid-connect/token"
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import approved_chart
@@ -87,7 +87,7 @@ def main():
     if status.get("info", {}).get("status") != "deployed":
         raise ValueError("Existing deployed Farmer release required")
     values = yaml.safe_load(command(["helm", "get", "values", RELEASE, *helm, "-o", "yaml"]))
-    if values.get("global", {}).get("registryHostname") != "farmer-registry-development.oanstaging.com":
+    if values.get("global", {}).get("registryHostname") != "farmer-registry.development.oanstaging.com":
         raise ValueError("This rollout targets only the verified dev Farmer release")
     before = list(yaml.safe_load_all(command(["helm", "get", "manifest", RELEASE, *helm])))
     listed = json.loads(command(["helm", "list", *helm, "--filter", "^farmer-registry$", "-o", "json"]))

@@ -26,7 +26,8 @@ else
   test -f "$kubectl_binary"
   args+=(-v "$kubectl_binary:/usr/local/bin/kubectl:ro")
 fi
-for variable in KUBECONFIG DEV_MANIFEST DEV_ACCEPTANCE; do
+# OAN_BUILT_CHART_PIN: built-chart/pin.json of this build; its archive sits next to it under the mounted workspace.
+for variable in KUBECONFIG DEV_MANIFEST DEV_ACCEPTANCE OAN_BUILT_CHART_PIN; do
   value=${!variable:-}
   if [[ -n "$value" ]]; then
     test -f "$value"

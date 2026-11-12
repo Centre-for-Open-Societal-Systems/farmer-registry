@@ -1,16 +1,22 @@
+{#- Retired: nothing is bound to this template any more. The Farmer registry publishes
+    farmer_registry_farmer_profile_changed_v1.j2 (event farmer-registry.farmer-profile.changed.v1).
+    Kept so rows that still name it resolve. -#}
 {#- The notice Crop and Livestock receive when a farmer change is approved
     (WebSub topic oan.farmer-reference.changed.v1). It names the farmer only;
     receivers fetch the details, the photo included, through the signed DCI
     search. The event id carries the latest approval of the farmer or of one
     of its phone numbers, the same time the DCI farmer_reference block gives
-    as approved_at, so a phone-only change is a new event too. -#}
+    as approved_at, so a phone-only change is a new event too. It also carries
+    the functional id: a farmer's first notice can leave with the platform's
+    TEMP- placeholder, and the re-publish with its FR- id (fr_id_republish.py)
+    must not share that notice's event id. -#}
 {%- set identifier = (expanded.foundational_id or '') | string | replace(' ', '') -%}
 {%- set latest = namespace(approved=(expanded.last_approved_at or '') | string) -%}
 {%- for item in expanded.farmer_phone or [] -%}
 {%- if (item.last_approved_at or '') | string > latest.approved -%}{%- set latest.approved = item.last_approved_at | string -%}{%- endif -%}
 {%- endfor -%}
 {
-  "event_id": {{ ((expanded.internal_record_id | string) ~ ':' ~ latest.approved) | tojson }},
+  "event_id": {{ ((expanded.internal_record_id | string) ~ ':' ~ latest.approved ~ ':' ~ (expanded.functional_record_id or '') | string) | tojson }},
   "event_type": "farmer_reference.changed.v1",
   "farmer_id": {{ expanded.functional_record_id | tojson }}
   {%- if identifier | length == 16 %},

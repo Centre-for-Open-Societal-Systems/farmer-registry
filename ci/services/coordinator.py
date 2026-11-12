@@ -47,6 +47,9 @@ class SkipService(Exception):
     pass
 
 
+DOCKER_STEPS = ("build", "run", "push", "pull", "exec", "network")
+
+
 def command(args, cwd=None, input=None):
     # No shell expansion; Git/Helm output may contain credentials or private values.
     try:
@@ -58,13 +61,17 @@ def command(args, cwd=None, input=None):
     if result.returncode:
         if re.search(r"AccessDenied|Unauthorized|forbidden|authentication failed|permission denied", result.stderr, re.I):
             raise ServiceError("tool-authentication-or-authorization-failed")
-        if "RepositoryNotFoundException" in result.stderr:
+        # docker push answers a missing ECR repository with "name unknown" rather than the AWS exception name.
+        if "RepositoryNotFoundException" in result.stderr or re.search(r"name unknown|repository with name \S+ does not exist", result.stderr, re.I):
             raise ServiceError("image-repository-missing")
         if Path(args[0]).stem == "helm":
             from deployment import upgrade_diagnostic
             raise ServiceError("command-failed-helm", {
                 "diagnostics": upgrade_diagnostic(result.stdout + "\n" + result.stderr),
             })
+        if Path(args[0]).name == "docker" and len(args) > 1 and args[1] in DOCKER_STEPS:
+            # A fixed word from our own arguments, never tool output, so a failed image build, test run or push can be told apart.
+            raise ServiceError("command-failed-docker-" + args[1])
         raise ServiceError("command-failed-" + Path(args[0]).name)
     return result.stdout
 
@@ -140,6 +147,8 @@ def branch(environment, component):
 
 def checkout(component, environment, destination, run=command, commit=None):
     repo = component["repository"]
+    # A component may pin an exact upstream commit (sourceCommit) instead of following a branch.
+    commit = commit or component.get("sourceCommit")
     if commit is None:
         wanted = branch(environment, component)
         # ls-remote --exit-code returns 2 ONLY for no matching reference.
@@ -254,6 +263,14 @@ def selected_chart(component, environment, source):
             yield chart, provenance_hash(provenance), provenance
 
 
+def built_chart_archive(name):
+    """The archive next to OAN_BUILT_CHART_PIN (built-chart/ of ci/deploy/package_chart.py), by its exact name."""
+    archive = Path(os.environ.get("OAN_BUILT_CHART_PIN", "")).with_name(name)
+    if not os.environ.get("OAN_BUILT_CHART_PIN") or not archive.is_file():
+        raise ValueError("Built chart archive missing")
+    return archive
+
+
 def prepare_dashboard_chart(state, values, before, installed_chart):
     """Render the installed OAN chart with its existing bounded compatibility fixes."""
     from oan_chart import profile, verify
@@ -264,8 +281,12 @@ def prepare_dashboard_chart(state, values, before, installed_chart):
         raise ServiceError("dashboard-api-installed-chart-mismatch")
     archive = state / (pin["name"] + "-" + pin["version"] + ".tgz")
     try:
-        with urllib.request.urlopen(pin["repository"] + archive.name, timeout=30) as response:
-            content = response.read(20 * 1024 * 1024 + 1)
+        if "repository" in pin:
+            with urllib.request.urlopen(pin["repository"] + archive.name, timeout=30) as response:
+                content = response.read(20 * 1024 * 1024 + 1)
+        else:
+            # A develop build's own chart (OAN_BUILT_CHART_PIN) is not published yet: read the archive it packaged.
+            content = built_chart_archive(archive.name).read_bytes()
         if len(content) > 20 * 1024 * 1024:
             raise ValueError("Chart archive too large")
         archive.write_bytes(content)
@@ -332,6 +353,20 @@ def image_repository(component, suffix):
     return component.get("imageRepository", "openg2p/farmer-registry/" + component["name"] + suffix)
 
 
+def ensure_image_repository(name, template, run):
+    """Create ECR repository `name` with the tag mutability, scan-on-push and encryption of `template`."""
+    settings = json.loads(run(["aws", "ecr", "describe-repositories", "--region", "ap-south-1",
+                               "--repository-names", template, "--output", "json"]))["repositories"][0]
+    encryption = settings.get("encryptionConfiguration") or {"encryptionType": "AES256"}
+    args = ["aws", "ecr", "create-repository", "--region", "ap-south-1", "--repository-name", name,
+            "--image-tag-mutability", settings.get("imageTagMutability", "MUTABLE"),
+            "--image-scanning-configuration",
+            "scanOnPush=" + str(bool(settings.get("imageScanningConfiguration", {}).get("scanOnPush"))).lower(),
+            "--encryption-configuration", "encryptionType=" + encryption["encryptionType"]
+            + (",kmsKey=" + encryption["kmsKey"] if encryption.get("kmsKey") else "")]
+    run(args)
+
+
 def build_image(component, role, spec, commit, source, registry, run, tag=None):
     suffix = "-" + role if component.get("images") else ""
     repository = registry + "/" + image_repository(component, suffix)
@@ -356,11 +391,19 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
         if role == "api" and runtime_test.is_file():
             run(["docker", "run", "--rm", "--network", "none", "--entrypoint", "python",
                  "-v", str(runtime_test) + ":/tests/test_media.py:ro", image, "/tests/test_media.py"])
-        if rehearsal.is_file():
+        # The schema rehearsal runs the connector's Python code; the UI role is a static web image without it.
+        if role == "api" and rehearsal.is_file():
             rehearsal_result = json.loads(run([sys.executable, str(rehearsal), image]).strip().splitlines()[-1])
             if not all(rehearsal_result.get(name) is True for name in ("schemaRerun", "failedDdlRolledBack", "failureRecovery", "duplicateSentOnce", "failedBoundaryRetried", "rollbackReconciled", "pollTimestampPersisted", "isolatedDatabases")):
                 raise ServiceError("connector-schema-rehearsal-failed")
-    pushed = run(["docker", "push", image])
+    try:
+        pushed = run(["docker", "push", image])
+    except ServiceError as error:
+        if str(error) != "image-repository-missing" or not suffix:
+            raise
+        # A role image (-api, -ui) whose repository was never made: create it like the component's own one, push again.
+        ensure_image_repository(image_repository(component, suffix), image_repository(component, ""), run)
+        pushed = run(["docker", "push", image])
     matches = re.findall(r"digest: (sha256:[0-9a-f]{64})\b", pushed)
     if len(set(matches)) != 1:
         raise ServiceError("missing-pushed-digest")
@@ -542,6 +585,53 @@ def signing_preparation_before(before, after, environment="dev"):
     return result
 
 
+ADMIN_AUTH_ENV = {"issuer": "CONNECTOR_ADMIN_AUTH_ISSUER", "jwksUrl": "CONNECTOR_ADMIN_AUTH_JWKS_URL",
+                  "clientId": "CONNECTOR_ADMIN_AUTH_CLIENT_ID", "role": "CONNECTOR_ADMIN_AUTH_ROLE",
+                  "uiClientId": "CONNECTOR_ADMIN_AUTH_UI_CLIENT_ID"}
+
+
+def admin_auth_preparation_before(before, after, admin_auth):
+    """Allow only the reviewed connector admin login env (adminAuth, rendered by chart_signing) as a change.
+
+    The connector image refuses every admin route (503) until it knows its issuer, so the reviewed adminAuth
+    must reach the release even while it only takes image-only rollouts. Every container that renders any
+    CONNECTOR_ADMIN_AUTH_* entry must render exactly the reviewed five; the returned copy of the old manifest
+    carries them in the new order, so guard() still refuses any other configuration change.
+    """
+    if not admin_auth:
+        return before
+    if not isinstance(admin_auth, dict) or any(not isinstance(admin_auth.get(k), str) or not admin_auth[k].strip()
+                                               for k in ADMIN_AUTH_ENV):
+        raise ServiceError("connector-admin-auth-not-reviewed")
+    expected = {name: {"name": name, "value": admin_auth[key]} for key, name in ADMIN_AUTH_ENV.items()}
+    result = copy.deepcopy(before)
+    newer = {(d["kind"], d["metadata"]["name"]): d for d in after}
+    rendered = False
+    for document in result:
+        current = newer.get((document["kind"], document["metadata"]["name"]))
+        if document["kind"] != "Deployment" or current is None:
+            continue
+        olds = {c["name"]: c for c in pod(document).get("containers", [])}
+        for new in pod(current).get("containers", []):
+            env = {e["name"]: e for e in new.get("env", [])}
+            if not set(env) & set(expected):
+                continue
+            if any(env.get(name) != value for name, value in expected.items()):
+                raise ServiceError("connector-admin-auth-config-not-verified")
+            old = olds.get(new["name"])
+            if old is None:
+                continue
+            rendered = True
+            previous = {e["name"]: e for e in old.get("env", [])}
+            aligned = [expected[e["name"]] if e["name"] in expected else previous[e["name"]]
+                       for e in new.get("env", []) if e["name"] in expected or e["name"] in previous]
+            aligned += [e for e in old.get("env", []) if e["name"] not in env]
+            old["env"] = aligned
+    if not rendered:
+        raise ServiceError("connector-admin-auth-not-rendered")
+    return result
+
+
 def dashboard_auth(overrides):
     """Only reviewed dev authentication literals may accompany the API image."""
     auth = overrides.get("dashboardApi", {}).get("env", {})
@@ -708,10 +798,26 @@ def deploy(component, environment, record, source, registry, run=command):
             if component.get("allowInstall") is not True:
                 raise SkipService("no-existing-release")
             before, values = [], {}
-        if component.get("kind") == "connector" and values.get("oanCutover", {}).get("phase") == "active":
-            raise SkipService("active-connector-requires-accepted-image-rollout")
+        # A connector that is already serving (cutover phase active) takes image-only rollouts: guard()
+        # refuses any other change, the upgrade is atomic, and a failed smoke check rolls it back.
+        # Chart, values or hook changes still go through the accepted cutover (connector_cutover.py).
+        # A release installed before the rename still carries cossCutover in its saved values.
+        cutover = values.get("oanCutover") or values.get("cossCutover") or {}
+        active = component.get("kind") == "connector" and cutover.get("phase") == "active"
+        if active and not status:
+            raise ServiceError("active-connector-release-missing")
         auth = dashboard_auth(overrides) if approved_dashboard else None
-        merge(values, overrides)
+        if not active:
+            # An active connector keeps its live values; the reviewed overrides describe the paused
+            # cutover preparation (no replicas, no route) and would switch the serving connector off.
+            merge(values, overrides)
+        else:
+            # Values the live release needs because the pinned chart renders them differently from the
+            # chart it was installed with (for example the Istio gateway). Reviewed in the environment file.
+            merge(values, settings.get("activeValues") or {})
+            # The reviewed admin login (admin_auth_preparation_before lets exactly this env through guard()).
+            if component.get("kind") == "connector" and overrides.get("adminAuth"):
+                values["adminAuth"] = copy.deepcopy(overrides["adminAuth"])
         for role, spec in image_specs(component).items():
             selected = record["images"][role] if component.get("images") else record
             for value_path in spec["imageValues"]:
@@ -743,12 +849,14 @@ def deploy(component, environment, record, source, registry, run=command):
                 render_options = ["--no-hooks", "--post-renderer", str(renderer)]
             after = docs(run(["helm", "template", release, str(chart), *args, "-f", str(path),
                               "--dry-run=server", *render_options, *(["--is-upgrade"] if status else [])]))
-            guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" else before
+            guard_before = signing_preparation_before(before, after, environment) if component.get("kind") == "connector" and not active else before
+            if component.get("kind") == "connector":
+                guard_before = admin_auth_preparation_before(guard_before, after, overrides.get("adminAuth"))
             if embedded:
                 guard_dashboard_api(before, after, images["main"], namespace, auth=auth)
             else:
                 guard(guard_before, after, namespace, images.values(), release)
-            if component.get("kind") == "connector":
+            if component.get("kind") == "connector" and not active:
                 from connector_cutover import verify_backup
                 backup_dir = os.environ.get("CONNECTOR_BACKUP_DIRECTORY")
                 if not backup_dir or not (Path(backup_dir) / "backup.json").is_file():
@@ -762,7 +870,9 @@ def deploy(component, environment, record, source, registry, run=command):
             # unreviewed migrations/setup jobs during an optional image deployment.
             old_hooks = docs(run(["helm", "get", "hooks", release, *args])) if status and not embedded else []
             hooks = [d for d in after if d.get("metadata", {}).get("annotations", {}).get("helm.sh/hook")]
-            if hooks or old_hooks:
+            if active and hooks != old_hooks:
+                raise SkipService("active-connector-hook-change-requires-accepted-cutover")
+            if (hooks or old_hooks) and not active:
                 rehearsal(component, environment, record, overrides)
             if status:
                 current = json.loads(run(["helm", "status", release, *args, "-o", "json"]))
@@ -776,12 +886,43 @@ def deploy(component, environment, record, source, registry, run=command):
         if final.get("info", {}).get("status") != "deployed":
             raise ServiceError("release-not-deployed")
         final_manifest = docs(run(["helm", "get", "manifest", release, *args]))
+        if active:
+            try:
+                smoke_check(final_manifest, namespace, args, run)
+            except ServiceError:
+                run(["helm", "rollback", release, str(status["version"]), *args, "--wait", "--timeout", "10m"])
+                raise ServiceError("active-connector-smoke-check-failed-rolled-back") from None
         if embedded:
             guard_dashboard_api(before, final_manifest, images["main"], namespace, auth=auth)
         else:
-            guard(signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" else before,
-                  final_manifest, namespace, images.values(), release)
+            final_before = signing_preparation_before(before, final_manifest, environment) if component.get("kind") == "connector" and not active else before
+            if component.get("kind") == "connector":
+                final_before = admin_auth_preparation_before(final_before, final_manifest, overrides.get("adminAuth"))
+            guard(final_before, final_manifest, namespace, images.values(), release)
         return final["version"]
+
+
+def smoke_check(manifest, namespace, args, run):
+    """Every Deployment's readiness endpoint answers 2xx from inside its own pod after the rollout."""
+    checked = 0
+    for d in manifest:
+        if d.get("kind") != "Deployment" or not d.get("spec", {}).get("replicas", 1):
+            continue
+        for container in pod(d).get("containers", []):
+            probe = (container.get("readinessProbe") or container.get("livenessProbe") or {}).get("httpGet")
+            if not probe:
+                continue
+            port = probe.get("port")
+            if not isinstance(port, int):
+                port = next((p["containerPort"] for p in container.get("ports", []) if p.get("name") == port), None)
+            if not isinstance(port, int):
+                continue
+            url = "http://127.0.0.1:%d%s" % (port, probe.get("path", "/"))
+            run(["kubectl", "exec", "-n", namespace, "deploy/" + d["metadata"]["name"], "-c", container["name"], "--",
+                 "sh", "-c", "wget -q -O /dev/null %s || curl -fsS -o /dev/null %s || python -c \"import urllib.request;urllib.request.urlopen('%s', timeout=10)\"" % (url, url, url)])
+            checked += 1
+    if not checked:
+        raise ServiceError("active-connector-has-no-checkable-endpoint")
 
 
 def merge(target, overlay):

@@ -2,7 +2,10 @@ oanAddons:
   components:
   - name: registry-connector
     repository: https://github.com/OpenG2P/registry-connector.git
-    sourceBranch: develop
+    # The release runs this upstream commit, the last one with the api/ chart and Dockerfile layout. Upstream
+    # moved packaging to docker/ and deployments/charts/registry-connector (chart renamed, DB names derived
+    # from the release name); moving to it is its own change, made against the live release values.
+    sourceCommit: bc565efd47c129ff0ce25809bd946afc2b5e70f5
     dockerfile: api/Dockerfile
     context: api
     chart: api/deploy/charts/openg2p-connector

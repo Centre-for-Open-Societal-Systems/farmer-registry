@@ -1,17 +1,13 @@
 // A merge into staging promotes the chart develop built from this source tree: the same image digests, under an rc
 // version, deployed with the staging values. Nothing is built, and the build fails if develop never built this tree.
-// fresh-install and deploy are the manual actions that need protected rehearsal evidence.
+// fresh-install and deploy are operator actions (ci/pipelines/operator.groovy) that need protected rehearsal evidence.
 def call() {
     pipeline {
         agent any
-        options { skipDefaultCheckout(true); disableConcurrentBuilds(); timestamps(); timeout(time: 60, unit: 'MINUTES') }
+        options { skipDefaultCheckout(true); disableConcurrentBuilds(); retry(count: 2, conditions: [agent(), nonresumable()]); timestamps(); timeout(time: 60, unit: 'MINUTES') }
         parameters {
-            choice(name: 'DELIVERY_ACTION', choices: ['promote', 'validate-only', 'fresh-install', 'deploy'],
-                description: 'promote delivers the chart develop built from this source tree (ci/deploy/promote-staging.sh). validate-only checks the source and changes nothing. fresh-install backs up the staging registry databases to the protected backup target, removes the OAN release in namespace farmer if present, drops its databases and installs the pinned OAN chart on empty databases. deploy upgrades the existing OAN release. Either cluster action also needs DEPLOY_STAGING. The legacy far release is never touched.')
-            booleanParam(name: 'DEPLOY_STAGING', defaultValue: true,
-                description: 'Second guard: nothing reaches the staging cluster unless this is set together with a DELIVERY_ACTION other than validate-only.')
-            booleanParam(name: 'COORDINATE_SERVICES', defaultValue: false,
-                description: 'Release available staging dashboards and prepare the paused promoted connector.')
+            booleanParam(name: 'LOAD_SAMPLE_DATA', defaultValue: false,
+                description: 'Load the sample records (db-seed hook) during this staging deploy. Leave off for a clean registry.')
         }
         environment {
             DELIVERY_ENVIRONMENT = 'staging'
@@ -31,10 +27,10 @@ def call() {
                         if (!(env.SOURCE_COMMIT ==~ /[0-9a-f]{40}/)) { error('Invalid source commit') }
                         env.IMAGE_TAG = env.SOURCE_COMMIT.take(12)
                         // Both guards must agree before any cluster action; otherwise this build only validates.
-                        env.EFFECTIVE_ACTION = params.DEPLOY_STAGING ? params.DELIVERY_ACTION : 'validate-only'
+                        env.EFFECTIVE_ACTION = env.DELIVERY_ACTION ?: 'promote'
                         if (env.EFFECTIVE_ACTION == 'validate-only') {
                             currentBuild.description = 'VALIDATION ONLY - staging was not deployed'
-                            echo 'No cluster action (DEPLOY_STAGING=false or DELIVERY_ACTION=validate-only): this successful build validates source only.'
+                            echo 'No cluster action (operator action validate-only): this successful build validates source only.'
                         } else {
                             currentBuild.description = 'Staging ' + env.EFFECTIVE_ACTION + ' requested - acceptance pending'
                         }
@@ -50,7 +46,7 @@ def call() {
             }
             stage('Promote and deploy') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'promote' } }
-                agent { label 'vpn-agent2' }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     checkout scm
                     withCredentials([
@@ -61,11 +57,39 @@ def call() {
                         sh 'bash ci/deploy/promote-staging.sh'
                     }
                     script { currentBuild.description = 'Promoted to staging in namespace farmer' }
+                    // The loader never fails the upgrade (it always exits 0), so its SUMMARY line is printed here, and
+                    // the build is UNSTABLE when not every sample farmer is in the register.
+                    // The script does nothing unless LOAD_SAMPLE_DATA is on.
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                            sh 'bash ci/deploy/sample-data-summary.sh'
+                        }
+                    }
+                    // The connector release follows oan-helm's staging values on every promotion, as crop and livestock
+                    // upgrade theirs: the services deploy below is an operator action, so without this a values change
+                    // (the qa move) never reached the running connector. --atomic: a failed upgrade restores it and
+                    // fails the build. Runs before the definitions, which call the connector's admin API.
+                    withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                        sh 'bash ci/deploy/connector-staging.sh'
+                    }
+                    // The connector definitions declared in git (helm/environments/staging/farmer-connector-definitions.yaml),
+                    // applied on every promotion as crop and livestock apply theirs: the services deploy below is an
+                    // operator action, so without this a merge into staging never creates or updates them.
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                            sh 'bash ci/deploy/connector-definitions.sh staging'
+                        }
+                    }
+                    // The dashboard UI release follows oan-helm's staging values on every promotion, as crop and livestock
+                    // deliver theirs (ci/deploy/dashboard-staging.sh). --atomic: a failed upgrade restores it and fails the build.
+                    withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                        sh 'bash ci/deploy/dashboard-staging.sh'
+                    }
                 }
             }
             stage('Deploy (registry)') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION in ['deploy', 'fresh-install'] } }
-                agent { label 'vpn-agent2' }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     dir('staging-deployment') {
                         deleteDir()
@@ -119,7 +143,7 @@ def call() {
                 }
             }
             stage('Build (services)') {
-                when { expression { env.EFFECTIVE_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
+                when { expression { env.EFFECTIVE_ACTION == 'deploy' && env.COORDINATE_SERVICES == 'true' } }
                 steps {
                     catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
                         withCredentials([
@@ -139,12 +163,12 @@ def call() {
                             sh 'bash ci/services/run-container.sh build --environment staging --registry "$ECR_REGISTRY" --input "$DEV_MANIFEST" --acceptance "$DEV_ACCEPTANCE" --output service-outcomes/staging-build.json'
                         }
                     }
-                    stash name: 'staging-services', includes: 'helm/**,ci/**,scripts/**,integrations/**,service-outcomes/staging-build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
+                    stash name: 'staging-services', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/registry-connector-ui/**,service-outcomes/staging-build.json', excludes: 'helm/**/charts/**', useDefaultExcludes: false
                 }
             }
             stage('Deploy (services)') {
-                when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'deploy' && params.COORDINATE_SERVICES } }
-                agent { label 'vpn-agent2' }
+                when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'deploy' && env.COORDINATE_SERVICES == 'true' } }
+                agent { label 'oan-ci-deploy' }
                 steps {
                     dir('staging-services') {
                         deleteDir()
@@ -167,12 +191,38 @@ def call() {
                                 sh 'bash ci/services/run-container.sh deploy --environment staging --registry "$ECR_REGISTRY" --input service-outcomes/staging-build.json --acceptance "$DEV_ACCEPTANCE" --output service-outcomes/staging-deploy.json'
                             }
                         }
+                        // The connector definitions declared in git (helm/environments/staging/farmer-connector-definitions.yaml).
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                            withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                                sh 'bash ci/deploy/connector-definitions.sh staging'
+                            }
+                        }
                         archiveArtifacts artifacts: 'service-outcomes/*.json', allowEmptyArchive: true
                     }
                 }
             }
         }
-        post { always { archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true } }
+        post {
+            always { archiveArtifacts artifacts: 'service-outcomes/*.json,service-outcomes/*.tsv', allowEmptyArchive: true }
+            failure {
+            script {
+                // Mail the DevOps list and the commit author; a controller without SMTP must not hide the failure.
+                try {
+                    def author = ''
+                    try { author = sh(script: "git log -1 --pretty=format:'%ae'", returnStdout: true).trim() } catch (ignored) { author = '' }
+                    def recipients = ['simretyibeltal@gmail.com', 'pavanns.ns@gmail.com']
+                    if (author && !author.contains('noreply')) { recipients = [author] + recipients }
+                    mail(
+                        to: recipients.unique().join(', '),
+                        subject: "Build FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: "Farmer Registry staging build or deploy failed.\n\nJob:     ${env.JOB_NAME}\nBranch:  ${env.BRANCH_NAME}\nBuild:   #${env.BUILD_NUMBER}\nURL:     ${env.BUILD_URL}\nConsole: ${env.BUILD_URL}console\n\nJenkins"
+                    )
+                } catch (err) {
+                    echo "notification not sent: ${err.message}"
+                }
+            }
+        }
+        }
     }
 }
 return this

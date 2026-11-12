@@ -29,10 +29,15 @@ def test_existing_environment_requires_matching_namespace_and_hostname(environme
 
 def test_staging_promotes_automatically_and_keeps_the_rehearsed_manual_actions():
     pipeline = (ROOT / "ci/pipelines/staging.groovy").read_text(encoding="utf-8")
-    assert "name: 'DEPLOY_STAGING', defaultValue: true" in pipeline
-    assert "choices: ['promote', 'validate-only', 'fresh-install', 'deploy']" in pipeline
-    assert "params.DEPLOY_STAGING ? params.DELIVERY_ACTION : 'validate-only'" in pipeline
-    assert "HELM_NAMESPACE = 'farmer'" in pipeline and "label 'vpn-agent2'" in pipeline
+    # The one build option is LOAD_SAMPLE_DATA, default off; any other parameter is refused.
+    assert pipeline.count("booleanParam(") == 1 and "choice(name" not in pipeline and "string(name" not in pipeline
+    assert "booleanParam(name: 'LOAD_SAMPLE_DATA', defaultValue: false" in pipeline and "params." not in pipeline
+    assert "env.DELIVERY_ACTION ?: 'promote'" in pipeline
+    operator = (ROOT / "ci/pipelines/operator.groovy").read_text(encoding="utf-8")
+    for action in ("fresh-install", "validate-only", "deploy-with-services"):
+        assert "'" + action + "'" in operator
+    assert "submitter: 'admin'" in operator
+    assert "HELM_NAMESPACE = 'farmer'" in pipeline and "label 'oan-ci-deploy'" in pipeline
     assert "staging-farmer-kubeconfig" in pipeline and "ci/deploy/fresh-install-staging.sh" in pipeline
     assert "env.BRANCH_NAME != 'staging' || env.CHANGE_ID" in pipeline
     assert "staging-farmer-rehearsal" in pipeline
@@ -58,8 +63,8 @@ def test_staging_binds_backup_credentials_only_for_evidence_that_is_not_a_first_
 def test_staging_contract_is_the_oan_install_beside_the_legacy_release():
     staging = delivery.configuration("staging")
     assert (staging["namespace"], staging["release"], staging["platform"]) == ("farmer", "farmer-registry", "1.2.2-rc.614")
-    assert staging["registryHostname"] == "farmer-registry.oanstaging.com"
-    assert staging["staffIssuer"] == "https://keycloak.oanstaging.com/realms/staff"
+    assert staging["registryHostname"] == "farmer-registry.qa.oanstaging.com"
+    assert staging["staffIssuer"] == "https://keycloak.qa.oanstaging.com/realms/staff"
     assert (staging["registryDatabase"], staging["idGeneratorDatabase"], staging["connectorDatabase"]) == (
         "farmer_registry", "farmer_registry_idgen", "farmer_connector_v2")
     assert staging["apiServers"] == ["https://10.0.1.212:6443", "https://52.66.116.220:6443"]

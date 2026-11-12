@@ -17,8 +17,8 @@ from urllib.request import urlopen
 
 import yaml
 
-ISSUER = "https://keycloak-development.oanstaging.com/realms/staff"
-IAM = "https://staff-iam-development.oanstaging.com"
+ISSUER = "https://keycloak.development.oanstaging.com/realms/staff"
+IAM = "https://staff-iam.development.oanstaging.com"
 OVERLAY = Path(__file__).resolve().parents[3] / "helm/environments/dev/farmer-identity.yaml"
 CHECKS = ("usersVerified", "clientsVerified", "rolesVerified", "audiencesVerified",
           "serviceAccountCredentialsVerified", "sharedPortalRoutingVerified",
@@ -30,7 +30,7 @@ def environment_settings(environment):
     if environment == "dev":
         return ISSUER, IAM, OVERLAY
     if environment == "staging":
-        return ("https://keycloak.oanstaging.com/realms/staff", "https://staff-iam.oanstaging.com",
+        return ("https://keycloak.qa.oanstaging.com/realms/staff", "https://staff-iam.qa.oanstaging.com",
                 Path(__file__).resolve().parents[3] / "helm/environments/staging/farmer-identity.yaml")
     raise ValueError("Unknown identity environment")
 

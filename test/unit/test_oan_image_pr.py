@@ -403,7 +403,7 @@ class PipelineWiringTests(unittest.TestCase):
         self.assertIn("branch 'develop'", stage)
         self.assertIn("not { changeRequest() }", stage)
         self.assertIn("env.DELIVERY_ACTION == 'deploy'", stage)          # not after a fresh install
-        self.assertIn("agent { label 'vpn-agent2' }", stage)
+        self.assertIn("agent { label 'oan-ci-deploy' }", stage)
         self.assertIn("OAN_HELM_FORK_CRED_ID", stage)
         for absent in ("KUBECONFIG", "helm upgrade", "kubectl", "docker ", "aws "):
             self.assertNotIn(absent, stage)

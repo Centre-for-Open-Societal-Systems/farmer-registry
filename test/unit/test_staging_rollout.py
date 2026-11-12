@@ -188,7 +188,7 @@ def test_missing_dump_or_image_is_rejected(tmp_path, evidence):
 
 @pytest.fixture
 def baseline(evidence):
-    values = {"global": {"registryHostname": "farmer-registry.oanstaging.com", "registryDB": "farmer_registry_far"}}
+    values = {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com", "registryDB": "farmer_registry_far"}}
     manifest = [{"kind": "Service", "metadata": {"name": "farmer-registry", "namespace": "far"}, "spec": {"ports": [80]}}]
     status = {"name": "farmer-registry", "namespace": "far", "version": 36, "info": {"status": "deployed"}}
     evidence.update(valuesHash=staging.content_hash(values), manifestHash=staging.content_hash(manifest))
@@ -262,7 +262,7 @@ def test_registry_staging_upgrade_pins_all_digests_and_enforces_signing(evidence
 def test_optional_public_ui_must_survive_with_its_config_and_accepted_image(evidence, fault):
     before, after, images = release_manifests(evidence)
     old = workload("Deployment", "staff-portal-ui-public", images["staff-ui"]["repository"] + ":" + "0" * 12)
-    deployment.pod(old)["containers"][0]["env"] = [{"name": "COOKIE_DOMAIN", "value": ".oanstaging.com"}]
+    deployment.pod(old)["containers"][0]["env"] = [{"name": "COOKIE_DOMAIN", "value": ".qa.oanstaging.com"}]
     before.append(old)
     new = copy.deepcopy(old)
     deployment.pod(new)["containers"][0]["image"] = images["staff-ui"]["repository"] + ":" + images["staff-ui"]["tag"] + "@" + DIGEST
@@ -276,7 +276,7 @@ def test_optional_public_ui_must_survive_with_its_config_and_accepted_image(evid
 
 
 def test_preparation_preserves_staging_database_and_awe_callback(evidence):
-    values = {"global": {"registryHostname": "farmer-registry.oanstaging.com", "registryDB": "farmer_registry_far", "aweDefaultCallbackUrl": "http://existing/awe/webhooks/decision"}}
+    values = {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com", "registryDB": "farmer_registry_far", "aweDefaultCallbackUrl": "http://existing/awe/webhooks/decision"}}
     before = [workload("Deployment", "staff-portal-api", "previous")]
     result = deployment.prepare(values, before, ECR, SHA[:12], environment="staging", images=evidence["registry"]["images"])
     assert result["global"]["registryDB"] == "farmer_registry_far"
@@ -288,14 +288,14 @@ def test_preparation_preserves_staging_database_and_awe_callback(evidence):
 
 def test_staging_fresh_install_prepares_from_environment_values_with_digests_and_no_demo_data(evidence):
     images = evidence["registry"]["images"]
-    values = {"global": {"registryHostname": "farmer-registry.oanstaging.com"}}
+    values = {"global": {"registryHostname": "farmer-registry.qa.oanstaging.com"}}
     prepared = deployment.prepare(values, [], ECR, SHA[:12], environment="staging", images=images, fresh=True)
     assert prepared["registry"]["staffApi"]["image"]["tag"] == SHA[:12] + "@" + DIGEST
     seed = prepared["registry"]["dbSeed"]
     assert seed["loadSampleData"] is False and seed["loadGeoData"] is False and seed["loadImages"] is False
     assert seed["intakeSeed"]["enabled"] is False
-    assert prepared["global"]["keycloakIssuerUrl"] == "https://keycloak.oanstaging.com/realms/staff"
-    assert prepared["registrantAuth"]["esignetBaseUrl"] == "https://esignet.oanstaging.com"
+    assert prepared["global"]["keycloakIssuerUrl"] == "https://keycloak.qa.oanstaging.com/realms/staff"
+    assert prepared["registrantAuth"]["esignetBaseUrl"] == "https://esignet.qa.oanstaging.com"
     assert "development" not in yaml.safe_dump(prepared)
     with pytest.raises(ValueError):
         deployment.prepare(values, [workload("Deployment", "staff-portal-api", "x")], ECR, SHA[:12], environment="staging", images=images, fresh=True)
@@ -323,8 +323,8 @@ def test_staging_connector_values_never_start_ingestion():
         "keyId": "farmer-connector-v2-staging", "secret": "farmer-connector-v2-staging-signing"}
     assert values["global"]["connectorDB"] == "farmer_connector_v2"
     assert values["global"]["connectorDBSecret"] == "farmer-connector-v2-staging-db"
-    assert values["global"]["hostname"] == "connector-farmer-registry.oanstaging.com"
-    assert values["adminAuth"]["issuer"] == "https://keycloak.oanstaging.com/realms/staff"
+    assert values["global"]["hostname"] == "connector-farmer-registry.qa.oanstaging.com"
+    assert values["adminAuth"]["issuer"] == "https://keycloak.qa.oanstaging.com/realms/staff"
     assert all(values[role]["replicaCount"] == 0 for role in ("api", "worker", "ui"))
     assert values["beat"]["enabled"] is False and values["consumer"]["enabled"] is False
     assert "development" not in yaml.safe_dump(values) and not re.search(r"[-_]far(?!mer)", yaml.safe_dump(values))

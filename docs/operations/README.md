@@ -13,8 +13,8 @@ pull requests validate without publishing or deploying.
 | Registry release | `farmer-registry` | `farmer-registry` |
 | Connector release | `farmer-registry-connector` | `farmer-connector` until accepted cutover to `farmer-registry-connector` |
 | Kubeconfig credential | `farmer-dev-kubeconfig` | `staging-farmer-kubeconfig` |
-| Staff issuer | `https://keycloak-development.oanstaging.com/realms/staff` | `https://keycloak.oanstaging.com/realms/staff` |
-| Registry UI | `https://farmer-registry-development.oanstaging.com` | `https://farmer-registry.oanstaging.com` |
+| Staff issuer | `https://keycloak.development.oanstaging.com/realms/staff` | `https://keycloak.oanstaging.com/realms/staff` |
+| Registry UI | `https://farmer-registry.development.oanstaging.com` | `https://farmer-registry.oanstaging.com` |
 | Platform | `1.2.2-rc.544` | `1.2.2-rc.544` candidate; live upgrade pending |
 
 ## Dev
@@ -30,7 +30,7 @@ Registry failures are fatal. Available Farmer add-ons release independently;
 their failures mark Jenkins unstable. Missing branches or application files
 preserve existing deployments.
 
-The deployment agent is `vpn-agent2`. Build agents need Docker, Bash, Git and AWS
+The deployment agent is `oan-ci-deploy-agent-1`. Build agents need Docker, Bash, Git and AWS
 CLI. Helpers provide Python dependencies in containers. Publishing uses
 `aws-ecr-creds`; protected backup transfer uses `farmer-new-dev-backup-ssh`.
 Identity migration additionally requires explicit `APPLY_COMMONS_IDENTITY` and

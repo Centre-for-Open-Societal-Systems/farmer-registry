@@ -26,6 +26,9 @@ for layer in location outgestion registrant-auth dci-signing identity; do
 done
 export OAN_PROMOTED_VALUES
 
+# Build option LOAD_SAMPLE_DATA (default off) turns the db-seed sample records on for this delivery.
+if [ "${LOAD_SAMPLE_DATA:-false}" = true ]; then flags+=(--set registry.dbSeed.loadSampleData=true); fi
+
 bash .oan-helm/scripts/ci/deliver_staging.sh openg2p-farmer-registry "$HELM_RELEASE" "$HELM_NAMESPACE" farmer.yaml \
   "${flags[@]}" --post-renderer ci/deploy/promote-renderer.sh
 

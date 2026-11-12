@@ -1,0 +1,28 @@
+# The Farmer connector release (farmer-registry-connector) runs the upstream registry-connector chart at the
+# commit pinned in ci/services/catalogue.yaml, which has no definitions hook. This release sits beside it and
+# only applies the connector definitions declared for an environment
+# (helm/environments/<env>/farmer-connector-definitions.yaml) through the connector's admin API, the way the
+# crop and livestock connector charts do. It creates no connector workload.
+#
+# files/apply_definitions.py is byte-identical to the livestock and crop copies
+# (test/unit/test_connector_definitions.py checks the hash).
+
+# The connector's own API image. ci/deploy/connector-definitions.sh sets it from the running
+# farmer-registry-connector-api Deployment, so the Job runs exactly the image the connector runs.
+image: ""
+imagePullSecrets:
+  - name: ecr-pull-secret
+connectorRelease: farmer-registry-connector
+apiPort: 80
+adminAuth:
+  enabled: true
+  tokenUrl: ""
+  clientId: registry-connector
+  # Read at run time with the Job's ServiceAccount (one-time grant: ci/k8s/connector-definitions-rbac.yaml).
+  clientSecret:
+    namespace: commons
+    name: registry-connector
+    key: client_secret
+# Rows to delete when present (by name).
+retired: []
+definitions: []
