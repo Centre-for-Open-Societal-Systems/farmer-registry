@@ -44,6 +44,7 @@ def test_import_configuration_has_a_fixed_id_and_points_at_the_form_own_data_mod
     text = sql('registry-configurations', 'g2p_registry_import_file_configurations.sql')
     assert re.search(rf"'{CONFIG}',\s*'{REGISTER}',\s*'{FORM}',\s*'{MODEL}',\s*'Farmer intake',", text)
     assert 'ON CONFLICT (import_file_configuration_id) DO UPDATE' in text
+    assert 'https://oan.closedroominc.qzz.io/import-templates/' in text, 'the description links the template workbook'
     assert 'odk_to_farmer_intake' not in re.sub(r'^--.*$', '', text, flags=re.MULTILINE)
     assert f"('{FORM}','{REGISTER}'" in sql('register-metadata', 'g2p_intake_form_definitions.sql')
 
@@ -93,7 +94,7 @@ def test_every_column_is_read_and_the_sections_are_the_odk_intake_sections():
     full = {column: '' for column in header()}
     full.update(BASE, fayda_id='1234 5678 9012', middle_name='Middle', birth_date='1980-01-02 00:00:00',
                 primary_phone_number='+251911000000', secondary_phone_number='0922000000', region='et04', zone='ET0404',
-                latitude='9', longitude='38.7', land_id='PLOT-1', land_size='1.5', land_ownership_type='owned',
+                latitude='9', longitude='38.7', land_id='PLOT-1', land_size='1.5', land_ownership_type='owner',
                 education_level='primary', disabled='no', is_primary_cooperative_member='no',
                 identity_document_type='fayda', marital_status='married', farming_type='crop')
     result = render(full)
@@ -109,7 +110,7 @@ def test_every_column_is_read_and_the_sections_are_the_odk_intake_sections():
     assert [h['level_value_id'] for h in json.loads(location['geo_code_hierarchy_json'])['hierarchy']] == ['ET04', 'ET0404']
     land = result['farmer_lands'][0]
     assert re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}', land['internal_record_id'])
-    assert (land['land_size'], land['unit'], land['land_ownership_type'], land['farming_type']) == (1.5, 'HECTARE', 'OWNED', 'CROP')
+    assert (land['land_size'], land['unit'], land['land_ownership_type'], land['farming_type']) == (1.5, 'HECTARE', 'OWNER', 'CROP')
     assert result['farmer_documents'] == [{'identity_document_type': 'FAYDA'}]
     for section in ('farmer_crops_intake', 'farmer_farm_inputs_intake', 'farmer_livestock_intake'):
         assert result[section] == []
@@ -146,7 +147,92 @@ def test_the_farmer_id_is_never_imported_and_no_land_without_land_columns():
     ({'latitude': '91', 'longitude': '38'}, 'column latitude must be between'),
     ({'latitude': '9'}, 'columns latitude and longitude must be given together'),
     ({'kebele': 'ET04040404'}, 'column kebele needs the level above it'),
+    ({'gender': 'X'}, 'column gender must be a GENDER code, got X'),
+    ({'marital_status': 'engaged'}, 'column marital_status must be a MARITAL_STATUS code, got ENGAGED'),
+    ({'land_ownership_type': 'owned'}, 'column land_ownership_type must be a LAND_OWNERSHIP_TYPE code, got OWNED'),
+    ({'land_unit': 'feet'}, 'column land_unit must be a LAND_SIZE_UNIT code'),
+    ({'primary_commodity': 'teff'}, 'column primary_commodity must be a CROP_COMMODITY code, got TEFF'),
 ])
 def test_a_value_the_template_cannot_read_fails_the_row_naming_the_column(change, message):
     with pytest.raises(UndefinedError, match=message):
         render({**BASE, **change})
+
+
+# The import template workbook and the code lists: one source (scripts/import_templates/build_import_template.py).
+BUILD = REPO / 'scripts' / 'import_templates' / 'build_import_template.py'
+SNAPSHOT = REPO / 'import-templates' / 'farmer_intake_code_lists.json'
+
+
+def builder():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location('farmer_import_template_builder', BUILD)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_code_lists_are_from_the_openg2p_data_commit_the_seed_pins():
+    snapshot = json.loads(SNAPSHOT.read_text(encoding='utf-8'))
+    dockerfile = (REPO / 'docker' / 'db-seed' / 'Dockerfile').read_text(encoding='utf-8')
+    assert f"ARG OPENG2P_DATA_REF={snapshot['openg2p_data_ref']}" in dockerfile, 'rebuild: build_import_template.py --pack'
+    module = builder()
+    used = {spec[3] for spec in module.COLUMNS.values() if spec[2] == 'code'}
+    assert set(snapshot['lists']) == used and all(snapshot['lists'][a] for a in used)
+
+
+def test_every_coded_column_reads_that_list_in_the_section_metadata():
+    seeds = ''.join(path.read_text(encoding='utf-8') for path in META.rglob('*.sql'))
+    for column, spec in builder().COLUMNS.items():
+        if spec[2] == 'code':
+            assert re.search(rf"[\"']{spec[3]}[\"']", seeds), (column, spec[3])
+
+
+def test_the_jinja_code_list_block_is_what_the_builder_generates():
+    module = builder()
+    lists = json.loads(SNAPSHOT.read_text(encoding='utf-8'))['lists']
+    text = (ROOT / 'templates' / TEMPLATE).read_text(encoding='utf-8')
+    assert module.BLOCK.search(text).group(2) == module.jinja_block(lists), 'rebuild: build_import_template.py --from-snapshot'
+
+
+def test_builder_columns_are_the_csv_header_and_the_documented_required_columns():
+    columns = builder().COLUMNS
+    assert list(columns) == header()
+    assert {c for c, spec in columns.items() if spec[1]} == REQUIRED
+
+
+def test_workbook_has_the_header_dropdowns_and_the_code_lists():
+    openpyxl = pytest.importorskip('openpyxl')
+    book = openpyxl.load_workbook(REPO / 'import-templates' / 'farmer_intake_import_template.xlsx')
+    assert book.sheetnames == ['Farmer intake', 'Code lists', 'Columns']
+    sheet = book['Farmer intake']
+    assert [c.value for c in sheet[1]] == header()
+    assert not any(c.value not in (None, '') for row in sheet.iter_rows(min_row=2) for c in row),         'blank template: sample rows belong in openg2p-data'
+    lists = json.loads(SNAPSHOT.read_text(encoding='utf-8'))['lists']
+    codes = book['Code lists']
+    for index in range(1, codes.max_column + 1, 2):
+        attribute = codes.cell(row=1, column=index).value
+        values = [codes.cell(row=r, column=index).value for r in range(2, codes.max_row + 1)]
+        assert [v for v in values if v] == [code for code, _ in lists[attribute]], attribute
+    formulas = {str(rule.sqref).split(':')[0]: rule.formula1 for rule in sheet.data_validations.dataValidation}
+    gender = header().index('gender') + 1
+    assert formulas[f'{openpyxl.utils.get_column_letter(gender)}2'].startswith("'Code lists'!")
+    assert formulas[f"{openpyxl.utils.get_column_letter(header().index('disabled') + 1)}2"] == '"yes,no"'
+    about = [row[0].value for row in book['Columns'].iter_rows(min_row=2) if row[0].value in columns_set()]
+    assert about == header()
+
+
+def columns_set():
+    return set(header())
+
+
+def test_the_code_lists_in_the_documentation_are_the_snapshot():
+    lists = json.loads(SNAPSHOT.read_text(encoding='utf-8'))['lists']
+    section = (REPO / 'docs/file-import.md').read_text(encoding='utf-8').split('\n## Code lists')[1].split('\n## ')[0]
+    rows = dict(re.findall(r'^\| `(\w+)` \|[^|]*\| (.*) \|$', section, re.MULTILINE))
+    assert set(rows) == set(lists)
+    for attribute, values in lists.items():
+        if len(values) >= 20:
+            assert rows[attribute].startswith(f'{len(values)} '), attribute
+        else:
+            assert re.findall(r'`(\w+)`', rows[attribute]) == [code for code, _ in values], attribute
