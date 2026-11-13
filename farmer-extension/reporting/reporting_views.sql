@@ -4,6 +4,12 @@
 -- (Superset) read from. Charts then stay simple SELECTs instead of repeating
 -- multi-table joins and JSONB digging in every chart definition.
 --
+-- Multi-select columns (income_sources, water_sources) are read through
+-- CASE jsonb_typeof(...): a list as it is, a single text value as a one-item
+-- list, anything else as empty. One row saved with a plain string (staging,
+-- 13 Nov) failed the upgrade hook with "cannot extract elements from a scalar";
+-- a bad row must never stop the views from refreshing.
+--
 -- Grain differs from NSR, deliberately
 -- ------------------------------------
 -- NSR pairs household/individual. Farmer's shape is a three-level tree:
@@ -128,7 +134,7 @@ inputs AS (
            bool_or(improved_seed_use)   AS improved_seed_use,
            bool_or(access_to_machinery) AS access_to_machinery,
            bool_or(access_to_finance)   AS access_to_finance,
-           string_agg(DISTINCT COALESCE((SELECT string_agg(v, ', ' ORDER BY v) FROM jsonb_array_elements_text(NULLIF(fi.water_sources::jsonb,'null'::jsonb)) v),water_source), ', ') AS water_sources
+           string_agg(DISTINCT COALESCE((SELECT string_agg(v, ', ' ORDER BY v) FROM jsonb_array_elements_text((CASE jsonb_typeof(fi.water_sources::jsonb) WHEN 'array' THEN fi.water_sources::jsonb WHEN 'string' THEN jsonb_build_array(fi.water_sources::jsonb) ELSE '[]'::jsonb END)) v),water_source), ', ') AS water_sources
     FROM g2p_register_farm_inputs fi
     WHERE record_status = 'ACTIVE'
     GROUP BY link_internal_record_id
@@ -314,7 +320,7 @@ SELECT
     f.occupation,
     f.language_spoken,
     f.source_of_income,
-    f.income_sources,
+    (CASE jsonb_typeof(f.income_sources::jsonb) WHEN 'array' THEN f.income_sources::jsonb WHEN 'string' THEN jsonb_build_array(f.income_sources::jsonb) END)::json AS income_sources,
     f.disabled,
     f.disability_type,
     f.disability_severity,
@@ -378,7 +384,7 @@ SELECT
         (f.gender            IS NOT NULL)::int +
         (f.birth_date        IS NOT NULL OR f.estimated_age IS NOT NULL)::int +
         (f.education_level   IS NOT NULL)::int +
-        (f.source_of_income IS NOT NULL OR COALESCE(jsonb_array_length(NULLIF(f.income_sources::jsonb,'null'::jsonb)),0)>0)::int +
+        (f.source_of_income IS NOT NULL OR jsonb_array_length((CASE jsonb_typeof(f.income_sources::jsonb) WHEN 'array' THEN f.income_sources::jsonb WHEN 'string' THEN jsonb_build_array(f.income_sources::jsonb) ELSE '[]'::jsonb END))>0)::int +
         (f.geo_code_hierarchy_json IS NOT NULL)::int +
         (COALESCE(h.parcel_count, 0) > 0)::int
     )                                          AS profile_fields_present,

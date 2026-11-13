@@ -215,6 +215,14 @@ def run():
                     '-v','ON_ERROR_STOP=1',data=b'GRANT SELECT ON fr_rpt_land TO PUBLIC;')
         command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
             '-v','ON_ERROR_STOP=1',data=b"DO $$ BEGIN IF (SELECT main_crop_count FROM fr_rpt_farmer) <> 1 OR (SELECT total_land_ha FROM fr_rpt_farmer) <> 1.5 OR (SELECT main_crop FROM fr_rpt_farmer_main_crop) <> 'CROP_MAIZE' THEN RAISE EXCEPTION 'Native reporting aggregate mismatch'; END IF; IF NOT has_table_privilege('public','fr_rpt_land','SELECT') THEN RAISE EXCEPTION 'Reader grant lost'; END IF; END $$; REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_land; REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_farmer; SELECT main_crop FROM fr_rpt_farmer_main_crop;")
+        # A multi-select saved as a plain string (staging, 13 Nov) must not stop the views: they read it as a
+        # one-item list and the replay and refresh still pass.
+        command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
+            '-v','ON_ERROR_STOP=1',data=b"""UPDATE g2p_register_farmers SET income_sources='"SOI_OTHERS"'::json; UPDATE g2p_register_farm_inputs SET water_sources='"WS_RAINFED"'::json;""")
+        command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
+            '-v','ON_ERROR_STOP=1',data=reporting)
+        command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
+            '-v','ON_ERROR_STOP=1',data=b"DO $$ BEGIN IF (SELECT income_sources::text FROM fr_rpt_farmer) <> '[\"SOI_OTHERS\"]' OR (SELECT profile_fields_present FROM fr_rpt_farmer) IS NULL THEN RAISE EXCEPTION 'A string multi-select was not read as a list'; END IF; END $$; REFRESH MATERIALIZED VIEW CONCURRENTLY fr_rpt_farmer;")
         print(json.dumps({'registry':'farmer','metadata_passes':2,'sql_files_per_pass':len(files),
             'metadata_identical':True,'reporting_replays':2,'reader_grants_preserved':True,'concurrent_refresh':True,'existing_environment_modified':False}),flush=True)
     finally:
