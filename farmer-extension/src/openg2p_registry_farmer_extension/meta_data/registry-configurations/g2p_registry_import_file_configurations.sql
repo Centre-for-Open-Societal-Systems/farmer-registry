@@ -9,6 +9,8 @@
 -- and the row is upserted, so an upgrade updates it in place and the seed can
 -- run again. The template mnemonic is the name staff see under Import from file;
 -- the import itself is routed by data_model_id.
+-- The description is shown in Configuration -> Register -> File Import and links
+-- the template workbook (import-templates/, published on the hosted pages site).
 -- Columns: docs/file-import.md.
 
 INSERT INTO g2p_registry_import_file_configurations (
@@ -25,7 +27,7 @@ INSERT INTO g2p_registry_import_file_configurations (
     'a1a4d25a-1cd4-4356-abac-8782382649',
     'file_import_to_farmer_intake',
     'Farmer intake',
-    'Import farmer intakes from a CSV or Excel file, one row per farmer'
+    'Import farmer intakes from a CSV or Excel file, one row per farmer. Template with dropdowns and column guide: https://oan.closedroominc.qzz.io/import-templates/'
 )
 ON CONFLICT (import_file_configuration_id) DO UPDATE SET
     register_id = EXCLUDED.register_id,

@@ -1,0 +1,823 @@
+{
+ "openg2p_data_ref": "db3e2ff6e9cc764648c1348708c37cfec8e941c3",
+ "lists": {
+  "CROP_COMMODITY": [
+   [
+    "CROP_TEFF",
+    "Teff"
+   ],
+   [
+    "CROP_QUINOA",
+    "Quinoa"
+   ],
+   [
+    "CROP_BREAD_WHEAT",
+    "Bread wheat"
+   ],
+   [
+    "CROP_DURUM_WHEAT",
+    "Durum wheat"
+   ],
+   [
+    "CROP_TRITICALE",
+    "Triticale"
+   ],
+   [
+    "CROP_EMMER_WHEAT",
+    "Emmer wheat"
+   ],
+   [
+    "CROP_BUCKWHEAT",
+    "Buckwheat"
+   ],
+   [
+    "CROP_BARLEY",
+    "Barley"
+   ],
+   [
+    "CROP_MALT_BARLEY",
+    "Malt barley"
+   ],
+   [
+    "CROP_SORGHUM",
+    "Sorghum"
+   ],
+   [
+    "CROP_FINGER_MILLET",
+    "Finger millet"
+   ],
+   [
+    "CROP_PEARL_MILLET",
+    "Pearl millet"
+   ],
+   [
+    "CROP_FOXTAIL_MILLET",
+    "Foxtail millet"
+   ],
+   [
+    "CROP_MAIZE",
+    "Maize"
+   ],
+   [
+    "CROP_RICE",
+    "Rice"
+   ],
+   [
+    "CROP_FABA_BEAN",
+    "Faba bean"
+   ],
+   [
+    "CROP_CHICKPEA",
+    "Chickpea"
+   ],
+   [
+    "CROP_LENTIL",
+    "Lentil"
+   ],
+   [
+    "CROP_FIELD_PEA",
+    "Field pea"
+   ],
+   [
+    "CROP_DEKOKO",
+    "Dekoko"
+   ],
+   [
+    "CROP_COWPEA",
+    "Cowpea"
+   ],
+   [
+    "CROP_HARICOT_BEAN",
+    "Haricot bean"
+   ],
+   [
+    "CROP_GRASS_PEA",
+    "Grass pea"
+   ],
+   [
+    "CROP_MUNG_BEAN",
+    "Mung bean"
+   ],
+   [
+    "CROP_ADZUKI_BEAN",
+    "Adzuki bean"
+   ],
+   [
+    "CROP_LIMA_BEAN",
+    "Lima bean"
+   ],
+   [
+    "CROP_COMMON_BEAN",
+    "Common bean"
+   ],
+   [
+    "CROP_NOUG",
+    "Noug"
+   ],
+   [
+    "CROP_LINSEED",
+    "Linseed"
+   ],
+   [
+    "CROP_RAPESEED",
+    "Rapeseed"
+   ],
+   [
+    "CROP_ETHIOPIAN_MUSTARD",
+    "Ethiopian mustard"
+   ],
+   [
+    "CROP_SUNFLOWER",
+    "Sunflower"
+   ],
+   [
+    "CROP_SAFFLOWER",
+    "Safflower"
+   ],
+   [
+    "CROP_SOYBEAN",
+    "Soybean"
+   ],
+   [
+    "CROP_SESAME",
+    "Sesame"
+   ],
+   [
+    "CROP_GROUNDNUT",
+    "Groundnut"
+   ],
+   [
+    "CROP_WINE_GRAPE",
+    "Wine grape"
+   ],
+   [
+    "CROP_PEACH",
+    "Peach"
+   ],
+   [
+    "CROP_BANANA",
+    "Banana"
+   ],
+   [
+    "CROP_MANGO",
+    "Mango"
+   ],
+   [
+    "CROP_PINEAPPLE",
+    "Pineapple"
+   ],
+   [
+    "CROP_AVOCADO",
+    "Avocado"
+   ],
+   [
+    "CROP_ZIZIPHUS",
+    "Ziziphus"
+   ],
+   [
+    "CROP_FIG",
+    "Fig"
+   ],
+   [
+    "CROP_PAPAYA",
+    "Papaya"
+   ],
+   [
+    "CROP_DATE_PALM",
+    "Date palm"
+   ],
+   [
+    "CROP_GARLIC",
+    "Garlic"
+   ],
+   [
+    "CROP_SHALLOT",
+    "Shallot"
+   ],
+   [
+    "CROP_CARROT",
+    "Carrot"
+   ],
+   [
+    "CROP_LETTUCE",
+    "Lettuce"
+   ],
+   [
+    "CROP_SNAP_BEAN",
+    "Snap bean"
+   ],
+   [
+    "CROP_CAULIFLOWER",
+    "Cauliflower"
+   ],
+   [
+    "CROP_SNOW_PEA",
+    "Snow pea"
+   ],
+   [
+    "CROP_PEPPER",
+    "Pepper"
+   ],
+   [
+    "CROP_TOMATO",
+    "Tomato"
+   ],
+   [
+    "CROP_ONION",
+    "Onion"
+   ],
+   [
+    "CROP_CABBAGE",
+    "Cabbage"
+   ],
+   [
+    "CROP_WATERMELON",
+    "Watermelon"
+   ],
+   [
+    "CROP_MUSKMELON",
+    "Muskmelon"
+   ],
+   [
+    "CROP_GREEN_COURGETTE",
+    "Green courgette"
+   ],
+   [
+    "CROP_YELLOW_COURGETTE",
+    "Yellow courgette"
+   ],
+   [
+    "CROP_BROCCOLI",
+    "Broccoli"
+   ],
+   [
+    "CROP_SNAP_PEA",
+    "Snap pea"
+   ],
+   [
+    "CROP_SWEET_CORN",
+    "Sweet corn"
+   ],
+   [
+    "CROP_FINE_BUSH_BEAN",
+    "Fine bush bean"
+   ],
+   [
+    "CROP_OKRA",
+    "Okra"
+   ],
+   [
+    "CROP_ANCHOTE",
+    "Anchote"
+   ],
+   [
+    "CROP_AMARANTH",
+    "Amaranth"
+   ],
+   [
+    "CROP_PAK_CHOI",
+    "Pak choi"
+   ],
+   [
+    "CROP_EGGPLANT",
+    "Eggplant"
+   ],
+   [
+    "CROP_CUCUMBER",
+    "Cucumber"
+   ],
+   [
+    "CROP_SUMMER_SQUASH",
+    "Summer squash"
+   ],
+   [
+    "CROP_POTATO",
+    "Potato"
+   ],
+   [
+    "CROP_SWEET_POTATO",
+    "Sweet potato"
+   ],
+   [
+    "CROP_RED_BEET",
+    "Red beet"
+   ],
+   [
+    "CROP_TARO",
+    "Taro"
+   ],
+   [
+    "CROP_CASSAVA",
+    "Cassava"
+   ],
+   [
+    "CROP_ENSET",
+    "Enset"
+   ],
+   [
+    "CROP_YAM",
+    "Yam"
+   ],
+   [
+    "CROP_COFFEE",
+    "Coffee"
+   ],
+   [
+    "CROP_COTTON",
+    "Cotton"
+   ],
+   [
+    "CROP_KENAF",
+    "Kenaf"
+   ],
+   [
+    "CROP_VERNONIA",
+    "Vernonia"
+   ],
+   [
+    "CROP_CASTOR",
+    "Castor"
+   ],
+   [
+    "CROP_CAMELINA",
+    "Camelina"
+   ],
+   [
+    "CROP_SUGARCANE",
+    "Sugarcane"
+   ],
+   [
+    "CROP_TOBACCO",
+    "Tobacco"
+   ],
+   [
+    "CROP_CACAO",
+    "Cacao"
+   ],
+   [
+    "CROP_SWEET_ANNIE",
+    "Sweet annie"
+   ],
+   [
+    "CROP_PYRETHRUM",
+    "Pyrethrum"
+   ],
+   [
+    "CROP_AFRICAN_MARIGOLD",
+    "African marigold"
+   ],
+   [
+    "CROP_CHAMOMILE",
+    "Chamomile"
+   ],
+   [
+    "CROP_STEVIA",
+    "Stevia"
+   ],
+   [
+    "CROP_HIBISCUS",
+    "Hibiscus"
+   ],
+   [
+    "CROP_CITRONELLA_GRASS",
+    "Citronella grass"
+   ],
+   [
+    "CROP_LEMONGRASS",
+    "Lemongrass"
+   ],
+   [
+    "CROP_PEPPERMINT",
+    "Peppermint"
+   ],
+   [
+    "CROP_SPEARMINT",
+    "Spearmint"
+   ],
+   [
+    "CROP_JAPANESE_MINT",
+    "Japanese mint"
+   ],
+   [
+    "CROP_SPANISH_MINT",
+    "Spanish mint"
+   ],
+   [
+    "CROP_GERANIUM",
+    "Geranium"
+   ],
+   [
+    "CROP_LEMON_VERBENA",
+    "Lemon verbena"
+   ],
+   [
+    "CROP_LAVENDER",
+    "Lavender"
+   ],
+   [
+    "CROP_MARJORAM_OREGANO",
+    "Marjoram / oregano"
+   ],
+   [
+    "CROP_SAGE",
+    "Sage"
+   ],
+   [
+    "CROP_ROSEMARY",
+    "Rosemary"
+   ],
+   [
+    "CROP_LEMON_SCENTED_EUCALYPTUS",
+    "Lemon-scented eucalyptus"
+   ],
+   [
+    "CROP_PALMAROSA",
+    "Palmarosa"
+   ],
+   [
+    "CROP_BLACK_PEPPER",
+    "Black pepper"
+   ],
+   [
+    "CROP_GINGER",
+    "Ginger"
+   ],
+   [
+    "CROP_TURMERIC",
+    "Turmeric"
+   ],
+   [
+    "CROP_CARDAMOM",
+    "Cardamom"
+   ],
+   [
+    "CROP_VANILLA",
+    "Vanilla"
+   ],
+   [
+    "CROP_CORIANDER",
+    "Coriander"
+   ],
+   [
+    "CROP_BLACK_CUMIN",
+    "Black cumin"
+   ],
+   [
+    "CROP_WHITE_CUMIN",
+    "White cumin"
+   ],
+   [
+    "CROP_FENUGREEK",
+    "Fenugreek"
+   ],
+   [
+    "CROP_BASIL",
+    "Basil"
+   ],
+   [
+    "CROP_KORARIMA",
+    "Korarima"
+   ],
+   [
+    "CROP_ROSE",
+    "Rose"
+   ],
+   [
+    "CROP_OTHER",
+    "Other"
+   ],
+   [
+    "CROP_OAT",
+    "Oat"
+   ],
+   [
+    "CROP_PIGEON_PEA",
+    "Pigeon pea"
+   ],
+   [
+    "CROP_ALFALFA",
+    "Alfalfa"
+   ],
+   [
+    "CROP_BRACHIARIA",
+    "Brachiaria"
+   ]
+  ],
+  "DISABILITY_DOMAIN": [
+   [
+    "VISION",
+    "Vision"
+   ],
+   [
+    "HEARING",
+    "Hearing"
+   ],
+   [
+    "MOBILITY",
+    "Mobility"
+   ],
+   [
+    "COGNITION",
+    "Cognition"
+   ],
+   [
+    "SELF_CARE",
+    "Self care"
+   ],
+   [
+    "COMMUNICATION",
+    "Communication"
+   ]
+  ],
+  "DISABILITY_SEVERITY": [
+   [
+    "NO_DIFFICULTY",
+    "No difficulty"
+   ],
+   [
+    "SOME_DIFFICULTY",
+    "Some difficulty"
+   ],
+   [
+    "A_LOT_OF_DIFFICULTY",
+    "A lot of difficulty"
+   ],
+   [
+    "CANNOT_DO_AT_ALL",
+    "Cannot do at all"
+   ]
+  ],
+  "EDUCATION_LEVEL": [
+   [
+    "ILLITERATE",
+    "Illiterate"
+   ],
+   [
+    "CAN_READ_AND_WRITE",
+    "Can read and write"
+   ],
+   [
+    "NON_FORMAL",
+    "Non-formal education"
+   ],
+   [
+    "NEVER_ATTEND",
+    "Never attended"
+   ],
+   [
+    "BASIC",
+    "Basic education"
+   ],
+   [
+    "PRIMARY",
+    "Primary"
+   ],
+   [
+    "INTERMEDIARY",
+    "Intermediate (middle school)"
+   ],
+   [
+    "SECONDARY",
+    "Secondary"
+   ],
+   [
+    "TERTIARY",
+    "Tertiary"
+   ],
+   [
+    "HIGHER_EDUCATION",
+    "Higher education"
+   ]
+  ],
+  "FARMER_CLUSTER_ROLE": [
+   [
+    "LEAD",
+    "Lead"
+   ],
+   [
+    "DEPUTY",
+    "Deputy"
+   ],
+   [
+    "SECRETARY",
+    "Secretary"
+   ],
+   [
+    "ACCOUNTANT",
+    "Accountant"
+   ],
+   [
+    "MEMBER",
+    "Member"
+   ]
+  ],
+  "FARMING_TYPE": [
+   [
+    "CROP",
+    "Crop"
+   ],
+   [
+    "LIVESTOCK",
+    "Livestock"
+   ],
+   [
+    "MIXED",
+    "Mixed"
+   ],
+   [
+    "AQUACULTURE",
+    "Aquaculture"
+   ],
+   [
+    "AGROFORESTRY",
+    "Agroforestry"
+   ]
+  ],
+  "GENDER": [
+   [
+    "FEMALE",
+    "Female"
+   ],
+   [
+    "MALE",
+    "Male"
+   ],
+   [
+    "OTHER",
+    "Other"
+   ],
+   [
+    "UNKNOWN",
+    "Unknown"
+   ]
+  ],
+  "IDENTITY_DOCUMENT_TYPE": [
+   [
+    "FAYDA",
+    "Fayda ID"
+   ],
+   [
+    "KEBELE_WOREDA_ID",
+    "Kebele/Woreda resident ID"
+   ],
+   [
+    "PASSPORT",
+    "Ethiopian passport"
+   ],
+   [
+    "DRIVING_LICENCE",
+    "Driving licence"
+   ],
+   [
+    "KEBELE_CONFIRMATION_LETTER",
+    "Kebele confirmation letter with photo"
+   ],
+   [
+    "OTHER_GOVERNMENT_ID",
+    "Other government photo ID"
+   ]
+  ],
+  "LAND_OWNERSHIP_TYPE": [
+   [
+    "OWNER",
+    "Owner"
+   ],
+   [
+    "TENANT",
+    "Tenant"
+   ],
+   [
+    "CROP_SHARE",
+    "Sharecropper"
+   ]
+  ],
+  "LAND_SIZE_UNIT": [
+   [
+    "HECTARE",
+    "Hectare"
+   ],
+   [
+    "ACRE",
+    "Acre"
+   ],
+   [
+    "SQUARE_METER",
+    "Square meter"
+   ],
+   [
+    "SQUARE_KM",
+    "Square kilometre"
+   ],
+   [
+    "SQUARE_FOOT",
+    "Square foot"
+   ],
+   [
+    "SQUARE_YARD",
+    "Square yard"
+   ]
+  ],
+  "LANGUAGE": [
+   [
+    "AMHARIC",
+    "Amharic"
+   ],
+   [
+    "AFAAN_OROMO",
+    "Afaan Oromoo"
+   ],
+   [
+    "TIGRINYA",
+    "Tigrinya"
+   ],
+   [
+    "SIDAAMU_AFOO",
+    "Sidaamu Afoo (Sidamo)"
+   ],
+   [
+    "AFAR",
+    "Afar"
+   ],
+   [
+    "SOMALI",
+    "Somali"
+   ],
+   [
+    "GURAGIGNA",
+    "Guragigna (Gurage)"
+   ],
+   [
+    "WOLAYTTA",
+    "Wolaytta"
+   ],
+   [
+    "HADIYYISA",
+    "Hadiyyisa (Hadiyya)"
+   ],
+   [
+    "GEDEO",
+    "Gedeo"
+   ],
+   [
+    "GAMO",
+    "Gamo"
+   ],
+   [
+    "SILTE",
+    "Silte"
+   ],
+   [
+    "KAFI_NOONOO",
+    "Kafi Noonoo (Kafa)"
+   ],
+   [
+    "OTHER",
+    "Other language"
+   ]
+  ],
+  "MARITAL_STATUS": [
+   [
+    "SINGLE",
+    "Single"
+   ],
+   [
+    "MARRIED",
+    "Married"
+   ],
+   [
+    "WIDOWED",
+    "Widowed"
+   ],
+   [
+    "DIVORCED",
+    "Divorced"
+   ],
+   [
+    "SEPARATED",
+    "Separated"
+   ],
+   [
+    "UNKNOWN",
+    "Unknown"
+   ]
+  ],
+  "SOURCE_OF_INCOME": [
+   [
+    "SOI_CROP_PRODUCTION",
+    "Crop production"
+   ],
+   [
+    "SOI_LIVESTOCK_PRODUCTION",
+    "Livestock production"
+   ],
+   [
+    "SOI_GOVERNMENT_NGO_SUPPORT",
+    "Government or non-governmental organisation support"
+   ],
+   [
+    "SOI_OTHERS",
+    "Other"
+   ]
+  ]
+ }
+}
