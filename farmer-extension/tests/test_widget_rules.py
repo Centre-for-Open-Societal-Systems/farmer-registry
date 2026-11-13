@@ -222,3 +222,32 @@ def test_multi_select_static_schema_checks_every_answer_and_required_empty_list(
     assert len(problems)==1 and 'UNKNOWN' in problems[0] and 'Financial services' in problems[0]
     assert widget_rules.check_record({"finance_access_types":[]},rules)==[
         'Financial services: this is required. Fill it in on every row before saving.']
+
+
+def test_a_multi_select_takes_a_list_never_a_plain_string():
+    # income_sources is a Master Data (api) multi-select: no options to check here,
+    # but the answer must still be a list, or the Crop and Livestock farmer
+    # reference refuse the farmer later (FARMER_REFERENCE_INVALID_PROFILE_VALUE).
+    schema = {"widgets": [{"widget": "multi-select", "widget-id": "income_sources", "widget-label": "source_of_income",
+                           "widget-data-path": f"{FARMER}.income_sources",
+                           "widget-data-source": {"type": "api", "service": "attributes", "endpoint": "values",
+                                                  "valueKey": "value_code", "params": {"attribute_id": "SOURCE_OF_INCOME"}}}]}
+    rules = widget_rules.collect_rules([(FARMER, schema)])[FARMER]
+    assert rules["income_sources"]["multiple"] is True
+    assert widget_rules.check_record({"income_sources": ["SOI_CROP_PRODUCTION", "SOI_OTHERS"]}, rules) == []
+    assert widget_rules.check_record({"income_sources": None}, rules) == []
+    assert widget_rules.check_record({"income_sources": "SOI_CROP_PRODUCTION"}, rules, {"source_of_income": "Source of income"}) == [
+        'Source of income: several answers can be chosen, so the answer must be a list of choices, not "SOI_CROP_PRODUCTION". '
+        'Pick them from the list.']
+    for bad in (["SOI_CROP_PRODUCTION", ""], ["SOI_CROP_PRODUCTION", 3], {"value": "SOI_OTHERS"}):
+        assert len(widget_rules.check_record({"income_sources": bad}, rules)) == 1, bad
+
+
+def test_a_static_multi_select_refuses_a_plain_string_even_when_it_is_a_choice():
+    schema = {"widgets": [{"widget": "table", "widget-data-path": f"{FARMER}.records",
+        "widget-data-columns": [{"widget": "multi-select", "column-key": "finance_access_types",
+        "widget-data-path": "finance_access_types", "widget-label": "Financial services",
+        "widget-data-source": {"type": "static", "options": [{"value": "LOAN"}, {"value": "INSURANCE"}]}}]}]}
+    rules = widget_rules.collect_rules([(FARMER, schema)])[FARMER]
+    problems = widget_rules.check_record({"finance_access_types": "LOAN"}, rules)
+    assert len(problems) == 1 and problems[0].startswith("Financial services: several answers can be chosen")

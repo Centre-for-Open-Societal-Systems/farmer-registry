@@ -208,7 +208,7 @@ helm/**/charts/*.tgz
 # Local dev tooling (docker compose stack, seeds, env) — never shipped
 local/
 
-# --- COSS delivery (Jenkins, local acceptance, operator exports) ---
+# --- OAN delivery (Jenkins, local acceptance, operator exports) ---
 .pytest-staging-*/
 # Retain the lock for the pinned Farmer RC chart; other legacy charts may
 # still use generated locks.

@@ -15,7 +15,7 @@ _coordination:
       virtualservice:
         gateway: istio-system/development
 fullnameOverride: farmer-registry-connector
-cossSigning:
+oanSigning:
   enabled: true
   partnerId: farmer-partner
   keyId: farmer-connector-v2-52da0fc34e90

@@ -318,8 +318,8 @@ def test_persistent_manifest_hash_binds_storage_config_and_routes(baseline):
 def test_staging_connector_values_never_start_ingestion():
     values = yaml.safe_load((ROOT / "helm/environments/staging/services/registry-connector.yaml").read_text(encoding="utf-8"))
     delivery.connector_settings("staging", values["_coordination"])
-    assert values["cossQueue"] == "farmer-registry-connector-v2"
-    assert values["cossSigning"] == {"enabled": True, "partnerId": "farmer-partner",
+    assert values["oanQueue"] == "farmer-registry-connector-v2"
+    assert values["oanSigning"] == {"enabled": True, "partnerId": "farmer-partner",
         "keyId": "farmer-connector-v2-staging", "secret": "farmer-connector-v2-staging-signing"}
     assert values["global"]["connectorDB"] == "farmer_connector_v2"
     assert values["global"]["connectorDBSecret"] == "farmer-connector-v2-staging-db"

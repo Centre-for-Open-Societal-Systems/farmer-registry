@@ -1,0 +1,2 @@
+import-templates/*.csv text eol=lf
+import-templates/*.xlsx binary

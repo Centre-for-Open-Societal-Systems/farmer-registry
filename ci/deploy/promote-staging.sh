@@ -11,7 +11,7 @@ set +x
 : "${IMAGE_TAG:?Validation image required}"
 export DELIVERY_ENVIRONMENT=staging HELM_NAMESPACE=farmer HELM_RELEASE=farmer-registry
 
-docker build -q -t "coss-ci/validation:$IMAGE_TAG" ci/validation > /dev/null
+docker build -q -t "oan-ci/validation:$IMAGE_TAG" ci/validation > /dev/null
 rm -rf .oan-helm
 git clone --quiet --depth 1 --filter=blob:none --sparse \
   https://github.com/Centre-for-Open-Societal-Systems/oan-helm.git .oan-helm

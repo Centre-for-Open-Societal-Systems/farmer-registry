@@ -146,7 +146,7 @@ spec:
         fsGroup: 10001
       initContainers:
         - name: key
-          image: {{ include "coss.image" $v.images.postgres | quote }}
+          image: {{ include "oan.image" $v.images.postgres | quote }}
           command: ["bash", "/scripts/key.sh"]
           env:
             - name: SECRET_NAME
@@ -168,7 +168,7 @@ spec:
           resources: {{- toYaml $v.resources | nindent 12 }}
       containers:
         - name: publish
-          image: {{ include "coss.image" $v.images.kubectl | quote }}
+          image: {{ include "oan.image" $v.images.kubectl | quote }}
           command: ["sh", "/scripts/publish.sh"]
           env:
             - name: NAMESPACE

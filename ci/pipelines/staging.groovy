@@ -37,9 +37,9 @@ def call() {
                     }
                     sh '''
                       set -eu
-                      docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                      docker build -t "oan-ci/validation:$IMAGE_TAG" ci/validation
                       docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" \
-                        "coss-ci/validation:$IMAGE_TAG" bash ci/validation/validate.sh
+                        "oan-ci/validation:$IMAGE_TAG" bash ci/validation/validate.sh
                     '''
                     stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,test/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
                 }
@@ -105,7 +105,7 @@ def call() {
                                           set -eu
                                           set +x
                                           mkdir -p service-outcomes
-                                          docker build -t "coss-ci/validation:$IMAGE_TAG" ci/validation
+                                          docker build -t "oan-ci/validation:$IMAGE_TAG" ci/validation
                                           export ECR_REGISTRY=recorded-in-protected-evidence
                                           export REGISTRY_OUTCOME_FILE="$PWD/service-outcomes/registry.json"
                                           bash "$DELIVERY_ENTRY"
@@ -198,6 +198,38 @@ def call() {
                             }
                         }
                         archiveArtifacts artifacts: 'service-outcomes/*.json', allowEmptyArchive: true
+                    }
+                }
+            }
+            stage('Deliver dashboard') {
+                // The farmer-registry-dashboard release (the dashboard UI; its dashboard-api comes with the registry chart), from
+                // oan-helm main: chart repository/farmer-registry-dashboard-0.1.2.tgz with environments/staging/values/farmer-dashboard.yaml,
+                // the release scripts/ci/deliver_staging_dashboards.sh installs. Same stage as Crop (#290) and Livestock (#243). The
+                // chart generates its Keycloak client secret, registers the client and the staff-portal tile and refreshes its own
+                // ECR pull secret, so nothing is set by hand. --atomic restores the previous revision when the upgrade fails; a
+                // failure marks the build unstable, because the registry is already delivered.
+                when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'promote' } }
+                agent { label 'oan-ci-deploy' }
+                steps {
+                    catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE', catchInterruptions: false) {
+                        withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                            sh '''
+                              set -eu
+                              dir=.oan-helm-dashboard
+                              rm -rf "$dir"
+                              git clone --quiet --depth 1 --filter=blob:none --sparse \\
+                                https://github.com/Centre-for-Open-Societal-Systems/oan-helm.git "$dir"
+                              git -C "$dir" sparse-checkout set --no-cone \\
+                                /repository/farmer-registry-dashboard-0.1.2.tgz /environments/staging/values/farmer-dashboard.yaml
+                              echo "oan-helm main $(git -C "$dir" rev-parse --short=12 HEAD)"
+                              helm upgrade --install farmer-registry-dashboard \\
+                                "$dir/repository/farmer-registry-dashboard-0.1.2.tgz" --namespace farmer \\
+                                --values "$dir/environments/staging/values/farmer-dashboard.yaml" \\
+                                --reset-values --atomic --wait --timeout 10m
+                              helm status farmer-registry-dashboard -n farmer | sed -n '1,6p'
+                              rm -rf "$dir"
+                            '''
+                        }
                     }
                 }
             }

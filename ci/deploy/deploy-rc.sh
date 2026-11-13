@@ -43,7 +43,7 @@ guard() {
   docker run --rm --network none --user "$(id -u):$(id -g)" \
     -e ECR_REGISTRY -e IMAGE_TAG -e SOURCE_COMMIT -e OAN_CHART_ARCHIVE -e OAN_BUILT_CHART_PIN "${evidence_args[@]}" \
     -v "$PWD:/repo:ro" -v "$STATE:$STATE" \
-    "coss-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
+    "oan-ci/validation:$IMAGE_TAG" python "${GUARD_SCRIPT:-ci/deploy/deployment.py}" "$@"
 }
 
 # Dev and staging each deploy only the OAN chart pinned for them.

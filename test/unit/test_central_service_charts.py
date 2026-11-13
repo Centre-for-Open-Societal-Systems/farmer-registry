@@ -29,8 +29,8 @@ def package(name="farmer-registry-dashboard", version="0.1.2", dependencies=None
 
 
 def test_catalogue_extraction_preserves_exact_semantics_and_configuration_hash():
-    original = yaml.safe_load((ROOT / "helm/openg2p-farmer-registry/values.yaml").read_text(encoding="utf-8"))["cossAddons"]
-    extracted = yaml.safe_load((ROOT / "ci/services/catalogue.yaml").read_text(encoding="utf-8"))["cossAddons"]
+    original = yaml.safe_load((ROOT / "helm/openg2p-farmer-registry/values.yaml").read_text(encoding="utf-8"))["oanAddons"]
+    extracted = yaml.safe_load((ROOT / "ci/services/catalogue.yaml").read_text(encoding="utf-8"))["oanAddons"]
     assert extracted == original
     assert coordinator.configuration_hash() == hashlib.sha256(json.dumps(original, sort_keys=True).encode()).hexdigest()
 

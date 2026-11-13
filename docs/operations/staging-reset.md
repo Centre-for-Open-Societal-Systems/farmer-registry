@@ -18,8 +18,8 @@ console. Its success does not establish a deployment.
 The operator entrypoint is `scripts/operations/staging/reset_registry.py`.
 It uses the existing staging kubeconfig, PostgreSQL pod and Secret references.
 Use a promoted staging checkout on the trusted staging host, with Python/PyYAML,
-Git, Helm and kubectl. Keep the working tree clean and fetch COSS develop and
-staging objects first. `create` and `exchange` verify the remote COSS staging
+Git, Helm and kubectl. Keep the working tree clean and fetch OAN develop and
+staging objects first. `create` and `exchange` verify the remote OAN staging
 head and require the implementation commit in **both** develop and staging.
 
 1. Resolve the accepted develop image set and record per-component source commits,
@@ -58,7 +58,7 @@ python scripts/operations/staging/reset_registry.py inventory \
 
 The private directory receives `plan.json` and an invalid evidence template.
 Set only the reviewed reset authorization and measured source provenance in a
-separate protected evidence file. `sourceCommit` must be the current COSS staging
+separate protected evidence file. `sourceCommit` must be the current OAN staging
 head; `implementationCommit` must contain this reset implementation and already
 belong to develop and staging. Retain the generated `deliveryHash`.
 

@@ -1,7 +1,7 @@
 # Farmer dev central service charts
 
 The service coordinator reads [catalogue.yaml](../ci/services/catalogue.yaml),
-which preserves the exact previous `cossAddons` object and JSON hash semantics.
+which preserves the exact previous `oanAddons` object and JSON hash semantics.
 Service identities, source repositories, release names, image paths, environment
 boundaries and promotion policy remain unchanged.
 

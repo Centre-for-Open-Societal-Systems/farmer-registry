@@ -1,7 +1,7 @@
 # Farmer service coordination
 
 The root Jenkinsfile selects one environment pipeline. Dev runs Registry first,
-then coordinates the three Farmer-owned add-ons from `cossAddons.components` in
+then coordinates the three Farmer-owned add-ons from `oanAddons.components` in
 the owning chart values. Other registry dashboards and shared dashboards remain
 outside Farmer ownership.
 

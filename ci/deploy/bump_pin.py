@@ -175,7 +175,7 @@ def main(argv=None):
         new, reason = proposal(old)
         print(reason)
         if new is None:
-            return 0
+            return
     else:
         if not args.commit:
             parser.error("give an oan-helm commit, or use --latest")
@@ -188,17 +188,16 @@ def main(argv=None):
         if old.get("platformVersion") != new["platformVersion"]:
             print(note)
         print("\n(dry run: nothing written; add --write to update " + str(PROFILE.name) + ")")
-        return 0
+        return
     for path in apply_pin(old, new):
         print("updated " + path)
     if old.get("platformVersion") != new["platformVersion"]:
         print(note)
     print("next: python3 -m pytest -q test/unit/test_oan_chart.py test/unit/test_oan_compat.py")
-    return 0
 
 
 if __name__ == "__main__":
     try:
-        sys.exit(main())
+        main()
     except (ValueError, OSError, KeyError, tarfile.TarError) as error:
         raise SystemExit("FAIL: " + str(error))
