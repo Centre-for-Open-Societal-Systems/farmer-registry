@@ -50,6 +50,7 @@ MESSAGES = {
     "rule_number": "{label}: \"{value}\" is not a number. Enter a number, for example 2.5.",
     "rule_date": "{label}: \"{value}\" is not a date. Pick the date from the calendar (DD/MM/YYYY).",
     "rule_option": "{label}: \"{value}\" is not one of the choices. Pick one from the list.",
+    "rule_multiple": "{label}: several answers can be chosen, so the answer must be a list of choices, not \"{value}\". Pick them from the list.",
     "rule_required": "{label}: this is required. Fill it in on every row before saving.",
     "rule_year_range": "{label}: enter a whole year from 1900 to {year}, or leave it empty.",
     "rule_future_date": "{label}: the date is in the future. Choose today or an earlier date.",
@@ -247,6 +248,11 @@ class _Say:
             return MESSAGES.get(key, key).format(**params)
 
 
+def _choice_list(value) -> bool:
+    """A multi-select answer: a list of non-blank text codes."""
+    return isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value)
+
+
 def check_record(record: dict, field_rules: dict[str, dict], messages: dict[str, str] | None = None) -> list[str]:
     """Problems with one record, each a sentence naming the field and the fix."""
     say = _Say(messages or {})
@@ -258,6 +264,13 @@ def check_record(record: dict, field_rules: dict[str, dict], messages: dict[str,
         if value is None or (isinstance(value, str) and not value.strip()) or (rule.get("multiple") and value == []):
             if rule.get("required") and (new or field in record):
                 problems.append(say("rule_required", label=label))
+            continue
+        if rule.get("multiple") and not _choice_list(value):
+            # A multi-select stores a list of codes. A plain string saved here
+            # passes the option check below as one answer, but every reader of
+            # the field (the Crop and Livestock farmer reference among them)
+            # expects a list and refuses the farmer later.
+            problems.append(say("rule_multiple", label=label, value=value))
             continue
         if "type" in rule:
             problem = _type_problem(rule["type"], value)
