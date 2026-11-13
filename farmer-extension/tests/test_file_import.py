@@ -236,3 +236,14 @@ def test_the_code_lists_in_the_documentation_are_the_snapshot():
             assert rows[attribute].startswith(f'{len(values)} '), attribute
         else:
             assert re.findall(r'`(\w+)`', rows[attribute]) == [code for code, _ in values], attribute
+
+
+def test_a_minimal_row_sends_one_record_in_every_single_record_section():
+    # The platform refuses an intake whose subject section holds no record ("Subject register section
+    # 'farmer_documents' must contain exactly one record"), so these sections always carry one, as the
+    # ODK intake sends them; an empty answer is an empty record.
+    result = render({**BASE, 'is_household_head': 'no'})
+    for section in ('farmer_household_lookup', 'farmer_identity', 'farmer_personal_details', 'farmer_photo',
+                    'farmer_socio_economic_health', 'farmer_location', 'farmer_membership', 'farmer_documents'):
+        assert len(result[section]) == 1, section
+    assert result['farmer_documents'] == [{}]

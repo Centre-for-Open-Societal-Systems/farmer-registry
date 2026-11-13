@@ -140,7 +140,9 @@
   {% set _ = lands.append(land) %}
 {% endif %}
 
-{% set documents = [{'identity_document_type': code(cell['identity_document_type'])}] if cell.get('identity_document_type') else [] %}
+{#- One record each in the single-record sections, as the ODK intake sends them (odk/transform.py): the platform
+    refuses an intake whose subject section holds no record, so an empty answer is an empty record. -#}
+{% set documents = [{'identity_document_type': code(cell['identity_document_type'])}] if cell.get('identity_document_type') else [{}] %}
 
 {{ {
   'farmer_household_lookup': [{'is_household_head': is_head}],
@@ -148,14 +150,14 @@
   'farmer_personal_details': [personal],
   'farmer_photo': [{}],
   'farmer_phones': phones,
-  'farmer_socio_economic_health': [socio] if socio else [],
+  'farmer_socio_economic_health': [socio],
   'household_information': household,
   'hh_members': members,
-  'farmer_location': [geo] if geo else [],
+  'farmer_location': [geo],
   'farmer_lands': lands,
   'farmer_crops_intake': [],
   'farmer_farm_inputs_intake': [],
   'farmer_livestock_intake': [],
-  'farmer_membership': [membership] if membership else [],
+  'farmer_membership': [membership],
   'farmer_documents': documents,
 } | tojson }}
