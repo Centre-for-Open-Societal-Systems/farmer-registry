@@ -9,7 +9,8 @@ subchart's image values point at this image instead:
   file is edited, and the entrypoint and roles (api, worker, beat, consumer) are upstream's.
 
 Built and pushed by Jenkins with the other images (`docker/<component>`, build context = repo
-root) as `openg2p/farmer-registry/registry-connector:<commit>`. `tests/` runs inside the pushed
+root) as `eoan/farmer-registry/registry-connector-<RP version>:<version>-<branch>.<build>`
+(`ci/deploy/image_names.py`). `tests/` runs inside the pushed
 image.
 
 The extension adds what OpenG2P's connector documentation specifies, but the published code does

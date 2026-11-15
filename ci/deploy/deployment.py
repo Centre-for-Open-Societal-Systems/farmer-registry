@@ -11,7 +11,9 @@ import uuid
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from environments import OAN_ENVIRONMENTS, configuration, namespace
+import image_names
 
 RELEASE = "farmer-registry"
 # Exact verified Registry UI hostnames of the dev release. Keep installed
@@ -46,7 +48,7 @@ def schema_probe(api, image):
     """Read the DB with existing Secret references while API replicas are stopped."""
     if api.get('metadata', {}).get('name') != RELEASE + '-staff-portal-api' or api['metadata'].get('namespace') != 'far':
         raise ValueError('Schema probe requires the staging staff API Deployment')
-    if not re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/openg2p/farmer-registry/staff-api:[a-f0-9]{12}@sha256:[a-f0-9]{64}', image):
+    if not image_names.is_pinned_image(image, 'staff-api'):
         raise ValueError('Schema probe requires the tested immutable staging API image')
     source = pod(api)
     containers = [c for c in source['containers'] if c['name'] == 'staff-portal-api']
@@ -164,12 +166,29 @@ def reconcile_dev(values, before, chart_pin=None):
     return values
 
 
+IMAGE_REFERENCE = re.compile(r"(?P<registry>\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com)/(?P<repository>[^:@\s]+)"
+                             r"(?::(?P<tag>[A-Za-z0-9_.-]+))?(?:@(?P<digest>sha256:[0-9a-f]{64}))?")
+
+
 def image_root(registry, tag):
+    """The registry host of a build. Its tag is image_names.py's, or the commit12 tag a staging record still carries."""
     if not re.fullmatch(r"\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com", registry):
         raise ValueError("Expected an ap-south-1 ECR registry")
-    if not re.fullmatch(r"[0-9a-f]{12}", tag):
-        raise ValueError("Expected a 12-character commit image tag")
-    return registry + "/openg2p/farmer-registry"
+    if not (image_names.is_tag(tag) or re.fullmatch(r"[0-9a-f]{12}", tag)):
+        raise ValueError("Expected a <version>-<branch>.<build> image tag")
+    return registry
+
+
+def image_repository(root, component, images=None):
+    """The repository the release must run for `component`: the recorded one (a staging record) or this build's."""
+    recorded = (images or {}).get(component, {}).get("repository")
+    return recorded or root + "/" + image_names.repository(component)
+
+
+def built_image(component, image):
+    """True when `image` is a Registry image of `component` in ECR, under its eoan name or its name before eoan."""
+    match = IMAGE_REFERENCE.fullmatch(image or "")
+    return bool(match) and image_names.is_repository(match["repository"], component)
 
 
 def environment_overlay(name, environment="dev"):
@@ -291,13 +310,14 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
             target.setdefault("istio", {}).setdefault("virtualservice", {})["gateway"] = gateways[0]
     for component, (_, _, image) in COMPONENTS.items():
         pinned_tag = images[image]["tag"] + "@" + images[image]["digest"] if images else tag
-        config.setdefault(component, {}).setdefault("image", {}).update(repository=root + "/" + image, tag=pinned_tag)
+        config.setdefault(component, {}).setdefault("image", {}).update(repository=image_repository(root, image, images),
+                                                                      tag=pinned_tag)
         if images:
             # Bitnami image helpers prefer digest to tag; overwrite saved pins.
             config[component]['image']['digest'] = ''
     if environment in OAN_ENVIRONMENTS and images:
         values.setdefault('analytics', {})['image'] = {
-            'repository': root + '/db-seed',
+            'repository': image_repository(root, 'db-seed', images),
             'tag': images['db-seed']['tag'] + '@' + images['db-seed']['digest']}
     # rc.544's chart omits AWE worker variables previously added by OAN. Carry
     # their exact literals/Secret refs forward, without capturing Secret data.
@@ -407,19 +427,22 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                 current_images = {c['name']: c.get('image') for c in pod(current).get(group, [])}
                 for container in pod(previous).get(group, []):
                     previous_image = container.get('image', '')
-                    built = any(previous_image.startswith(root + '/' + component + ':') or previous_image.startswith(root + '/' + component + '@') for component in images)
+                    # The installed release may still run the images of their names before eoan.
+                    built = any(built_image(component, previous_image) for component in images)
                     if not built and container.get('image') != current_images.get(container['name']):
                         raise ValueError(f'Optional component image changed: {key}/{container["name"]}')
     for _, (kind, suffix, component) in COMPONENTS.items():
         key = (kind, RELEASE + "-" + suffix)
         if key not in new or not pod(new[key]).get("containers"):
             raise ValueError(f"Missing required image workload: {key}")
-        expected = root + "/" + component + ":" + (images[component]["tag"] + "@" + images[component]["digest"] if images else tag)
+        expected = image_repository(root, component, images) + ":" + (
+            images[component]["tag"] + "@" + images[component]["digest"] if images else tag)
         if pod(new[key])["containers"][0]["image"] != expected:
             raise ValueError(f"Wrong commit image: {key}")
     public = new.get(("Deployment", RELEASE + "-staff-portal-ui-public"))
     if public:
-        expected = root + "/staff-ui:" + (images["staff-ui"]["tag"] + "@" + images["staff-ui"]["digest"] if images else tag)
+        expected = image_repository(root, "staff-ui", images) + ":" + (
+            images["staff-ui"]["tag"] + "@" + images["staff-ui"]["digest"] if images else tag)
         if [c.get("image") for c in pod(public).get("containers", [])] != [expected]:
             raise ValueError("Public staff UI must use the accepted Registry staff UI image")
     if migrate_identity:
@@ -470,7 +493,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
         for container in pod(d).get("containers", []):
             if environment in OAN_ENVIRONMENTS and images:
                 for component in images:
-                    prefix = root + '/' + component
+                    prefix = image_repository(root, component, images)
                     image = container.get('image', '')
                     if image.startswith((prefix + ':', prefix + '@')) and image != prefix + ':' + images[component]['tag'] + '@' + images[component]['digest']:
                         raise ValueError(f'Built component did not use recorded digest: {key}')
@@ -505,14 +528,14 @@ def unchanged_release(before, current, environment="dev"):
 
 def registry_provenance(registry, tag, commit):
     root = image_root(registry, tag)
-    if not re.fullmatch(r"[0-9a-f]{40}", commit) or not commit.startswith(tag):
+    if not re.fullmatch(r"[0-9a-f]{40}", commit) or not image_names.is_tag(tag):
         raise ValueError("Invalid Registry source provenance")
     images = {}
     for line in Path("service-outcomes/registry-images.tsv").read_text(encoding="utf-8").splitlines():
         component, image, digest = line.split("\t")
         if component not in {c[2] for c in COMPONENTS.values()} or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
             raise ValueError("Invalid Registry image provenance")
-        if image != root + "/" + component + ":" + tag or component in images:
+        if image != image_repository(root, component) + ":" + tag or component in images:
             raise ValueError("Invalid Registry image provenance")
         images[component] = {"image": image, "tag": tag, "digest": digest}
     if set(images) != {c[2] for c in COMPONENTS.values()}:

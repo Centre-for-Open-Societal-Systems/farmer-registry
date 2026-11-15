@@ -12,7 +12,7 @@ of a commit always belong together and nothing is committed back. The image tags
 packaged copy only. oan-helm's publisher (scripts/ci/publish_chart.py) adds the archive and its workflow updates the
 index, CHANGELOG.md and the per-chart rollback history from the annotations set here.
 
-package needs IMAGE_TAG, SOURCE_COMMIT, ECR_REGISTRY, ECR_REPOSITORY, BRANCH_NAME and COMMIT_SUBJECT. publish needs
+package needs IMAGE_TAG, SOURCE_COMMIT, ECR_REGISTRY, BRANCH_NAME and COMMIT_SUBJECT. publish needs
 GH_TOKEN with push access to oan-helm; DRY_RUN=1 publishes nothing. Standard library only: it runs on the Jenkins agent.
 
 Exit codes: 0 done (or already published by an earlier run of this commit), 1 failure, 3 no credential.
@@ -71,11 +71,11 @@ def package(env, version, work):
     chart = work / "chart" / CHART
     shutil.copytree(str(source), str(chart))
     digests = release_images.read_digests((ROOT / release_images.DIGESTS).read_text(encoding="utf-8"),
-                                          env["ECR_REGISTRY"], env["ECR_REPOSITORY"], env["IMAGE_TAG"])
+                                          env["ECR_REGISTRY"], env["IMAGE_TAG"])
     values = chart / "values.yaml"
     values.write_text(release_images.rewrite_values(
         values.read_text(encoding="utf-8"), release_images.wanted(env["IMAGE_TAG"], digests),
-        release_images.expected_repositories(env["ECR_REGISTRY"], env["ECR_REPOSITORY"])), encoding="utf-8")
+        release_images.expected_repositories(env["ECR_REGISTRY"])), encoding="utf-8")
     metadata = chart / "Chart.yaml"
     metadata.write_text(annotate(metadata.read_text(encoding="utf-8"), {
         "oan.org/source-repository": "Centre-for-Open-Societal-Systems/farmer-registry",

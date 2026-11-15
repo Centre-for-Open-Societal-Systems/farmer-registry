@@ -13,7 +13,8 @@ this checkout, never typed in:
   * staging: the deployed commons-services release (revision, chart version), the staging Gateway,
     and the absence of the target release and of every target database (read through psql in the
     Commons PostgreSQL pod; no password is printed or written);
-  * this checkout: the delivery hash and the full source commit of the image tag.
+  * this checkout: the delivery hash and the full source commit of the images (the oan.org/source-commit annotation
+    of the deployed chart; a commit12 tag of the image names before eoan is resolved in this checkout).
 
 Only get/exec-read operations are issued. Output holds no credentials. Upload the file to the Jenkins
 file credential staging-farmer-rehearsal; the pipeline accepts it for 24 hours, only for the
@@ -42,6 +43,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ci"))
 sys.path.insert(0, str(ROOT / "ci" / "deploy"))
+import image_names
 import oan_chart
 import staging
 from deployment import COMPONENTS
@@ -73,8 +75,10 @@ def helm_release(prefix, release, namespace):
     newest = max(secrets, key=lambda s: int(s["metadata"]["labels"]["version"]))
     # Helm stores base64(gzip(json)) inside the Secret's own base64 data field.
     body = json.loads(gzip.decompress(base64.b64decode(base64.b64decode(newest["data"]["release"]))))
+    metadata = body["chart"]["metadata"]
     return {"status": newest["metadata"]["labels"]["status"], "revision": int(newest["metadata"]["labels"]["version"]),
-            "chartVersion": body["chart"]["metadata"]["version"], "platform": body["chart"]["metadata"].get("appVersion", "")}
+            "chartVersion": metadata["version"], "platform": metadata.get("appVersion", ""),
+            "sourceCommit": (metadata.get("annotations") or {}).get("oan.org/source-commit", "")}
 
 
 def fetch(url):
@@ -124,16 +128,20 @@ def new_dev_facts(prefix, now):
     if len(tags) != 1:
         raise RuntimeError("The New Dev components were not built from one source commit")
     tag = tags.pop()
-    commit = subprocess.run(["git", "rev-parse", "--verify", tag + "^{commit}"], cwd=ROOT, capture_output=True, text=True)
+    # A <version>-<branch>.<build> tag says nothing about the commit: the chart New Dev runs records it.
+    wanted = tag if re.fullmatch(r"[0-9a-f]{12}", tag) else release.get("sourceCommit", "")
+    if not wanted:
+        raise RuntimeError("The New Dev chart has no oan.org/source-commit annotation for image tag %s" % tag)
+    commit = subprocess.run(["git", "rev-parse", "--verify", wanted + "^{commit}"], cwd=ROOT, capture_output=True, text=True)
     if commit.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}", commit.stdout.strip()):
-        raise RuntimeError("Image tag %s does not resolve to a commit in this checkout; fetch the full history" % tag)
+        raise RuntimeError("Source %s of image tag %s is not a commit in this checkout; fetch the full history" % (wanted, tag))
     registries = {i["repository"].split("/")[0] for i in images.values()}
     if len(registries) != 1:
         raise RuntimeError("Components come from different registries")
     registry, source = registries.pop(), commit.stdout.strip()
     record_images = {}
     for component, ref in images.items():
-        if ref["repository"] != registry + "/openg2p/farmer-registry/" + component:
+        if not image_names.is_repository(ref["repository"][len(registry) + 1:], component):
             raise RuntimeError("Unexpected repository for " + component)
         # runtimeTested: this exact digest is the one running (ready) on New Dev now.
         record_images[component] = {"repository": ref["repository"], "tag": tag, "sourceCommit": source,
