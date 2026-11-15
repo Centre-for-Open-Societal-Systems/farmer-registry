@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT / 'ci'))
 sys.path.insert(0, str(ROOT / 'ci/deploy'))
 from environments import validate_cluster, validate_release
 from staging import delivery_hash
+import image_names
 import yaml
 
 DATABASE = 'farmer_registry_far'
@@ -265,8 +266,7 @@ def render_jobs(manifest, candidate, images, token):
         if container.get('envFrom') or spec.get('initContainers'):
             raise ValueError('Review hidden environment/init containers before reset')
         image = images[component]
-        expected = r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/openg2p/farmer-registry/' + component + r':[a-f0-9]{12}@sha256:[a-f0-9]{64}'
-        if not re.fullmatch(expected, image):
+        if not image_names.is_pinned_image(image, component):
             raise ValueError('Exact accepted image digest required')
         container['image'] = image
         env = container.setdefault('env', [])
