@@ -9,6 +9,7 @@ import json
 import sqlite3
 import sys
 import types
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from jinja2 import ChainableUndefined, Environment
@@ -35,7 +36,7 @@ def _db():
         CREATE TABLE g2p_register_farmers (internal_record_id TEXT PRIMARY KEY, functional_record_id TEXT);
         CREATE TABLE outgoing_raw_data_payloads (payload_id TEXT PRIMARY KEY, raw_data_json TEXT);
         CREATE TABLE outgoing_raw_data (outgest_id TEXT PRIMARY KEY, payload_id TEXT, register_id TEXT,
-                                        internal_record_id TEXT);
+                                        internal_record_id TEXT, created_at TEXT);
     """)
     return db
 
@@ -44,16 +45,22 @@ def _farmer(db, irid, fid):
     db.execute("INSERT INTO g2p_register_farmers VALUES (?, ?)", (irid, fid))
 
 
-def _snapshot(db, payload, irid, fid, register=REGISTER):
+NOW = datetime(2026, 11, 16, 10, 0)
+
+
+def _snapshot(db, payload, irid, fid, register=REGISTER, created_at=NOW - timedelta(hours=1)):
     db.execute("INSERT INTO outgoing_raw_data_payloads VALUES (?, ?)",
                (payload, json.dumps({"internal_record_id": irid, "functional_record_id": fid})))
     for topic in ("a", "b"):  # one outgoing row per active topic, as the platform writes them
-        db.execute("INSERT INTO outgoing_raw_data VALUES (?, ?, ?, ?)", (f"{payload}:{topic}", payload, register, irid))
+        db.execute("INSERT INTO outgoing_raw_data VALUES (?, ?, ?, ?, ?)",
+                   (f"{payload}:{topic}", payload, register, irid, created_at.isoformat(sep=" ")))
 
 
 def _pending(db, limit=republish.BATCH_SIZE):
     # SQLite takes the same :name binds as SQLAlchemy's text().
-    return [row[0] for row in db.execute(republish.PENDING_SQL, republish.pending_params(limit))]
+    params = republish.pending_params(limit, now=NOW)
+    params["since"] = params["since"].isoformat(sep=" ")  # Postgres compares timestamps; SQLite compares this text
+    return [row[0] for row in db.execute(republish.PENDING_SQL, params)]
 
 
 def test_picks_a_farmer_whose_only_notice_carried_the_placeholder():
@@ -61,6 +68,14 @@ def test_picks_a_farmer_whose_only_notice_carried_the_placeholder():
     _farmer(db, "f-1", "FR-000000000001")
     _snapshot(db, f"intake-1:{REGISTER}:f-1", "f-1", "TEMP-abc")
     assert _pending(db) == ["f-1"]
+
+
+def test_skips_placeholder_notices_older_than_the_scan_window():
+    db = _db()
+    _farmer(db, "f-1", "FR-000000000001")
+    _snapshot(db, f"intake-1:{REGISTER}:f-1", "f-1", "TEMP-abc",
+              created_at=NOW - timedelta(days=republish.SCAN_DAYS, hours=1))
+    assert _pending(db) == []
 
 
 def test_skips_a_farmer_already_sent_with_its_functional_id():

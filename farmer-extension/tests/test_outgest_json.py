@@ -122,3 +122,12 @@ def test_intake_ingest_fanout_uses_json_hierarchy(monkeypatch):
     )
     assert native.call_args.kwargs["intake_form_submission_id"] == "submission"
     assert module.install_intake_outgest_json("oan_missing_worker_module") is None
+
+
+def test_fanout_makes_the_json_hierarchy_when_none_is_registered(monkeypatch):
+    """A worker process that never installed the extension still fans out with the JSON-safe hierarchy."""
+    monkeypatch.setattr(module.JsonSafeHierarchyService, "get_component", classmethod(lambda cls: None))
+    native = AsyncMock()
+    monkeypatch.setattr(module, "fanout_outgest_rows", native)
+    asyncio.run(module.fanout_outgest_rows_json("definition", "row", "session", change_request_id="cr"))
+    assert isinstance(native.call_args.kwargs["hierarchical_service"], module.JsonSafeHierarchyService)
