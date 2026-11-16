@@ -33,7 +33,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 BUILD_TAG_PATTERN='^([0-9a-f]{12}|[0-9]+\.[0-9]+\.[0-9]+-[a-z0-9-]+\.[1-9][0-9]*)$'
 # The rc tag the promotion adds to the chart's images is not a build: the connector images never carry it.
 PROMOTION_TAG_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$'
-PROMOTED_CHART="${PROMOTED_CHART:-$(ls built-chart/*.tgz 2> /dev/null | head -n 1)}"
+PROMOTED_CHART="${PROMOTED_CHART:-$(ls built-chart/*.tgz 2> /dev/null | head -n 1 || true)}"
 test -f "${PROMOTED_CHART:-}" || { echo "No promoted chart archive (built-chart/*.tgz): the registry promotion must run first." >&2; exit 1; }
 STATE=$(mktemp -d)
 checkout=.oan-helm-connector
