@@ -20,7 +20,16 @@ if [[ -z "$replicas" || "$replicas" == 0 ]]; then
 fi
 image=$(kubectl -n "$namespace" get deployment farmer-registry-connector-api -o jsonpath='{.spec.template.spec.containers[0].image}')
 test -n "$image"
+# Pull that image with the API's own pull secrets. On staging the chart default (ecr-pull-secret) is not
+# refreshed; the API also has the release's refreshed farmer-registry-ecr-pull-secret.
+pull_args=()
+index=0
+for secret in $(kubectl -n "$namespace" get deployment farmer-registry-connector-api \
+    -o jsonpath='{range .spec.template.spec.imagePullSecrets[*]}{.name}{" "}{end}'); do
+  pull_args+=(--set-string "imagePullSecrets[$index].name=$secret")
+  index=$((index + 1))
+done
 
 helm upgrade --install farmer-connector-definitions helm/farmer-connector-definitions -n "$namespace" \
-  -f "$values" --set-string "image=$image" --atomic --wait --timeout 20m
+  -f "$values" --set-string "image=$image" "${pull_args[@]}" --atomic --wait --timeout 20m
 echo "[connector-definitions] applied $values with $image"
