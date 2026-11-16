@@ -40,6 +40,7 @@ from ..derived import (
     land_rollup,
     local_name_problems,
     normalize_phone,
+    primary_phone_of,
     sync_email,
 )
 from ..name_rules import NAME_LABELS, name_problems
@@ -115,7 +116,7 @@ def _farmer_record(record: dict) -> None:
 
 
 async def refresh_farmer(session, farmer_id: str | None) -> None:
-    """Land totals and phone list of one farmer, from its own approved rows.
+    """Land totals, plot count, phone list and primary phone of one farmer, from its own approved rows.
 
     The household head is the household's attribute and changes only through a
     change request on the household (household_intake.py), never from here."""
@@ -152,6 +153,7 @@ async def refresh_farmer(session, farmer_id: str | None) -> None:
             for index, p in enumerate(phones)
         ]
         farmer.has_personal_phone = True
+    farmer.primary_phone_number = primary_phone_of(_json(farmer.phone_numbers))
 
 
 async def _phones_from_list(farmer, session) -> None:
