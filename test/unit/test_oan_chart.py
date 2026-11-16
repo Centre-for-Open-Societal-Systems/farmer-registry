@@ -144,3 +144,42 @@ def test_staging_values_are_pinned_by_commit_and_checksum(monkeypatch):
     pinned['values']['path'] = '../../etc/passwd'
     with pytest.raises(ValueError, match='not pinned'):
         oan_chart.values_url('staging')
+
+
+def _running(tmp_path, version, chart='openg2p-farmer-registry'):
+    path = tmp_path / 'running-chart.json'
+    path.write_text('' if version is None else
+                    '{"name": "farmer-registry", "chart": "%s", "version": "%s", "appVersion": "1.2.2-rc.625"}'
+                    % (chart, version), encoding='utf-8')
+    return path
+
+
+def test_semver_orders_rc_after_dev_and_numbers_numerically():
+    order = ['1.0.0-dev.2', '1.0.0-dev.20', '1.0.0-rc.9', '1.0.0-rc.882', '1.0.0', '1.0.1-dev.1']
+    assert sorted(order, key=oan_chart._semver) == order
+    with pytest.raises(ValueError):
+        oan_chart._semver('latest')
+
+
+def test_operator_path_never_installs_a_chart_older_than_staging_runs(tmp_path):
+    pin = oan_chart.profile('staging')
+    # Staging runs a promoted rc newer than the pin: the operator action stops and says why.
+    with pytest.raises(ValueError, match='would downgrade') as blocked:
+        oan_chart.require_current('staging', _running(tmp_path, '1.0.0-rc.99999'))
+    assert pin['version'] in str(blocked.value) and '1.0.0-rc.99999' in str(blocked.value)
+    # The release runs the pinned chart, or there is no release yet (first install): allowed.
+    assert 'not older' in oan_chart.require_current('staging', _running(tmp_path, pin['version']))
+    assert 'no staging release' in oan_chart.require_current('staging', _running(tmp_path, None))
+    with pytest.raises(ValueError, match='runs chart'):
+        oan_chart.require_current('staging', _running(tmp_path, pin['version'], chart='other-chart'))
+
+
+def test_operator_scripts_check_the_running_chart_before_installing():
+    root = Path(__file__).resolve().parents[2]
+    for script in ('ci/deploy/deploy-rc.sh', 'ci/deploy/fresh-install-staging.sh'):
+        text = (root / script).read_text(encoding='utf-8')
+        check = text.index('guard require-current staging')
+        assert text.index('helm get metadata "$HELM_RELEASE"') < check
+        assert check < text.index('guard verify "$CHART"')
+        # A metadata read that fails for any reason other than a missing release stops the run.
+        assert "grep -q 'not found'" in text

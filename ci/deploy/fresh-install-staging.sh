@@ -97,6 +97,14 @@ if [[ "$MODE" == upgrade && "$BACKUP_AVAILABLE" != true ]]; then
   exit 1
 fi
 guard provenance
+{
+  # Never install a chart older than the one staging runs (staging follows promotions, which install rc charts).
+  if ! helm get metadata "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/running-chart.json" 2> "$STATE/metadata.err"; then
+    grep -q 'not found' "$STATE/metadata.err" || { cat "$STATE/metadata.err" >&2; exit 1; }
+    : > "$STATE/running-chart.json"
+  fi
+  GUARD_SCRIPT=ci/deploy/oan_chart.py guard require-current staging "$STATE/running-chart.json"
+}
 
 # 2. The reviewed environment values of the pinned oan-helm commit, checksum verified.
 read -r VALUES_URL VALUES_SHA < <(GUARD_SCRIPT=ci/deploy/oan_chart.py guard values-url staging)

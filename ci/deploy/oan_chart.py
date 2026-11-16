@@ -56,6 +56,44 @@ def require_deployable(environment):
         raise ValueError('Deployment blocked: the pinned OAN chart is for another environment')
 
 
+def _semver(version):
+    """Sort key of a SemVer 2.0 version: release numbers, then pre-release identifiers (a release sorts last)."""
+    match = re.fullmatch(r'(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?', version or '')
+    if not match:
+        raise ValueError('Not a chart version: %r' % version)
+    release = tuple(int(part) for part in match.group(1, 2, 3))
+    if match.group(4) is None:
+        return release, (1,)
+    # Numeric identifiers sort numerically and before alphanumeric ones (SemVer 11.4).
+    identifiers = tuple((0, int(part), '') if part.isdigit() else (1, 0, part) for part in match.group(4).split('.'))
+    return release, (0, identifiers)
+
+
+def require_current(environment, metadata_path):
+    """An operator deploy or fresh-install never installs a chart older than the one the release runs.
+
+    Staging follows promotions: a merge into staging installs the rc chart develop built (ci/deploy/promote-staging.sh),
+    while deploy and fresh-install install the pinned chart. When the pin is older, one operator run would downgrade
+    staging, so it stops here. metadata_path holds `helm get metadata -o json` of the release; empty when there is none.
+    """
+    pin = profile(environment)
+    text = Path(metadata_path).read_text(encoding='utf-8').strip()
+    if not text:
+        return 'no %s release yet; the pinned %s %s may be installed' % (environment, pin['name'], pin['version'])
+    running = json.loads(text)
+    if running.get('chart') != pin['name']:
+        raise ValueError('Deployment blocked: the release runs chart %r, the pin names %r'
+                         % (running.get('chart'), pin['name']))
+    if _semver(pin['version']) < _semver(running.get('version')):
+        raise ValueError(
+            'Deployment blocked: %s runs %s %s (platform %s), newer than the pinned %s (platform %s) in '
+            'ci/deploy/oan-chart-%s.json. This action would downgrade it. Staging follows promotions; to redeploy '
+            'or fresh-install, first pin the chart it runs (its rc archive and sha256 in oan-helm repository/%s/).'
+            % (environment, pin['name'], running.get('version'), running.get('appVersion'), pin['version'],
+               pin['platformVersion'], environment, environment))
+    return 'the pinned %s %s is not older than the running %s' % (pin['name'], pin['version'], running.get('version'))
+
+
 def values_url(environment):
     """The reviewed environment values file of the pinned oan-helm commit, with its checksum."""
     pin = profile(environment)
@@ -88,6 +126,11 @@ if __name__ == '__main__':
             print(pin['repository'] + pin['name'] + '-' + pin['version'] + '.tgz')
         elif sys.argv[1] == 'values-url':
             print('%s %s' % values_url(sys.argv[2]))
+        elif sys.argv[1] == 'require-current':
+            try:
+                print('PASS: ' + require_current(sys.argv[2], sys.argv[3]))
+            except ValueError as reason:
+                sys.exit('FAIL: %s' % reason)
         elif sys.argv[1] == 'require-deployable':
             require_deployable(sys.argv[2])
             print('PASS: registry promotion evidence accepted')
