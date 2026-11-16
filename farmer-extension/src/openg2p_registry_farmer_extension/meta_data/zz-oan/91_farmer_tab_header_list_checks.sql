@@ -49,8 +49,21 @@ BEGIN
       FROM "public"."g2p_register_schemas" d, json_array_elements(d.search_result_schema) e
       WHERE d.register_id = f)
      IS DISTINCT FROM ARRAY['functional_record_id', 'first_name', 'middle_name', 'last_name', 'gender', 'birth_date',
-                            'marital_status', 'education_level', 'region_name', 'zone_name', 'woreda_name', 'kebele_name'] THEN
+                            'marital_status', 'education_level', 'region_name', 'zone_name', 'woreda_name', 'kebele_name',
+                            'total_land_area', 'total_plots', 'primary_phone_number'] THEN
     RAISE EXCEPTION 'Farmer list columns are not Farmer ID, names, then the rest (05_registers.sql)';
+  END IF;
+  -- Filters: the list's filters and the list API's filter_by whitelist (core allows 10).
+  IF (SELECT array_agg(e->>'field_name' ORDER BY (e->>'order')::int)
+      FROM "public"."g2p_register_schemas" d, json_array_elements(d.filter_schema) e
+      WHERE d.register_id = f)
+     IS DISTINCT FROM ARRAY['first_name', 'last_name', 'gender', 'birth_date', 'region_name', 'zone_name',
+                            'woreda_name', 'kebele_name', 'registration_date', 'record_status'] THEN
+    RAISE EXCEPTION 'Farmer list filters are not names, gender, birth date, place, registration date and status (05_registers.sql)';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM "public"."g2p_register_schemas" d, json_array_elements(d.filter_schema) e
+                 WHERE d.register_id = f AND e->>'field_name' = 'record_status' AND e->>'display_label' = 'Status') THEN
+    RAISE EXCEPTION 'Farmer status filter is not labelled Status (05_registers.sql)';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM "public"."g2p_register_schemas" d, json_array_elements(d.search_result_schema) e
                  WHERE d.register_id = f AND e->>'field_name' = 'middle_name' AND e->>'display_label' = 'Father''s name')
@@ -106,13 +119,17 @@ BEGIN
     RAISE EXCEPTION 'Cooperative names have no require action: %', found;
   END IF;
 
-  -- The Yes/No questions are radios.
+  -- The Yes/No questions are radios whose No is the value false. The platform boolean widget saves
+  -- "No" as empty, so a required question could not be answered No and a rule on "No" never matched;
+  -- a radio with static true/false options keeps the answer.
   SELECT string_agg(c.section_id || '.' || c.wid, ', ') INTO found
   FROM (VALUES ('farmer_socio_economic_health', 'disabled'), ('farmer_socio_economic_health', 'is_psnp_user'),
-               ('farmer_socio_economic_health', 'is_farmer'), ('farmer_identity', 'has_national_id')) c(section_id, wid)
+               ('farmer_socio_economic_health', 'is_farmer'), ('farmer_identity', 'has_national_id'),
+               ('household_information', 'other_land_owner'), ('household_information', 'other_farmer_in_household'),
+               ('household_information', 'father_included'), ('household_information', 'mother_included')) c(section_id, wid)
   WHERE NOT EXISTS (SELECT 1 FROM "public"."g2p_register_sections" s
           WHERE s.section_id = c.section_id AND jsonb_path_exists(s.section_ui_schema,
-            'lax $.**.widgets[*] ? (@."widget-id" == $id && @.widget == "boolean" && @."widget-data-format".booleanControlType == "radio")',
+            'lax $.**.widgets[*] ? (@."widget-id" == $id && @.widget == "radio" && exists(@."widget-data-source".options[*] ? (@.value == false)))',
             jsonb_build_object('id', c.wid)));
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'Yes/No questions that are not radios: %', found;

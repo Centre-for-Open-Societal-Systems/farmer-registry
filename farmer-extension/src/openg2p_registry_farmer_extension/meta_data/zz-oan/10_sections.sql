@@ -48,10 +48,11 @@ WITH additions (upstream_section_id, section_id, path, items) AS (
   ('farmer_household_lookup_section_01',
    'farmer_household_lookup',
    '{panels,0,panels,0,widgets}'::text[],
-   '[{"widget": "boolean", "widget-id": "is_household_head", "widget-type": "input", "widget-label": "is_household_head",
+   '[{"widget": "radio", "widget-id": "is_household_head", "widget-type": "input", "widget-label": "is_household_head",
       "widget-readonly": false, "widget-required": false,
       "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.is_household_head",
-      "widget-data-format": {"allowUnset": false, "booleanControlType": "radio", "booleanRepresentation": "yes-no"}}]'::jsonb),
+      "widget-data-format": {"layout": "horizontal"},
+     "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}}]'::jsonb),
 
   -- Livestock tables: gender, condition and production, when the count was
   -- taken and in which season, and disease.

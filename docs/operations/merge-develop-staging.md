@@ -22,8 +22,11 @@ staging cluster by itself.
 
 ## What the staging branch deploys
 
-- The OAN chart `openg2p-farmer-registry` pinned in `ci/deploy/oan-chart-staging.json`, into namespace `farmer`,
-  with values from the pinned oan-helm commit and the overlays in `helm/environments/staging/`.
+- A merge promotes the rc chart develop built from this tree (`ci/deploy/promote-staging.sh`), into namespace
+  `farmer`, with the oan-helm staging overlay and the overlays in `helm/environments/staging/`.
+- The manual `deploy` and `fresh-install` actions install the chart pinned in `ci/deploy/oan-chart-staging.json`, with
+  values from the pinned oan-helm commit. They first compare it with the running release and stop when the pin is
+  older (`ci/deploy/oan_chart.py require-current`), so they never downgrade a promoted rc.
 - The legacy release in namespace `far` (`farmer_registry_far`, platform rc.544) is not deployed to, upgraded or
   removed by this pipeline.
 - `ci/deploy/oan_chart.py require-deployable` accepts only `dev` and `staging`, and only with the pin made for the

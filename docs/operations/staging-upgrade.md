@@ -8,8 +8,11 @@ Values come only from `environments/staging/values/farmer.yaml` of oan-helm and 
 
 The sections below describe the manual `fresh-install` and `deploy` actions, which need the protected rehearsal evidence.
 
-Staging runs the same OAN chart as New Dev (`openg2p-farmer-registry` 1.0.0-dev.20, platform
-`1.2.2-rc.614`, pinned in `ci/deploy/oan-chart-staging.json`) in namespace `farmer`,
+Staging runs the rc chart its last promotion installed (`openg2p-farmer-registry` 1.0.0-rc.*, published in oan-helm
+`repository/staging/`) in namespace `farmer`. The manual actions install the chart pinned in
+`ci/deploy/oan-chart-staging.json` instead, so before installing anything they read the running release
+(`helm get metadata`) and stop when the pin is older (`ci/deploy/oan_chart.py require-current`): one manual run must
+never downgrade what promotions delivered. To run one, first pin the chart staging runs. The release was
 installed fresh beside the legacy release in namespace `far`. The legacy release, its
 databases (`*_far`) and its connector are not touched by this pipeline. The earlier
 procedure for upgrading that legacy release in place (rc.544, 36 coordinate columns,
@@ -24,7 +27,7 @@ Changes land in `develop` and are promoted `develop` to `staging` by PR; see
 | Resource | Staging |
 | --- | --- |
 | Namespace / release | `farmer` / `farmer-registry` |
-| Pin | `ci/deploy/oan-chart-staging.json` (`environment: staging`, chart dev.20 at oan-helm `d7588ad`) |
+| Pin | `ci/deploy/oan-chart-staging.json` (`environment: staging`; manual actions only, refused while older than the running release) |
 | Hosts | base domain `qa.oanstaging.com`: `farmer-registry`, `keycloak` (issuer `https://keycloak.qa.oanstaging.com/realms/staff`), `staff-farmer`, `connector-farmer-registry`, `esignet`, `odk-central` |
 | Databases | `farmer_registry`, `farmer_registry_idgen`, connector `farmer_connector_v2` |
 | Kubeconfig credential / agent | `staging-farmer-kubeconfig` / `oan-ci-deploy-agent-1`; API servers `https://10.0.1.212:6443`, `https://52.66.116.220:6443` |

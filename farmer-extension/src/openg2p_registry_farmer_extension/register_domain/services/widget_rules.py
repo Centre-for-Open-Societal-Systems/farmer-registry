@@ -112,7 +112,7 @@ def _kind(widget: dict) -> str | None:
 
 def _options(widget: dict) -> list | None:
     source = widget.get("widget-data-source") or {}
-    if widget.get("widget") not in {"select", "multi-select"} or source.get("type") != "static":
+    if widget.get("widget") not in {"select", "multi-select", "radio"} or source.get("type") != "static":
         return None
     values = [o.get("value") for o in source.get("options") or [] if isinstance(o, dict)]
     return values or None

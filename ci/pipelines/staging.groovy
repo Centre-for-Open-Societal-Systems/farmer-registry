@@ -65,11 +65,13 @@ def call() {
                             sh 'bash ci/deploy/sample-data-summary.sh'
                         }
                     }
-                    // The connector release follows oan-helm's staging values on every promotion, as crop and livestock
+                    // The connector release follows oan-helm's staging values and the promoted build's connector images on every promotion, as crop and livestock
                     // upgrade theirs: the services deploy below is an operator action, so without this a values change
                     // (the qa move) never reached the running connector. --atomic: a failed upgrade restores it and
                     // fails the build. Runs before the definitions, which call the connector's admin API.
-                    withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                    // It resolves the promoted build's connector images in ECR, hence the AWS credentials.
+                    withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG'),
+                                     [$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-ecr-creds']]) {
                         sh 'bash ci/deploy/connector-staging.sh'
                     }
                     // The connector definitions declared in git (helm/environments/staging/farmer-connector-definitions.yaml),

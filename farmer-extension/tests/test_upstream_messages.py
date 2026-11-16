@@ -139,3 +139,29 @@ def test_an_unknown_parent_of_another_register_names_that_register():
 def test_an_unknown_household_message_uses_the_translation():
     text = "link_internal_record_id 'x' does not exist in register 'Household'"
     assert reword(text, {"upstream_link_not_found": "No such {register_lower}."}) == "No such household."
+
+def test_the_finalize_members_message_with_its_count_is_reworded():
+    # What finalize raised on New Dev on 16 Nov: the size and a hint after '; '.
+    text = ("Household members must be entered before the submission can be finalized (3 expected); "
+            "add every member of the household, including the head")
+    assert reword(text) == (
+        "Household members: none are entered (3 expected). Add every member, including the head, before submitting.")
+    assert reword("Household members must be entered before the submission can be finalized") == (
+        "Household members: none are entered. Add every member, including the head, before submitting.")
+
+
+def test_the_members_count_message_is_reworded():
+    text = "Household size_of_group is 3 but 1 member(s) were entered; the members must match the size of the group"
+    assert reword(text).startswith("Household members: 1 entered, but the household size is 3.")
+
+
+def test_every_problem_of_a_joined_refusal_is_reworded():
+    text = ("Farmer location: Kebele is empty; Household information must be entered before the submission "
+            "can be finalized; Household size_of_group is 2 but 1 member(s) were entered; the members must "
+            "match the size of the group")
+    assert reword(text) == (
+        "Farmer location: Kebele is empty; "
+        "Household: the household information is empty. Fill it in before submitting.; "
+        "Household members: 1 entered, but the household size is 2. Add or remove members, or correct the "
+        "household size, so they match.")
+    assert reword("Something unknown; another") == "Something unknown; another"

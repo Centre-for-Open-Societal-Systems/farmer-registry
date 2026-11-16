@@ -55,9 +55,38 @@ WHERE "register_id" = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
 UPDATE "public"."g2p_register_schemas" s
 SET "search_result_schema" = (s."search_result_schema"::jsonb || (
   SELECT COALESCE(jsonb_agg(jsonb_build_object('field_name', f, 'display_label', l, 'order', 100 + o) ORDER BY o), '[]'::jsonb)
-  FROM (VALUES (1, 'region_name', 'Region'), (2, 'zone_name', 'Zone'), (3, 'woreda_name', 'Woreda'), (4, 'kebele_name', 'Kebele')) v(o, f, l)
+  FROM (VALUES (1, 'region_name', 'Region'), (2, 'zone_name', 'Zone'), (3, 'woreda_name', 'Woreda'), (4, 'kebele_name', 'Kebele'),
+               (5, 'total_land_area', 'Total land (hectares)'), (6, 'total_plots', 'Total plots'),
+               (7, 'primary_phone_number', 'Mobile number')) v(o, f, l)
   WHERE NOT EXISTS (SELECT 1 FROM json_array_elements(s."search_result_schema") e WHERE e->>'field_name' = v.f)))::json
 WHERE s."register_id" = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
+
+-- The farmer list's filters, which are also the only fields the list API's
+-- filter_by accepts (core's FilterBuilder whitelist, at most 10 fields): the
+-- names, gender, birth date, where the farmer lives, when the farmer was
+-- registered and the record's status. Core's filter types are text, a dropdown
+-- with fixed options, and number, date and boolean ranges; it has no list from
+-- Master Data, so the place names are text filters on the names derived from
+-- the farmer's location (register_domain/derived.py). Written out on every run.
+UPDATE "public"."g2p_register_schemas"
+SET "filter_schema" = '[
+  {"field_name": "first_name", "display_label": "First name", "filter_type": "text", "order": 1, "allowed_operators": ["eq", "contains"]},
+  {"field_name": "last_name", "display_label": "Grandfather''s name", "filter_type": "text", "order": 2, "allowed_operators": ["eq", "contains"]},
+  {"field_name": "gender", "display_label": "Gender", "filter_type": "dropdown", "order": 3, "allowed_operators": ["eq", "in"],
+   "options_source": [{"value": "MALE", "label": "Male"}, {"value": "FEMALE", "label": "Female"},
+                      {"value": "OTHERS", "label": "Other"}, {"value": "UNKNOWN", "label": "Unknown"}]},
+  {"field_name": "birth_date", "display_label": "Birth date", "filter_type": "date_range", "order": 4,
+   "allowed_operators": ["eq", "gt", "gte", "lt", "lte", "between"]},
+  {"field_name": "region_name", "display_label": "Region", "filter_type": "text", "order": 5, "allowed_operators": ["eq", "contains"]},
+  {"field_name": "zone_name", "display_label": "Zone", "filter_type": "text", "order": 6, "allowed_operators": ["eq", "contains"]},
+  {"field_name": "woreda_name", "display_label": "Woreda", "filter_type": "text", "order": 7, "allowed_operators": ["eq", "contains"]},
+  {"field_name": "kebele_name", "display_label": "Kebele", "filter_type": "text", "order": 8, "allowed_operators": ["eq", "contains"]},
+  {"field_name": "registration_date", "display_label": "Registration date", "filter_type": "date_range", "order": 9,
+   "allowed_operators": ["eq", "gt", "gte", "lt", "lte", "between"]},
+  {"field_name": "record_status", "display_label": "Status", "filter_type": "dropdown", "order": 10, "allowed_operators": ["eq", "in"],
+   "options_source": [{"value": "ACTIVE", "label": "Active"}, {"value": "INACTIVE", "label": "Inactive"},
+                      {"value": "ARCHIVED", "label": "Archived"}]}]'::json
+WHERE "register_id" = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
 
 -- A farmer's record is verified with Fayda (eSignet): core's registrant
 -- authentication, started by the platform's id-authentication widget on the

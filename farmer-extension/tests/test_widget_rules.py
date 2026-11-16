@@ -251,3 +251,19 @@ def test_a_static_multi_select_refuses_a_plain_string_even_when_it_is_a_choice()
     rules = widget_rules.collect_rules([(FARMER, schema)])[FARMER]
     problems = widget_rules.check_record({"finance_access_types": "LOAN"}, rules)
     assert len(problems) == 1 and problems[0].startswith("Financial services: several answers can be chosen")
+
+
+def test_a_yes_no_radio_keeps_no_and_takes_only_yes_or_no():
+    # The Yes/No questions are radios with the static options true and false, so "No" is saved as false
+    # and anything else is refused.
+    radio = {"panels": [{"panels": [{"widgets": [
+        {"widget": "radio", "widget-id": "other_land_owner", "widget-label": "other_land_owner",
+         "widget-data-path": "hh.other_land_owner",
+         "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": True}, {"label": "NO", "value": False}]}},
+    ]}]}]}
+    rules = widget_rules.collect_rules([("hh", radio)])["hh"]
+    words = {**MESSAGES, "other_land_owner": "Another land owner in the household"}
+    assert widget_rules.check_record({"other_land_owner": False}, rules, words) == []
+    assert widget_rules.check_record({"other_land_owner": True}, rules, words) == []
+    assert widget_rules.check_record({"other_land_owner": "perhaps"}, rules, words) == [
+        'Another land owner in the household: "perhaps" is not one of the choices. Pick one from the list.']

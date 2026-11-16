@@ -27,7 +27,7 @@ processes import this module through CELERY_IMPORTS (worker.py).
 import asyncio
 import logging
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 _logger = logging.getLogger(__name__)
 
@@ -35,6 +35,9 @@ TASK_NAME = "farmer_fr_id_republish_worker"
 SCHEDULE_KEY = "farmer_fr_id_republish_beat_producer"
 SCHEDULE_SECONDS = 300
 BATCH_SIZE = 20
+# Only TEMP- snapshots from the last SCAN_DAYS are looked at, so each run reads a bounded slice of outgoing_raw_data
+# instead of every snapshot ever written. The first run on each environment (11 Nov) handled the older farmers.
+SCAN_DAYS = 30
 FARMER_REGISTER_ID = "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd"
 SOURCE_PREFIX = "republish-fr-id:"
 CHANGED_BY = "system:republish-fr-id"
@@ -50,6 +53,7 @@ WHERE f.functional_record_id LIKE 'FR-%'
     SELECT 1 FROM outgoing_raw_data o
     JOIN outgoing_raw_data_payloads p ON p.payload_id = o.payload_id
     WHERE o.register_id = :register_id AND o.internal_record_id = f.internal_record_id
+      AND o.created_at >= :since
       AND p.raw_data_json ->> 'functional_record_id' LIKE 'TEMP-%')
   AND NOT EXISTS (
     SELECT 1 FROM outgoing_raw_data o
@@ -73,8 +77,9 @@ def payload_id(internal_record_id: str, register_id: str = FARMER_REGISTER_ID) -
     return f"{source_id(internal_record_id)}:{register_id}:{internal_record_id}"
 
 
-def pending_params(limit: int = BATCH_SIZE) -> dict:
-    return {"register_id": FARMER_REGISTER_ID, "prefix": SOURCE_PREFIX, "limit": limit}
+def pending_params(limit: int = BATCH_SIZE, now: datetime | None = None) -> dict:
+    since = (now or datetime.now(UTC).replace(tzinfo=None)) - timedelta(days=SCAN_DAYS)
+    return {"register_id": FARMER_REGISTER_ID, "prefix": SOURCE_PREFIX, "limit": limit, "since": since}
 
 
 def add_schedule(beat_app, worker_queue: str) -> None:
