@@ -22,7 +22,7 @@ SEED = '61_file_import_to_farmer_intake.sql'
 REQUIRED = {'first_name', 'last_name', 'gender', 'is_household_head'}
 BASE = {'first_name': 'Sample', 'last_name': 'Farmer', 'gender': 'MALE', 'is_household_head': 'yes'}
 SECTIONS = ("farmer_household_lookup", "farmer_identity", "farmer_personal_details", "farmer_photo", "farmer_phones",
-            "farmer_socio_economic_health", "household_information", "household_household_household_member_section_02", "farmer_location", "farmer_lands",
+            "farmer_socio_economic_health", "household_information", "hh_members", "farmer_location", "farmer_lands",
             "farmer_crops_intake", "farmer_farm_inputs_intake", "farmer_livestock_intake", "farmer_membership",
             "farmer_documents")
 
@@ -122,11 +122,11 @@ def test_a_head_starts_a_household_with_the_farmer_as_its_only_member():
     assert result['household_information'] == [{'household_head': 'Sample Middle Farmer', 'size_of_group': 1,
                                                  'number_of_male_members': 0, 'number_of_female_members': 1,
                                                  'other_land_owner': False}]
-    assert result['household_household_household_member_section_02'] == [{'first_name': 'Sample', 'last_name': 'Farmer', 'gender': 'FEMALE',
+    assert result['hh_members'] == [{'first_name': 'Sample', 'last_name': 'Farmer', 'gender': 'FEMALE',
                                      'is_head': True, 'relationship_to_the_head': 'SELF', 'middle_name': 'Middle'}]
     other = render({**BASE, 'is_household_head': 'No'})
     assert other['farmer_household_lookup'] == [{'is_household_head': False}]
-    assert other['household_information'] == [] and other['household_household_household_member_section_02'] == []
+    assert other['household_information'] == [] and other['hh_members'] == []
 
 
 def test_the_farmer_id_is_never_imported_and_no_land_without_land_columns():

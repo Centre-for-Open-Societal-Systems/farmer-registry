@@ -66,8 +66,8 @@ class SourceMapperTests(unittest.TestCase):
             "hh_member_land_info":{"hh_member_land_info_repeat":[{"hh_member_land_certificate":"stored-certificate"}]}}]}
         result=mapper.intake_sections(value)
         self.assertTrue(result["household_information"][0]["other_farmer_in_household"])
-        self.assertEqual(result["household_household_household_member_section_02"][1]["odk_member_id"],"ODK-MEMBER")
-        self.assertEqual(result["household_household_household_member_section_02"][1]["certificate_storage_id"],"stored-certificate")
+        self.assertEqual(result["hh_members"][1]["odk_member_id"],"ODK-MEMBER")
+        self.assertEqual(result["hh_members"][1]["certificate_storage_id"],"stored-certificate")
         # This is a member summary, not another Farmer submission.
         self.assertEqual(len(result["farmer_identity"]),1)
 

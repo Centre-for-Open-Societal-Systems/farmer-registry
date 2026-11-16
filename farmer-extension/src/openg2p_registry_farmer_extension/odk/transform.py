@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 
 SECTIONS = ("farmer_household_lookup", "farmer_identity",
     "farmer_personal_details", "farmer_photo", "farmer_phones",
-    "farmer_socio_economic_health", "household_information", "household_household_household_member_section_02",
+    "farmer_socio_economic_health", "household_information", "hh_members",
     "farmer_location", "farmer_lands", "farmer_crops_intake",
     "farmer_farm_inputs_intake", "farmer_livestock_intake",
     "farmer_membership", "farmer_documents")
