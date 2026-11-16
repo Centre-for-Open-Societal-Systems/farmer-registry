@@ -135,6 +135,16 @@ pipeline {
                 stash name: 'built-chart', includes: 'built-chart/**'
             }
         }
+        stage('Checks green') {
+            // Nothing reaches New Dev unless every GitHub check of this commit passed (ci/deploy/require-green-checks.sh).
+            // The images were built meanwhile; a red or still-pending commit stops here.
+            when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION != 'publish-only' } } }
+            steps {
+                withCredentials([usernamePassword(credentialsId: "${OAN_HELM_FORK_CRED_ID}", usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                    sh 'bash ci/deploy/require-green-checks.sh Centre-for-Open-Societal-Systems/farmer-registry "$SOURCE_COMMIT"'
+                }
+            }
+        }
         stage('Deploy (package)') {
             when { allOf { branch 'develop'; not { changeRequest() }; expression { env.DELIVERY_ACTION != 'publish-only' } } }
             steps {
