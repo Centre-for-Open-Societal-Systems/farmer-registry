@@ -12,8 +12,9 @@
 -- date widget's "ethiopian" variant (15_sections.sql). Stored values stay
 -- Gregorian ISO dates; server-derived Ethiopian twins still feed reports.
 --
--- Yes/no questions are answered yes or no: "allowUnset": false drops the
--- radio's "Not set" choice. An unanswered question stays empty.
+-- Yes/no questions are radios with the static options true and false: the
+-- platform boolean radio saves "No" as empty, so a required question could not
+-- be answered No. An unanswered question stays empty.
 
 -- Documents: six categories, each with the kind of document and up to
 -- `slots` files. Only the identity document is required.
@@ -248,7 +249,12 @@ form_layout (section_id, upstream_section_id, col, ord, w) AS (
   ('household_information', 'household_household_household_information_section_01', 2, 1, '{"widget-id": "number_of_male_members"}'),
   ('household_information', 'household_household_household_information_section_01', 2, 2, '{"widget-id": "number_of_female_members"}'),
   ('household_information', 'household_household_household_information_section_01', 2, 3, '{"widget-id": "number_of_elderly_members"}'),
-  ('household_information', 'household_household_household_information_section_01', 3, 1, '{"widget-id": "other_land_owner"}'),
+  ('household_information', 'household_household_household_information_section_01', 3, 1,
+   '{"widget": "radio", "widget-id": "other_land_owner", "widget-type": "input", "widget-label": "other_land_owner",
+     "widget-readonly": false, "widget-required": true,
+     "widget-data-path": "9055ab43-c85d-4833-bd00-ca657bb72644.other_land_owner",
+     "widget-data-format": {"layout": "horizontal"},
+     "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}}'),
   ('household_information', 'household_household_household_information_section_01', 3, 2,
    '{"widget": "radio", "widget-id": "other_farmer_in_household", "widget-type": "input", "widget-label": "other_farmer_in_household",
      "widget-readonly": false, "widget-required": false,
