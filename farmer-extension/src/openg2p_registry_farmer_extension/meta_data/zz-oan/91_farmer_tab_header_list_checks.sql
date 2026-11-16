@@ -106,13 +106,17 @@ BEGIN
     RAISE EXCEPTION 'Cooperative names have no require action: %', found;
   END IF;
 
-  -- The Yes/No questions are radios.
+  -- The Yes/No questions are radios whose No is the value false. The platform boolean widget saves
+  -- "No" as empty, so a required question could not be answered No and a rule on "No" never matched;
+  -- a radio with static true/false options keeps the answer.
   SELECT string_agg(c.section_id || '.' || c.wid, ', ') INTO found
   FROM (VALUES ('farmer_socio_economic_health', 'disabled'), ('farmer_socio_economic_health', 'is_psnp_user'),
-               ('farmer_socio_economic_health', 'is_farmer'), ('farmer_identity', 'has_national_id')) c(section_id, wid)
+               ('farmer_socio_economic_health', 'is_farmer'), ('farmer_identity', 'has_national_id'),
+               ('household_information', 'other_land_owner'), ('household_information', 'other_farmer_in_household'),
+               ('household_information', 'father_included'), ('household_information', 'mother_included')) c(section_id, wid)
   WHERE NOT EXISTS (SELECT 1 FROM "public"."g2p_register_sections" s
           WHERE s.section_id = c.section_id AND jsonb_path_exists(s.section_ui_schema,
-            'lax $.**.widgets[*] ? (@."widget-id" == $id && @.widget == "boolean" && @."widget-data-format".booleanControlType == "radio")',
+            'lax $.**.widgets[*] ? (@."widget-id" == $id && @.widget == "radio" && exists(@."widget-data-source".options[*] ? (@.value == false)))',
             jsonb_build_object('id', c.wid)));
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'Yes/No questions that are not radios: %', found;
