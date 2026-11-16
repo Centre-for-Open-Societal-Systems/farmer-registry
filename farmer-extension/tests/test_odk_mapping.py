@@ -44,8 +44,8 @@ def test_prepared_sections_render_as_native_json_with_mds_codes_and_exact_roster
     household = sections['household_information'][0]
     assert household['size_of_group'] == 2
     assert household['number_of_male_members'] == household['number_of_female_members'] == 1
-    assert sections['hh_members'][0]['is_head'] is True
-    assert sections['hh_members'][1]['relationship_to_the_head'] == 'SPOUSE'
+    assert sections['household_household_household_member_section_02'][0]['is_head'] is True
+    assert sections['household_household_household_member_section_02'][1]['relationship_to_the_head'] == 'SPOUSE'
     loc = sections['farmer_location'][0]
     assert loc['geo_lowest_level_value_id'] == 'ET01010102'
     assert len(json.loads(loc['geo_code_hierarchy_json'])['hierarchy']) == 4
@@ -69,7 +69,7 @@ def test_legacy_numeric_geography_is_not_invented_and_existing_household_is_not_
     data['matched_household_id']='approved-household'
     result=intake_sections(data)
     assert result['farmer_location']==[{}]
-    assert result['household_information']==[] and result['hh_members']==[]
+    assert result['household_information']==[] and result['household_household_household_member_section_02']==[]
     assert result['farmer_household_lookup'][0]['link_internal_record_id']=='approved-household'
 
 

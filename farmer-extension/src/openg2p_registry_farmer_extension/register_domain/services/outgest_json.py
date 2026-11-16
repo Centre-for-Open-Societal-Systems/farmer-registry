@@ -48,6 +48,15 @@ class JsonSafeHierarchyService(G2PRegisterHierarchicalService):
         return to_jsonable_python(result)
 
 
+def json_safe_hierarchy():
+    """The registered JSON-safe hierarchy, made on first use.
+
+    A process that never ran install_outgest_json() (a Celery task module loaded on its own) has no component yet;
+    passing None would make native fanout build its plain hierarchy and fail on Decimal again.
+    """
+    return JsonSafeHierarchyService.get_component() or JsonSafeHierarchyService()
+
+
 class JsonSafeOutgestChangeRequestService(DirectApprovalClosed, G2PRegisterChangeRequestService):
     async def _fanout_outgest_for_change_request(self, change_request, session):
         definition, register_class, _ = await self._get_register_class_and_schema(
@@ -68,13 +77,13 @@ class JsonSafeOutgestChangeRequestService(DirectApprovalClosed, G2PRegisterChang
             approved_by=change_request.approved_by,
             approved_at=change_request.approved_at,
             changed_by_partner_id=change_request.source_partner_id,
-            hierarchical_service=JsonSafeHierarchyService.get_component(),
+            hierarchical_service=json_safe_hierarchy(),
         )
 
 
 async def fanout_outgest_rows_json(*args, **kwargs):
     """Native fanout with the JSON-safe hierarchy, whatever the caller built."""
-    kwargs["hierarchical_service"] = JsonSafeHierarchyService.get_component()
+    kwargs["hierarchical_service"] = json_safe_hierarchy()
     return await fanout_outgest_rows(*args, **kwargs)
 
 
@@ -98,8 +107,7 @@ def install_intake_outgest_json(module_name=INGEST_WORKER_MODULE):
 
 
 def install_outgest_json():
-    if JsonSafeHierarchyService.get_component() is None:
-        JsonSafeHierarchyService()
+    json_safe_hierarchy()
     install_intake_outgest_json()
     current = G2PRegisterChangeRequestService.get_component()
     if isinstance(current, JsonSafeOutgestChangeRequestService):
