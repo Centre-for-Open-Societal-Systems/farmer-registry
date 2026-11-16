@@ -45,12 +45,26 @@ def test_hectares():
 
 def test_land_rollup():
     rollup = derived.land_rollup([("OWNER", 2.5), ("TENANT", 3.5), ("CROP_SHARE", 1.0)])
-    assert rollup == {"total_land_area": 7.0, "total_land_owned_area": 2.5, "total_land_rent_area": 3.5,
+    assert rollup == {"total_plots": 3, "total_land_area": 7.0, "total_land_owned_area": 2.5, "total_land_rent_area": 3.5,
                       "total_land_crop_sharing_area": 1.0, "land_ownership": "HYBRID"}
     assert derived.land_rollup([("OWNER", 1), ("OWNER", 2)])["land_ownership"] == "OWNER"
     assert derived.land_rollup([("CROP_SHARE", 1)])["land_ownership"] == "HYBRID"
     assert derived.land_rollup([])["land_ownership"] is None
     assert derived.land_rollup([])["total_land_area"] == 0
+    assert derived.land_rollup([])["total_plots"] == 0
+    # A parcel without a size or type is still a plot.
+    assert derived.land_rollup([(None, None), ("OWNER", 1.0)])["total_plots"] == 2
+
+
+def test_primary_phone_of():
+    numbers = [{"type": "other", "number": "+251911000001", "is_primary": False},
+               {"type": "mobile", "number": "+251911000002", "is_primary": True}]
+    assert derived.primary_phone_of(numbers) == "+251911000002"
+    # No primary entry: the first one with a number.
+    assert derived.primary_phone_of([{"number": ""}, {"number": " 0911000003 "}]) == "0911000003"
+    assert derived.primary_phone_of([]) is None
+    assert derived.primary_phone_of(None) is None
+    assert derived.primary_phone_of("+251911000004") is None
 
 
 def test_geo_names():

@@ -16,7 +16,7 @@ README's migration map names the column for each.
 
 from datetime import date
 
-from sqlalchemy import JSON, Boolean, Date, Numeric, String, Text
+from sqlalchemy import JSON, Boolean, Date, Integer, Numeric, String, Text
 
 # register mnemonic -> {field: (column type, python type)}
 OAN_FIELDS: dict[str, dict[str, tuple]] = {
@@ -65,6 +65,10 @@ OAN_FIELDS: dict[str, dict[str, tuple]] = {
         "total_land_rent_area": (Numeric(16, 6), float),
         "total_land_crop_sharing_area": (Numeric(16, 6), float),
         "land_ownership": (String, str),  # OWNER, TENANT or HYBRID
+        # Derived for the farmer list: the number of active land parcels, and the
+        # primary entry of phone_numbers.
+        "total_plots": (Integer, int),
+        "primary_phone_number": (String, str),
         # Names of the units in geo_code_hierarchy_json, for lists and search.
         "region_name": (String, str),
         "zone_name": (String, str),

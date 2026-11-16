@@ -58,6 +58,7 @@ class Initializer(FarmerInitializer):
 
             await migrate_existing_schema(dbengine.get())
             await fill_derived_columns()
+            await fill_list_summary()
             await rename_records()
 
         asyncio.run(migrate())
@@ -117,6 +118,36 @@ async def fill_derived_columns() -> None:
             if rows:
                 _logger.info("Filled search_text on %d %s rows", len(rows), cls.__tablename__)
         await session.commit()
+
+
+# The farmer list's plot count and mobile number for farmers saved before the
+# columns existed. refresh_farmer (register_domain/services/derivations.py)
+# keeps them in step on every save; these are the same rules in SQL: the
+# farmer's ACTIVE land rows, and the primary entry of phone_numbers, else the
+# first one with a number. Only empty columns are filled.
+LIST_SUMMARY_BACKFILL = (
+    """UPDATE g2p_register_farmers f
+       SET total_plots = (SELECT count(*) FROM g2p_register_lands l
+                          WHERE l.link_internal_record_id = f.internal_record_id AND l.record_status = 'ACTIVE')
+       WHERE f.total_plots IS NULL""",
+    """UPDATE g2p_register_farmers f SET primary_phone_number = p.number
+       FROM (SELECT f2.internal_record_id,
+                    (SELECT btrim(e->>'number') FROM jsonb_array_elements(f2.phone_numbers::jsonb) WITH ORDINALITY a(e, n)
+                     WHERE jsonb_typeof(e) = 'object' AND btrim(COALESCE(e->>'number', '')) <> ''
+                     ORDER BY (e->'is_primary') = 'true'::jsonb IS TRUE DESC, n LIMIT 1) AS number
+             FROM g2p_register_farmers f2
+             WHERE f2.primary_phone_number IS NULL AND jsonb_typeof(f2.phone_numbers::jsonb) = 'array') p
+       WHERE f.internal_record_id = p.internal_record_id AND p.number IS NOT NULL""",
+)
+
+
+async def fill_list_summary() -> None:
+    """Fill total_plots and primary_phone_number on farmers saved without them."""
+    async with dbengine.get().begin() as conn:
+        for statement in LIST_SUMMARY_BACKFILL:
+            result = await conn.execute(text(statement))
+            if result.rowcount:
+                _logger.info("Filled the farmer list summary on %d rows", result.rowcount)
 
 
 # Rows renamed per transaction

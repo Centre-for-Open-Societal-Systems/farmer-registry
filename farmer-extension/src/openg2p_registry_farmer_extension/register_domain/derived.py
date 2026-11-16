@@ -60,13 +60,16 @@ def hectares(size, unit) -> float | None:
 def land_rollup(lands: Iterable[tuple[str | None, float | None]]) -> dict:
     """A farmer's land totals from (ownership type, hectares) per active parcel.
 
+    total_plots counts the parcels, with or without a size.
     Owned is OWNER, rented is TENANT, and crop sharing is every other parcel.
     The farmer's land ownership is OWNER or TENANT when every typed parcel is
     that, HYBRID when they differ, and empty when no parcel has a type.
     """
     owned = rented = shared = total = 0.0
+    plots = 0
     kinds: set[str] = set()
     for kind, area in lands:
+        plots += 1
         area = area or 0.0
         total += area
         if kind == "OWNER":
@@ -84,6 +87,7 @@ def land_rollup(lands: Iterable[tuple[str | None, float | None]]) -> dict:
     else:
         ownership = "HYBRID"
     return {
+        "total_plots": plots,
         "total_land_area": round(total, 6),
         "total_land_owned_area": round(owned, 6),
         "total_land_rent_area": round(rented, 6),
@@ -191,6 +195,15 @@ def local_name_problems(record: dict) -> list[str]:
 EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+([.][A-Za-z0-9-]+)+$")
 EMAIL_MAX_LENGTH = 254
 EMAIL_MESSAGE = "Email: enter an address like name@example.org"
+
+
+def primary_phone_of(phone_numbers) -> str | None:
+    """The number of the primary entry of a phone_numbers list, else its first one."""
+    if not isinstance(phone_numbers, list):
+        return None
+    entries = [e for e in phone_numbers if isinstance(e, dict) and str(e.get("number") or "").strip()]
+    entries.sort(key=lambda e: not e.get("is_primary"))
+    return str(entries[0]["number"]).strip() if entries else None
 
 
 def email_of(emails) -> str | None:

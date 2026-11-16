@@ -49,8 +49,21 @@ BEGIN
       FROM "public"."g2p_register_schemas" d, json_array_elements(d.search_result_schema) e
       WHERE d.register_id = f)
      IS DISTINCT FROM ARRAY['functional_record_id', 'first_name', 'middle_name', 'last_name', 'gender', 'birth_date',
-                            'marital_status', 'education_level', 'region_name', 'zone_name', 'woreda_name', 'kebele_name'] THEN
+                            'marital_status', 'education_level', 'region_name', 'zone_name', 'woreda_name', 'kebele_name',
+                            'total_land_area', 'total_plots', 'primary_phone_number'] THEN
     RAISE EXCEPTION 'Farmer list columns are not Farmer ID, names, then the rest (05_registers.sql)';
+  END IF;
+  -- Filters: the list's filters and the list API's filter_by whitelist (core allows 10).
+  IF (SELECT array_agg(e->>'field_name' ORDER BY (e->>'order')::int)
+      FROM "public"."g2p_register_schemas" d, json_array_elements(d.filter_schema) e
+      WHERE d.register_id = f)
+     IS DISTINCT FROM ARRAY['first_name', 'last_name', 'gender', 'birth_date', 'region_name', 'zone_name',
+                            'woreda_name', 'kebele_name', 'registration_date', 'record_status'] THEN
+    RAISE EXCEPTION 'Farmer list filters are not names, gender, birth date, place, registration date and status (05_registers.sql)';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM "public"."g2p_register_schemas" d, json_array_elements(d.filter_schema) e
+                 WHERE d.register_id = f AND e->>'field_name' = 'record_status' AND e->>'display_label' = 'Status') THEN
+    RAISE EXCEPTION 'Farmer status filter is not labelled Status (05_registers.sql)';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM "public"."g2p_register_schemas" d, json_array_elements(d.search_result_schema) e
                  WHERE d.register_id = f AND e->>'field_name' = 'middle_name' AND e->>'display_label' = 'Father''s name')
