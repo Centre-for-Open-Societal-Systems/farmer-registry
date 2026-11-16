@@ -63,8 +63,14 @@ REWORDED: list[tuple[str, str, str]] = [
      "Livestock: the same livestock type is listed twice. Keep one row per type and add up the head count."),
     ("upstream_household_missing", r"Household information must be entered before the submission can be finalized",
      "Household: the household information is empty. Fill it in before submitting."),
-    ("upstream_members_missing", r"Household members must be entered before the submission can be finalized",
-     "Household members: none are entered. Add every member, including the head, before submitting."),
+    # Upstream adds the household size and a hint: "... finalized (3 expected); add every member ...".
+    ("upstream_members_missing", (r"Household members must be entered before the submission can be finalized"
+                                  r"(?: \((\d+) expected\))?(?:; add every member of the household, including the head)?"),
+     "Household members: none are entered{expected}. Add every member, including the head, before submitting."),
+    ("upstream_members_count", (r"Household size_of_group is (\d+) but (\d+) member\(s\) were entered; "
+                                r"the members must match the size of the group"),
+     ("Household members: {2} entered, but the household size is {1}. Add or remove members, or correct "
+     "the household size, so they match.")),
     ("upstream_household_fields", r"Required household fields missing: (.+)",
      "Household: {fields} are empty. Fill them in before submitting."),
     ("upstream_member_genders", r"Members entered: (\S+) male / (\S+) female, but the household says (\S+) male / (\S+) female",
@@ -97,6 +103,28 @@ def _label(name: str, messages: dict[str, str]) -> str:
 
 
 def reword(message: str, messages: dict[str, str] | None = None) -> str:
+    """The OAN wording of an upstream message, or the message unchanged.
+
+    Several problems joined with '; ' are reworded one by one, so a refusal
+    that lists them all says each one plainly."""
+    messages = messages or {}
+    whole = _reword_one(message, messages)
+    if whole != message or "; " not in message:
+        return whole
+    parts, said, i = message.strip().split("; "), [], 0
+    while i < len(parts):
+        # An upstream message may itself hold '; ': try two parts together first.
+        pair = "; ".join(parts[i:i + 2])
+        if i + 1 < len(parts) and _reword_one(pair, messages) != pair:
+            said.append(_reword_one(pair, messages))
+            i += 2
+        else:
+            said.append(_reword_one(parts[i], messages))
+            i += 1
+    return "; ".join(said)
+
+
+def _reword_one(message: str, messages: dict[str, str]) -> str:
     """The OAN wording of one upstream message, or the message unchanged."""
     messages = messages or {}
     # Core joins independently generated problems with '; '. Parse its quoted
@@ -123,11 +151,13 @@ def reword(message: str, messages: dict[str, str] | None = None) -> str:
             continue
         template = messages.get(key) if isinstance(messages.get(key), str) and messages.get(key) else english
         groups = match.groups()
+        first = groups[0] if groups and groups[0] is not None else None
         params = {
-            "label": _label(groups[0], messages) if groups else "",
-            "fields": ", ".join(_label(f, messages) for f in groups[0].split(",")) if groups else "",
-            "register": _words(groups[0]).capitalize() if groups else "",
-            "register_lower": _words(groups[0]) if groups else "",
+            "label": _label(first, messages) if first else "",
+            "fields": ", ".join(_label(f, messages) for f in first.split(",")) if first else "",
+            "register": _words(first).capitalize() if first else "",
+            "register_lower": _words(first) if first else "",
+            "expected": f" ({first} expected)" if key == "upstream_members_missing" and first else "",
         }
         try:
             return template.format(*([match.group(0), *groups]), **params)

@@ -341,8 +341,17 @@ async def check_farmer_submission(submission_id: str, session, submission=None, 
             else:
                 problems.extend(await registered_household_head_problems(
                     session, farmer, farmer.link_internal_record_id, farmer_name(farmer)))
+        # The household too, so one refusal names every missing item.
+        try:
+            async with _reworded(messages):
+                check_farmer_household(farmers, households[0] if households else None, members, messages)
+        except G2PRegistryException as error:
+            if error.code != G2PRegistryErrorCodes.REQUEST_VALIDATION_ERROR.value[1] or not error.message:
+                raise
+            problems.append(error.message)
         if problems:
             validation_error("; ".join(problems))
+        return
     async with _reworded(messages):
         check_farmer_household(farmers, households[0] if households else None, members, messages)
 
