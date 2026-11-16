@@ -93,12 +93,13 @@ BEGIN
     RAISE EXCEPTION 'The primary phone column is not a yes/no select';
   END IF;
 
-  -- The household head question is the yes/no radio the other questions use.
+  -- The household head question is the yes/no radio the other questions use: a radio with the
+  -- static options true and false (the boolean widget saves "No" as empty, so No could not be kept).
   IF NOT EXISTS (
     SELECT 1 FROM "public"."g2p_register_sections" s,
       jsonb_path_query(s.section_ui_schema::jsonb, 'lax $.** ? (@."widget-id" == "is_household_head")') w
-    WHERE s.section_id = 'farmer_household_lookup' AND w ->> 'widget' = 'boolean'
-      AND w #>> '{widget-data-format,booleanControlType}' = 'radio') THEN
+    WHERE s.section_id = 'farmer_household_lookup' AND w ->> 'widget' = 'radio'
+      AND w -> 'widget-data-source' -> 'options' @> '[{"value": true}, {"value": false}]'::jsonb) THEN
     RAISE EXCEPTION 'The household head question is not a yes/no radio';
   END IF;
 
