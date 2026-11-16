@@ -48,6 +48,14 @@ guard() {
 
 # Dev and staging each deploy only the OAN chart pinned for them.
 GUARD_SCRIPT=ci/deploy/oan_chart.py guard require-deployable "$DELIVERY_ENVIRONMENT"
+if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
+  # Never install a chart older than the one staging runs (staging follows promotions, which install rc charts).
+  if ! helm get metadata "$HELM_RELEASE" -n "$HELM_NAMESPACE" -o json > "$STATE/running-chart.json" 2> "$STATE/metadata.err"; then
+    grep -q 'not found' "$STATE/metadata.err" || { cat "$STATE/metadata.err" >&2; exit 1; }
+    : > "$STATE/running-chart.json"
+  fi
+  GUARD_SCRIPT=ci/deploy/oan_chart.py guard require-current staging "$STATE/running-chart.json"
+fi
 
 if [[ "$DELIVERY_ENVIRONMENT" == staging ]]; then
   kubectl config view --minify -o json > "$STATE/cluster.json"
