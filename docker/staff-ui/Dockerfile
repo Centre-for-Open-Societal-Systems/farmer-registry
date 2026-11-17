@@ -10,12 +10,22 @@ WORKDIR /app
 
 FROM base AS source
 ARG BASE_IMAGE_VERSION=29d2a2397ef9fa09308561e15ae9aa444a4fcd7c
+# Upstream's lock file takes @openg2p/notification from the develop branch of
+# OpenG2P/notifications (raw/refs/heads/develop/client/openg2p-notification-0.1.0.tgz).
+# That file was removed from develop on 17 Nov 2026 (a97bb2f), so npm ci answered
+# 404. The same tarball is read from the last commit that holds it; its sha512 is
+# the one the lock file already records, so npm ci still verifies it.
+ARG NOTIFICATION_CLIENT_COMMIT=01c678abac3d4d8ede40e00645f1ba73246f741b
 RUN apk add --no-cache git \
  && git init -q /src && cd /src \
  && git remote add origin https://github.com/OpenG2P/registry-platform.git \
  && git fetch -q --depth 1 --filter=blob:none origin "$BASE_IMAGE_VERSION" \
  && git sparse-checkout set ui/staff-ui \
- && git checkout -q FETCH_HEAD
+ && git checkout -q FETCH_HEAD \
+ && sed -i "s#notifications/raw/refs/heads/develop/client/#notifications/raw/$NOTIFICATION_CLIENT_COMMIT/client/#" \
+      ui/staff-ui/package.json ui/staff-ui/package-lock.json \
+ && grep -q "notifications/raw/$NOTIFICATION_CLIENT_COMMIT/client/" ui/staff-ui/package-lock.json \
+ && ! grep -q "notifications/raw/refs/heads/" ui/staff-ui/package.json ui/staff-ui/package-lock.json
 
 FROM base AS builder
 COPY --from=source /src/ui/staff-ui/package.json /src/ui/staff-ui/package-lock.json ./
