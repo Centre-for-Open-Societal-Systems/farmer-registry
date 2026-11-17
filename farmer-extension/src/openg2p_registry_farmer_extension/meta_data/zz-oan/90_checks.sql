@@ -461,7 +461,7 @@ BEGIN
 END $$;
 
 -- Every name widget carries the name rule (19_name_rules.sql): the letters
--- pattern, the 100-character limit and its message. The pattern is also run
+-- pattern, the 100-character limit and its message (in plain words, 89_plain_pattern_messages.sql). The pattern is also run
 -- here, so a pattern the database cannot read, or one that lets digits in,
 -- fails the seed.
 DO $$
@@ -477,7 +477,7 @@ BEGIN
         || @."column-key" == "first_name_local" || @."column-key" == "middle_name_local" || @."column-key" == "last_name_local"))') w
   WHERE (w #>> '{widget-data-validation,pattern}') IS NULL
      OR (w #>> '{widget-data-validation,maxLength}') IS DISTINCT FROM '100'
-     OR (w #>> '{widget-data-validation,patternMessage}') IS DISTINCT FROM 'name_letters_only'
+     OR (w #>> '{widget-data-validation,patternMessage}') IS DISTINCT FROM 'Use letters only; spaces, apostrophes and hyphens are allowed.'
      OR NOT ('Abebe Kebede' ~ (w #>> '{widget-data-validation,pattern}'))
      OR NOT ('O''Neil' ~ (w #>> '{widget-data-validation,pattern}'))
      OR 'E2E Test' ~ (w #>> '{widget-data-validation,pattern}')
@@ -576,7 +576,7 @@ BEGIN
       'lax $.** ? (@."column-key" == "phone_number" && @.widget == "phone")') w
   WHERE s.section_id = 'farmer_phones'
     AND ((w #>> '{widget-data-validation,pattern}') IS NULL
-     OR (w #>> '{widget-data-validation,patternMessage}') IS DISTINCT FROM 'phone_ethiopian_mobile'
+     OR (w #>> '{widget-data-validation,patternMessage}') IS DISTINCT FROM 'Enter a mobile number such as 0912345678 or +251912345678.'
      OR NOT ('0912345678' ~ (w #>> '{widget-data-validation,pattern}'))
      OR NOT ('+251912345678' ~ (w #>> '{widget-data-validation,pattern}'))
      OR NOT ('912345678' ~ (w #>> '{widget-data-validation,pattern}'))
@@ -633,5 +633,20 @@ BEGIN
     WHERE s.section_id = r.section_id AND w->>'widget-id' = r.widget_id);
   IF found IS NOT NULL THEN
     RAISE EXCEPTION 'Fields every farmer must have are not required in the section metadata: %', found;
+  END IF;
+END $$;
+
+-- Format messages are shown as stored (the widget library does not translate
+-- them), so none may be a translation key (89_plain_pattern_messages.sql).
+DO $$
+DECLARE
+  found text;
+BEGIN
+  SELECT string_agg(DISTINCT s.section_id || ': ' || (m #>> '{}'), '; ') INTO found
+  FROM public.g2p_register_sections s,
+    jsonb_path_query(s.section_ui_schema, 'lax $.**.patternMessage') m
+  WHERE (m #>> '{}') ~ '^[a-z0-9]+(_[a-z0-9]+)+$';
+  IF found IS NOT NULL THEN
+    RAISE EXCEPTION 'Format messages must be plain text, not keys: %', found;
   END IF;
 END $$;
