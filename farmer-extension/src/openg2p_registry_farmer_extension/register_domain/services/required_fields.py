@@ -43,6 +43,8 @@ from .form_integrity import (
     _plain,
     check_form_complete,
     condition_registers,
+    has_show_rules,
+    hidden_fields,
     intake_rows,
     required_problems,
     saved_document_labels,
@@ -104,6 +106,35 @@ class RequiredFieldsMixin:
         from . import _load
 
         return (await _load())[2]
+
+    async def blank_hidden_on_save(
+        self, submission_id, section_id, section_payload, section_register_id, session
+    ) -> None:
+        """Clear, in the payload, the fields only hidden widgets write.
+
+        The staff UI keeps a hidden field's value (Has Fayda ID: Yes, an ID
+        typed, then No) and sends it with the section, where it was saved and
+        checked although the officer can no longer see or change it. A hidden
+        field is now sent as empty, so it is cleared on the draft and its
+        value is no longer checked. One-record sections only: a list
+        section's rows are left as sent.
+        """
+        section = await self._get_section_or_error(section_id, session)
+        schema = getattr(section, "section_ui_schema", None) or {}
+        if getattr(section, "is_list", False) or not section_payload or not has_show_rules(schema):
+            return
+        existing = {}
+        if submission_id:
+            intake_class = await self._resolve_intake_form_class(section_register_id, session)
+            existing = await self._get_intake_rows(intake_class, submission_id, session)
+        base = _plain(next(iter(existing.values()))) if existing else {}
+        record = next((r for r in section_payload if isinstance(r, dict) and r.get("edit_action") != "DELETE"), None)
+        if record is None:
+            return
+        values = {section_register_id: {**base, **record}}
+        for field in hidden_fields(schema, section_register_id, values):
+            if not _blank(values[section_register_id].get(field)):
+                record[field] = None
 
     async def refuse_missing_on_save(
         self, submission_id, section_id, section_payload, section_register_id, documents, session
@@ -173,6 +204,8 @@ class RequiredFieldsMixin:
         form_id, register_id, created_by, session, documents=None,
     ):
         if not unattended.get():
+            await self.blank_hidden_on_save(
+                submission_id, section_id, section_payload, section_register_id, session)
             await self.refuse_missing_on_save(
                 submission_id, section_id, section_payload, section_register_id, documents, session)
         return await super().save_intake_form_submission_with_session(

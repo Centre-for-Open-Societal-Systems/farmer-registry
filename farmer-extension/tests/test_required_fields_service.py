@@ -133,6 +133,28 @@ def test_a_value_already_saved_in_the_row_counts():
         _Host(existing=existing), [{"internal_record_id": "r-1", "first_name": ""}])
 
 
+
+def test_a_hidden_field_is_sent_empty_so_its_old_value_is_cleared_and_not_checked():
+    host = _Host()
+    payload = [{"first_name": "Abebe", "gender": "MALE", "disabled": False, "disability_type": "VISUAL"}]
+    assert _save(host, payload) == "saved"
+    sent = host.saved[0][2]
+    assert sent[0]["disability_type"] is None and sent[0]["first_name"] == "Abebe"
+
+
+def test_a_hidden_value_saved_earlier_is_cleared_when_the_section_is_saved_again():
+    host = _Host(existing={"r-1": {"first_name": "Abebe", "gender": "MALE", "disabled": True,
+                                   "disability_type": "VISUAL"}})
+    assert _save(host, [{"internal_record_id": "r-1", "disabled": False}]) == "saved"
+    assert host.saved[0][2][0]["disability_type"] is None
+
+
+def test_a_shown_field_keeps_its_value():
+    host = _Host()
+    assert _save(host, [{"first_name": "Abebe", "gender": "MALE", "disabled": True,
+                         "disability_type": "VISUAL"}]) == "saved"
+    assert host.saved[0][2][0]["disability_type"] == "VISUAL"
+
 def test_a_required_list_section_with_no_row_is_refused_on_next():
     message = _refused(_Host(LIST_SCHEMA, is_list=True), [], register=LAND)
     assert message == "Lands: at least one entry is required. Add one before pressing Next."
