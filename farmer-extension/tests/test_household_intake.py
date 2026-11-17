@@ -98,9 +98,9 @@ def test_another_farmer_still_heading_the_household_is_named_with_the_fix():
     assert "change request on Tesfaye Alemu's record" in problem
 
 
-# G2R-576: core keeps a chosen parent link when a save sends it blank, so the
-# household removed in the lookup stayed on the draft. A blank link sent by the
-# section that picks it now clears it.
+# Core keeps a chosen parent link when a save sends it blank, so a household
+# removed in the lookup stayed on the draft. A blank link sent by the section
+# that picks it now clears the stored one before core's save.
 LOOKUP_SECTION = {"section-id": "farmer_household_lookup", "panels": [{"panel-widgets": [
     {"widget": "register-lookup", "widget-id": "household",
      "widget-data-path": "farmer-reg.link_internal_record_id"},

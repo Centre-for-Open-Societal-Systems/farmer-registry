@@ -300,31 +300,30 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
         # Core keeps a chosen parent link when a save sends it blank (its
         # resolve_link_internal_record_id: "a blank or omitted link keeps a
         # link the user already chose"). In a section where the officer picks
-        # the link, a blank one means it was removed (G2R-576: the household
-        # removed, then Yes/No changed, still checked against the old one).
+        # the link, a blank one means the household was removed, so the stored
+        # link is dropped before core's save: core then resolves and checks the
+        # section without it, and the head answer in the same save is checked
+        # against no household rather than the removed one.
         unlink = removes_link(payload) and picks_link(getattr(section, "section_ui_schema", None),
                                                       section_register_id)
         token = current_intake.set((session, submission_id))
         gate = unattended.set(worker_save)
         try:
             if not (worker_save and submission_id):
-                saved = await super().save_intake_form_submission_with_session(
+                if unlink and submission_id:
+                    await clear_link(section_register_id, submission_id, session)
+                return await super().save_intake_form_submission_with_session(
                     submission_id, section_id, payload, section_register_id, form_id,
                     register_id, created_by, session, documents=documents)
-                if unlink:
-                    await clear_link(section_register_id, getattr(saved, "submission_id", None) or submission_id,
-                                     session)
-                return saved
             # A rule can refuse a row after earlier rows of the section were
             # added (core's parent-link check): the savepoint takes the whole
             # section back, so a refused section leaves nothing behind.
             async with session.begin_nested():
-                saved = await super().save_intake_form_submission_with_session(
-                    submission_id, section_id, payload, section_register_id, form_id,
-                    register_id, created_by, session, documents=documents)
                 if unlink:
                     await clear_link(section_register_id, submission_id, session)
-                return saved
+                return await super().save_intake_form_submission_with_session(
+                    submission_id, section_id, payload, section_register_id, form_id,
+                    register_id, created_by, session, documents=documents)
         except G2PRegistryException:
             # Core's raw parent-link text (an unknown household) said plainly.
             from . import _reworded
