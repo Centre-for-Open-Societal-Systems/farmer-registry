@@ -138,11 +138,20 @@ LIST_SUMMARY_BACKFILL = (
              FROM g2p_register_farmers f2
              WHERE f2.primary_phone_number IS NULL AND jsonb_typeof(f2.phone_numbers::jsonb) = 'array') p
        WHERE f.internal_record_id = p.internal_record_id AND p.number IS NOT NULL""",
+    # registration_date: the date of the farmer's first approval in its history;
+    # without history, its last approval; without either, the day it was created
+    # (registration_date_of in register_domain/services/derivations.py).
+    """UPDATE g2p_register_farmers f
+       SET registration_date = COALESCE(
+             (SELECT min(h.approved_at) FROM g2p_register_history_farmers h
+              WHERE h.internal_record_id = f.internal_record_id AND h.approved_at IS NOT NULL),
+             f.last_approved_at, f.created_at)::date
+       WHERE f.registration_date IS NULL""",
 )
 
 
 async def fill_list_summary() -> None:
-    """Fill total_plots and primary_phone_number on farmers saved without them."""
+    """Fill total_plots, primary_phone_number and registration_date on farmers saved without them."""
     async with dbengine.get().begin() as conn:
         for statement in LIST_SUMMARY_BACKFILL:
             result = await conn.execute(text(statement))

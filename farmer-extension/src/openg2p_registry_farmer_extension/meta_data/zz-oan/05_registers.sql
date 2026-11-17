@@ -33,33 +33,31 @@ ON CONFLICT ("register_id") DO UPDATE SET
   "deduplicate_schema" = EXCLUDED."deduplicate_schema", "search_result_schema" = EXCLUDED."search_result_schema",
   "filter_schema" = EXCLUDED."filter_schema";
 
--- The farmer list starts with the Farmer ID, then the three names the way
--- staff say them (first name, father's name, grandfather's name), then the
--- rest of upstream's columns. The base columns are written out on every run,
--- so the geography columns below are appended once to a known list.
+-- The farmer list. The staff portal's card and list views show the first six
+-- columns: Farmer ID, first name, grandfather's name, mobile number, total land
+-- and total plots (decided 17 Nov 2026). The rest follow in this order
+-- and are still returned by the list API: father's name, gender, birth date,
+-- where the farmer lives, marital status and education level. The place names,
+-- land, plots and mobile number are derived on save (register_domain/derived.py).
+-- Written out on every run.
 UPDATE "public"."g2p_register_schemas"
 SET "search_result_schema" = '[
   {"field_name": "functional_record_id", "display_label": "Farmer ID", "order": 1},
   {"field_name": "first_name", "display_label": "First name", "order": 2},
-  {"field_name": "middle_name", "display_label": "Father''s name", "order": 3},
-  {"field_name": "last_name", "display_label": "Grandfather''s name", "order": 4},
-  {"field_name": "gender", "display_label": "Gender", "order": 5},
-  {"field_name": "birth_date", "display_label": "Birth date", "order": 6},
-  {"field_name": "marital_status", "display_label": "Marital status", "order": 7},
-  {"field_name": "education_level", "display_label": "Education level", "order": 8}]'::json
+  {"field_name": "last_name", "display_label": "Grandfather''s name", "order": 3},
+  {"field_name": "primary_phone_number", "display_label": "Mobile number", "order": 4},
+  {"field_name": "total_land_area", "display_label": "Total land (hectares)", "order": 5},
+  {"field_name": "total_plots", "display_label": "Total plots", "order": 6},
+  {"field_name": "middle_name", "display_label": "Father''s name", "order": 7},
+  {"field_name": "gender", "display_label": "Gender", "order": 8},
+  {"field_name": "birth_date", "display_label": "Birth date", "order": 9},
+  {"field_name": "region_name", "display_label": "Region", "order": 10},
+  {"field_name": "zone_name", "display_label": "Zone", "order": 11},
+  {"field_name": "woreda_name", "display_label": "Woreda", "order": 12},
+  {"field_name": "kebele_name", "display_label": "Kebele", "order": 13},
+  {"field_name": "marital_status", "display_label": "Marital status", "order": 14},
+  {"field_name": "education_level", "display_label": "Education level", "order": 15}]'::json
 WHERE "register_id" = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
-
--- The farmer list shows where each farmer lives. The names are derived from
--- the farmer's location (register_domain/derived.py). Upstream's columns are
--- kept, and these are appended once.
-UPDATE "public"."g2p_register_schemas" s
-SET "search_result_schema" = (s."search_result_schema"::jsonb || (
-  SELECT COALESCE(jsonb_agg(jsonb_build_object('field_name', f, 'display_label', l, 'order', 100 + o) ORDER BY o), '[]'::jsonb)
-  FROM (VALUES (1, 'region_name', 'Region'), (2, 'zone_name', 'Zone'), (3, 'woreda_name', 'Woreda'), (4, 'kebele_name', 'Kebele'),
-               (5, 'total_land_area', 'Total land (hectares)'), (6, 'total_plots', 'Total plots'),
-               (7, 'primary_phone_number', 'Mobile number')) v(o, f, l)
-  WHERE NOT EXISTS (SELECT 1 FROM json_array_elements(s."search_result_schema") e WHERE e->>'field_name' = v.f)))::json
-WHERE s."register_id" = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
 
 -- The farmer list's filters, which are also the only fields the list API's
 -- filter_by accepts (core's FilterBuilder whitelist, at most 10 fields): the

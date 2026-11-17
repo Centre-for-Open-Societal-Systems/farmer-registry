@@ -44,14 +44,14 @@ BEGIN
     RAISE EXCEPTION 'Farmer header captions without text (87_zz_farmer_tab_text.sql): %', found;
   END IF;
 
-  -- List: Farmer ID first, then the three names, then the rest.
+  -- List: the six columns the portal shows first, then the rest.
   IF (SELECT array_agg(e->>'field_name' ORDER BY (e->>'order')::int)
       FROM "public"."g2p_register_schemas" d, json_array_elements(d.search_result_schema) e
       WHERE d.register_id = f)
-     IS DISTINCT FROM ARRAY['functional_record_id', 'first_name', 'middle_name', 'last_name', 'gender', 'birth_date',
-                            'marital_status', 'education_level', 'region_name', 'zone_name', 'woreda_name', 'kebele_name',
-                            'total_land_area', 'total_plots', 'primary_phone_number'] THEN
-    RAISE EXCEPTION 'Farmer list columns are not Farmer ID, names, then the rest (05_registers.sql)';
+     IS DISTINCT FROM ARRAY['functional_record_id', 'first_name', 'last_name', 'primary_phone_number', 'total_land_area',
+                            'total_plots', 'middle_name', 'gender', 'birth_date', 'region_name', 'zone_name',
+                            'woreda_name', 'kebele_name', 'marital_status', 'education_level'] THEN
+    RAISE EXCEPTION 'Farmer list columns are not Farmer ID, first name, grandfather''s name, mobile, land, plots, then the rest (05_registers.sql)';
   END IF;
   -- Filters: the list's filters and the list API's filter_by whitelist (core allows 10).
   IF (SELECT array_agg(e->>'field_name' ORDER BY (e->>'order')::int)
