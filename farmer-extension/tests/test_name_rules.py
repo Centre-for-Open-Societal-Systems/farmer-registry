@@ -138,5 +138,7 @@ def test_the_seed_applies_the_rule_to_every_name_field_and_has_its_message():
     assert "'patternMessage', 'name_letters_only'" in _SEED
     translations = (_ROOT / "meta_data/zz-oan/30_translations.sql").read_text(encoding="utf-8")
     assert '"name_letters_only":' in translations
+    plain = (_ROOT / "meta_data/zz-oan/89_plain_pattern_messages.sql").read_text(encoding="utf-8")
+    assert '"name_letters_only": "Use letters only; spaces, apostrophes and hyphens are allowed."' in plain
     checks = (_ROOT / "meta_data/zz-oan/90_checks.sql").read_text(encoding="utf-8")
-    assert "name_letters_only" in checks
+    assert "'Use letters only; spaces, apostrophes and hyphens are allowed.'" in checks
