@@ -19,6 +19,9 @@ const failures = new Map()
 let brokenSmoke = false
 let deniedCharts = 0
 let userMode = "existing"
+// The staff accounts the reviewed grant list names (rehearse.py passes them); admin is the default.
+const fixtureUsers = (process.env.FIXTURE_USERS || "admin").split(/\s+/).filter(Boolean)
+const userId = name => `staff-${name}`
 const clientId = process.env.FIXTURE_CLIENT_ID
 const apiClientId = process.env.FIXTURE_API_CLIENT_ID
 const port = 9137
@@ -44,6 +47,7 @@ createServer(async (request, response) => {
       grants: count("keycloak", "grant/"), applications: count("iam", "application/"),
       secrets: count("kubernetes", "secret/"), deniedCharts,
       adminViewer: Boolean(get("keycloak", `grant/staff-admin/${clientId}/Dashboard Viewer`)),
+      viewers: fixtureUsers.filter(name => get("keycloak", `grant/${userId(name)}/${clientId}/Dashboard Viewer`)),
       unrelatedRolePreserved: Boolean(get("keycloak", `grant/staff-admin/${clientId}/Registry Approver`)),
     })
     if (path === "/fixture/control" && request.method === "POST") {
@@ -89,9 +93,10 @@ createServer(async (request, response) => {
       if (request.headers.authorization !== `Bearer ${adminToken}`) return send(401)
       const route = path.slice(admin.length)
       if (route === "/users" && request.method === "GET") {
-        if (url.searchParams.get("username") !== "admin" || userMode === "missing") return send(200, [])
-        const users = [{ id: "staff-admin", username: "admin" }]
-        if (userMode === "ambiguous") users.push({ id: "other-admin", username: "admin" })
+        const name = url.searchParams.get("username")
+        if (!fixtureUsers.includes(name) || userMode === "missing") return send(200, [])
+        const users = [{ id: userId(name), username: name }]
+        if (userMode === "ambiguous") users.push({ id: `other-${name}`, username: name })
         return send(200, users)
       }
       if (route === "/clients" && request.method === "GET") {
@@ -119,7 +124,7 @@ createServer(async (request, response) => {
       }
       if (grant && request.method === "POST") {
         if (!((grant[1] === `service-${clientId}` && grant[2] === apiClientId) ||
-              (grant[1] === "staff-admin" && grant[2] === clientId && json.every(r => r.name === "Dashboard Viewer")))) return send(403)
+              (fixtureUsers.map(userId).includes(grant[1]) && grant[2] === clientId && json.every(r => r.name === "Dashboard Viewer")))) return send(403)
         for (const value of json) put("keycloak", `grant/${grant[1]}/${grant[2]}/${value.name}`, value)
         return send(204)
       }
