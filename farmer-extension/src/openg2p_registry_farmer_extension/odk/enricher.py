@@ -51,11 +51,41 @@ def replace_files(value, session, actor):
     return value
 
 
+def instance_id(raw) -> str | None:
+    """The ODK submission's instance id, as the transform stores it (odk_instance_id)."""
+    value = (raw.get("meta") or {}).get("instanceID") or raw.get("__id")
+    if not value:
+        return None
+    return str(value).strip() or None
+
+
+def already_received(session, instance) -> str | None:
+    """The application reference of an intake that already holds this ODK
+    submission. Collect and Central can send the same submission again (a
+    retry, a re-push); the ingest is deduplicated by its message id only, so
+    the copy would otherwise become a second draft of the same farmer."""
+    from openg2p_registry_core.models import G2PIntakeFormSubmission
+
+    from ..register_domain.models import G2PIntakeFormFarmer
+
+    if not instance:
+        return None
+    reference = session.execute(
+        select(G2PIntakeFormSubmission.application_reference)
+        .join(G2PIntakeFormFarmer, G2PIntakeFormFarmer.submission_id == G2PIntakeFormSubmission.submission_id)
+        .where(G2PIntakeFormFarmer.odk_instance_id == instance)
+        .limit(1)).scalar()
+    return reference if isinstance(reference, str) and reference else None
+
+
 class OdkToFarmerIntakeEnricher(G2PPayloadEnricherInterface):
     def enrich(self, data, session):
         from ..register_domain.models import G2PRegisterFarmer
 
         raw = deepcopy(data.get("payload", data))
+        received = already_received(session, instance_id(raw))
+        if received:
+            raise ValueError(f"ODK submission already received as {received}; this copy is not registered again")
         raw.pop("matched_household_id", None)
         raw.pop("oan_intake_sections", None)
         actor = (raw.get("survey_metadata") or {}).get("enumerator_name") or \

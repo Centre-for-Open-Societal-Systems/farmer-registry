@@ -378,6 +378,14 @@ async def check_farmer_submission(submission_id: str, session, submission=None, 
             held = await check_fayda_id_unique(farmer, label, session, messages, submission_id=submission_id)
             if held:
                 problems.append(held)
+            # A save goes through when Master Data cannot be read (coded_values);
+            # Submit does not, so no form reaches approval with its codes unchecked.
+            from .coded_values import master_data_unchecked
+            from .form_integrity import _plain
+            from .upstream_messages import MDS_UNAVAILABLE
+
+            if await master_data_unchecked([_plain(farmer)]):
+                problems.append(_Say(messages).text("upstream_mds_unavailable", MDS_UNAVAILABLE))
         if farmer is not None and as_bool(farmer.is_household_head):
             household = households[0] if households else None
             if household is not None and farmer.link_internal_record_id in (None, "", household.internal_record_id):
