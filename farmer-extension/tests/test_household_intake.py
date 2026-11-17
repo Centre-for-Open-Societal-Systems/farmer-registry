@@ -96,3 +96,63 @@ def test_another_farmer_still_heading_the_household_is_named_with_the_fix():
     [problem] = hi.household_head_problems("Almaz Desta Bekele", household, ["Tesfaye Alemu"])
     assert "Tesfaye Alemu is already the head of HH-0001" in problem
     assert "change request on Tesfaye Alemu's record" in problem
+
+
+# Core keeps a chosen parent link when a save sends it blank, so a household
+# removed in the lookup stayed on the draft. A blank link sent by the section
+# that picks it now clears the stored one before core's save.
+LOOKUP_SECTION = {"section-id": "farmer_household_lookup", "panels": [{"panel-widgets": [
+    {"widget": "register-lookup", "widget-id": "household",
+     "widget-data-path": "farmer-reg.link_internal_record_id"},
+    {"widget": "radio", "widget-id": "is_household_head", "widget-data-path": "farmer-reg.is_household_head"}]}]}
+LAND_SECTION = {"section-id": "farmer_lands", "panels": [{"panel-widgets": [
+    {"widget": "text", "widget-id": "land_id", "widget-data-path": "land-reg.land_id"}]}]}
+
+
+def test_the_household_lookup_section_picks_the_farmer_link():
+    assert hi.picks_link(LOOKUP_SECTION, "farmer-reg")
+    assert not hi.picks_link(LOOKUP_SECTION, "land-reg")
+    assert not hi.picks_link(LAND_SECTION, "land-reg")
+    assert not hi.picks_link(None, "farmer-reg")
+
+
+def test_a_blank_link_in_the_payload_removes_it_and_an_omitted_one_does_not():
+    assert hi.removes_link([{"link_internal_record_id": None, "is_household_head": True}])
+    assert hi.removes_link([{"link_internal_record_id": ""}])
+    assert not hi.removes_link([{"link_internal_record_id": "hh-1"}])
+    assert not hi.removes_link([{"is_household_head": False}])
+    assert not hi.removes_link([])
+
+
+class _Row:
+    def __init__(self, link):
+        self.link_internal_record_id = link
+
+
+class _Session:
+    flushed = False
+
+    async def flush(self):
+        self.flushed = True
+
+
+def test_clear_link_drops_the_link_on_the_submission_rows(monkeypatch):
+    import asyncio
+
+    from openg2p_registry_farmer_extension.register_domain.services import (
+        form_integrity,
+    )
+
+    rows = [_Row("hh-old"), _Row(None)]
+    seen = {}
+
+    async def fake_rows(register_id, submission_id, session):
+        seen["args"] = (register_id, submission_id)
+        return rows
+
+    monkeypatch.setattr(form_integrity, "intake_rows", fake_rows)
+    session = _Session()
+    asyncio.run(hi.clear_link("farmer-reg", "sub-1", session))
+    assert seen["args"] == ("farmer-reg", "sub-1")
+    assert [r.link_internal_record_id for r in rows] == [None, None]
+    assert session.flushed
