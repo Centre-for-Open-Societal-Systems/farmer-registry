@@ -76,32 +76,32 @@ def test_a_complete_form_has_nothing_missing():
 
 def test_an_unopened_section_reports_each_required_field_by_section():
     problems = _missing({"has_national_id": False})
-    assert "Personal details: gender is required. Open Personal details, fill it in and save, then submit again." in problems
-    assert any(p.startswith("Location: farmer_geo_hierarchy is required") for p in problems)
+    assert "Personal details: Gender is required. Open Personal details, fill it in and save, then submit again." in problems
+    assert any(p.startswith("Location: Farmer geo hierarchy is required") for p in problems)
 
 
 def test_a_hidden_field_is_never_required():
     # foundational_id is shown and required only when has_national_id is Yes.
-    assert not any("foundational_id" in p for p in _missing({**COMPLETE, "has_national_id": False, "foundational_id": None}))
+    assert not any("Foundational id" in p for p in _missing({**COMPLETE, "has_national_id": False, "foundational_id": None}))
 
 
 def test_a_require_rule_makes_a_shown_field_required():
     problems = _missing({**COMPLETE, "foundational_id": ""})
-    assert problems == ["Identity: foundational_id is required. Open Identity, fill it in and save, then submit again."]
+    assert problems == ["Identity: Foundational id is required. Open Identity, fill it in and save, then submit again."]
 
 
 def test_a_conditional_requirement_follows_its_condition():
-    assert any("disability_type" in p for p in _missing({**COMPLETE, "disabled": True}))
+    assert any("Disability type" in p for p in _missing({**COMPLETE, "disabled": True}))
     assert _missing({**COMPLETE, "disabled": False}) == []
 
 
 def test_a_false_answer_counts_as_an_answer():
-    assert not any("has_national_id" in p for p in _missing({**COMPLETE, "has_national_id": False}))
+    assert not any("Has national id" in p for p in _missing({**COMPLETE, "has_national_id": False}))
 
 
 def test_a_missing_required_document_names_its_section():
     problems = _missing(dict(COMPLETE), documents={})
-    assert problems == ["Documents: identity_document_1 is required. Open Documents, add the file and save, then submit again."]
+    assert problems == ["Documents: Identity document 1 is required. Open Documents, add the file and save, then submit again."]
 
 
 def test_a_document_category_is_named_by_its_title():

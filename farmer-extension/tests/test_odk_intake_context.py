@@ -31,7 +31,7 @@ def test_another_intakes_land_cannot_satisfy_current_intake_validation():
     session = SimpleNamespace(get=AsyncMock(side_effect=[SimpleNamespace(submission_id="another-intake"), None]))
     token = intake_context.current_intake.set((session, "submission-1"))
     try:
-        with pytest.raises(G2PRegistryException, match="select a land on this intake"):
+        with pytest.raises(G2PRegistryException, match="Crop records: a row.s plot is not a land on this form"):
             asyncio.run(intake_context.validation_records([{"link_internal_record_id": "foreign-land"}], "Crop"))
     finally:
         intake_context.current_intake.reset(token)
