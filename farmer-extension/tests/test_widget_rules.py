@@ -69,9 +69,9 @@ def test_pattern_uses_the_translated_message():
     assert problems == ["First Name (Amharic): Use Ethiopic (Ge'ez) script."]
 
 
-def test_pattern_message_key_is_used_when_untranslated():
+def test_pattern_message_key_is_used_when_untranslated_and_the_field_is_named_in_words():
     problems = widget_rules.check_record({"first_name_amh": "Abebe"}, RULES[FARMER], {})
-    assert problems == ["first_name_amh: ethiopic_script_only."]
+    assert problems == ["First name amh: ethiopic_script_only."]
 
 
 def test_length_and_range():
@@ -81,7 +81,7 @@ def test_length_and_range():
 
 
 def test_numbers_sent_as_text_are_checked():
-    assert widget_rules.check_record({"land_size": "0"}, RULES[LAND]) == ["land_size: 0 is too small. Enter 0.01 or more."]
+    assert widget_rules.check_record({"land_size": "0"}, RULES[LAND]) == ["Land size: 0 is too small. Enter 0.01 or more."]
 
 
 def test_empty_values_are_left_to_the_required_rules():

@@ -12,6 +12,10 @@ from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.d
 current_intake = ContextVar("oan_current_intake", default=None)
 
 
+# The child registers whose rows name a land, as the form titles them.
+ROW_NAMES = {"Crop": "Crop records", "Livestock": "Livestock records", "FarmInputs": "Farm input records"}
+
+
 async def validation_records(records, mnemonic):
     scope = current_intake.get()
     if scope is None or mnemonic not in ("Crop", "Livestock", "FarmInputs"):
@@ -27,6 +31,7 @@ async def validation_records(records, mnemonic):
             intake_land = await session.get(G2PIntakeFormLand, (submission_id, str(link)))
             registered_land = None if intake_land else await session.get(G2PRegisterLand, str(link))
             if not ((intake_land and intake_land.submission_id == submission_id) or registered_land):
-                validation_error(f"{mnemonic}: select a land on this intake or an approved registered land")
+                validation_error(f"{ROW_NAMES[mnemonic]}: a row's plot is not a land on this form or an approved "
+                                 "registered land. Pick the plot again in each row.")
         normalized.append(candidate)
     return normalized
