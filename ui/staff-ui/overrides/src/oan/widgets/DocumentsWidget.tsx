@@ -87,7 +87,15 @@ export function DocumentsWidget({ config }: { config: Config }) {
         const kept = next.map((value) => (isSerializedFile(value) ? null : value));
         const fresh = next.filter(isSerializedFile);
         let k = 0;
+        // The patch starts from the form's current values of the register the
+        // slots belong to: setValues merges one level only, so a patch holding
+        // just this category's slots would replace the register's whole
+        // "documents" object and drop the files of every other category
+        // (uploading a bank document removed the identity document).
         let patch: Record<string, unknown> = {};
+        for (const root of Array.from(new Set(slots.map((path) => path.split('.')[0])))) {
+            if (values[root] !== undefined) patch[root] = values[root];
+        }
         slots.forEach((path, i) => (patch = setValueByPath(patch, path, kept[i] ?? fresh[k++] ?? null)));
         dispatch(setValues(patch as never));
         base.onBlur?.();
