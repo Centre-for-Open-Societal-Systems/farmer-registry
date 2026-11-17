@@ -187,7 +187,7 @@ def test_the_committed_v4_form_has_no_stale_rule():
     lists = {n: s for n, s in choice_names(book).items() if n in build_mds_form.MDS_LISTS}
     assert build_mds_form.check_literals(book["survey"], survey_columns(book), lists) == []
     settings = {c.value: book["settings"].cell(2, c.column).value for c in book["settings"][1] if c.value}
-    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.10.31.3"
+    assert settings["form_id"] == "farmer_profile" and settings["version"] == "2026.11.17.1"
 
 
 COOPS = [
@@ -374,3 +374,18 @@ def test_a_later_phone_may_not_repeat_an_earlier_one():
                                           ("a@b..co", False), ("name@", False), ("name example.org", False)])
 def test_an_email_is_checked_as_the_registry_checks_it(name, value, ok):
     assert _passes(name, value) is ok
+
+
+def test_no_message_wraps_a_question_in_select_the_or_enter_the():
+    """A generated message once read "Select the select the plot…" or "Enter the confirm your Fayda ID."."""
+    import re
+
+    book = openpyxl.load_workbook(REPO / "odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx", read_only=True)
+    rows = list(book["survey"].iter_rows(values_only=True))
+    header = list(rows[0])
+    columns = [i for i, name in enumerate(header)
+               if isinstance(name, str) and name.startswith(("required_message", "constraint_message"))]
+    garbled = re.compile(r"^(Select|Enter) the (select|enter|confirm|do|does|is|are|have|has|what|which|how)\b", re.I)
+    found = [f"{row[header.index('name')]}: {row[i]}" for row in rows[1:] for i in columns
+             if isinstance(row[i], str) and garbled.search(row[i])]
+    assert found == []
