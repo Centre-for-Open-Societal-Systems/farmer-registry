@@ -156,6 +156,37 @@ def check_farmer_household(farmers: list, household, members: list, messages: di
     validate_household_roster(household, members)
 
 
+def picks_link(schema, register_id: str) -> bool:
+    """Whether a section lets the officer pick this register's parent: a lookup
+    widget writing `<register_id>.link_internal_record_id`."""
+    from .form_integrity import _widgets
+
+    target = f"{register_id}.link_internal_record_id"
+    for widget in _widgets(schema or {}):
+        path = widget.get("widget-data-path")
+        if widget.get("widget") in ("register-lookup", "parent-lookup") and target in (
+                path.values() if isinstance(path, dict) else [path]):
+            return True
+    return False
+
+
+def removes_link(payload) -> bool:
+    """Whether a section payload clears the parent link: a record sends
+    link_internal_record_id, blank."""
+    return any(isinstance(record, dict) and "link_internal_record_id" in record
+               and is_blank(record.get("link_internal_record_id")) for record in payload or [])
+
+
+async def clear_link(register_id: str, submission_id, session) -> None:
+    """Drop the parent link on the submission's rows of one register."""
+    from .form_integrity import intake_rows
+
+    for row in await intake_rows(register_id, str(submission_id), session):
+        if not is_blank(getattr(row, "link_internal_record_id", None)):
+            row.link_internal_record_id = None
+    await session.flush()
+
+
 class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFieldsMixin, G2PFarmerIntakeFormDataService):
     """The farmer extension's intake service, with the farmer household check
     and the required fields of every registry's form (required_fields.py, ahead
@@ -266,20 +297,34 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
                     record.pop(field, None)
         from .intake_context import current_intake
 
+        # Core keeps a chosen parent link when a save sends it blank (its
+        # resolve_link_internal_record_id: "a blank or omitted link keeps a
+        # link the user already chose"). In a section where the officer picks
+        # the link, a blank one means it was removed (G2R-576: the household
+        # removed, then Yes/No changed, still checked against the old one).
+        unlink = removes_link(payload) and picks_link(getattr(section, "section_ui_schema", None),
+                                                      section_register_id)
         token = current_intake.set((session, submission_id))
         gate = unattended.set(worker_save)
         try:
             if not (worker_save and submission_id):
-                return await super().save_intake_form_submission_with_session(
+                saved = await super().save_intake_form_submission_with_session(
                     submission_id, section_id, payload, section_register_id, form_id,
                     register_id, created_by, session, documents=documents)
+                if unlink:
+                    await clear_link(section_register_id, getattr(saved, "submission_id", None) or submission_id,
+                                     session)
+                return saved
             # A rule can refuse a row after earlier rows of the section were
             # added (core's parent-link check): the savepoint takes the whole
             # section back, so a refused section leaves nothing behind.
             async with session.begin_nested():
-                return await super().save_intake_form_submission_with_session(
+                saved = await super().save_intake_form_submission_with_session(
                     submission_id, section_id, payload, section_register_id, form_id,
                     register_id, created_by, session, documents=documents)
+                if unlink:
+                    await clear_link(section_register_id, submission_id, session)
+                return saved
         except G2PRegistryException:
             # Core's raw parent-link text (an unknown household) said plainly.
             from . import _reworded
