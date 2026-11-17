@@ -35,7 +35,7 @@ ON CONFLICT ("register_id") DO UPDATE SET
 
 -- The farmer list. The staff portal's card and list views show the first six
 -- columns: Farmer ID, first name, grandfather's name, mobile number, total land
--- and total plots (DA-391 decision, 17 Nov 2026). The rest follow in this order
+-- and total plots (decided 17 Nov 2026). The rest follow in this order
 -- and are still returned by the list API: father's name, gender, birth date,
 -- where the farmer lives, marital status and education level. The place names,
 -- land, plots and mobile number are derived on save (register_domain/derived.py).
