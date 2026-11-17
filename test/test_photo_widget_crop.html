@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Farmer Photo 4:5 Crop & Size Validator</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 30px; background: #f9fafb; color: #111827; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; max-width: 600px; margin: 0 auto; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    h2 { margin-top: 0; color: #111827; }
+    .drop-zone { border: 2px dashed #d1d5db; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; margin-bottom: 20px; transition: border 0.2s; }
+    .drop-zone:hover { border-color: #ed7c22; }
+    .preview-section { display: flex; gap: 24px; align-items: flex-start; margin-top: 20px; }
+    .frame { width: 160px; height: 200px; border-radius: 8px; border: 2px solid #ed7c22; overflow: hidden; background: #eee; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .frame img { width: 100%; height: 100%; object-fit: cover; }
+    .details { font-size: 14px; line-height: 1.6; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+    .badge-pass { background: #dcfce7; color: #15803d; }
+    .badge-fail { background: #fee2e2; color: #b91c1c; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Farmer Photo 4:5 Crop & Size Test</h2>
+    <p style="color:#6b7280; font-size: 14px;">Upload any photo (landscape, square, or selfie) to test the 4:5 aspect ratio center-crop and MOSIP size rules.</p>
+    
+    <div class="drop-zone" onclick="document.getElementById('file-input').click()">
+      <strong>Click to choose a photo</strong> or drag and drop here
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="processImage(this.files[0])">
+    </div>
+
+    <div id="result" class="preview-section" style="display:none;">
+      <div class="frame">
+        <img id="preview-img" src="" alt="Cropped preview">
+      </div>
+      <div class="details">
+        <div><strong>Original Dimensions:</strong> <span id="orig-dim">-</span></div>
+        <div><strong>Original Size:</strong> <span id="orig-size">-</span></div>
+        <hr style="margin: 8px 0; border: none; border-top: 1px solid #eee;">
+        <div><strong>Cropped Ratio:</strong> <span id="crop-ratio">4:5 Portrait</span></div>
+        <div><strong>Processed Dimensions:</strong> <span id="proc-dim">-</span></div>
+        <div><strong>Output Format:</strong> <span id="proc-format">image/jpeg</span></div>
+        <div><strong>Processed Size:</strong> <span id="proc-size">-</span></div>
+        <div style="margin-top: 8px;"><strong>Status:</strong> <span id="proc-status"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const MAX_DIMENSION = 750;
+    const MAX_SIZE_KB = 100;
+    const QUALITY = 0.82;
+
+    async function processImage(file) {
+      if (!file) return;
+      document.getElementById('result').style.display = 'flex';
+      document.getElementById('orig-size').textContent = (file.size / 1024).toFixed(1) + ' KB';
+
+      const bitmap = await createImageBitmap(file);
+      document.getElementById('orig-dim').textContent = `${bitmap.width} × ${bitmap.height} px`;
+
+      const targetRatio = 4 / 5;
+      const currentRatio = bitmap.width / bitmap.height;
+
+      let cropX = 0, cropY = 0, cropWidth = bitmap.width, cropHeight = bitmap.height;
+
+      if (currentRatio > targetRatio) {
+        cropWidth = Math.round(bitmap.height * targetRatio);
+        cropX = Math.round((bitmap.width - cropWidth) / 2);
+      } else if (currentRatio < targetRatio) {
+        cropHeight = Math.round(bitmap.width / targetRatio);
+        cropY = Math.round((bitmap.height - cropHeight) / 2);
+      }
+
+      const targetHeight = Math.min(cropHeight, MAX_DIMENSION);
+      const targetWidth = Math.round(targetHeight * targetRatio);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(bitmap, cropX, cropY, cropWidth, cropHeight, 0, 0, targetWidth, targetHeight);
+
+      canvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob);
+        document.getElementById('preview-img').src = url;
+        document.getElementById('proc-dim').textContent = `${targetWidth} × ${targetHeight} px`;
+        const kb = (blob.size / 1024).toFixed(1);
+        document.getElementById('proc-size').textContent = `${kb} KB`;
+
+        const statusEl = document.getElementById('proc-status');
+        if (blob.size <= MAX_SIZE_KB * 1024) {
+          statusEl.innerHTML = `<span class="badge badge-pass">PASSED (≤ 100 KB)</span>`;
+        } else {
+          statusEl.innerHTML = `<span class="badge badge-fail">FAILED (> 100 KB)</span>`;
+        }
+      }, 'image/jpeg', QUALITY);
+    }
+  </script>
+</body>
+</html>
