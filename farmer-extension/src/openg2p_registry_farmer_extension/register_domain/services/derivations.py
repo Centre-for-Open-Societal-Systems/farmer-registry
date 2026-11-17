@@ -154,6 +154,22 @@ async def refresh_farmer(session, farmer_id: str | None) -> None:
         ]
         farmer.has_personal_phone = True
     farmer.primary_phone_number = primary_phone_of(_json(farmer.phone_numbers))
+    farmer.registration_date = registration_date_of(farmer)
+
+
+def registration_date_of(farmer):
+    """The day the farmer was registered: the date of its first approval.
+
+    refresh_farmer runs on every approval, so a farmer without the date gets the
+    day it is approved (last_approved_at, which is that approval), else the day
+    the record was created. A date already set is kept, so a later change never
+    moves it. Farmers approved before the date was kept are filled at migration
+    from their history (app.LIST_SUMMARY_BACKFILL).
+    """
+    if farmer.registration_date is not None:
+        return farmer.registration_date
+    stamp = farmer.last_approved_at or farmer.created_at
+    return stamp.date() if stamp is not None else None
 
 
 async def _phones_from_list(farmer, session) -> None:
