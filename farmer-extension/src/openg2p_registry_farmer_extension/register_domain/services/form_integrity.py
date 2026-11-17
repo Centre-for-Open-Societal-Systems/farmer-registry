@@ -177,6 +177,36 @@ def _value_path(widget: dict) -> str | None:
     return path if isinstance(path, str) else None
 
 
+def has_show_rules(schema) -> bool:
+    """Whether any widget of a section can be hidden by a show/hide rule."""
+    return any(rule.get("action") in ("show", "hide")
+               for widget in _widgets(schema or {}) for rule in _rules(widget.get("widget-data-options")))
+
+
+def hidden_fields(schema, register_id: str, values: dict) -> set[str]:
+    """The fields of `register_id` that a section's widgets write only while
+    hidden: every widget writing the field is hidden by its show/hide rule, as
+    the staff UI evaluates it (`values` maps register ids to records). A field
+    one visible widget writes is never in it, nor one whose rule reads another
+    register: that register's answer may not be saved yet, so the server
+    cannot tell what the officer sees."""
+    hidden: set[str] = set()
+    shown: set[str] = set()
+    for widget in _widgets(schema or {}):
+        if widget.get("widget") in _TABLES:
+            continue
+        reads = [rule.get("condition", {}).get("field") for rule in _rules(widget.get("widget-data-options"))
+                 if rule.get("action") in ("show", "hide") and isinstance(rule.get("condition"), dict)]
+        local = all(isinstance(f, str) and f.startswith(register_id + ".") for f in reads)
+        path = widget.get("widget-data-path")
+        fields = {value.split(".", 1)[1] for value in (path.values() if isinstance(path, dict) else [path])
+                  if isinstance(value, str) and value.startswith(register_id + ".")}
+        if not fields:
+            continue
+        (shown if not local or widget_state(widget, values)[0] else hidden).update(fields)
+    return hidden - shown - {"internal_record_id"}
+
+
 def _section_problems(section, register_id, values, documents, say, keys) -> list[str]:
     """The required single-record fields of one section; only widgets of
     `register_id` are looked at (another register's fields are checked with

@@ -157,3 +157,38 @@ def test_the_holder_is_named_by_record_name_or_names():
     assert fi.holder_name({"record_name": "Abebe Kebede"}) == "Abebe Kebede"
     assert fi.holder_name({"first_name": "Abebe", "middle_name": None, "last_name": "Kebede"}) == "Abebe Kebede"
     assert fi.holder_name({}) == "an unnamed farmer"
+
+
+# A field the officer can no longer see is cleared on save (hidden_fields).
+IDENTITY = SECTIONS[0]["schema"]
+
+
+def test_a_field_hidden_by_its_rule_is_cleared_and_a_shown_one_is_kept():
+    hidden = fi.hidden_fields(IDENTITY, FARMER, {FARMER: {"has_national_id": False, "foundational_id": "123"}})
+    assert hidden == {"foundational_id"}
+    assert fi.hidden_fields(IDENTITY, FARMER, {FARMER: {"has_national_id": True, "foundational_id": "123"}}) == set()
+
+
+def test_a_field_one_visible_widget_writes_is_never_cleared():
+    schema = {"panels": [{"widgets": [
+        _w("foundational_id", options={"action": "show", "condition": _equals("has_national_id", True)}),
+        _w("fin_copy", path=f"{FARMER}.foundational_id"),
+    ]}]}
+    assert fi.hidden_fields(schema, FARMER, {FARMER: {"has_national_id": False}}) == set()
+
+
+def test_a_rule_reading_another_register_never_clears():
+    schema = {"panels": [{"widgets": [
+        _w("household_note", options={"action": "show", "condition": {
+            "field": f"{HOUSEHOLD}.size_of_group", "operator": "greaterThan", "value": 1}}),
+    ]}]}
+    assert fi.hidden_fields(schema, FARMER, {FARMER: {}, HOUSEHOLD: {"size_of_group": 0}}) == set()
+
+
+def test_another_register_s_fields_and_tables_are_left_alone():
+    schema = {"panels": [{"widgets": [
+        _w("size_of_group", path=f"{HOUSEHOLD}.size_of_group",
+           options={"action": "show", "condition": _equals("has_national_id", True)}),
+        _w("lands", "table", options={"action": "show", "condition": _equals("has_national_id", True)}),
+    ]}]}
+    assert fi.hidden_fields(schema, FARMER, {FARMER: {"has_national_id": False}}) == set()
