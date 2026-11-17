@@ -157,3 +157,21 @@ def test_the_holder_is_named_by_record_name_or_names():
     assert fi.holder_name({"record_name": "Abebe Kebede"}) == "Abebe Kebede"
     assert fi.holder_name({"first_name": "Abebe", "middle_name": None, "last_name": "Kebede"}) == "Abebe Kebede"
     assert fi.holder_name({}) == "an unnamed farmer"
+
+
+def test_a_second_form_with_the_fayda_id_of_one_pending_approval_is_refused_naming_it(monkeypatch):
+    """Two ODK submissions of the same farmer: the second one's Submit finds the first, already
+    submitted and pending approval, and says which it is (the worker keeps it as a draft with
+    this reason)."""
+    import asyncio
+    from types import SimpleNamespace
+
+    async def holder(fin, *, internal_record_id, submission_id, session):
+        assert submission_id == "s-2"
+        row = SimpleNamespace(first_name="Abebe", middle_name="Kebede", last_name="Tesfaye", submission_id="s-1")
+        return "pending", (row, "2026NOV17-00001ABCDE")
+
+    monkeypatch.setattr(fi, "fayda_id_holder", holder)
+    said = asyncio.run(fi.check_fayda_id_unique(
+        {"foundational_id": "123456789012"}, "Fayda ID", None, {}, submission_id="s-2"))
+    assert "123456789012" in said and "2026NOV17-00001ABCDE" in said

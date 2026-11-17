@@ -9,7 +9,9 @@ from the Farmer's `validate_domain_attributes` (web save, change request,
 validate, submit), and say which field, what is wrong and what to do.
 
 Master Data is read through core's own client. When it cannot be read the
-check is skipped with a warning, so an outage never blocks a save.
+check is skipped with a warning, so an outage never blocks a save; Submit
+(finalize) does not skip it: `master_data_unchecked` makes the form wait, as a
+draft with the reason, until the values can be checked.
 
 This module has no framework imports at load time, so it can be tested alone.
 """
@@ -162,3 +164,15 @@ async def coded_value_problems(records: list[dict], say) -> list[str]:
             if problem:
                 problems.append(problem)
     return problems
+
+
+async def master_data_unchecked(records: list[dict]) -> bool:
+    """Whether a Master Data value of these records could not be checked
+    because Master Data could not be read (a list or the geography)."""
+    wanted = {CHOICES[field][0] for record in records for field in CHOICES if not _blank(record.get(field))}
+    if wanted:
+        lists = await master_data_lists(sorted(wanted))
+        if any(name not in lists for name in wanted):
+            return True
+    located = any(not _blank(record.get("geo_lowest_level_value_id")) for record in records)
+    return located and not await known_location_ids()
