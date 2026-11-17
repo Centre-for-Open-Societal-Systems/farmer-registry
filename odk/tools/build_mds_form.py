@@ -370,7 +370,6 @@ def registry_rules() -> dict[str, dict[str, str]]:
              "separated by hyphens, for example ABC-1234-5678-9012-3456-789012.")}
     rules["land_id"] = {"constraint": "count(../../land_info_repeat[land_id = current()]) = 1",
                         EN: "Each plot needs a different Land ID."}
-    rules["farmer_photo"] = {"parameters": "max-pixels=800"}
     return rules
 
 

@@ -52,8 +52,6 @@ insert(row, {'type': 'image', 'name': 'identity_document',
     'label::Afaan Oromoo (om)': 'Photograph the identity document', 'required': 'yes',
     'parameters': 'max-pixels=1600',
     'hint::English (en)': 'This offline intake is unverified. An approver checks the ID evidence.'})
-if 'farmer_photo' in names():
-    survey.cell(names()['farmer_photo'], columns['parameters'], 'max-pixels=800')
 row = names()['crop_date']
 insert(row, {'type': 'select_one oan_crop_season', 'name': 'crop_season',
     'label::English (en)': 'Crop season', 'label::Amharic (am)': 'Crop season',
