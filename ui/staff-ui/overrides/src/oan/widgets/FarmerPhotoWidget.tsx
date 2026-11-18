@@ -26,12 +26,14 @@ type Config = Record<string, any>;
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const DEFAULTS = { maxDimension: 750, maxSizeKb: 100, imageSize: 160, jpegQuality: 0.82 };
+const MIN_JPEG_QUALITY = 0.5;
+const JPEG_QUALITY_STEP = 0.08;
 
 const LABELS: Record<string, string> = {
     farmer_photo_upload: 'Upload photo',
     farmer_photo_replace: 'Replace photo',
     farmer_photo_remove: 'Remove',
-    farmer_photo_hint: 'JPEG, PNG or WebP. On a phone, take a photo or pick one from the gallery.',
+    farmer_photo_hint: 'JPEG, PNG or WebP (center-cropped to 4:5). On a phone, take a photo or pick one from the gallery.',
     farmer_photo_none: 'No photo',
     farmer_photo_bad_type: 'Use a JPEG, PNG or WebP image.',
     farmer_photo_too_large: 'The photo is larger than {size} KB after resizing. Choose a smaller image, or take the photo again.',
@@ -51,7 +53,9 @@ const readAsBase64 = (blob: Blob): Promise<string> =>
 
 // Crop the photo to a 4:5 portrait aspect ratio and scale it down so its
 // height is at most maxDimension, as JPEG (standard MOSIP/Fayda passport specs).
-async function shrink(file: File, maxDimension: number, quality: number): Promise<Blob> {
+// If the encoded image exceeds maxSizeBytes, step JPEG quality down until it
+// fits or reaches MIN_JPEG_QUALITY.
+async function shrink(file: File, maxDimension: number, initialQuality: number, maxSizeBytes: number): Promise<Blob> {
     const bitmap = await createImageBitmap(file);
     try {
         const targetRatio = 4 / 5; // 0.8 portrait aspect ratio
@@ -84,7 +88,18 @@ async function shrink(file: File, maxDimension: number, quality: number): Promis
         context.imageSmoothingEnabled = true;
         context.imageSmoothingQuality = 'high';
         context.drawImage(bitmap, cropX, cropY, cropWidth, cropHeight, 0, 0, targetWidth, targetHeight);
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+
+        const encode = (q: number) =>
+            new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', q));
+
+        let quality = initialQuality;
+        let blob = await encode(quality);
+        while (blob && maxSizeBytes > 0 && blob.size > maxSizeBytes && quality > MIN_JPEG_QUALITY) {
+            quality = Math.max(MIN_JPEG_QUALITY, Math.round((quality - JPEG_QUALITY_STEP) * 100) / 100);
+            const next = await encode(quality);
+            if (!next) break;
+            blob = next;
+        }
         return blob ?? file;
     } finally {
         bitmap.close();
@@ -165,7 +180,12 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
             }
             setBusy(true);
             try {
-                const blob = await shrink(file, Number(format.maxDimension), Number(format.jpegQuality));
+                const blob = await shrink(
+                    file,
+                    Number(format.maxDimension),
+                    Number(format.jpegQuality),
+                    maxSizeKb * 1024,
+                );
                 if (blob.size > maxSizeKb * 1024) {
                     setError(label('farmer_photo_too_large', { size: maxSizeKb }));
                     return;

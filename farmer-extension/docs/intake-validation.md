@@ -76,7 +76,7 @@ Messages are the English defaults.
 | Rule | Where | Message |
 | --- | --- | --- |
 | JPEG, PNG or WebP | UI | "Use a JPEG, PNG or WebP image." |
-| cropped to 4:5 portrait, resized to 750 px on the long side, then ≤ 100 KB | UI | "The photo is larger than 100 KB after resizing. Choose a smaller image, or take the photo again." |
+| center-cropped to 4:5 portrait, resized to 750 px on the long side, JPEG quality stepped down from 0.82 to 0.50 until ≤ 100 KB | UI | "The photo is larger than 100 KB after resizing. Choose a smaller image, or take the photo again." |
 | readable image | UI | "The image could not be read. Choose another photo, or take it again." |
 
 ### Phone numbers (table)
