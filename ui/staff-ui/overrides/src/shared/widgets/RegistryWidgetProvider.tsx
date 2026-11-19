@@ -13,6 +13,7 @@ import '@/oan/widgets/register';
 // (src/oan/intake/). Everything else in this file is upstream's.
 import { installNextGuard } from '@/oan/intake/nextGuard';
 import { installServerNotice } from '@/oan/intake/serverNotice';
+import { installSubmitOnce } from '@/oan/intake/submitOnce';
 import { intakeText } from '@/oan/intake/text';
 
 type RegistryWidgetProviderProps = ComponentProps<typeof WidgetProvider>;
@@ -45,6 +46,7 @@ export function RegistryWidgetProvider({
     if (!store || !rootRef.current) return undefined;
     currentStore = store;
     installServerNotice(() => currentStore, () => translateRef.current);
+    installSubmitOnce();
     const remove = installNextGuard(rootRef.current, store, (key) => translateRef.current(key));
     return () => {
       remove();

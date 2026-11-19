@@ -85,3 +85,13 @@ def test_registration_date_is_filled_at_migration_from_the_first_approval():
     assert "min(h.approved_at)" in statement and "g2p_register_history_farmers" in statement
     assert "f.last_approved_at, f.created_at" in statement
     assert "WHERE f.registration_date IS NULL" in statement
+
+
+def test_the_derived_list_columns_have_a_header_and_two_decimals():
+    # The list's header is the translation of the field name (upstream register
+    # page: t.has(key) ? t(key) : key), not display_label; without a key the
+    # officer sees "primary_phone_number". The land total is shown as stored.
+    translations = (SRC / "meta_data/zz-oan/30_translations.sql").read_text(encoding="utf-8")
+    for name in ("primary_phone_number", "total_land_area", "total_plots"):
+        assert re.search(rf'^\s+"{name}": "[^"_]+",?$', translations, re.MULTILINE), name
+    assert re.search(r'"total_land_area": \(Numeric\(16, 2\)', FIELDS)

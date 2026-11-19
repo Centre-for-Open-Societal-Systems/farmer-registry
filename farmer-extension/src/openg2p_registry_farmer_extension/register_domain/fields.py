@@ -59,11 +59,12 @@ OAN_FIELDS: dict[str, dict[str, tuple]] = {
         "enumerator_longitude": (Numeric(10, 7), float),
         "enumerator_altitude": (Numeric(10, 2), float),
         "enumerator_accuracy": (Numeric(10, 2), float),
-        # Derived from the farmer's active lands, in hectares.
-        "total_land_area": (Numeric(16, 6), float),
-        "total_land_owned_area": (Numeric(16, 6), float),
-        "total_land_rent_area": (Numeric(16, 6), float),
-        "total_land_crop_sharing_area": (Numeric(16, 6), float),
+        # Derived from the farmer's active lands, in hectares to 2 decimals (the
+        # farmer list shows the stored value as it is).
+        "total_land_area": (Numeric(16, 2), float),
+        "total_land_owned_area": (Numeric(16, 2), float),
+        "total_land_rent_area": (Numeric(16, 2), float),
+        "total_land_crop_sharing_area": (Numeric(16, 2), float),
         "land_ownership": (String, str),  # OWNER, TENANT or HYBRID
         # Derived for the farmer list: the number of active land parcels, and the
         # primary entry of phone_numbers.

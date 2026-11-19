@@ -156,3 +156,23 @@ def test_clear_link_drops_the_link_on_the_submission_rows(monkeypatch):
     assert seen["args"] == ("farmer-reg", "sub-1")
     assert [r.link_internal_record_id for r in rows] == [None, None]
     assert session.flushed
+
+
+def _form(draft_status, approval_status="PENDING"):
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    return SimpleNamespace(draft_status=draft_status, approval_status=approval_status,
+                           finalized_at=datetime(2026, 11, 17, 9, 30))
+
+
+def test_a_draft_may_be_submitted():
+    assert hi.already_submitted(_form("DRAFT")) is None
+
+
+def test_a_second_submit_is_refused_while_waiting_for_approval():
+    assert hi.already_submitted(_form("FINAL")) == "Already submitted on 17 Nov 2026; it is waiting for approval."
+
+
+def test_a_second_submit_after_the_decision_says_the_decision():
+    assert hi.already_submitted(_form("FINAL", "REJECTED")) == "Already submitted on 17 Nov 2026; it was rejected."

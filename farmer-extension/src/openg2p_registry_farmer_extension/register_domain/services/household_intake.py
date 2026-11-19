@@ -58,6 +58,21 @@ def _get(row, key: str):
     return row.get(key) if isinstance(row, dict) else getattr(row, key, None)
 
 
+def already_submitted(submission) -> str | None:
+    """The refusal of a second Submit: the form is final and its approval
+    request was started on the first one (a double click, or Submit pressed
+    again after a slow answer). Finalizing again would start a second
+    approval request for the same form."""
+    if str(getattr(submission, "draft_status", "") or "").upper() != "FINAL":
+        return None
+    when = getattr(submission, "finalized_at", None)
+    on = f" on {when:%d %b %Y}" if hasattr(when, "strftime") else ""
+    status = str(getattr(submission, "approval_status", "") or "PENDING").upper()
+    if status == "PENDING":
+        return f"Already submitted{on}; it is waiting for approval."
+    return f"Already submitted{on}; it was {status.lower()}."
+
+
 def _same_name(a, b) -> bool:
     return " ".join(str(a or "").split()).casefold() == " ".join(str(b or "").split()).casefold()
 
@@ -195,6 +210,9 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
 
     async def finalize_submission_with_session(self, submission_id: str, session, *args, **kwargs):
         submission = await self._get_submission_or_error(submission_id, session)
+        refusal = already_submitted(submission)
+        if refusal:
+            validation_error(refusal)
         register_definition = await self._get_register_definition(submission.register_id, session)
         from ...odk.actor import ingest_active
 

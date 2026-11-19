@@ -1,7 +1,7 @@
 -- Additive compatibility for existing legacy OAN (Gen1) databases, through OAN's native
 -- extension migration hook. Existing values, identifiers and checkpoints stay.
 DO $native_compat$
-DECLARE prefix text;
+DECLARE prefix text; total text;
 BEGIN
   IF to_regclass('public.outgoing_topics') IS NOT NULL THEN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns
@@ -25,6 +25,17 @@ BEGIN
       EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS is_head boolean', prefix || 'household_members');
       EXECUTE format('ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS relationship_to_the_head varchar', prefix || 'household_members');
     END IF;
+    -- A farmer's land totals are kept to 2 decimals (register_domain/fields.py);
+    -- they were numeric(16,6), which the farmer list showed as 2.250000.
+    FOREACH total IN ARRAY ARRAY['total_land_area', 'total_land_owned_area', 'total_land_rent_area',
+                                 'total_land_crop_sharing_area'] LOOP
+      IF EXISTS (SELECT 1 FROM information_schema.columns
+          WHERE table_schema='public' AND table_name=prefix || 'farmers' AND column_name=total
+            AND numeric_scale IS DISTINCT FROM 2) THEN
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I TYPE numeric(16,2) USING round(%I, 2)',
+                       prefix || 'farmers', total, total);
+      END IF;
+    END LOOP;
   END LOOP;
 END;
 $native_compat$;
