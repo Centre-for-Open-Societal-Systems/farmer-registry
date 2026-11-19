@@ -61,9 +61,21 @@ def test_render_and_validation_failures_are_classified(log, expected):
     assert expected in deployment.upgrade_diagnostic(log)[0]
 
 
+def test_the_connector_render_error_shows_the_failing_value():
+    # Build 208's error, whole: at 300 characters it stopped before the field that was nil.
+    log = ('Error: template: openg2p-connector/templates/worker-deployment.yaml:48:16: executing '
+           '"openg2p-connector/templates/worker-deployment.yaml" at <include "openg2p-connector.commonEnv" .>: '
+           'error calling include: template: openg2p-connector/templates/_helpers.tpl:67:14: executing '
+           '"openg2p-connector.commonEnv" at <.Values.oanSigning.enabled>: nil pointer evaluating interface {}.enabled')
+    result = deployment.upgrade_diagnostic(log)
+    assert 'render' in result[0]
+    assert result[-1].endswith('<.Values.oanSigning.enabled>: nil pointer evaluating interface {}.enabled')
+
+
 def test_only_the_first_error_line_is_given_and_it_is_cut():
     result = deployment.upgrade_diagnostic('Error: ' + 'a ' * 400 + '\nError: second')
-    assert len(result[-1]) <= len('Helm said: ') + 301 and 'second' not in result[-1]
+    assert len(result[-1]) > len('Helm said: ') + 300  # a nested template error keeps its tail
+    assert len(result[-1]) <= len('Helm said: ') + 601 and 'second' not in result[-1]
 
 
 @pytest.mark.parametrize("state", ["deployed", "failed"])

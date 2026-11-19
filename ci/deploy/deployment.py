@@ -532,7 +532,7 @@ _MASKS = (
     (re.compile(r"(://)[^/\s:@]+:[^/\s@]+@"), r"\1***@"),
     (re.compile(r"[A-Za-z0-9+_=-]{32,}"), "***"),  # no "/": paths stay readable
 )
-_ERROR_LINE_LIMIT = 300
+_ERROR_LINE_LIMIT = 600
 
 
 def masked(line):
@@ -543,7 +543,7 @@ def masked(line):
 
 
 def helm_error_line(log):
-    """Helm's first "Error:" line, masked and cut to a fixed length, or None."""
+    """Helm's first "Error:" line, masked and cut to 600 characters, or None."""
     for line in log.splitlines():
         line = line.strip()
         if line.startswith("Error:"):
