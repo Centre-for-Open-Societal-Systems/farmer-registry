@@ -162,7 +162,7 @@ SET "domain_translation" = (COALESCE("domain_translation"::jsonb, '{}'::jsonb) |
  "land_ownership_type": "Land ownership type",
  "land_size": "Land size",
  "land_summary": "Land summary",
- "last_name": "Last name",
+ "last_name": "Grandfather''s name",
  "LIVESTOCK_PRODUCTION": "Livestock production",
  "livestock_system": "Livestock system",
  "livestock_type": "Livestock type",
