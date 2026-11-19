@@ -480,6 +480,25 @@ def pod(doc):
     return spec.get("template", {}).get("spec", {})
 
 
+# Release values renamed from coss* to oan* (#234). The chart overlays and this module read the oan* names
+# only (chart_signing.py: .Values.oanSigning, .Values.oanQueue; release_handoff.py: oanRoutingTarget and
+# oanCutover), so a release installed before the rename rendered nothing for them, or failed to render
+# (.Values.oanSigning.enabled on a nil map). The upgrade saves the values under the new names.
+RENAMED_VALUES = {"cossSigning": "oanSigning", "cossQueue": "oanQueue", "cossRoutingTarget": "oanRoutingTarget",
+                  "cossCutover": "oanCutover"}
+
+
+def current_value_names(values):
+    """The release's saved values with the pre-rename keys under their oan* names; a key already saved
+    under the new name wins, and the old one is dropped either way."""
+    values = dict(values or {})
+    for old, new in RENAMED_VALUES.items():
+        if old in values:
+            value = values.pop(old)
+            values.setdefault(new, value)
+    return values
+
+
 def guard(before, after, namespace, image, release=None):
     """An optional update may change its image, never discard existing resources."""
     expected_images = {image} if isinstance(image, str) else set(image)
@@ -793,7 +812,7 @@ def deploy(component, environment, record, source, registry, run=command):
             if status.get("name") != release or status.get("namespace") != namespace or status.get("info", {}).get("status") != "deployed":
                 raise ServiceError("existing-deployed-release-required")
             before = docs(run(["helm", "get", "manifest", release, *args]))
-            values = yaml.safe_load(run(["helm", "get", "values", release, *args, "-o", "yaml"])) or {}
+            values = current_value_names(yaml.safe_load(run(["helm", "get", "values", release, *args, "-o", "yaml"])))
         else:
             if component.get("allowInstall") is not True:
                 raise SkipService("no-existing-release")
@@ -801,8 +820,7 @@ def deploy(component, environment, record, source, registry, run=command):
         # A connector that is already serving (cutover phase active) takes image-only rollouts: guard()
         # refuses any other change, the upgrade is atomic, and a failed smoke check rolls it back.
         # Chart, values or hook changes still go through the accepted cutover (connector_cutover.py).
-        # A release installed before the rename still carries cossCutover in its saved values.
-        cutover = values.get("oanCutover") or values.get("cossCutover") or {}
+        cutover = values.get("oanCutover") or {}
         active = component.get("kind") == "connector" and cutover.get("phase") == "active"
         if active and not status:
             raise ServiceError("active-connector-release-missing")

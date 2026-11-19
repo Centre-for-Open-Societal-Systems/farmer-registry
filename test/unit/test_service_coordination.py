@@ -1131,3 +1131,29 @@ def test_an_active_connector_never_takes_a_hook_change(component, release_tools,
 def test_smoke_check_needs_at_least_one_endpoint():
     with pytest.raises(coordinator.ServiceError, match="no-checkable-endpoint"):
         coordinator.smoke_check([deployment("example")], "farmer", [], lambda args: "")
+
+
+def test_a_release_saved_before_the_rename_renders_with_the_oan_names():
+    # New Dev's farmer-registry-connector was installed before #234 and still saves cossSigning; the
+    # signing overlay reads .Values.oanSigning.enabled, which failed on the nil map (builds 205-209).
+    saved = {"cossSigning": {"enabled": True, "partnerId": "farmer-partner", "keyId": "k", "secret": "s"},
+             "cossCutover": {"phase": "active"}, "cossQueue": "q", "cossRoutingTarget": "t", "global": {"x": 1}}
+    values = coordinator.current_value_names(saved)
+    assert values == {"oanSigning": saved["cossSigning"], "oanCutover": {"phase": "active"}, "oanQueue": "q",
+                      "oanRoutingTarget": "t", "global": {"x": 1}}
+    assert "cossSigning" in saved  # the saved values themselves are not changed
+
+
+def test_a_value_saved_under_the_new_name_wins():
+    values = coordinator.current_value_names({"oanSigning": {"enabled": True}, "cossSigning": {"enabled": False}})
+    assert values == {"oanSigning": {"enabled": True}}
+
+
+def test_no_saved_values_give_an_empty_map():
+    assert coordinator.current_value_names(None) == {}
+
+
+def test_every_renamed_key_is_read_under_its_new_name():
+    sources = (ROOT / "scripts/operations/connector/chart_signing.py").read_text(encoding="utf-8") +         (ROOT / "scripts/operations/connector/release_handoff.py").read_text(encoding="utf-8") +         (ROOT / "ci/services/coordinator.py").read_text(encoding="utf-8")
+    for old, new in coordinator.RENAMED_VALUES.items():
+        assert new in sources and old.startswith("coss") and new == "oan" + old[len("coss"):]
