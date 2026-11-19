@@ -95,3 +95,11 @@ def test_the_derived_list_columns_have_a_header_and_two_decimals():
     for name in ("primary_phone_number", "total_land_area", "total_plots"):
         assert re.search(rf'^\s+"{name}": "[^"_]+",?$', translations, re.MULTILINE), name
     assert re.search(r'"total_land_area": \(Numeric\(16, 2\)', FIELDS)
+
+
+def test_the_last_name_header_matches_its_display_label():
+    # The list header is t("last_name"); the label casing file sets it last, so it
+    # must say what display_label says.
+    casing = (SRC / "meta_data/zz-oan/80_label_casing.sql").read_text(encoding="utf-8")
+    labels = {f["field_name"]: f["display_label"] for f in _result_schema()}
+    assert f' "last_name": "{labels["last_name"].replace(chr(39), chr(39) * 2)}",' in casing
