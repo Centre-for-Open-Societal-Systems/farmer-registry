@@ -16,6 +16,9 @@ import unittest
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
+_names = importlib.util.spec_from_file_location("image_names_for_image_pr", ROOT / "ci/deploy/image_names.py")
+image_names = importlib.util.module_from_spec(_names)
+_names.loader.exec_module(image_names)
 
 
 def load_release():
@@ -26,18 +29,17 @@ def load_release():
 
 
 REG = "123456789012.dkr.ecr.ap-south-1.amazonaws.com"
-PATH_ = "openg2p/farmer-registry"
-OLD_TAG = "bf78e69a5fd6"
-NEW_TAG = "0123456789ab"
+OLD_TAG = "0.0.0-develop.41"
+NEW_TAG = "0.0.0-develop.42"
 COMPONENTS = ["staff-ui", "staff-api", "partner-api", "celery", "db-seed", "sanity-tests"]
 
 
-def sample_values(tag=OLD_TAG):
+def sample_values(tag=OLD_TAG, repository=image_names.repository):
     """The shape of charts/openg2p-farmer-registry/values.yaml in oan-helm, reduced."""
     old = "e" * 64
 
     def img(component):
-        return "    image:\n      repository: %s/%s/%s\n      tag: %s@sha256:%s\n" % (REG, PATH_, component, tag, old)
+        return "    image:\n      repository: %s/%s\n      tag: %s@sha256:%s\n" % (REG, repository(component), tag, old)
     return (
         "global:\n  baseDomain: development.oanstaging.com\n"
         "registry:\n"
@@ -51,7 +53,7 @@ def sample_values(tag=OLD_TAG):
         "  keycloak-init:\n    image:\n      repository: docker.io/x/y\n      tag: 1.0.0\n"
         "  sanity:\n    enabled: true\n" + img("sanity-tests") + "    regType: Farmer\n"
         "analytics:\n  image:\n    repository: ''\n    tag: ''\n"
-        "dashboardApi:\n  image:\n    digest: sha256:%s\n    repository: %s/%s/dashboard-api\n    tag: 85fd0a3c2518\n" % (old, REG, PATH_))
+        "dashboardApi:\n  image:\n    digest: sha256:%s\n    repository: %s/openg2p/farmer-registry/dashboard-api\n    tag: 85fd0a3c2518\n" % (old, REG))
 
 
 def release_digests():
@@ -61,14 +63,14 @@ def release_digests():
 def tsv(tag=NEW_TAG, digests=None):
     """service-outcomes/registry-images.tsv as the Publish stage writes it: component, image, digest."""
     digests = digests or release_digests()
-    return "".join("%s\t%s/%s/%s:%s\t%s\n" % (c, REG, PATH_, c, tag, d) for c, d in digests.items())
+    return "".join("%s\t%s/%s:%s\t%s\n" % (c, REG, image_names.repository(c), tag, d) for c, d in digests.items())
 
 
 class ImageValuesTests(unittest.TestCase):
     def setUp(self):
         self.r = load_release()
         self.tags = self.r.wanted(NEW_TAG, self.r.read_digests(tsv()))
-        self.repos = self.r.expected_repositories(REG, PATH_)
+        self.repos = self.r.expected_repositories(REG)
 
     def test_only_the_seven_image_tag_lines_change(self):
         old = sample_values()
@@ -83,6 +85,16 @@ class ImageValuesTests(unittest.TestCase):
                      "      A: 'b'"):
             self.assertIn(kept, new)
 
+    def test_values_still_on_an_earlier_name_move_to_this_builds_repositories(self):
+        for earlier in (image_names.legacy_repository, lambda c: "eoan/farmer-registry/%s-1.2.2-rc.1" % c):
+            old = sample_values(repository=earlier)
+            new = self.r.rewrite_values(old, self.tags, self.repos)
+            changed = [b.strip().split(":", 1)[0] for a, b in zip(old.split("\n"), new.split("\n")) if a != b]
+            self.assertEqual(sorted(changed), ["repository"] * 7 + ["tag"] * 7)
+            self.assertIn("      repository: %s/%s\n      tag: %s@%s" % (
+                REG, image_names.repository("staff-api"), NEW_TAG, release_digests()["staff-api"]), new)
+            self.assertIn("/openg2p/farmer-registry/dashboard-api", new)       # not a registry image: left alone
+
     def test_both_celery_workloads_get_the_celery_digest(self):
         new = self.r.rewrite_values(sample_values(), self.tags, self.repos)
         self.assertEqual(new.count("%s@%s" % (NEW_TAG, release_digests()["celery"])), 2)
@@ -95,7 +107,7 @@ class ImageValuesTests(unittest.TestCase):
 
     def test_the_tags_stay_strings_for_yaml(self):
         import yaml
-        for tag in ("875427410733", "123456e78901"):
+        for tag in ("1.0.0-develop.875427410733", "0.0.0-develop.123"):
             tags = self.r.wanted(tag, self.r.read_digests(tsv(tag)))
             document = yaml.safe_load(self.r.rewrite_values(sample_values(), tags, self.repos))
             self.assertIsInstance(document["registry"]["staffApi"]["image"]["tag"], str)
@@ -111,20 +123,24 @@ class ImageValuesTests(unittest.TestCase):
 
     def test_digest_lines_are_read_and_validated(self):
         self.assertEqual(self.r.read_digests(tsv()), release_digests())
-        self.assertEqual(self.r.read_digests(tsv(), REG, PATH_, NEW_TAG), release_digests())
+        self.assertEqual(self.r.read_digests(tsv(), REG, NEW_TAG), release_digests())
         for bad in ("staff-api\tx\tlatest\n", "staff-api\tsha256:" + "a" * 64 + "\n"):
             with self.assertRaises(ValueError):
                 self.r.read_digests(bad)
         with self.assertRaisesRegex(ValueError, "not the image of build"):        # a stale file from another build
-            self.r.read_digests(tsv("ffffffffffff"), REG, PATH_, NEW_TAG)
+            self.r.read_digests(tsv("0.0.0-develop.7"), REG, NEW_TAG)
+        legacy = tsv().replace(image_names.repository("celery"), "openg2p/farmer-registry/celery")
+        with self.assertRaisesRegex(ValueError, "not the image of build"):        # pushed under the old name
+            self.r.read_digests(legacy, REG, NEW_TAG)
 
     def test_every_component_needs_a_digest_and_the_tag_a_commit(self):
         partial = dict(release_digests())
         del partial["sanity-tests"]
         with self.assertRaisesRegex(ValueError, "sanity-tests"):
             self.r.wanted(NEW_TAG, partial)
-        with self.assertRaises(ValueError):
-            self.r.wanted("latest", release_digests())
+        for bad in ("latest", "0123456789ab"):                               # not a <version>-<branch>.<build> tag
+            with self.assertRaises(ValueError):
+                self.r.wanted(bad, release_digests())
 
 
 FORK = "fork-owner/oan-helm"
@@ -204,8 +220,8 @@ class ImagePullRequestTests(unittest.TestCase):
         self.r = load_release()
         self.gh = FakeGitHub(self.r)
         self.out = []
-        self.env = {"IMAGE_TAG": NEW_TAG, "ECR_REGISTRY": REG, "ECR_REPOSITORY": PATH_, "COMMIT_SUBJECT": "Add a field",
-                    "SOURCE_COMMIT": NEW_TAG + "f" * 28, "BUILD_URL": "https://jenkins/job/7/"}
+        self.env = {"IMAGE_TAG": NEW_TAG, "ECR_REGISTRY": REG, "COMMIT_SUBJECT": "Add a field",
+                    "SOURCE_COMMIT": "0123456789ab" + "f" * 28, "BUILD_URL": "https://jenkins/job/7/"}
         self.tags = self.r.wanted(NEW_TAG, self.r.read_digests(tsv()))
 
     def proposal(self):
@@ -299,10 +315,10 @@ class ImagePullRequestTests(unittest.TestCase):
 
     def test_the_next_commit_gets_its_own_pull_request(self):
         self.gh.text = self.r.rewrite_values(sample_values(), self.tags)    # the previous commit is merged
-        (self.root / "service-outcomes/registry-images.tsv").write_text(tsv("fedcba987654"))
-        url = self.run_stage(IMAGE_TAG="fedcba987654")
+        (self.root / "service-outcomes/registry-images.tsv").write_text(tsv("0.0.0-develop.43"))
+        url = self.run_stage(IMAGE_TAG="0.0.0-develop.43")
         self.assertTrue(url)
-        self.assertIn("tag: fedcba987654@", self.gh.branches["bot/farmer-images-fedcba987654"])
+        self.assertIn("tag: 0.0.0-develop.43@", self.gh.branches["bot/farmer-images-0.0.0-develop.43"])
 
     def test_a_left_over_branch_is_reset_and_the_open_pull_request_is_updated_not_duplicated(self):
         self.gh.branches[BRANCH] = "stale"
@@ -410,9 +426,14 @@ class PipelineWiringTests(unittest.TestCase):
         self.assertIn("OAN_HELM_FORK_CRED_ID = 'oan-helm-fork-token'", self.text)
 
     def test_the_stage_uses_this_pipelines_ecr_names(self):
-        self.assertIn("ECR_REPOSITORY = 'openg2p/farmer-registry'", self.text)
-        for component in COMPONENTS:
-            self.assertIn(component, self.text.split("stage('Publish')", 1)[1].split("stage('Deploy (package)')", 1)[0])
+        publish = self.text.split("stage('Publish')", 1)[1].split("stage('Deploy (package)')", 1)[0]
+        self.assertNotIn("ECR_REPOSITORY", self.text)                 # one naming rule: ci/deploy/image_names.py
+        self.assertIn("""python3 ci/deploy/image_names.py tag "$BRANCH_NAME" "$BUILD_NUMBER\"""", self.text)
+        self.assertIn('repository=$(python3 ci/deploy/image_names.py repository "$component")', publish)
+        self.assertIn('image="$ECR_REGISTRY/$repository:$IMAGE_TAG"', publish)
+        self.assertNotIn("take(12)", self.text)
+        for component in COMPONENTS + ["registry-connector", "registry-connector-ui"]:
+            self.assertIn(component, publish)
         self.assertIn("CHART = \"openg2p-farmer-registry\"", (ROOT / "ci/deploy/release_images.py").read_text())
 
     def test_the_chart_is_annotated_for_the_rollback_history(self):

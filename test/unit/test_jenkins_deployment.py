@@ -11,7 +11,8 @@ spec = importlib.util.spec_from_file_location("deployment", ROOT / "ci/deploy/de
 deployment = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deployment)
 ECR = "379220350808.dkr.ecr.ap-south-1.amazonaws.com"
-TAG = "abcdef012345"
+TAG = "0.0.0-develop.42"
+COMMIT = "abcdef012345" + "a" * 28
 
 
 def helm_status(state="deployed", revision=5):
@@ -153,7 +154,7 @@ def release():
                 previous = copy.deepcopy(existing[key])
                 deployment.pod(previous)['containers'][0]['image'] = 'old/' + image + ':previous'
                 before.append(previous)
-        deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:{TAG}"
+        deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/{deployment.image_names.repository(image)}:{TAG}"
     for doc in after:
         suffix = doc["metadata"]["name"].removeprefix("farmer-registry-")
         env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
@@ -214,14 +215,22 @@ def test_registry_provenance_rejects_wrong_or_missing_image_digest(tmp_path, mon
     monkeypatch.chdir(tmp_path)
     path = tmp_path / "service-outcomes/registry-images.tsv"
     path.parent.mkdir()
-    commit = TAG + "a" * 28
+    commit = COMMIT
     names = {c[2] for c in deployment.COMPONENTS.values()}
-    lines = [f"{name}\t{ECR}/openg2p/farmer-registry/{name}:{TAG}\tsha256:{'b' * 64}" for name in sorted(names)]
+    lines = [f"{name}\t{ECR}/{deployment.image_names.repository(name)}:{TAG}\tsha256:{'b' * 64}" for name in sorted(names)]
     path.write_text("\n".join(lines))
     assert set(deployment.registry_provenance(ECR, TAG, commit)) == names
     path.write_text("\n".join(lines[:-1]))
     with pytest.raises(ValueError, match="Missing"):
         deployment.registry_provenance(ECR, TAG, commit)
+    # The names before eoan, or a commit12 tag, are not this build's images.
+    path.write_text("\n".join(line.replace(deployment.image_names.repository("celery"), "openg2p/farmer-registry/celery")
+                              for line in lines))
+    with pytest.raises(ValueError, match="Invalid"):
+        deployment.registry_provenance(ECR, TAG, commit)
+    path.write_text("\n".join(line.replace(TAG, "abcdef012345") for line in lines))
+    with pytest.raises(ValueError, match="Invalid"):
+        deployment.registry_provenance(ECR, "abcdef012345", commit)
 
 
 def test_prepare_retains_values_and_worker_awe_secrets(release):
@@ -407,3 +416,25 @@ def test_the_ecr_refresher_is_a_reviewed_new_resource(release):
     after.append({'kind': 'CronJob', 'metadata': {'name': 'farmer-registry-other-job'}})
     with pytest.raises(ValueError, match='Unexpected persistent resource'):
         deployment.validate(before, after, ECR, TAG)
+
+
+def test_first_eoan_deploy_replaces_the_installed_images_of_the_names_before_eoan(release):
+    # New Dev still runs openg2p/farmer-registry/<image>:<commit12>; this build moves every component to its eoan
+    # repository. Those are built images being replaced, not an optional component's image changing.
+    before, after = release
+    digest = "sha256:" + "b" * 64
+    images = {c: {"tag": TAG, "digest": digest} for _, _, c in deployment.COMPONENTS.values()}
+    installed = {(d["kind"], d["metadata"]["name"]): d for d in before}
+    for _, (kind, suffix, image) in deployment.COMPONENTS.items():
+        key = (kind, "farmer-registry-" + suffix)
+        if key in installed:
+            deployment.pod(installed[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:abcdef012345@{digest}"
+    for doc in after:
+        for container in deployment.pod(doc).get("containers", []):
+            if "/eoan/farmer-registry/" in container["image"]:
+                container["image"] = container["image"].replace(":" + TAG, ":" + TAG + "@" + digest)
+    deployment.validate(before, after, ECR, TAG, images=images)
+    dashboard = installed[("Deployment", "farmer-registry-dashboard-api")]
+    deployment.pod(dashboard)["containers"][0]["image"] = "independent/dashboard:other"
+    with pytest.raises(ValueError, match="Dashboard image must be retained"):
+        deployment.validate(before, after, ECR, TAG, images=images)

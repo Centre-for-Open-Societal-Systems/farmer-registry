@@ -5,8 +5,16 @@
 # extension installed (docker/<component>/Dockerfile), the same images the local stack runs. The
 # sanity suite is upstream's (docker/sanity-tests). Images are tagged
 # oan-ci/<component>:<tag>; the publish stage pushes them under these names.
+#
+#
+# The platform the images are built on is each Dockerfile's ARG BASE_IMAGE_VERSION
+# default, as in OpenG2P; nothing overrides it here. The defaults agree
+# (image_names.py platform fails otherwise), and the staff UI's registry-platform
+# commit must be the one that platform version's staff UI image was built from.
 set -euo pipefail
 tag="${1:?usage: ci/build/images.sh <image tag>}"
+python3 ci/build/check_rp_commit.py "$(python3 ci/deploy/image_names.py platform)" \
+  "$(python3 ci/deploy/image_names.py platform-commit)"
 
 for component in staff-api partner-api celery db-seed staff-ui; do
   docker build -f "docker/$component/Dockerfile" -t "oan-ci/$component:$tag" .

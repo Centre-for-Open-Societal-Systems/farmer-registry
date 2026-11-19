@@ -354,7 +354,7 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
             selected = yaml.safe_load(Path(args[args.index("-f") + 1]).read_text())
             assert selected["dashboardApi"]["enabled"] is True
             assert selected["dashboardApi"]["env"] == DEV_API_AUTH
-            assert selected["dashboardApi"]["image"]["repository"] == ECR + "/openg2p/farmer-registry/dashboard-api"
+            assert selected["dashboardApi"]["image"]["repository"] == ECR + "/eoan/farmer-registry/dashboard-api"
             if args[1] == "upgrade":
                 state["upgraded"] = True
             return yaml.safe_dump_all(after)

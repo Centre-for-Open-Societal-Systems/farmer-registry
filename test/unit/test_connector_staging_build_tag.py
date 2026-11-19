@@ -101,6 +101,29 @@ class ConnectorBuildTagTest(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("No registry-connector and registry-connector-ui image carries a build tag", out)
 
+    def test_eoan_names_pin_the_unsuffixed_connector_images_of_the_develop_build(self):
+        # The promoted chart pins eoan/farmer-registry/staff-api-<rpVersion>; the develop build tagged every image with
+        # its version, and the promotion added the staging version to the staff-api digest. The connector images are
+        # registry-connector-api and registry-connector-ui with no platform suffix.
+        eoan = "123456789012.dkr.ecr.ap-south-1.amazonaws.com/eoan/farmer-registry"
+        build = "1.0.0-develop.212"
+        code, out = self.run_script(COMMIT, f"1.0.0-staging.12\t{build}", [
+            f"registry-connector-api:{build}={CONNECTOR}", f"registry-connector-ui:{build}={CONNECTOR_UI}"],
+            staff_api=eoan + "/staff-api-1.2.2-rc.625")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"Promoted chart is build {build} (chart commit {COMMIT[:12]};", out)
+        self.assertIn(f"api, worker, beat, consumer: {eoan}/registry-connector-api@{CONNECTOR}", out)
+        self.assertIn(f"ui: {eoan}/registry-connector-ui@{CONNECTOR_UI}", out)
+        self.assertNotIn("1.0.0-staging.12)", out)
+
+    def test_eoan_names_never_take_the_staging_tag_for_a_build(self):
+        eoan = "123456789012.dkr.ecr.ap-south-1.amazonaws.com/eoan/farmer-registry"
+        code, out = self.run_script("", "1.0.0-staging.12", [
+            "registry-connector-api:1.0.0-staging.12=" + CONNECTOR, "registry-connector-ui:1.0.0-staging.12=" + CONNECTOR_UI],
+            staff_api=eoan + "/staff-api-1.2.2-rc.625")
+        self.assertNotEqual(code, 0)
+        self.assertIn("Neither the promoted chart (oan.org/source-commit) nor staff-api", out)
+
     def test_no_promoted_chart_fails(self):
         env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], KUBECONFIG="/nonexistent",
                    PLAN_ONLY="1")
