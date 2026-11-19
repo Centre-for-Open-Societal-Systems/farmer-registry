@@ -87,6 +87,8 @@ WITH oan (language_code, labels) AS (
     "total_land_rent_area": "Rented Land (ha)",
     "total_land_crop_sharing_area": "Crop-Sharing Land (ha)",
     "land_ownership": "Land Ownership",
+    "primary_phone_number": "Mobile number",
+    "total_plots": "Total plots",
     "enumerator": "Enumerator",
     "enumerator_name": "Enumerator Name",
     "enumerator_user_id": "Enumerator User ID",

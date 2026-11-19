@@ -9,6 +9,7 @@ import {
     validateWidget,
 } from '@openg2p/registry-widgets';
 import { toast } from 'react-toastify';
+import { MEMBERS_WIDGET, rosterProblem } from './roster';
 import { widgetConfig, type WidgetConfig } from './widgetConfigs';
 
 // Mandatory means mandatory on Next.
@@ -132,11 +133,22 @@ export function installNextGuard(root: Element, store: Store, t: Translate): () 
         if (!button || !root.contains(button)) return;
         const content = button.closest(SECTION_CONTENT);
         if (!content) return;
-        const problems = sectionProblems(content, store.getState().widget.values, t);
-        if (problems.length === 0) return;
+        const values = store.getState().widget.values;
+        const problems = sectionProblems(content, values, t);
+        // The roster spans two sections; check it once the members section's own fields pass.
+        const members = problems.length === 0 ? content.querySelector(`[data-widget-id="${MEMBERS_WIDGET}"]`) : null;
+        const roster = members ? rosterProblem(values, t) : null;
+        if (problems.length === 0 && !roster) return;
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
+        if (roster && members) {
+            store.dispatch(setTouched({ widgetId: MEMBERS_WIDGET, touched: true }));
+            store.dispatch(setError({ widgetId: MEMBERS_WIDGET, errors: [roster] }));
+            members.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            toast.error(roster, { position: 'top-right', autoClose: 8000, toastId: 'oan-intake-next' });
+            return;
+        }
         showProblems(store, problems, t);
     };
     document.addEventListener('click', onClick, true);
