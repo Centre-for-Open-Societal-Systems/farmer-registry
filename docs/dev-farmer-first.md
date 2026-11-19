@@ -51,7 +51,7 @@ A develop `deploy` or `fresh-install` build runs `ci/deploy/package_chart.py` tw
   `Chart.lock` and the native contract together; `test/unit/test_base_image_pin_lockstep.py` fails when any copy
   differs. A new `rpVersion` is a set of new repositories: the Publish stage creates a missing one with
   `ci/build/ecr_repository.py`, like the image's repository before the eoan names (immutable tags, scan on push, its
-  lifecycle policy).
+  lifecycle policy of the repository before the eoan names).
 - Before the deploy, `ci/deploy/pull_check.py` pulls every image the packaged chart pins, by digest, in a short-lived
   Pod in `farmer`; a pull error stops the build before anything changes. The staging promotion runs the same check.
 - The deploy installs that archive (`BUILT_CHART_DIR`, verified against `pin.json` by `oan_chart.py`).

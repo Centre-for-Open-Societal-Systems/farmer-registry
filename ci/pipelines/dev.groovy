@@ -87,8 +87,9 @@ pipeline {
                           repository=$(python3 ci/deploy/image_names.py repository "$component")
                           image="$ECR_REGISTRY/$repository:$IMAGE_TAG"
                           # A new platform version is a new repository name, and ECR does not create repositories on push:
-                          # a missing one is made like the image's repository before eoan (immutable tags, scan on push,
-                          # its lifecycle policy). Tags are immutable, so a version is pushed once: a taken one fails here.
+                          # a missing one gets the standard settings (immutable tags, scan on push, AES256, owner and
+                          # naming tags) and the lifecycle policy of the image's repository before eoan. Tags are
+                          # immutable, so a version is pushed once: a taken one fails here.
                           python3 ci/build/ecr_repository.py ensure "$repository" \
                             "$(python3 ci/deploy/image_names.py legacy "$component")"
                           docker tag "oan-ci/$component:$IMAGE_TAG" "$image"

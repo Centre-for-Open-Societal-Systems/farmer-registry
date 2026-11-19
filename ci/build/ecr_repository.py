@@ -3,9 +3,9 @@
     python3 ci/build/ecr_repository.py ensure <repository> <template repository>
 
 A repository that exists is left alone. A missing one (a new image, or every platform image after an rpVersion bump:
-oan-helm docs/release/naming-standard.md, section 6) is created with the tag mutability and encryption of the template
-(the image's repository before the eoan names), scan on push always on, the tags owner=farmer-registry and
-naming=eoan-standard, and the template's lifecycle policy when it has one. Nothing is ever created by hand.
+oan-helm docs/release/naming-standard.md, section 6) is created with the standard settings: immutable tags, scan on
+push, AES256 encryption and the tags owner=farmer-registry and naming=eoan-standard. It also gets the lifecycle policy
+of the template (the image's repository before the eoan names) when that has one. Nothing is ever created by hand.
 
 Needs the aws CLI with the pipeline's ECR credential. Standard library only. Exit codes: 0 exists or created, 1 failure.
 """
@@ -14,7 +14,10 @@ import subprocess
 import sys
 
 REGION = "ap-south-1"
-TAGS = ["Key=owner,Value=farmer-registry", "Key=naming,Value=eoan-standard"]
+# The naming standard's settings for every eoan repository (oan-helm docs/release/naming-standard.md).
+SETTINGS = ["--image-tag-mutability", "IMMUTABLE", "--image-scanning-configuration", "scanOnPush=true",
+            "--encryption-configuration", "encryptionType=AES256",
+            "--tags", "Key=owner,Value=farmer-registry", "Key=naming,Value=eoan-standard"]
 
 
 class Missing(Exception):
@@ -33,24 +36,13 @@ def aws(args):
 
 
 def ensure(name, template, call=aws):
-    """'exists' or 'created'. The template must exist: its settings are the reviewed ones."""
+    """'exists' or 'created'."""
     try:
         call(["describe-repositories", "--repository-names", name, "--output", "json"])
         return "exists"
     except Missing:
         pass
-    try:
-        settings = json.loads(call(["describe-repositories", "--repository-names", template,
-                                    "--output", "json"]))["repositories"][0]
-    except Missing:
-        raise RuntimeError("template repository %s does not exist; create %s through a reviewed change" % (template, name))
-    encryption = settings.get("encryptionConfiguration") or {"encryptionType": "AES256"}
-    call(["create-repository", "--repository-name", name,
-          "--image-tag-mutability", settings.get("imageTagMutability", "IMMUTABLE"),
-          "--image-scanning-configuration", "scanOnPush=true",
-          "--encryption-configuration", "encryptionType=" + encryption["encryptionType"]
-          + (",kmsKey=" + encryption["kmsKey"] if encryption.get("kmsKey") else ""),
-          "--tags"] + TAGS)
+    call(["create-repository", "--repository-name", name] + SETTINGS)
     try:
         policy = json.loads(call(["get-lifecycle-policy", "--repository-name", template, "--output", "json"]))
     except Missing:
