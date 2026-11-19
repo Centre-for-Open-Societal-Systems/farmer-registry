@@ -71,6 +71,15 @@ REWORDED: list[tuple[str, str, str]] = [
                                 r"the members must match the size of the group"),
      ("Household members: {2} entered, but the household size is {1}. Add or remove members, or correct "
      "the household size, so they match.")),
+    # The household's own check (g2p_register_domain_service_household) says the same with "recorded".
+    ("upstream_members_recorded", (r"size_of_group is (\d+) but (\d+) household member\(s\) are recorded; "
+                                   r"update the members or the size so they match"),
+     ("Household members: {2} entered, but the household size is {1}. Add or remove members, or correct "
+     "the household size, so they match.")),
+    # land_link_validation lists the internal ids of the rows' lands, which mean nothing to an officer.
+    ("upstream_land_link", (r"(.+?) rows must be attached to one of the farmer's lands "
+                            r"\(select the land in the row\); not a land: .+"),
+     "{label}: a row's plot is not one of the farmer's lands. Pick the plot again in each row."),
     ("upstream_household_fields", r"Required household fields missing: (.+)",
      "Household: {fields} are empty. Fill them in before submitting."),
     ("upstream_member_genders", r"Members entered: (\S+) male / (\S+) female, but the household says (\S+) male / (\S+) female",
@@ -96,10 +105,20 @@ def _words(name: str) -> str:
     return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", name.strip()).lower()
 
 
+def readable(name: str) -> str:
+    """A database or key name as words, for a field with no label:
+    birth_date -> Birth date. Any other text is returned as it is."""
+    name = name.strip()
+    if not re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", name):
+        return name
+    words = name.replace("_", " ")
+    return words[0].upper() + words[1:]
+
+
 def _label(name: str, messages: dict[str, str]) -> str:
     name = name.strip()
     found = messages.get(name)
-    return found if isinstance(found, str) and found else name
+    return found if isinstance(found, str) and found else readable(name)
 
 
 def reword(message: str, messages: dict[str, str] | None = None) -> str:

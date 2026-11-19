@@ -20,6 +20,8 @@ message a user gets. The rule this document holds the form to:
 | Server, an ingested answer a rule refuses (every ingest_data_worker task: ODK, partner API, File Import) | ODK Central does not run the form's rules on a submission posted through its API, so the section-save rules (names, Ge'ez script, phones, Master Data codes, Fayda ID) are the check. A section the worker saves with a refused answer is not saved; the form is left as a draft instead of failing the ingest, and the Fayda ID and household checks at finalize do the same. Only validation and parent-link errors are held back; a Master Data or database failure still fails the task, which retries it. The refused section is saved in a savepoint, so nothing of it remains; its fields are left out of the later sections of the same register (the worker carries a register's answers into each of its sections), so those sections are kept, and each reason is listed once | `household_intake.py`, `required_fields.py` (`hold_back`) | the draft's remarks read `Not submitted: some answers were not accepted. <reasons> ...` (`review_reason_refused`), refused answers first, then the missing fields |
 | Server, OAN Fayda ID | the FIN/FAN is not held by another register record or by another submitted form waiting for approval (section save, change request, submit) | `register_domain/services/form_integrity.py` | `fayda_fin_registered`, `fayda_fin_pending`: names the holder and the record |
 | Server, OAN person names | the farmer's and household members' names take letters (any script, Ge'ez included), spaces, apostrophes and hyphens, at most 100 characters, the rule Crop applies; from every source (web, ODK, partner). The widgets carry the same rule as one pattern | `register_domain/name_rules.py`, `derivations.py`, `odk/transform.py`; pattern in `19_name_rules.sql` | `name_letters_only`; "First Name: use letters only (spaces, apostrophes and hyphens allowed)" |
+| Staff UI, OAN household roster on Next | on the Household members section's Next: members entered, as many as the household size, exactly one head, a relationship for every other member, the male/female counts; the server's rules in the server's order | `ui/staff-ui/overrides/src/oan/intake/roster.ts`, called by `nextGuard.ts` | the server's words (`oan_roster_*`, same text as `upstream_messages.py`), under the members table and in one notification |
+| Server, a second Submit | a form already submitted (`draft_status` FINAL) is not finalized again, so a double click or a repeated Submit never starts a second approval request; the UI also drops a second click on the confirmation's Submit (`submitOnce.ts`) | `household_intake.py` (`already_submitted`) | "Already submitted on 17 Nov 2026; it is waiting for approval." (after a decision: "…; it was approved/rejected.") |
 | Server, registry core | file bytes against the documents profile; MDS codes (`REGISTRY_CORE_VALIDATE_ATTRIBUTE_VALUES`) | upstream core | core's own text for files (see [Files](#files-and-documents)); OAN wording for codes (`attribute_messages.py`) |
 
 The UI is the first line; the server repeats the value rules because an API
@@ -76,7 +78,7 @@ Messages are the English defaults.
 | Rule | Where | Message |
 | --- | --- | --- |
 | JPEG, PNG or WebP | UI | "Use a JPEG, PNG or WebP image." |
-| resized to 1024 px on the long side, then ≤ 2048 KB | UI | "The photo is larger than 2048 KB after resizing. Choose a smaller image, or take the photo again." |
+| center-cropped to 4:5 portrait, resized to 750 px on the long side, JPEG quality stepped down from 0.82 to 0.50 until ≤ 100 KB | UI | "The photo is larger than 100 KB after resizing. Choose a smaller image, or take the photo again." |
 | readable image | UI | "The image could not be read. Choose another photo, or take it again." |
 
 ### Phone numbers (table)
@@ -152,10 +154,10 @@ Messages are the English defaults.
 | Required | identity document (type + at least one file); all others optional | UI | upstream "required" |
 | Files per category | up to 5 | UI | "Up to 5 files can be attached here. Remove one to add another." |
 | Types | PDF, JPG, JPEG, PNG | UI | "scan.docx cannot be attached here. Choose a PDF, JPG, JPEG or PNG file." |
-| Size | ≤ 5 MB per file | UI | "The file is larger than 5 MB. Choose a smaller file, or scan it again at a lower resolution." |
+| Size | ≤ 2 MB per file | UI | "The file is larger than 2 MB. Choose a smaller file, or scan it again at a lower resolution." |
 | Server limit | PNG/JPEG/WebP ≤ 5 MB, PDF ≤ 10 MB, content sniffed (the extension must match the bytes) | API (core) | core's text, e.g. "File content could not be identified as an allowed type." |
 | Land certificate (lands table) | one file, same types and size | UI | as above |
-| Farmer photo | JPEG/PNG/WebP, ≤ 2048 KB after resizing to 1024 px | UI | see Photo |
+| Farmer photo | 4:5 portrait, JPEG/PNG/WebP input converted to JPEG, ≤ 100 KB after resizing to 750 px | UI | see Photo |
 
 The UI is stricter than the server, so a user of the form never reaches the
 server's file messages; only an API client can. Those messages are core's and
@@ -217,12 +219,21 @@ validation path). ✔ = accepted, ✘ = rejected with the message shown above.
 | unknown gender code | ✔ (open item) |
 | household entered, no members, finalize | ✔ (open item) |
 
+The roster rules above also run on the members section's Next in the staff UI
+(`roster.ts`), with the same words, so the officer does not first learn of them on
+Submit.
+
 ## Open items
 
 | Item | Why it is open | Proposed fix |
 | --- | --- | --- |
 | Core's file messages are not reworded | core endpoint, no hook | UI is stricter, so only API clients see them |
 | The map pin is bounded to Ethiopia only in the browser | the server checks latitude/longitude ranges only | an Ethiopia bounding-box rule in `widget_rules.py` |
+
+Upstream behaviour, left as it is: after a draft is reloaded, the sections saved
+before the reload show the "Modified" badge again. The badge is the widget
+library's per-session change tracking, not saved state; the data saved on the
+server is unchanged by the reload.
 
 Closed: the farmer's household at submit and "picked and new" (`household_intake.py`);
 Master Data codes (core's validator with OAN wording); acquisition-year and collected-date

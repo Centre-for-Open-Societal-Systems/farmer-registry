@@ -203,3 +203,20 @@ def test_a_bad_odk_email_is_left_out_and_the_personal_details_kept():
     person = intake_sections(data)["farmer_personal_details"][0]
     assert "email" not in person and "emails" not in person
     assert person["first_name"] and person["gender"]
+
+
+def test_a_resent_odk_submission_is_refused_and_names_the_intake_that_holds_it():
+    data = example()
+    data['meta'] = {'instanceID': 'uuid:5b1e-resent'}
+    session = MagicMock()
+    session.execute.return_value.scalar.return_value = '2026NOV17-12345ABCDE'
+    with pytest.raises(ValueError, match='already received as 2026NOV17-12345ABCDE'):
+        enricher.OdkToFarmerIntakeEnricher().enrich(data, session)
+    session.execute.return_value.scalar.return_value = None
+    assert enricher.OdkToFarmerIntakeEnricher().enrich(data, session)['oan_intake_sections']
+
+
+def test_a_submission_without_an_instance_id_is_not_looked_up():
+    assert enricher.instance_id({}) is None
+    assert enricher.instance_id({'meta': {'instanceID': ' uuid:1 '}}) == 'uuid:1'
+    assert enricher.already_received(MagicMock(), None) is None

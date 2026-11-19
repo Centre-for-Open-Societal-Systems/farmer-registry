@@ -13,7 +13,9 @@ dashboardApi:
   auth:
     enabled: true
 iamSetup:
-  grantUsers: [admin]
+  # The sample approvers (AWE stage 1 and 2) can open the dashboard for testing.
+  # Every user listed must exist once in the staff realm, or the setup fails (iam/grants.mjs).
+  grantUsers: [admin, alex.carter, nina.patel]
   description: Farmer Dashboard
 host: farmer-registry-dashboard.development.oanstaging.com
 ingress:

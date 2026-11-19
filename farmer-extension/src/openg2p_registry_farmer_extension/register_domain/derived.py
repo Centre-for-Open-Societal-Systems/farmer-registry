@@ -88,10 +88,10 @@ def land_rollup(lands: Iterable[tuple[str | None, float | None]]) -> dict:
         ownership = "HYBRID"
     return {
         "total_plots": plots,
-        "total_land_area": round(total, 6),
-        "total_land_owned_area": round(owned, 6),
-        "total_land_rent_area": round(rented, 6),
-        "total_land_crop_sharing_area": round(shared, 6),
+        "total_land_area": round(total, 2),
+        "total_land_owned_area": round(owned, 2),
+        "total_land_rent_area": round(rented, 2),
+        "total_land_crop_sharing_area": round(shared, 2),
         "land_ownership": ownership,
     }
 

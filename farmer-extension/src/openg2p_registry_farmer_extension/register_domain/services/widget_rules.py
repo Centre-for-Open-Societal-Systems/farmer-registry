@@ -219,6 +219,16 @@ def _type_problem(kind: str, value) -> str | None:
     return None
 
 
+def _readable(name: str) -> str:
+    """A key or column name as words (birth_date -> Birth date), as
+    upstream_messages.readable; this module is loaded alone in its tests."""
+    name = name.strip()
+    if not re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", name):
+        return name
+    words = name.replace("_", " ")
+    return words[0].upper() + words[1:]
+
+
 class _Say:
     """Formats a message key with the translations, falling back to English."""
 
@@ -233,12 +243,13 @@ class _Say:
 
     def label(self, key: str | None, field: str) -> str:
         """The field as the form names it: its label's translation, else the
-        field's, else the label key itself."""
+        field's, else the label key or field name in words (birth_date ->
+        Birth date), never a raw key."""
         for candidate in (key, field):
             found = self.messages.get(candidate) if candidate else None
             if isinstance(found, str) and found:
                 return found
-        return key or field
+        return _readable(key or field)
 
     def __call__(self, key: str, **params) -> str:
         template = self.text(key, MESSAGES.get(key, key))

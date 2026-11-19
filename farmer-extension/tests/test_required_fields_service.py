@@ -133,6 +133,28 @@ def test_a_value_already_saved_in_the_row_counts():
         _Host(existing=existing), [{"internal_record_id": "r-1", "first_name": ""}])
 
 
+
+def test_a_hidden_field_is_sent_empty_so_its_old_value_is_cleared_and_not_checked():
+    host = _Host()
+    payload = [{"first_name": "Abebe", "gender": "MALE", "disabled": False, "disability_type": "VISUAL"}]
+    assert _save(host, payload) == "saved"
+    sent = host.saved[0][2]
+    assert sent[0]["disability_type"] is None and sent[0]["first_name"] == "Abebe"
+
+
+def test_a_hidden_value_saved_earlier_is_cleared_when_the_section_is_saved_again():
+    host = _Host(existing={"r-1": {"first_name": "Abebe", "gender": "MALE", "disabled": True,
+                                   "disability_type": "VISUAL"}})
+    assert _save(host, [{"internal_record_id": "r-1", "disabled": False}]) == "saved"
+    assert host.saved[0][2][0]["disability_type"] is None
+
+
+def test_a_shown_field_keeps_its_value():
+    host = _Host()
+    assert _save(host, [{"first_name": "Abebe", "gender": "MALE", "disabled": True,
+                         "disability_type": "VISUAL"}]) == "saved"
+    assert host.saved[0][2][0]["disability_type"] == "VISUAL"
+
 def test_a_required_list_section_with_no_row_is_refused_on_next():
     message = _refused(_Host(LIST_SCHEMA, is_list=True), [], register=LAND)
     assert message == "Lands: at least one entry is required. Add one before pressing Next."
@@ -514,3 +536,49 @@ def test_a_person_saving_strips_nothing_and_is_refused(monkeypatch, ingest):
         _run(service.save_intake_form_submission_with_session(
             "s-1", "personal", [{"first_name": "Abebe"}], FARMER, "form", FARMER, "alex", _Savepoints()))
     assert seen == [{"first_name": "Abebe"}]
+
+
+class _Rows:
+    """A session whose queries return the farmers, households and members in turn."""
+
+    def __init__(self, *results):
+        self.results = list(results)
+
+    async def execute(self, query):
+        rows = self.results.pop(0)
+        return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+
+
+def test_submit_waits_when_master_data_cannot_check_the_farmer_s_codes(monkeypatch):
+    from openg2p_registry_farmer_extension.register_domain import services
+    from openg2p_registry_farmer_extension.register_domain.services import (
+        coded_values,
+        form_integrity,
+    )
+
+    async def load():
+        return {}, {}, {}
+
+    async def unique(*args, **kwargs):
+        return None
+
+    async def down(records):
+        return True
+
+    import sys
+    import types
+
+    from openg2p_registry_farmer_extension.register_domain import models
+
+    # At run time the platform serves the registry's models under this name.
+    for name in ("openg2p_registry_extensions", "openg2p_registry_extensions.register_domain"):
+        monkeypatch.setitem(sys.modules, name, sys.modules.get(name) or types.ModuleType(name))
+    monkeypatch.setitem(sys.modules, "openg2p_registry_extensions.register_domain.models", models)
+    monkeypatch.setattr(services, "_load", load)
+    monkeypatch.setattr(form_integrity, "check_fayda_id_unique", unique)
+    monkeypatch.setattr(coded_values, "master_data_unchecked", down)
+    farmer = models.G2PIntakeFormFarmer(internal_record_id="f-1", submission_id="s-1", is_household_head=False,
+                                        link_internal_record_id="hh-1", gender="MALE")
+    with pytest.raises(G2PRegistryException) as error:
+        _run(hi.check_farmer_submission("s-1", _Rows([farmer], [], []), submission=SimpleNamespace(), required=[]))
+    assert "Reference choices are unavailable" in error.value.message

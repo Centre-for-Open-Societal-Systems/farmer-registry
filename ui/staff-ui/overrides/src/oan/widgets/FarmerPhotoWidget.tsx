@@ -25,13 +25,15 @@ type SerializedFile = {
 type Config = Record<string, any>;
 
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const DEFAULTS = { maxDimension: 1024, maxSizeKb: 2048, imageSize: 160, jpegQuality: 0.85 };
+const DEFAULTS = { maxDimension: 750, maxSizeKb: 100, imageSize: 160, jpegQuality: 0.82 };
+const MIN_JPEG_QUALITY = 0.5;
+const JPEG_QUALITY_STEP = 0.08;
 
 const LABELS: Record<string, string> = {
     farmer_photo_upload: 'Upload photo',
     farmer_photo_replace: 'Replace photo',
     farmer_photo_remove: 'Remove',
-    farmer_photo_hint: 'JPEG, PNG or WebP. On a phone, take a photo or pick one from the gallery.',
+    farmer_photo_hint: 'JPEG, PNG or WebP (center-cropped to 4:5). On a phone, take a photo or pick one from the gallery.',
     farmer_photo_none: 'No photo',
     farmer_photo_bad_type: 'Use a JPEG, PNG or WebP image.',
     farmer_photo_too_large: 'The photo is larger than {size} KB after resizing. Choose a smaller image, or take the photo again.',
@@ -49,20 +51,55 @@ const readAsBase64 = (blob: Blob): Promise<string> =>
         reader.readAsDataURL(blob);
     });
 
-// Scale the photo down so its longer side is at most maxDimension, as JPEG. A
-// phone camera photo is several megabytes; the record needs a portrait.
-async function shrink(file: File, maxDimension: number, quality: number): Promise<Blob> {
+// Crop the photo to a 4:5 portrait aspect ratio and scale it down so its
+// height is at most maxDimension, as JPEG (standard MOSIP/Fayda passport specs).
+// If the encoded image exceeds maxSizeBytes, step JPEG quality down until it
+// fits or reaches MIN_JPEG_QUALITY.
+async function shrink(file: File, maxDimension: number, initialQuality: number, maxSizeBytes: number): Promise<Blob> {
     const bitmap = await createImageBitmap(file);
     try {
-        const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
-        if (scale === 1 && file.type === 'image/jpeg') return file;
+        const targetRatio = 4 / 5; // 0.8 portrait aspect ratio
+        const currentRatio = bitmap.width / bitmap.height;
+
+        let cropX = 0;
+        let cropY = 0;
+        let cropWidth = bitmap.width;
+        let cropHeight = bitmap.height;
+
+        if (currentRatio > targetRatio) {
+            // Image is wider than 4:5; crop the left and right sides
+            cropWidth = Math.round(bitmap.height * targetRatio);
+            cropX = Math.round((bitmap.width - cropWidth) / 2);
+        } else if (currentRatio < targetRatio) {
+            // Image is taller than 4:5; crop the top and bottom
+            cropHeight = Math.round(bitmap.width / targetRatio);
+            cropY = Math.round((bitmap.height - cropHeight) / 2);
+        }
+
+        // Scale down to maxDimension (height) while preserving 4:5 ratio
+        const targetHeight = Math.min(cropHeight, maxDimension);
+        const targetWidth = Math.round(targetHeight * targetRatio);
+
         const canvas = document.createElement('canvas');
-        canvas.width = Math.round(bitmap.width * scale);
-        canvas.height = Math.round(bitmap.height * scale);
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         const context = canvas.getContext('2d');
         if (!context) return file;
-        context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(bitmap, cropX, cropY, cropWidth, cropHeight, 0, 0, targetWidth, targetHeight);
+
+        const encode = (q: number) =>
+            new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', q));
+
+        let quality = initialQuality;
+        let blob = await encode(quality);
+        while (blob && maxSizeBytes > 0 && blob.size > maxSizeBytes && quality > MIN_JPEG_QUALITY) {
+            quality = Math.max(MIN_JPEG_QUALITY, Math.round((quality - JPEG_QUALITY_STEP) * 100) / 100);
+            const next = await encode(quality);
+            if (!next) break;
+            blob = next;
+        }
         return blob ?? file;
     } finally {
         bitmap.close();
@@ -143,7 +180,12 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
             }
             setBusy(true);
             try {
-                const blob = await shrink(file, Number(format.maxDimension), Number(format.jpegQuality));
+                const blob = await shrink(
+                    file,
+                    Number(format.maxDimension),
+                    Number(format.jpegQuality),
+                    maxSizeKb * 1024,
+                );
                 if (blob.size > maxSizeKb * 1024) {
                     setError(label('farmer_photo_too_large', { size: maxSizeKb }));
                     return;
@@ -180,7 +222,7 @@ export function FarmerPhotoWidget({ config }: { config: Config }) {
             <style>{`
                 .oan-photo { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
                 .oan-photo-frame {
-                    width: ${size}px; height: ${size}px; border-radius: 12px; overflow: hidden;
+                    width: ${size}px; height: ${Math.round(size * 1.25)}px; border-radius: 12px; overflow: hidden;
                     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
                     background: var(--owt-color-bg-alt, #f5f5f5);
                     border: 2px dashed var(--owt-color-border, #d1d5db);
