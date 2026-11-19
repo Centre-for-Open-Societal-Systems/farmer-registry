@@ -520,8 +520,45 @@ def registry_provenance(registry, tag, commit):
     return images
 
 
+# A value after "=" or ":" under a key that names a secret, an Authorization
+# header, credentials in a URL, and long token-like runs are replaced by ***.
+# A template file name (templates/secret.yaml:4:3) is a place, not a key.
+_SECRET_KEY = (r"(?<![\w.-])(?![\w.-]*\.(?:ya?ml|tpl|json|txt)\b)"
+               r"[\w.-]*(?:pass(?:word|wd)?|pwd|secret|token|api[_-]?key|private[_-]?key|credential|auth|cert|dsn"
+               r"|connection[_-]?string)[\w.-]*")
+_MASKS = (
+    (re.compile(r"(?i)(authorization\s*[:=]\s*)(?:bearer|basic)?\s*\S+"), r"\1***"),
+    (re.compile(rf"(?i)(\"?{_SECRET_KEY}\"?\s*[:=]\s*)(\"[^\"]*\"|'[^']*'|[^\s,;}}\]]+)"), r"\1***"),
+    (re.compile(r"(://)[^/\s:@]+:[^/\s@]+@"), r"\1***@"),
+    (re.compile(r"[A-Za-z0-9+_=-]{32,}"), "***"),  # no "/": paths stay readable
+)
+_ERROR_LINE_LIMIT = 300
+
+
+def masked(line):
+    """One line of tool output with every secret-looking value replaced by ***."""
+    for pattern, replacement in _MASKS:
+        line = pattern.sub(replacement, line)
+    return line
+
+
+def helm_error_line(log):
+    """Helm's first "Error:" line, masked and cut to a fixed length, or None."""
+    for line in log.splitlines():
+        line = line.strip()
+        if line.startswith("Error:"):
+            line = masked(line)
+            return line if len(line) <= _ERROR_LINE_LIMIT else line[:_ERROR_LINE_LIMIT] + "…"
+    return None
+
+
 def upgrade_diagnostic(log):
-    """Classify Helm errors without echoing arbitrary manifests or secret values."""
+    """Classify Helm errors, and add Helm's own first error line with secrets masked.
+
+    The classes say what kind of failure it was; the error line says which
+    resource, template or value, which a class alone cannot (a render failure
+    used to be "unclassified"). Manifests and other output lines are never
+    echoed."""
     patterns = [
         (r'BackoffLimitExceeded|backoff limit', 'A hook Job exhausted its retries.'),
         (r'ImagePullBackOff|ErrImagePull|pull access denied', 'A workload could not pull its image.'),
@@ -532,9 +569,20 @@ def upgrade_diagnostic(log):
         (r'failed (?:pre|post)-(?:install|upgrade)|hooks? failed', 'A Helm lifecycle hook failed.'),
         (r'no matches for kind|resource mapping not found', 'A required Kubernetes API or CRD is unavailable.'),
         (r'connection refused|no such host|TLS handshake timeout', 'The Kubernetes endpoint could not be reached.'),
+        (r'execution error at|template: \S+:\d+|parse error|nil pointer evaluating', 'The chart failed to render.'),
+        (r"values don't meet the specifications of the schema|values\.schema\.json", "The values do not match the chart's schema."),
+        (r'error validating data|unable to build kubernetes objects|error converting YAML to JSON', 'A rendered manifest is not valid Kubernetes.'),
+        (r'exists and cannot be imported into the current release|invalid ownership metadata', 'A resource is owned outside this release.'),
+        (r'found in Chart\.yaml, but missing in charts/|dependenc(?:y|ies).*(?:missing|not found|out of sync)', "A chart dependency is missing or out of date."),
+        (r'admission webhook .* denied', 'An admission webhook denied a resource.'),
+        (r'chart requires kubeVersion', "The cluster's Kubernetes version is outside the chart's range."),
+        (r'has no deployed releases', 'The release has no deployed revision to upgrade.'),
     ]
     matches = [message for pattern, message in patterns if re.search(pattern, log, re.I)]
-    return matches or ['Helm failed with an unclassified error; raw output was withheld because it may contain secrets.']
+    if not matches:
+        matches = ['Helm failed with an unclassified error.']
+    line = helm_error_line(log)
+    return matches + ([f'Helm said: {line}'] if line else [])
 
 
 def main():
