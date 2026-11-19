@@ -42,7 +42,7 @@ WITH doc_categories (category, col, ord, type_field, required, attribute_id) AS 
   ('other_document', 3, 2, 'other_document_purpose', false, 'DOCUMENT_PURPOSE')
 ),
 doc_settings (slots, accept, max_size) AS (
-  VALUES (5, '.pdf,.jpg,.jpeg,.png', 5242880)
+  VALUES (5, '.pdf,.jpg,.jpeg,.png', 2097152)
 ),
 doc_widgets (col, ord, w) AS (
   -- The kind of document: the category's Master Data list.

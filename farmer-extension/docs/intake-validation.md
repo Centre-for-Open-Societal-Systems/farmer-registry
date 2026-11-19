@@ -76,7 +76,7 @@ Messages are the English defaults.
 | Rule | Where | Message |
 | --- | --- | --- |
 | JPEG, PNG or WebP | UI | "Use a JPEG, PNG or WebP image." |
-| resized to 1024 px on the long side, then ≤ 2048 KB | UI | "The photo is larger than 2048 KB after resizing. Choose a smaller image, or take the photo again." |
+| center-cropped to 4:5 portrait, resized to 750 px on the long side, JPEG quality stepped down from 0.82 to 0.50 until ≤ 100 KB | UI | "The photo is larger than 100 KB after resizing. Choose a smaller image, or take the photo again." |
 | readable image | UI | "The image could not be read. Choose another photo, or take it again." |
 
 ### Phone numbers (table)
@@ -152,10 +152,10 @@ Messages are the English defaults.
 | Required | identity document (type + at least one file); all others optional | UI | upstream "required" |
 | Files per category | up to 5 | UI | "Up to 5 files can be attached here. Remove one to add another." |
 | Types | PDF, JPG, JPEG, PNG | UI | "scan.docx cannot be attached here. Choose a PDF, JPG, JPEG or PNG file." |
-| Size | ≤ 5 MB per file | UI | "The file is larger than 5 MB. Choose a smaller file, or scan it again at a lower resolution." |
+| Size | ≤ 2 MB per file | UI | "The file is larger than 2 MB. Choose a smaller file, or scan it again at a lower resolution." |
 | Server limit | PNG/JPEG/WebP ≤ 5 MB, PDF ≤ 10 MB, content sniffed (the extension must match the bytes) | API (core) | core's text, e.g. "File content could not be identified as an allowed type." |
 | Land certificate (lands table) | one file, same types and size | UI | as above |
-| Farmer photo | JPEG/PNG/WebP, ≤ 2048 KB after resizing to 1024 px | UI | see Photo |
+| Farmer photo | 4:5 portrait, JPEG/PNG/WebP input converted to JPEG, ≤ 100 KB after resizing to 750 px | UI | see Photo |
 
 The UI is stricter than the server, so a user of the form never reaches the
 server's file messages; only an API client can. Those messages are core's and
