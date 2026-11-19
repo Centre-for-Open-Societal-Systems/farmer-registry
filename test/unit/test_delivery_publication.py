@@ -168,3 +168,14 @@ def test_a_failed_deploy_never_reaches_chart_publication():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
     deploy = pipeline.split("stage('Deploy (registry)')", 1)[1].split("stage('Build (services)')", 1)[0]
     assert "catchError" not in deploy
+
+
+def test_the_chart_version_is_the_image_tag_of_init_yaml():
+    import sys
+    sys.path.insert(0, str(ROOT / "ci/deploy"))
+    package = module("package_chart", "ci/deploy/package_chart.py")
+    version = names.chart_version()
+    assert package.chart_version({"IMAGE_TAG": version + "-develop.57"}) == version + "-develop.57"
+    for tag in ("0.0.0-develop.57" if version != "0.0.0" else "9.9.9-develop.57", "abcdef012345", version + "-develop"):
+        with pytest.raises(ValueError):
+            package.chart_version({"IMAGE_TAG": tag})

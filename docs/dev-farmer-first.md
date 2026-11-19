@@ -29,16 +29,31 @@ refuses any other archive. `ci/deploy/bump_pin.py` moves it.
 
 A develop `deploy` or `fresh-install` build runs `ci/deploy/package_chart.py` twice:
 
-- `Package chart`, before the deploy: the version comes from git (`0.0.0-develop.<commit count>`, using
-  `scripts/ci/derive-version.sh` of oan-helm). The stage packages `helm/openg2p-farmer-registry`, with the
+- `Package chart`, before the deploy: the chart version is the build's image tag,
+  `<version>-develop.<BUILD_NUMBER>` with `version` from `init.yaml` (for example `1.0.0-develop.57`). The stage
+  packages `helm/openg2p-farmer-registry`, with the
   repository and tag of `staffUi`, `staffApi`, `partnerApi`, `celeryWorker`, `celeryBeat`, `dbSeed` and
   `sanity` written into the packaged copy only, and writes `built-chart/` with the archive and its
   `pin.json`. If this stage fails nothing is deployed.
 
-  The images are named by `ci/deploy/image_names.py` from the chart's `Chart.yaml`:
-  `eoan/farmer-registry/<image>-<appVersion>:<version>-<branch>.<build>`, for example
-  `eoan/farmer-registry/staff-ui-1.2.2-rc.625:0.0.0-develop.300@sha256:<digest>`. A new `appVersion` (RP
-  version) is a new repository name; the Publish stage creates a missing repository with scan on push.
+  The images are named by `ci/deploy/image_names.py` from `init.yaml` (oan-helm
+  `docs/release/naming-standard.md`, section 6): `eoan/farmer-registry/<image>[-<rpVersion>]:<version>-<branch>.<build>`.
+  Only the six platform images (staff-ui, staff-api, partner-api, celery, db-seed, sanity-tests) carry the
+  `-<rpVersion>` suffix, for example `eoan/farmer-registry/staff-ui-1.2.2-rc.625:1.0.0-develop.57@sha256:<digest>`;
+  the connector and dashboard images are `eoan/farmer-registry/registry-connector-api`, `registry-connector-ui`,
+  `dashboard-api` and `dashboard-ui`, tagged with the same build version. ECR tags are immutable, so a version is
+  pushed once.
+
+  `init.yaml` holds `version`, `rpVersion` and `rpCommit` (the registry-platform commit of the platform staff UI
+  image). The Dockerfiles have no `BASE_IMAGE_VERSION` default: `ci/build/images.sh` and the build workflow pass
+  `rpVersion` (and `rpCommit` for the staff UI), and `ci/build/check_rp_commit.py` checks `rpCommit` against the image
+  label. Change the platform with `scripts/bump-rp-version.sh <version>`, which writes `init.yaml`, `Chart.yaml`,
+  `Chart.lock` and the native contract together; `test/unit/test_base_image_pin_lockstep.py` fails when any copy
+  differs. A new `rpVersion` is a set of new repositories: the Publish stage creates a missing one with
+  `ci/build/ecr_repository.py`, like the image's repository before the eoan names (immutable tags, scan on push, its
+  lifecycle policy).
+- Before the deploy, `ci/deploy/pull_check.py` pulls every image the packaged chart pins, by digest, in a short-lived
+  Pod in `farmer`; a pull error stops the build before anything changes. The staging promotion runs the same check.
 - The deploy installs that archive (`BUILT_CHART_DIR`, verified against `pin.json` by `oan_chart.py`).
 - `Publish chart`, last, `deploy` builds only: the same archive goes to `repository/develop/` of oan-helm,
   where a workflow updates the index, changelog and rollback history.

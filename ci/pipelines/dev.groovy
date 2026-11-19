@@ -164,6 +164,11 @@ pipeline {
                     unstash 'dev-deployment'
                     unstash 'built-chart'
                     withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                        // New Dev pulls every image the packaged chart pins, by digest, before anything is deployed.
+                        sh '''
+                            set -eu
+                            python3 ci/deploy/pull_check.py --namespace farmer --chart "$(ls built-chart/*.tgz | head -n 1)"
+                        '''
                         script {
                           def deployRegistry = {
                             try {
