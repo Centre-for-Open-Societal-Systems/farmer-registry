@@ -31,14 +31,10 @@ done
 OAN_WORKER_SAVE_TEST_IMAGE="oan-ci/celery:$tag" python3 ci/validation/check_native_worker_save.py
 docker build -f docker/sanity-tests/Dockerfile -t "oan-ci/sanity-tests:$tag" .
 
-# The connector image (docker/registry-connector): OpenG2P's published connector plus
-# openg2p_registry_connector_extension, with the extension's tests run inside it.
-docker build -f docker/registry-connector/Dockerfile -t "oan-ci/registry-connector:$tag" .
-docker run --rm -u 0 -v "$PWD/docker/registry-connector:/ext:ro" -w /ext -e PYTHONDONTWRITEBYTECODE=1 \
-  --entrypoint sh "oan-ci/registry-connector:$tag" -c \
-  'pip install --quiet --no-cache-dir --root-user-action=ignore pytest==8.4.2 && python -m pytest -q -p no:cacheprovider tests'
-# The connector admin UI: the published UI behind the staff login (docker/registry-connector-ui).
-docker build -f docker/registry-connector-ui/Dockerfile -t "oan-ci/registry-connector-ui:$tag" .
+# The connector images are built by ci/services/coordinator.py from upstream source plus integrations/registry-connector
+# and the docker/registry-connector-ui overlay, and tested inside the image (test/runtime/test_connector_media.py).
+# docker/registry-connector (the published image plus openg2p_registry_connector_extension) is no longer built; it stays
+# in the tree for one release so staging can roll back to its last image.
 
 # The extension's tests, against the platform it is installed on. They read
 # upstream UI files from the repository, so the whole tree is mounted.

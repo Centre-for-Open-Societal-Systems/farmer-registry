@@ -80,10 +80,10 @@ pipeline {
                           docker login --username AWS --password-stdin "$ECR_REGISTRY"
                         mkdir -p service-outcomes
                         : > service-outcomes/registry-images.tsv
-                        : > service-outcomes/registry-connector.tsv
-                        # The connector images (docker/registry-connector, docker/registry-connector-ui) are
-                        # not registry components, so they get their own outcome file, not registry-images.tsv.
-                        for component in staff-api partner-api celery db-seed sanity-tests staff-ui registry-connector registry-connector-ui; do
+                        # The registry images only. The connector images (registry-connector-api, registry-connector-ui) have
+                        # one builder, ci/services/coordinator.py, which pushes them with this build's tag; a second push of
+                        # the same tag is refused by the immutable repository (test_publish_and_coordinator_never_share_a_repository).
+                        for component in staff-api partner-api celery db-seed sanity-tests staff-ui; do
                           repository=$(python3 ci/deploy/image_names.py repository "$component")
                           image="$ECR_REGISTRY/$repository:$IMAGE_TAG"
                           # A new platform version is a new repository name, and ECR does not create repositories on push:
@@ -96,12 +96,7 @@ pipeline {
                           docker push "$image"
                           digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" \
                             --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
-                          case "$component" in
-                            registry-connector*) outcome=service-outcomes/registry-connector.tsv
-                                                 echo "$component: $image@$digest" ;;
-                            *) outcome=service-outcomes/registry-images.tsv ;;
-                          esac
-                          printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> "$outcome"
+                          printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
                         done
                         docker run --rm --network none --user "$(id -u):$(id -g)" \
                           -e DELIVERY_ACTION \
