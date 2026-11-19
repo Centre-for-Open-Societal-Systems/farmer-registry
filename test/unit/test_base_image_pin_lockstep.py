@@ -1,17 +1,17 @@
-"""Guard: init.yaml is the one place the openg2p-registry platform is chosen, and every copy agrees with it.
+"""Guard: the openg2p-registry platform pin is identical in every place it appears.
 
-A variant extends ONE registry-platform version, used three ways:
-  * the Docker images — every docker/*/Dockerfile built FROM a platform image declares `ARG BASE_IMAGE_VERSION` with
-    no default; ci/build/images.sh and .github/workflows/build.yml pass rpVersion of init.yaml (the staff UI gets
-    rpCommit, the registry-platform commit of openg2p/openg2p-registry-staff-ui:<rpVersion>)
-  * the Helm chart — `appVersion` and the `openg2p-registry` dependency `version:` in Chart.yaml (Chart.yaml stays
-    literal; scripts/bump-rp-version.sh writes init.yaml and Chart.yaml together)
+As in OpenG2P (farmer-registry test/test_rp_pin_lockstep.py), the pin is the `ARG BASE_IMAGE_VERSION=<v>` default
+of every docker/*/Dockerfile built FROM a platform image: a Dockerfile cannot read the version from another file
+before FROM, and a plain `docker build -f docker/<role>/Dockerfile .` must build without arguments. The same version
+is also
+  * the Helm chart's `appVersion` and `openg2p-registry` dependency `version:` in Chart.yaml (and Chart.lock)
   * the reviewed contracts — ci/validation/native-release-contract.json and ci/deploy/oan-chart.json
+  * the -<rpVersion> of the platform images' ECR repositories (ci/deploy/image_names.py reads it from the Dockerfiles)
+and the staff UI Dockerfile's default is the registry-platform commit of that version's staff UI image
+(ci/build/check_rp_commit.py checks it against the image label).
 
-If these drift, the images are built FROM one base while the chart deploys another, and the overlay lands on a
-harness it does not match. This test fails the build if anything ever splits them.
-
-No dependencies beyond the stdlib + pytest — runs anywhere the other tests do.
+If these drift, the images are built FROM one base while the chart deploys another. scripts/bump-rp-version.sh
+changes them together; this test fails the build if anything ever splits them.
 """
 
 import importlib.util
@@ -28,12 +28,16 @@ PLATFORM_IMAGE = re.compile(r"^FROM openg2p/openg2p-registry-[a-z-]+:\$\{BASE_IM
 spec = importlib.util.spec_from_file_location("image_names", REPO / "ci/deploy/image_names.py")
 image_names = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(image_names)
-INIT = image_names.read_init()
 
 
-def _platform_dockerfiles():
-    files = [f for f in sorted((REPO / "docker").glob("*/Dockerfile")) if PLATFORM_IMAGE.search(f.read_text())]
-    return files + [REPO / "docker/staff-ui/Dockerfile"]
+def _docker_pins():
+    pins = {}
+    for f in sorted((REPO / "docker").glob("*/Dockerfile")):
+        content = f.read_text()
+        m = re.search(r"^ARG BASE_IMAGE_VERSION=(\S+)", content, re.M)
+        if m and PLATFORM_IMAGE.search(content):
+            pins[f.relative_to(REPO).as_posix()] = m.group(1)
+    return pins
 
 
 def _chart_pin():
@@ -41,49 +45,54 @@ def _chart_pin():
     return m.group(1) if m else None
 
 
-def test_dockerfiles_take_the_platform_from_the_build_and_have_no_default():
-    files = _platform_dockerfiles()
-    assert sorted(f.parent.name for f in files) == sorted(image_names.PLATFORM_IMAGES)
-    for f in files:
-        declared = re.findall(r"^ARG BASE_IMAGE_VERSION(\S*)\s*$", f.read_text(), re.M)
-        assert declared == [""], f"{f.relative_to(REPO)} must declare ARG BASE_IMAGE_VERSION without a default"
+def test_every_platform_dockerfile_declares_the_pin():
+    assert sorted(pathlib.PurePosixPath(p).parent.name for p in _docker_pins()) == sorted(image_names.PLATFORM_DOCKERFILES)
 
 
-def test_every_copy_of_the_platform_version_is_init_yaml():
-    copies = {
-        "Chart.yaml appVersion": re.search(r"(?m)^appVersion:\s*(\S+)", CHART.read_text()).group(1),
-        "Chart.yaml openg2p-registry dependency": _chart_pin(),
-        "ci/deploy/oan-chart.json platformVersion": json.loads((REPO / "ci/deploy/oan-chart.json").read_text())["platformVersion"],
-        "ci/validation/native-release-contract.json platformVersion":
-            json.loads((REPO / "ci/validation/native-release-contract.json").read_text())["platformVersion"],
-    }
-    split = {name: value for name, value in copies.items() if value != INIT["rpVersion"]}
-    if split:
-        pytest.fail("init.yaml rpVersion is %s, but:\n%s\n\nChange the platform with scripts/bump-rp-version.sh"
-                    % (INIT["rpVersion"], "\n".join("  %s: %s" % item for item in split.items())))
+def test_platform_pin_is_in_lockstep():
+    docker = _docker_pins()
+    copies = dict(docker)
+    copies["Chart.yaml appVersion"] = re.search(r"(?m)^appVersion:\s*(\S+)", CHART.read_text()).group(1)
+    copies["Chart.yaml openg2p-registry dependency"] = _chart_pin()
+    copies["ci/deploy/oan-chart.json"] = json.loads((REPO / "ci/deploy/oan-chart.json").read_text())["platformVersion"]
+    copies["ci/validation/native-release-contract.json"] = \
+        json.loads((REPO / "ci/validation/native-release-contract.json").read_text())["platformVersion"]
+    if len(set(copies.values())) != 1:
+        pytest.fail("openg2p-registry pin has SPLIT — images and chart must be identical:\n"
+                    + "\n".join("  %s: %s" % item for item in copies.items())
+                    + "\n\nChange the platform with scripts/bump-rp-version.sh <version>")
+    assert image_names.platform_version() == set(copies.values()).pop()
+
+
+def test_staff_ui_is_rebuilt_from_a_registry_platform_commit():
+    assert re.fullmatch(r"[0-9a-f]{40}", image_names.platform_commit())
+    assert ("openg2p/openg2p-registry-staff-ui:%s." % image_names.platform_version()) in \
+        (REPO / "docker/staff-ui/Dockerfile").read_text()
 
 
 def test_chart_dependency_lock_matches_the_pinned_platform():
     lock = CHART.with_name("Chart.lock")
     assert lock.is_file(), "Pinned Farmer chart must commit its dependency lock"
-    assert re.search(r"version:\s*" + re.escape(INIT["rpVersion"]) + r"\s", lock.read_text())
+    assert re.search(r"version:\s*" + re.escape(_chart_pin()) + r"\s", lock.read_text())
     assert "https://openg2p.github.io/openg2p-helm" in lock.read_text()
 
 
-def test_builds_pass_init_yaml_to_every_platform_image():
+def test_no_build_overrides_the_dockerfile_pin():
+    # The Dockerfile default is what is built: a --build-arg would let the build and the reviewed pin differ.
+    for path in ("ci/build/images.sh", ".github/workflows/build.yml", ".github/workflows/checks.yml"):
+        assert "BASE_IMAGE_VERSION=" not in (REPO / path).read_text(), path
     images = (REPO / "ci/build/images.sh").read_text()
-    assert 'rp_version=$(python3 ci/deploy/image_names.py field rpVersion)' in images
-    assert 'rp_commit=$(python3 ci/deploy/image_names.py field rpCommit)' in images
-    assert 'python3 ci/build/check_rp_commit.py "$rp_version" "$rp_commit"' in images
-    builds = re.findall(r"docker build (.*?)-t \"oan-ci/([a-z$-]+)", images.replace("\\\n", " "))
-    arguments = {name: line for line, name in builds}
-    assert "for component in staff-api partner-api celery db-seed; do" in images
-    assert '--build-arg "BASE_IMAGE_VERSION=$rp_version"' in arguments["$component"]
-    assert '--build-arg "BASE_IMAGE_VERSION=$rp_version"' in arguments["sanity-tests"]
-    assert '--build-arg "BASE_IMAGE_VERSION=$rp_commit"' in arguments["staff-ui"]
-    workflow = (REPO / ".github/workflows/build.yml").read_text()
-    assert "BASE_IMAGE_VERSION=${{ matrix.component == 'staff-ui' && steps.platform.outputs.commit" \
-           " || steps.platform.outputs.version }}" in workflow
+    assert "ci/build/check_rp_commit.py" in images and "image_names.py platform-commit" in images
+
+
+def test_platform_dockerfiles_that_differ_are_refused(tmp_path):
+    for role in image_names.PLATFORM_DOCKERFILES + ("staff-ui",):
+        (tmp_path / role).mkdir()
+        (tmp_path / role / "Dockerfile").write_text((REPO / "docker" / role / "Dockerfile").read_text())
+    celery = tmp_path / "celery/Dockerfile"
+    celery.write_text(re.sub(r"(?m)^ARG BASE_IMAGE_VERSION=\S+", "ARG BASE_IMAGE_VERSION=1.2.2-rc.681", celery.read_text()))
+    with pytest.raises(ValueError, match="differ"):
+        image_names.platform_version(tmp_path)
 
 
 def test_image_parents_and_central_platform_source_contract():
@@ -92,4 +101,4 @@ def test_image_parents_and_central_platform_source_contract():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     result = module.check(REPO)
-    assert result["image_parent"] == result["platform"] == INIT["rpVersion"]
+    assert result["image_parent"] == result["platform"] == image_names.platform_version()

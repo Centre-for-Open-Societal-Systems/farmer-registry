@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Move this repository to another OpenG2P registry-platform version (rpVersion) in one change.
 #
-# init.yaml is where the platform is chosen (oan-helm docs/release/naming-standard.md, section 6); the Dockerfiles
-# have no default and take it as a build argument. Chart.yaml stays literal, so this script writes the copies
-# together:
+# As in OpenG2P, the platform version is the ARG BASE_IMAGE_VERSION default of the Dockerfiles: a Dockerfile cannot
+# read it from another file before FROM, and a plain `docker build -f docker/<role>/Dockerfile .` must work without
+# arguments. Every copy must agree (test/unit/test_base_image_pin_lockstep.py), so this script writes them together:
 #
-#   init.yaml                                    rpVersion, and rpCommit = the org.opencontainers.image.revision
+#   docker/{staff-api,partner-api,celery,db-seed,sanity-tests}/Dockerfile   ARG BASE_IMAGE_VERSION=<rpVersion>
+#   docker/staff-ui/Dockerfile                  ARG BASE_IMAGE_VERSION=<rpCommit>, the org.opencontainers.image.revision
 #                                                label of openg2p/openg2p-registry-staff-ui:<rpVersion>
 #   helm/openg2p-farmer-registry/Chart.yaml     appVersion and the openg2p-registry dependency version
 #   helm/openg2p-farmer-registry/Chart.lock     helm dependency update
@@ -49,7 +50,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$VERSION" ] || die "give the platform version, for example: scripts/bump-rp-version.sh 1.2.2-rc.681"
-[ -f init.yaml ] && [ -d "$CHART_DIR" ] || die "run from the repository root"
+[ -f docker/staff-ui/Dockerfile ] && [ -d "$CHART_DIR" ] || die "run from the repository root"
 command -v curl >/dev/null && command -v python3 >/dev/null && command -v helm >/dev/null \
   || die "curl, python3 and helm are required"
 
@@ -71,9 +72,9 @@ print(commit)
 PY
 ) || die "$COMMIT"
 
-CURRENT=$(python3 ci/deploy/image_names.py field rpVersion)
+CURRENT=$(python3 ci/deploy/image_names.py platform) || die "the Dockerfiles do not agree on one platform version"
 echo "rpVersion: $CURRENT -> $VERSION"
-echo "rpCommit:  $(python3 ci/deploy/image_names.py field rpCommit) -> $COMMIT"
+echo "rpCommit:  $(python3 ci/deploy/image_names.py platform-commit) -> $COMMIT"
 if [ "$CHECK_ONLY" = true ]; then
   echo "(check only: nothing written)"
   exit 0
@@ -90,9 +91,12 @@ def rewrite(path, pattern, replacement, flags=0):
         sys.exit("%s: %s not found" % (path, pattern))
     open(path, "w", encoding="utf-8").write(new)
 
-rewrite("init.yaml", r"(?m)^(rpVersion:\s*)\S+", r"\g<1>" + version)
-rewrite("init.yaml", r"(?m)^(rpCommit:\s*)\S+", r"\g<1>" + commit)
-rewrite(chart, r"(?m)^(appVersion:\s*)\S+", r"\g<1>" + version)
+for role in ("staff-api", "partner-api", "celery", "db-seed", "sanity-tests"):
+    rewrite("docker/%s/Dockerfile" % role, r"(?m)^(ARG BASE_IMAGE_VERSION=)\S+", r"\g<1>" + version)
+rewrite("docker/staff-ui/Dockerfile", r"(?m)^(ARG BASE_IMAGE_VERSION=)\S+", r"\g<1>" + commit)
+rewrite("docker/staff-ui/Dockerfile", r"(openg2p/openg2p-registry-staff-ui:)\S+?(\.?)$", r"\g<1>" + version + r"\g<2>",
+        re.M)
+rewrite(chart,r"(?m)^(appVersion:\s*)\S+", r"\g<1>" + version)
 # Only the version inside the openg2p-registry dependency block.
 rewrite(chart, r"(-\s*name:\s*openg2p-registry\b(?:(?!\n\s*-\s).)*?version:\s*)\S+", r"\g<1>" + version, re.S)
 data = json.load(open(contract, encoding="utf-8"))
@@ -103,9 +107,10 @@ PY
 helm repo add openg2p https://openg2p.github.io/openg2p-helm >/dev/null 2>&1 || true
 helm repo update openg2p >/dev/null
 helm dependency update "$CHART_DIR" >/dev/null || die "helm dependency update failed for $VERSION"
-python3 ci/build/check_rp_commit.py "$VERSION" "$(python3 ci/deploy/image_names.py field rpCommit)"
+[ "$(python3 ci/deploy/image_names.py platform)" = "$VERSION" ] || die "post-write check failed: the Dockerfiles differ"
+python3 ci/build/check_rp_commit.py "$VERSION" "$(python3 ci/deploy/image_names.py platform-commit)"
 
 echo ""
-echo "Written: init.yaml, $CHART_DIR/Chart.yaml, $CHART_DIR/Chart.lock, $CONTRACT."
+echo "Written: the six Dockerfiles, $CHART_DIR/Chart.yaml, $CHART_DIR/Chart.lock, $CONTRACT."
 echo "Not written: ci/deploy/oan-chart.json (the central chart pin moves in its own reviewed change)."
 echo "Run: python -m pytest test/unit/test_base_image_pin_lockstep.py"

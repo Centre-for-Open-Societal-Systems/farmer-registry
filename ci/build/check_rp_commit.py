@@ -1,6 +1,9 @@
-"""rpCommit of init.yaml must be the commit OpenG2P built openg2p/openg2p-registry-staff-ui:<rpVersion> from.
+"""The staff UI's registry-platform commit must be the one OpenG2P built openg2p/openg2p-registry-staff-ui:<rpVersion> from.
 
-The staff UI image is rebuilt from rpCommit (docker/staff-ui/Dockerfile), so a platform bump that leaves rpCommit
+<rpVersion> is the ARG BASE_IMAGE_VERSION default of the platform Dockerfiles and <rpCommit> the one of
+docker/staff-ui/Dockerfile (ci/deploy/image_names.py platform, platform-commit).
+
+The staff UI image is rebuilt from rpCommit, so a platform bump that leaves rpCommit
 behind would build an older UI under the new platform version. The commit is the org.opencontainers.image.revision
 label of the published image, read anonymously from the Docker Hub registry API (manifest and config only, no layers).
 
@@ -53,7 +56,7 @@ def revision(version, get=fetch, token=None):
 
 def main(argv, get=fetch, token=None):
     if len(argv) != 3:
-        print(__doc__.strip().splitlines()[4].strip(), file=sys.stderr)
+        print("usage: check_rp_commit.py <rpVersion> <rpCommit>", file=sys.stderr)
         return 1
     version, commit = argv[1], argv[2]
     try:
@@ -62,8 +65,9 @@ def main(argv, get=fetch, token=None):
         print("FAIL: could not read %s of %s:%s: %s" % (LABEL, REPOSITORY, version, error), file=sys.stderr)
         return 1
     if found != commit:
-        print("FAIL: init.yaml rpCommit is %s, but %s:%s was built from %s. Set both with scripts/bump-rp-version.sh."
-              % (commit, REPOSITORY, version, found or "<no revision label>"), file=sys.stderr)
+        print("FAIL: docker/staff-ui/Dockerfile BASE_IMAGE_VERSION is %s, but %s:%s was built from %s. "
+              "Set both with scripts/bump-rp-version.sh." % (commit, REPOSITORY, version, found or "<no revision label>"),
+              file=sys.stderr)
         return 1
     print("rpCommit matches %s:%s" % (REPOSITORY, version))
     return 0

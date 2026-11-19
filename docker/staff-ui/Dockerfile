@@ -3,14 +3,13 @@
 # commit of the published image it replaces, so the overlay is the only
 # difference. Build from the repository root:
 #   docker build -f docker/staff-ui/Dockerfile .
-# BASE_IMAGE_VERSION is rpCommit of init.yaml, passed by ci/build/images.sh: the
-# org.opencontainers.image.revision label of openg2p/openg2p-registry-staff-ui:<rpVersion>
-# (ci/build/check_rp_commit.py checks it). No default.
+# BASE_IMAGE_VERSION is the org.opencontainers.image.revision label of
+# openg2p/openg2p-registry-staff-ui:1.2.2-rc.625.
 FROM node:20-alpine AS base
 WORKDIR /app
 
 FROM base AS source
-ARG BASE_IMAGE_VERSION
+ARG BASE_IMAGE_VERSION=29d2a2397ef9fa09308561e15ae9aa444a4fcd7c
 # Upstream's lock file takes @openg2p/notification from the develop branch of
 # OpenG2P/notifications (raw/refs/heads/develop/client/openg2p-notification-0.1.0.tgz).
 # That file was removed from develop on 17 Nov 2026 (a97bb2f), so npm ci answered

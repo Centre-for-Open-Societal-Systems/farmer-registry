@@ -6,8 +6,7 @@
 # with LOAD_SAMPLE_DATA=true: on every New Dev deploy (ci/deploy/deployment.py) and on staging only
 # when the staging build's LOAD_SAMPLE_DATA option is on).
 # Build from the repository root:  docker build -f docker/db-seed/Dockerfile .
-# BASE_IMAGE_VERSION is rpVersion of init.yaml, passed by ci/build/images.sh; no default.
-ARG BASE_IMAGE_VERSION
+ARG BASE_IMAGE_VERSION=1.2.2-rc.625
 FROM openg2p/openg2p-registry-db-seed:${BASE_IMAGE_VERSION}
 
 # The platform image ships the reference registry's seed; only Farmer's is applied.

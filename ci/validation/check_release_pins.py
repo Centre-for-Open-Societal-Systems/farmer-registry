@@ -7,11 +7,6 @@ ROOT = Path(__file__).resolve().parents[2]
 ROLES = ("staff-api", "partner-api", "celery", "db-seed")
 
 
-def init_platform(root):
-    found = re.search(r"""(?m)^rpVersion:\s*["']?([^"'\s#]+)""", (root / "init.yaml").read_text(encoding="utf-8"))
-    return found.group(1) if found else None
-
-
 def check(root=ROOT):
     contract = json.loads((root / "ci/validation/native-release-contract.json").read_text(encoding="utf-8"))
     if set(contract["parents"]) != set(ROLES):
@@ -22,13 +17,10 @@ def check(root=ROOT):
         if selected != expected:
             raise ValueError("Farmer image parent path or repository changed")
         content = (root / selected["dockerfile"]).read_text(encoding="utf-8")
-        # The parent version is rpVersion of init.yaml, passed as a build argument; the Dockerfile has no default.
-        declared = re.findall(r"^ARG BASE_IMAGE_VERSION(\S*)$", content, re.M)
+        versions = re.findall(r"^ARG BASE_IMAGE_VERSION=(\S+)$", content, re.M)
         sources = re.findall(r"^FROM (\S+)$", content, re.M)
-        if declared != [""] or sources != [selected["repository"] + ":${BASE_IMAGE_VERSION}"]:
+        if versions != [contract["platformVersion"]] or sources != [selected["repository"] + ":${BASE_IMAGE_VERSION}"]:
             raise ValueError("Farmer image parent pin or FROM changed without contract review")
-    if init_platform(root) != contract["platformVersion"]:
-        raise ValueError("init.yaml rpVersion differs from reviewed native release contract")
     pin = json.loads((root / "ci/deploy/oan-chart.json").read_text(encoding="utf-8"))
     if pin["platformVersion"] != contract["platformVersion"]:
         raise ValueError("Central platform pin differs from reviewed native release contract")

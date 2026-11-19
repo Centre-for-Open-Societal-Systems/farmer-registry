@@ -6,21 +6,19 @@
 # sanity suite is upstream's (docker/sanity-tests). Images are tagged
 # oan-ci/<component>:<tag>; the publish stage pushes them under these names.
 #
-# The platform the images are built on comes from init.yaml only: rpVersion is
-# BASE_IMAGE_VERSION of the five images built FROM openg2p/openg2p-registry-<role>,
-# and rpCommit is BASE_IMAGE_VERSION of the staff UI, which is rebuilt from that
-# registry-platform commit. The Dockerfiles have no default.
+#
+# The platform the images are built on is each Dockerfile's ARG BASE_IMAGE_VERSION
+# default, as in OpenG2P; nothing overrides it here. The defaults agree
+# (image_names.py platform fails otherwise), and the staff UI's registry-platform
+# commit must be the one that platform version's staff UI image was built from.
 set -euo pipefail
 tag="${1:?usage: ci/build/images.sh <image tag>}"
-rp_version=$(python3 ci/deploy/image_names.py field rpVersion)
-rp_commit=$(python3 ci/deploy/image_names.py field rpCommit)
-python3 ci/build/check_rp_commit.py "$rp_version" "$rp_commit"
+python3 ci/build/check_rp_commit.py "$(python3 ci/deploy/image_names.py platform)" \
+  "$(python3 ci/deploy/image_names.py platform-commit)"
 
-for component in staff-api partner-api celery db-seed; do
-  docker build --build-arg "BASE_IMAGE_VERSION=$rp_version" \
-    -f "docker/$component/Dockerfile" -t "oan-ci/$component:$tag" .
+for component in staff-api partner-api celery db-seed staff-ui; do
+  docker build -f "docker/$component/Dockerfile" -t "oan-ci/$component:$tag" .
 done
-docker build --build-arg "BASE_IMAGE_VERSION=$rp_commit" -f docker/staff-ui/Dockerfile -t "oan-ci/staff-ui:$tag" .
 
 # Load each Python image's platform entry point offline, as the image starts it.
 for role in staff-api partner-api celery-worker celery-beat; do
@@ -31,7 +29,7 @@ done
 # Exercise real native SAVE (including parent/finance rejection and complete
 # rollback) in the exact Celery image that Jenkins will publish.
 OAN_WORKER_SAVE_TEST_IMAGE="oan-ci/celery:$tag" python3 ci/validation/check_native_worker_save.py
-docker build --build-arg "BASE_IMAGE_VERSION=$rp_version" -f docker/sanity-tests/Dockerfile -t "oan-ci/sanity-tests:$tag" .
+docker build -f docker/sanity-tests/Dockerfile -t "oan-ci/sanity-tests:$tag" .
 
 # The connector image (docker/registry-connector): OpenG2P's published connector plus
 # openg2p_registry_connector_extension, with the extension's tests run inside it.

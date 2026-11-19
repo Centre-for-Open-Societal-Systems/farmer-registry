@@ -1,4 +1,6 @@
-"""Image names: eoan/farmer-registry/<image>[-<rpVersion>]:<version>-<branch>.<build>, both versions from init.yaml."""
+"""Image names: eoan/farmer-registry/<image>[-<rpVersion>]:<version>-<branch>.<build>.
+
+<version> is init.yaml's; <rpVersion> is the ARG BASE_IMAGE_VERSION default of the platform Dockerfiles."""
 import importlib.util
 import re
 from pathlib import Path
@@ -10,7 +12,7 @@ spec = importlib.util.spec_from_file_location("image_names", ROOT / "ci/deploy/i
 image_names = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(image_names)
 INIT = (ROOT / "init.yaml").read_text(encoding="utf-8")
-RP = re.search(r"(?m)^rpVersion: (\S+)$", INIT).group(1)
+RP = re.search(r"(?m)^ARG BASE_IMAGE_VERSION=(\S+)$", (ROOT / "docker/staff-api/Dockerfile").read_text()).group(1)
 VERSION = re.search(r"(?m)^version: (\S+)$", INIT).group(1)
 
 
@@ -30,18 +32,19 @@ def test_other_images_have_no_platform_suffix(image, repository):
     assert not image_names.is_repository(repository + "-" + RP, image)
 
 
-def test_init_yaml_holds_the_versions():
-    assert image_names.read_init() == {"version": VERSION, "rpVersion": RP,
-                                       "rpCommit": re.search(r"(?m)^rpCommit: (\S+)$", INIT).group(1)}
+def test_init_yaml_holds_the_version_and_the_dockerfiles_the_platform():
+    assert image_names.read_init() == {"version": VERSION}
     assert re.fullmatch(r"\d+\.\d+\.\d+", VERSION)
+    assert image_names.platform_version() == RP
+    assert re.fullmatch(r"[0-9a-f]{40}", image_names.platform_commit())
 
 
 @pytest.mark.parametrize("text, problem", [
-    ("version: 1.0.0\nrpVersion: 1.2.2-rc.625\n", "rpCommit"),
-    ("version: 1.0.0-develop.3\nrpVersion: 1.2.2-rc.625\nrpCommit: " + "a" * 40 + "\n", "version"),
-    ("version: 1.0.0\nrpVersion: latest\nrpCommit: " + "a" * 40 + "\n", "rpVersion"),
-    ("version: 1.0.0\nrpVersion: 1.2.2\nrpCommit: " + "a" * 40 + "\nchannel: develop\n", "channel"),
-    ("version: 1.0.0\nversion: 1.0.1\nrpVersion: 1.2.2\nrpCommit: " + "a" * 40 + "\n", "version")])
+    ("", "version"),
+    ("version: 1.0.0-develop.3\n", "version"),
+    ("version: 1.0.0\nrpVersion: 1.2.2-rc.625\n", "rpVersion"),
+    ("version: 1.0.0\nchannel: develop\n", "channel"),
+    ("version: 1.0.0\nversion: 1.0.1\n", "version")])
 def test_a_bad_init_yaml_is_refused(tmp_path, text, problem):
     (tmp_path / "init.yaml").write_text(text, encoding="utf-8")
     with pytest.raises(ValueError, match=problem):

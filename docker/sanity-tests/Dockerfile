@@ -16,11 +16,11 @@
 # id, DCI reg-type, search text, scopes and CR tab/section are supplied as env
 # by the Helm chart (sanity.* values), not baked here.
 #
-# BASE_IMAGE_VERSION pins the base sanity image: rpVersion of init.yaml, passed by
-# ci/build/images.sh, the same as the other farmer images and the openg2p-registry chart dependency.
+# BASE_IMAGE_VERSION pins the base sanity image; keep it in lockstep with the other
+# farmer images and the openg2p-registry chart dependency.
 #
 # Build context = repo root.
-ARG BASE_IMAGE_VERSION
+ARG BASE_IMAGE_VERSION=1.2.2-rc.625
 FROM openg2p/openg2p-registry-sanity-tests:${BASE_IMAGE_VERSION}
 
 COPY test/sanity/sanity/fixtures.py                /app/sanity/fixtures.py

@@ -36,20 +36,21 @@ A develop `deploy` or `fresh-install` build runs `ci/deploy/package_chart.py` tw
   `sanity` written into the packaged copy only, and writes `built-chart/` with the archive and its
   `pin.json`. If this stage fails nothing is deployed.
 
-  The images are named by `ci/deploy/image_names.py` from `init.yaml` (oan-helm
-  `docs/release/naming-standard.md`, section 6): `eoan/farmer-registry/<image>[-<rpVersion>]:<version>-<branch>.<build>`.
+  The images are named by `ci/deploy/image_names.py` (oan-helm `docs/release/naming-standard.md`, section 6):
+  `eoan/farmer-registry/<image>[-<rpVersion>]:<version>-<branch>.<build>`.
   Only the six platform images (staff-ui, staff-api, partner-api, celery, db-seed, sanity-tests) carry the
   `-<rpVersion>` suffix, for example `eoan/farmer-registry/staff-ui-1.2.2-rc.625:1.0.0-develop.57@sha256:<digest>`;
   the connector and dashboard images are `eoan/farmer-registry/registry-connector-api`, `registry-connector-ui`,
   `dashboard-api` and `dashboard-ui`, tagged with the same build version. ECR tags are immutable, so a version is
   pushed once.
 
-  `init.yaml` holds `version`, `rpVersion` and `rpCommit` (the registry-platform commit of the platform staff UI
-  image). The Dockerfiles have no `BASE_IMAGE_VERSION` default: `ci/build/images.sh` and the build workflow pass
-  `rpVersion` (and `rpCommit` for the staff UI), and `ci/build/check_rp_commit.py` checks `rpCommit` against the image
-  label. Change the platform with `scripts/bump-rp-version.sh <version>`, which writes `init.yaml`, `Chart.yaml`,
-  `Chart.lock` and the native contract together; `test/unit/test_base_image_pin_lockstep.py` fails when any copy
-  differs. A new `rpVersion` is a set of new repositories: the Publish stage creates a missing one with
+  `init.yaml` holds `version`. The platform version (`rpVersion`) is kept where OpenG2P keeps it: the
+  `ARG BASE_IMAGE_VERSION` default of each platform Dockerfile, all the same. A Dockerfile cannot read it from another
+  file before `FROM`, and a plain `docker build -f docker/<role>/Dockerfile .` builds without arguments; nothing
+  overrides the default in CI. The staff UI Dockerfile's default is the registry-platform commit of that version's
+  staff UI image, which `ci/build/check_rp_commit.py` checks against the image label. Change the platform with
+  `scripts/bump-rp-version.sh <version>`, which writes the six Dockerfiles, `Chart.yaml`, `Chart.lock` and the native
+  contract together; `test/unit/test_base_image_pin_lockstep.py` fails when any copy differs. A new `rpVersion` is a set of new repositories: the Publish stage creates a missing one with
   `ci/build/ecr_repository.py`, with the standard settings (immutable tags, scan on push, AES256, the tags
   `owner=farmer-registry` and `naming=eoan-standard`) and the lifecycle policy of the image's repository before the
   eoan names.
