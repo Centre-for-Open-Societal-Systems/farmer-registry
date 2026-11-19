@@ -64,16 +64,40 @@ def command(args, cwd=None, input=None):
         # docker push answers a missing ECR repository with "name unknown" rather than the AWS exception name.
         if "RepositoryNotFoundException" in result.stderr or re.search(r"name unknown|repository with name \S+ does not exist", result.stderr, re.I):
             raise ServiceError("image-repository-missing")
+        if "LifecyclePolicyNotFoundException" in result.stderr:
+            raise ServiceError("lifecycle-policy-missing")
         if Path(args[0]).stem == "helm":
             from deployment import upgrade_diagnostic
             raise ServiceError("command-failed-helm", {
                 "diagnostics": upgrade_diagnostic(result.stdout + "\n" + result.stderr),
             })
         if Path(args[0]).name == "docker" and len(args) > 1 and args[1] in DOCKER_STEPS:
-            # A fixed word from our own arguments, never tool output, so a failed image build, test run or push can be told apart.
-            raise ServiceError("command-failed-docker-" + args[1])
+            # A fixed word from our own arguments, so a failed image build, test run or push can be told apart; the
+            # tool's own first error line goes into the diagnostics, masked, as for Helm.
+            raise ServiceError("command-failed-docker-" + args[1], {
+                "diagnostics": docker_diagnostic(result.stderr + "\n" + result.stdout),
+            })
         raise ServiceError("command-failed-" + Path(args[0]).name)
     return result.stdout
+
+
+DOCKER_ERROR = re.compile(r"error|denied|invalid|failed|unknown|not found|cannot|refused", re.I)
+
+
+def docker_diagnostic(log):
+    """What a failed docker step said: a class for the known cases, then its first error line, masked (deployment.masked)
+    and cut to 600 characters. Other output lines are never echoed."""
+    from deployment import _ERROR_LINE_LIMIT, masked
+
+    said = []
+    if re.search(r"tag invalid|already exists .* cannot be overwritten|repository is immutable", log, re.I):
+        said.append("The tag is already taken in an immutable ECR repository: this build pushed it, or another image "
+                    "was pushed under the same tag first.")
+    line = next((line.strip() for line in log.splitlines() if DOCKER_ERROR.search(line)), None)
+    if line:
+        line = masked(line)
+        said.append("Docker said: " + (line if len(line) <= _ERROR_LINE_LIMIT else line[:_ERROR_LINE_LIMIT] + "…"))
+    return said or ["Docker failed without an error line."]
 
 
 def relative_file(root, path):
@@ -383,17 +407,21 @@ def build_tag(commit, overlays=None):
 
 
 def ensure_image_repository(name, template, run):
-    """Create ECR repository `name` with the tag mutability, scan-on-push and encryption of `template`."""
-    settings = json.loads(run(["aws", "ecr", "describe-repositories", "--region", "ap-south-1",
-                               "--repository-names", template, "--output", "json"]))["repositories"][0]
-    encryption = settings.get("encryptionConfiguration") or {"encryptionType": "AES256"}
-    args = ["aws", "ecr", "create-repository", "--region", "ap-south-1", "--repository-name", name,
-            "--image-tag-mutability", settings.get("imageTagMutability", "MUTABLE"),
-            "--image-scanning-configuration",
-            "scanOnPush=" + str(bool(settings.get("imageScanningConfiguration", {}).get("scanOnPush"))).lower(),
-            "--encryption-configuration", "encryptionType=" + encryption["encryptionType"]
-            + (",kmsKey=" + encryption["kmsKey"] if encryption.get("kmsKey") else "")]
-    run(args)
+    """Create a missing ECR repository with the naming standard's settings (ci/build/ecr_repository.py: immutable tags,
+    scan on push, AES256, the owner and naming tags) and the lifecycle policy of `template`, the image's repository
+    before the eoan names. Nothing else is read from `template`: an old MUTABLE repository makes no MUTABLE eoan one."""
+    sys.path.insert(0, str(ROOT / "ci/build"))
+    import ecr_repository
+
+    def call(args):
+        try:
+            return run(["aws", "ecr"] + args[:1] + ["--region", ecr_repository.REGION] + args[1:])
+        except ServiceError as error:
+            if str(error) in ("image-repository-missing", "lifecycle-policy-missing"):
+                raise ecr_repository.Missing() from None
+            raise
+
+    return ecr_repository.ensure(name, template, call)
 
 
 def build_image(component, role, spec, commit, source, registry, run, tag=None):
