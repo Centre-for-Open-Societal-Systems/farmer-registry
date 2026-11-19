@@ -1,0 +1,9 @@
+# The version of this repository's builds (oan-helm docs/release/naming-standard.md, section 6).
+# Builds add -<branch>.<BUILD_NUMBER>: develop 1.0.0-develop.57, staging 1.0.0-staging.12. Change rpVersion and
+# rpCommit only through scripts/bump-rp-version.sh; test/unit/test_base_image_pin_lockstep.py checks the copies.
+version: 1.0.0
+# The OpenG2P registry platform the images are built on: openg2p/openg2p-registry-<role>:<rpVersion>.
+rpVersion: 1.2.2-rc.625
+# The registry-platform commit of openg2p/openg2p-registry-staff-ui:<rpVersion>
+# (its org.opencontainers.image.revision label); the staff UI is rebuilt from that commit.
+rpCommit: 29d2a2397ef9fa09308561e15ae9aa444a4fcd7c

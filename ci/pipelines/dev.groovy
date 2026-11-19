@@ -86,10 +86,11 @@ pipeline {
                         for component in staff-api partner-api celery db-seed sanity-tests staff-ui registry-connector registry-connector-ui; do
                           repository=$(python3 ci/deploy/image_names.py repository "$component")
                           image="$ECR_REGISTRY/$repository:$IMAGE_TAG"
-                          # A new platform version is a new repository name, and ECR does not create repositories on push.
-                          aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$repository" > /dev/null 2>&1 ||
-                            aws ecr create-repository --region "$AWS_REGION" --repository-name "$repository" \
-                              --image-scanning-configuration scanOnPush=true > /dev/null
+                          # A new platform version is a new repository name, and ECR does not create repositories on push:
+                          # a missing one is made like the image's repository before eoan (immutable tags, scan on push,
+                          # its lifecycle policy). Tags are immutable, so a version is pushed once: a taken one fails here.
+                          python3 ci/build/ecr_repository.py ensure "$repository" \
+                            "$(python3 ci/deploy/image_names.py legacy "$component")"
                           docker tag "oan-ci/$component:$IMAGE_TAG" "$image"
                           docker push "$image"
                           digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" \

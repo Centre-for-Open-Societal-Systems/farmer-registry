@@ -11,11 +11,10 @@ mkdir -p service-outcomes
 : > service-outcomes/staging-registry-images.tsv
 for component in staff-api staff-ui partner-api celery db-seed sanity-tests; do
     image="$ECR_REGISTRY/$ECR_REPOSITORY/$component:$IMAGE_TAG"
-    if [[ "$component" == sanity-tests ]]; then
-        docker build --build-arg "BASE_IMAGE_VERSION=$BASE_IMAGE_VERSION" -f docker/sanity-tests/Dockerfile -t "$image" .
-    else
-        docker build -f "docker/$component/Dockerfile" -t "$image" .
-    fi
+    # The platform comes from init.yaml (the Dockerfiles have no default); the staff UI is rebuilt from rpCommit.
+    base=$(python3 ci/deploy/image_names.py field rpVersion)
+    [[ "$component" == staff-ui ]] && base=$(python3 ci/deploy/image_names.py field rpCommit)
+    docker build --build-arg "BASE_IMAGE_VERSION=$base" -f "docker/$component/Dockerfile" -t "$image" .
     docker push "$image"
     digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$ECR_REPOSITORY/$component" --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
     printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/staging-registry-images.tsv

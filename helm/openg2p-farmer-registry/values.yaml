@@ -355,7 +355,7 @@ oanAddons:
           overlayContext: repository
           imageValues: [ui.image]
     - name: farmer-registry-dashboard
-      imageRepository: openg2p/farmer-registry/dashboard-ui
+      imageRepository: eoan/farmer-registry/dashboard-ui
       repository: https://github.com/Centre-for-Open-Societal-Systems/oan_farmerregistry_dashboard.git
       dockerfile: Dockerfile
       chart: helm/farmer-registry-dashboard
@@ -373,7 +373,7 @@ oanAddons:
       release: farmer-registry
       namespace: farmer
       kind: registry-dashboard-api
-      imageRepository: openg2p/farmer-registry/dashboard-api
+      imageRepository: eoan/farmer-registry/dashboard-api
       imageValues: dashboardApi.image
 dashboardUi:
   enabled: false

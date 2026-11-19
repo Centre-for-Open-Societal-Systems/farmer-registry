@@ -118,12 +118,12 @@ def configuration(path=MANIFEST, environment="dev"):
             "name": "farmer-registry-dashboard-api", "release": "farmer-registry",
             "repository": "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api.git",
             "chart": "helm/openg2p-farmer-registry", "imageValues": "dashboardApi.image",
-            "imageRepository": "openg2p/farmer-registry/dashboard-api",
+            "imageRepository": "eoan/farmer-registry/dashboard-api",
         }.items()):
             raise ValueError("Dashboard API must retain its Farmer chart ownership")
         if item["release"] in ("commons", "commons-services", "farmer-connector") or (item["release"] == "farmer-registry" and not embedded):
             raise ValueError("Optional service must not adopt an existing shared/Registry/old connector release")
-        if item.get("imageRepository") and not re.fullmatch(r"openg2p/[a-z0-9/-]+", item["imageRepository"]):
+        if item.get("imageRepository") and not re.fullmatch(r"eoan/[a-z0-9/-]+", item["imageRepository"]):
             raise ValueError("Invalid image repository")
     if environment == "staging":
         items = copy.deepcopy(items)
@@ -326,7 +326,8 @@ def prepare_dashboard_chart(state, values, before, installed_chart):
 
 def dashboard_hook_rehearsal(component, environment, record, chart, registry, run):
     tools = os.environ.get("COORDINATOR_IMAGE", "")
-    if not re.fullmatch(r"oan-ci/services:[a-f0-9]{12}", tools):
+    if not re.fullmatch(r"oan-ci/services:[a-f0-9]{12}", tools) and not (
+            tools.startswith("oan-ci/services:") and BUILD_TAG.fullmatch(tools.split(":", 1)[1])):
         raise ServiceError("dashboard-hook-rehearsal-tools-required")
     values_file = ROOT / "helm/environments" / environment / "services" / (component["name"] + ".yaml")
     overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
@@ -349,8 +350,36 @@ def dashboard_hook_rehearsal(component, environment, record, chart, registry, ru
     return result
 
 
+IMAGE_PATH = "eoan/farmer-registry/"
+LEGACY_IMAGE_PATH = "openg2p/farmer-registry/"
+# The build version of the Farmer develop build that runs this coordinator (ci/deploy/image_names.py tag): every
+# service image of that build is tagged with it, as the registry images are (oan-helm docs/release/naming-standard.md).
+BUILD_TAG = re.compile(r"\d+\.\d+\.\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.[1-9]\d*")
+
+
 def image_repository(component, suffix):
-    return component.get("imageRepository", "openg2p/farmer-registry/" + component["name"] + suffix)
+    """eoan/farmer-registry/<image>: the service images carry no platform suffix (they are not built on it)."""
+    return component.get("imageRepository", IMAGE_PATH + component["name"] + suffix)
+
+
+def legacy_image_repository(component, suffix):
+    """The repository before the eoan names, which records of earlier builds still name."""
+    return image_repository(component, suffix).replace(IMAGE_PATH, LEGACY_IMAGE_PATH, 1)
+
+
+def build_tag(commit, overlays=None):
+    """IMAGE_TAG of this build when the pipeline sets one, else the older <commit12>[-<overlay hash12>] tag.
+
+    ECR repositories under eoan/ have immutable tags: a commit tag would be pushed again by the next build of the same
+    service commit and refused, while a build version is new on every build.
+    """
+    tag = os.environ.get("IMAGE_TAG", "")
+    if BUILD_TAG.fullmatch(tag):
+        return tag
+    tag = commit[:12]
+    if overlays:
+        tag += "-" + hashlib.sha256(json.dumps(overlays, sort_keys=True).encode()).hexdigest()[:12]
+    return tag
 
 
 def ensure_image_repository(name, template, run):
@@ -402,7 +431,7 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
         if str(error) != "image-repository-missing" or not suffix:
             raise
         # A role image (-api, -ui) whose repository was never made: create it like the component's own one, push again.
-        ensure_image_repository(image_repository(component, suffix), image_repository(component, ""), run)
+        ensure_image_repository(image_repository(component, suffix), legacy_image_repository(component, ""), run)
         pushed = run(["docker", "push", image])
     matches = re.findall(r"digest: (sha256:[0-9a-f]{64})\b", pushed)
     if len(set(matches)) != 1:
@@ -443,9 +472,7 @@ def _build_resolved(component, environment, source, registry, commit, run):
                 run(["bash", str(ROOT / "ci/dashboard/verify-source.sh"), str(source)])
             overlays = {role: chart_hash(relative_file(ROOT, spec["overlay"]))
                         for role, spec in image_specs(component).items() if spec.get("overlay")}
-            tag = commit[:12]
-            if overlays:
-                tag += "-" + hashlib.sha256(json.dumps(overlays, sort_keys=True).encode()).hexdigest()[:12]
+            tag = build_tag(commit, overlays)
             for role, spec in image_specs(component).items():
                 built[role] = build_image(component, role, spec, commit, source, registry, run, tag)
             if environment == "dev" and component.get("chartSource") == "registry":
@@ -721,12 +748,14 @@ def artifact(component, record, registry):
     if not SHA.fullmatch(record.get("commit", "")) or not DIGEST.fullmatch(record.get("digest", "")):
         raise ServiceError("invalid-promotion-artifact")
     suffix = "-" + next(iter(image_specs(component))) if component.get("images") else ""
-    if record.get("repository") != registry + "/" + image_repository(component, suffix):
+    if record.get("repository") not in (registry + "/" + image_repository(component, suffix),
+                                        registry + "/" + legacy_image_repository(component, suffix)):
         raise ServiceError("promotion-repository-mismatch")
     expected_tag = record["commit"][:12]
     if record.get("overlayHashes"):
         expected_tag += "-" + hashlib.sha256(json.dumps(record["overlayHashes"], sort_keys=True).encode()).hexdigest()[:12]
-    if record.get("tag") != expected_tag or not re.fullmatch(r"[0-9a-f]{64}", record.get("chartHash", "")):
+    if (record.get("tag") != expected_tag and not BUILD_TAG.fullmatch(record.get("tag", ""))) \
+            or not re.fullmatch(r"[0-9a-f]{64}", record.get("chartHash", "")):
         raise ServiceError("invalid-promotion-artifact")
     return record["repository"] + ":" + record["tag"] + "@" + record["digest"]
 
@@ -740,7 +769,9 @@ def image_artifacts(component, record, registry):
     images = {}
     for role in component["images"]:
         image = record["images"][role]
-        if image.get("repository") != registry + "/" + image_repository(component, "-" + role) or image.get("tag") != record["tag"] or not DIGEST.fullmatch(image.get("digest", "")):
+        if image.get("repository") not in (registry + "/" + image_repository(component, "-" + role),
+                                           registry + "/" + legacy_image_repository(component, "-" + role)) \
+                or image.get("tag") != record["tag"] or not DIGEST.fullmatch(image.get("digest", "")):
             raise ServiceError("invalid-component-image-digest")
         images[role] = image["repository"] + ":" + image["tag"] + "@" + image["digest"]
     if next(iter(images.values())) != primary:

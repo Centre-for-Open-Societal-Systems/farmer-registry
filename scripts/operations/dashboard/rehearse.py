@@ -29,7 +29,9 @@ def reviewed_grant_users(values):
 
 
 def rehearse(image,tools,chart,values):
-    if not re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/openg2p/farmer-registry/dashboard-ui:[a-f0-9]{12}@sha256:[a-f0-9]{64}',image):
+    # eoan/farmer-registry/dashboard-ui:<build version>, or the name and commit tag of a build before the eoan names.
+    if not (re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/eoan/farmer-registry/dashboard-ui:\d+\.\d+\.\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.[1-9]\d*@sha256:[a-f0-9]{64}',image)
+            or re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/openg2p/farmer-registry/dashboard-ui:[a-f0-9]{12}@sha256:[a-f0-9]{64}',image)):
         raise ValueError('Pinned Farmer dashboard image required')
     release='farmer-registry-dashboard'
     repository,tag=image.split('@',1)[0].rsplit(':',1)

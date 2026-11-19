@@ -18,6 +18,10 @@ jobs:
         run: |
           python -m ruff check --select E9,F63,F7,F82 farmer-extension/src farmer-extension/tests
           bash ci/validation/validate.sh
+      - name: init.yaml rpCommit is the commit of the platform staff UI image
+        run: |
+          python3 ci/build/check_rp_commit.py "$(python3 ci/deploy/image_names.py field rpVersion)" \
+            "$(python3 ci/deploy/image_names.py field rpCommit)"
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

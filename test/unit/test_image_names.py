@@ -1,4 +1,4 @@
-"""Image names: eoan/farmer-registry/<image>-<RP version>:<version>-<branch>.<build>, both versions from Chart.yaml."""
+"""Image names: eoan/farmer-registry/<image>[-<rpVersion>]:<version>-<branch>.<build>, both versions from init.yaml."""
 import importlib.util
 import re
 from pathlib import Path
@@ -9,9 +9,43 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("image_names", ROOT / "ci/deploy/image_names.py")
 image_names = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(image_names)
-CHART = (ROOT / "helm/openg2p-farmer-registry/Chart.yaml").read_text(encoding="utf-8")
-RP = re.search(r"(?m)^appVersion: (\S+)$", CHART).group(1)
-VERSION = re.search(r"(?m)^version: (\S+)$", CHART).group(1)
+INIT = (ROOT / "init.yaml").read_text(encoding="utf-8")
+RP = re.search(r"(?m)^rpVersion: (\S+)$", INIT).group(1)
+VERSION = re.search(r"(?m)^version: (\S+)$", INIT).group(1)
+
+
+@pytest.mark.parametrize("image", ["staff-ui", "staff-api", "partner-api", "celery", "db-seed", "sanity-tests"])
+def test_only_the_platform_images_carry_the_platform_version(image):
+    assert image_names.repository(image) == "eoan/farmer-registry/%s-%s" % (image, RP)
+
+
+@pytest.mark.parametrize("image, repository", [("registry-connector", "eoan/farmer-registry/registry-connector-api"),
+                                               ("registry-connector-ui", "eoan/farmer-registry/registry-connector-ui"),
+                                               ("dashboard-api", "eoan/farmer-registry/dashboard-api"),
+                                               ("dashboard-ui", "eoan/farmer-registry/dashboard-ui")])
+def test_other_images_have_no_platform_suffix(image, repository):
+    # The repositories created for the eoan names (19 Nov 2026); the -<rpVersion> dashboard ones are not used.
+    assert image_names.repository(image) == repository
+    assert image_names.is_repository(repository, image)
+    assert not image_names.is_repository(repository + "-" + RP, image)
+
+
+def test_init_yaml_holds_the_versions():
+    assert image_names.read_init() == {"version": VERSION, "rpVersion": RP,
+                                       "rpCommit": re.search(r"(?m)^rpCommit: (\S+)$", INIT).group(1)}
+    assert re.fullmatch(r"\d+\.\d+\.\d+", VERSION)
+
+
+@pytest.mark.parametrize("text, problem", [
+    ("version: 1.0.0\nrpVersion: 1.2.2-rc.625\n", "rpCommit"),
+    ("version: 1.0.0-develop.3\nrpVersion: 1.2.2-rc.625\nrpCommit: " + "a" * 40 + "\n", "version"),
+    ("version: 1.0.0\nrpVersion: latest\nrpCommit: " + "a" * 40 + "\n", "rpVersion"),
+    ("version: 1.0.0\nrpVersion: 1.2.2\nrpCommit: " + "a" * 40 + "\nchannel: develop\n", "channel"),
+    ("version: 1.0.0\nversion: 1.0.1\nrpVersion: 1.2.2\nrpCommit: " + "a" * 40 + "\n", "version")])
+def test_a_bad_init_yaml_is_refused(tmp_path, text, problem):
+    (tmp_path / "init.yaml").write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match=problem):
+        image_names.read_init(tmp_path / "init.yaml")
 
 
 def test_repository_carries_the_platform_version_of_the_chart():
