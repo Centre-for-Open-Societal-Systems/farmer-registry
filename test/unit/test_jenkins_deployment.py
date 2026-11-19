@@ -23,13 +23,47 @@ def helm_status(state="deployed", revision=5):
     ('Error: post-upgrade hooks failed: job farmer-registry-db-seed failed: BackoffLimitExceeded', 'retries'),
     ('Error: timed out waiting for the condition', 'timed out'),
     ('Error: ImagePullBackOff password=private-value', 'pull its image'),
-    ('Error: cannot patch deployment; private-value', 'resource update'),
-    ('Error: unexpected private-value', 'unclassified'),
+    ('Error: cannot patch deployment; password: private-value', 'resource update'),
+    ('Error: unexpected token=private-value', 'unclassified'),
+    ('manifest line password: private-value\nError: x', 'unclassified'),
 ])
 def test_helm_failure_diagnostics_do_not_echo_private_output(log, expected):
     result = ' '.join(deployment.upgrade_diagnostic(log))
     assert expected in result
     assert 'private-value' not in result
+
+
+@pytest.mark.parametrize("log,said", [
+    ('Error: UPGRADE FAILED: execution error at (c/templates/secret.yaml:4:3): db.password: "p" is required',
+     'execution error at (c/templates/secret.yaml:4:3): db.password: *** is required'),
+    ('Error: x {"client_secret": "p", "PGPASSWORD=p"}', '"client_secret": ***'),
+    ('Error: x postgres://user:p@db:5432/x', 'postgres://***@db:5432/x'),
+    ('Error: x Authorization: Bearer p', 'Authorization: ***'),
+    ('Error: x eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9pppp', 'Error: x ***'),
+])
+def test_helm_error_line_is_given_with_secrets_masked(log, said):
+    result = deployment.upgrade_diagnostic(log)
+    assert result[-1].startswith('Helm said: Error:')
+    assert said in result[-1]
+    assert not any(part in result[-1] for part in ('"p"', ':p@', 'Bearer p', 'eyJhbGci', '=p"'))
+
+
+@pytest.mark.parametrize("log,expected", [
+    ('Error: UPGRADE FAILED: template: c/templates/a.yaml:12:3: executing "x" at <.Values.y>: nil pointer', 'render'),
+    ("Error: values don't meet the specifications of the schema(s)", 'schema'),
+    ('Error: UPGRADE FAILED: unable to build kubernetes objects from release manifest: error validating data', 'not valid Kubernetes'),
+    ('Error: UPGRADE FAILED: Secret "s" in namespace "farmer" exists and cannot be imported into the current release',
+     'owned outside'),
+    ('Error: found in Chart.yaml, but missing in charts/ directory: postgres-init', 'dependency'),
+    ('Error: UPGRADE FAILED: admission webhook "v.k" denied the request', 'webhook'),
+])
+def test_render_and_validation_failures_are_classified(log, expected):
+    assert expected in deployment.upgrade_diagnostic(log)[0]
+
+
+def test_only_the_first_error_line_is_given_and_it_is_cut():
+    result = deployment.upgrade_diagnostic('Error: ' + 'a ' * 400 + '\nError: second')
+    assert len(result[-1]) <= len('Helm said: ') + 301 and 'second' not in result[-1]
 
 
 @pytest.mark.parametrize("state", ["deployed", "failed"])
