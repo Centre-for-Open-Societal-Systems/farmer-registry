@@ -48,7 +48,7 @@ MESSAGES = {
     ),
     "fayda_fin_registered": (
         "{label}: {fin} is already registered to {name} ({record}). Open that record instead of "
-        "registering the farmer again; if the ID was mistyped, correct it."
+        "registering the farmer again, or correct the ID if it was mistyped."
     ),
     "fayda_fin_pending": (
         "{label}: {fin} is already in another submitted form, for {name} ({record}), waiting for approval. "

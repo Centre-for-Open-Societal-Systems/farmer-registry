@@ -62,15 +62,18 @@ def already_submitted(submission) -> str | None:
     """The refusal of a second Submit: the form is final and its approval
     request was started on the first one (a double click, or Submit pressed
     again after a slow answer). Finalizing again would start a second
-    approval request for the same form."""
+    approval request for the same form.
+
+    One sentence without '; ': refusals that list several problems join them
+    with '; ', and the staff UI counts the parts (serverNotice.ts)."""
     if str(getattr(submission, "draft_status", "") or "").upper() != "FINAL":
         return None
     when = getattr(submission, "finalized_at", None)
     on = f" on {when:%d %b %Y}" if hasattr(when, "strftime") else ""
     status = str(getattr(submission, "approval_status", "") or "PENDING").upper()
     if status == "PENDING":
-        return f"Already submitted{on}; it is waiting for approval."
-    return f"Already submitted{on}; it was {status.lower()}."
+        return f"This form was already submitted{on} and is waiting for approval."
+    return f"This form was already submitted{on} and was {status.lower()}."
 
 
 def _same_name(a, b) -> bool:

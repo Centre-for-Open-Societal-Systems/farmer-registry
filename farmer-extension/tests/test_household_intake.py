@@ -171,8 +171,10 @@ def test_a_draft_may_be_submitted():
 
 
 def test_a_second_submit_is_refused_while_waiting_for_approval():
-    assert hi.already_submitted(_form("FINAL")) == "Already submitted on 17 Nov 2026; it is waiting for approval."
+    assert hi.already_submitted(_form("FINAL")) == (
+        "This form was already submitted on 17 Nov 2026 and is waiting for approval.")
 
 
 def test_a_second_submit_after_the_decision_says_the_decision():
-    assert hi.already_submitted(_form("FINAL", "REJECTED")) == "Already submitted on 17 Nov 2026; it was rejected."
+    assert hi.already_submitted(_form("FINAL", "REJECTED")) == (
+        "This form was already submitted on 17 Nov 2026 and was rejected.")
