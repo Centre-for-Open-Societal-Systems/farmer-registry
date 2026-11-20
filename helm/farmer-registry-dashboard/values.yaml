@@ -125,6 +125,13 @@ iamSetup:
     name: ""
     key: client_secret
 
+# Master Data, whose public catalogue (GET /public/geography/...) serves the
+# map boundaries and the location filter units. Default: the Commons API in
+# the cluster. Master Data must have its public catalogue on and the
+# geography marked public, or the map shows "Error loading map".
+masterData:
+  url: http://commons-services-master-data-api.commons.svc.cluster.local
+
 # Extra environment variables, as NAME: value. Values may use templates.
 env: {}
 envFrom: []

@@ -64,3 +64,34 @@ def test_digest_pinned_images_have_valid_labels_on_resources_and_hooks(tmp_path,
     # complete immutable image reference, even though labels omit its digest.
     assert len(images) == 3
     assert set(images) == {REPOSITORY + ":" + tag}
+
+
+def render_deployment(tmp_path, *extra):
+    rendered = subprocess.run([
+        "helm", "template", "farmer-registry-dashboard", str(CHART),
+        "-n", "farmer", "-f", str(VALUES),
+        "--set-string", "image.repository=" + REPOSITORY,
+        "--set-string", "image.tag=042d0f4c271d", *extra,
+    ], check=True, capture_output=True, text=True).stdout
+    deployment = next(d for d in yaml.safe_load_all(rendered) if d and d["kind"] == "Deployment")
+    container = deployment["spec"]["template"]["spec"]["containers"][0]
+    return {e["name"]: e.get("value") for e in container["env"]}
+
+
+def test_the_dashboard_reads_master_data_for_the_map_and_filters(tmp_path):
+    # Without MASTER_DATA_URL every /api/maps/* call fails and the page shows
+    # "Error loading map" (New Dev, 20 Nov).
+    env = render_deployment(tmp_path)
+    assert env["MASTER_DATA_URL"] == "http://commons-services-master-data-api.commons.svc.cluster.local"
+    env = render_deployment(tmp_path, "--set-string", "masterData.url=https://master-data.example.org/")
+    assert env["MASTER_DATA_URL"] == "https://master-data.example.org"
+
+
+def test_an_empty_master_data_url_fails_the_render():
+    result = subprocess.run([
+        "helm", "template", "farmer-registry-dashboard", str(CHART), "-n", "farmer", "-f", str(VALUES),
+        "--set-string", "image.repository=" + REPOSITORY, "--set-string", "image.tag=042d0f4c271d",
+        "--set-string", "masterData.url=",
+    ], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "masterData.url is required" in result.stderr

@@ -64,6 +64,8 @@ spec:
               value: {{ include "dashboard.staffPortalUrl" . | quote }}
             - name: REGISTRY_PORTAL_URL
               value: {{ .Values.links.registryPortalUrl | quote }}
+            - name: MASTER_DATA_URL
+              value: {{ required "masterData.url is required: the map and the location filters read Master Data" .Values.masterData.url | trimSuffix "/" | quote }}
             {{- range $name, $value := .Values.env }}
             {{- if has $name (list "AUTH_ENABLED" "DASHBOARD_API_AUTH" "DASHBOARD_CLIENT_SECRET") }}
             {{- fail "configure dashboard authentication through typed chart settings, not env" }}
