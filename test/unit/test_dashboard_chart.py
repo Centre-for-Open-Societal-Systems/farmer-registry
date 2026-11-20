@@ -92,6 +92,6 @@ def test_an_empty_master_data_url_fails_the_render():
         "helm", "template", "farmer-registry-dashboard", str(CHART), "-n", "farmer", "-f", str(VALUES),
         "--set-string", "image.repository=" + REPOSITORY, "--set-string", "image.tag=042d0f4c271d",
         "--set-string", "masterData.url=",
-    ], capture_output=True, text=True)
+    ], capture_output=True, text=True, check=False)
     assert result.returncode != 0
     assert "masterData.url is required" in result.stderr
