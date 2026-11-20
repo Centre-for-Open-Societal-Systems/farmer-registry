@@ -8,9 +8,10 @@ registry:
     envVars:
       MASTERDATA_BACKEND_API_URL: http://commons-services-master-data-api.commons.svc.cluster.local
       # The farmer location map: OpenStreetMap tiles (img) and the pin's
-      # elevation lookup (connect). CSP_SRC_IMG repeats the release's MinIO
-      # source because a per-directive value replaces the whole list.
-      CSP_SRC_IMG: 'self blob: data: https://minio-farmer.development.oanstaging.com https://tile.openstreetmap.org'
+      # elevation lookup (connect). CSP_SRC_IMG repeats the object store's
+      # public hosts (farmer-object-store.yaml: Garage, and the minio-farmer
+      # alias for one release) because a per-directive value replaces the whole list.
+      CSP_SRC_IMG: 'self blob: data: https://garage.development.oanstaging.com https://minio-farmer.development.oanstaging.com https://tile.openstreetmap.org'
       CSP_SRC_CONNECT: 'self https://api.open-meteo.com'
   staffApi:
     envVars:

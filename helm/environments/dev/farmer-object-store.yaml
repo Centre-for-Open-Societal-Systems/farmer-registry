@@ -1,0 +1,6 @@
+# Commons object store on New Dev: Garage (commons-base 2.3.4) since 20 November 2026. The registry signs object links
+# for global.minioHost, so it is Garage's public host. minio-farmer.development stays routed to Garage, and allowed in
+# CSP_SRC_IMG (farmer-location.yaml), for one release so links issued before the switch still load.
+# Merge over saved release values.
+global:
+  minioHost: garage.development.oanstaging.com
