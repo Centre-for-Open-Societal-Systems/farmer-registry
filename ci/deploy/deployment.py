@@ -238,6 +238,25 @@ def outgestion_env(suffix, environment="dev"):
     return outgestion_overlay(environment).get("registry", {}).get(component, {}).get("envVars", {})
 
 
+def object_store_overlay(environment="dev"):
+    """The Commons object store's public host (global.minioHost); only environments that set it have the file."""
+    if environment not in OAN_ENVIRONMENTS:
+        return {}
+    path = Path(__file__).resolve().parents[2] / "helm/environments" / environment / "farmer-object-store.yaml"
+    return load(path) if path.exists() else {}
+
+
+# The chart renders global.minioHost into these variables, one per workload.
+OBJECT_STORE_ENV = {"staff-portal-api": "REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT",
+                    "partner-api": "REGISTRY_PARTNER_API_MINIO_ENDPOINT",
+                    "celery-worker": "REGISTRY_CELERY_WORKERS_MINIO_ENDPOINT"}
+
+
+def object_store_env(suffix, environment="dev"):
+    host = object_store_overlay(environment).get("global", {}).get("minioHost")
+    return {OBJECT_STORE_ENV[suffix]: host} if host and suffix in OBJECT_STORE_ENV else {}
+
+
 def registrant_auth_overlay(environment="dev"):
     """Fayda (eSignet) verification for the farmer register; hostnames only differ per environment."""
     return environment_overlay("farmer-registrant-auth", environment)
@@ -355,6 +374,7 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     # Qualify the Commons service explicitly across namespace boundaries.
     merge(values, location_overlay(environment))
     merge(values, outgestion_overlay(environment))
+    merge(values, object_store_overlay(environment))
     merge(values, registrant_auth_overlay(environment))
     merge(values, dci_signing_overlay(environment))
     merge(values, pull_secret_overlay(environment))
@@ -405,6 +425,7 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
                         approved = dict(identity_env(suffix, environment) if migrate_identity or environment == "staging" else master_data_env(suffix, environment))
                         approved.update(location_env(suffix, environment))
                         approved.update(outgestion_env(suffix, environment))
+                        approved.update(object_store_env(suffix, environment))
                         if name not in approved or new_env.get(container, {}).get(name) != env_entry(name, approved[name]):
                             raise ValueError(f"Existing environment/Secret reference changed: {key[1]}/{container}/{name}")
             if pod(previous).get("imagePullSecrets", []) != pod(current).get("imagePullSecrets", []):
@@ -460,7 +481,8 @@ def validate(before, after, registry, tag, migrate_identity=False, environment="
             environments = list(envs(current, include_init=False).values())
             if len(environments) != 1:
                 raise ValueError("Master Data routing requires one application container per workload")
-            for name, value in {**location_env(suffix, environment), **outgestion_env(suffix, environment)}.items():
+            for name, value in {**location_env(suffix, environment), **outgestion_env(suffix, environment),
+                                **object_store_env(suffix, environment)}.items():
                 if environments[0].get(name) != {"name": name, "value": value}:
                     raise ValueError(f"Master Data routing was not rendered: {suffix}/{name}")
             for name, value in master_data_env(suffix, environment).items():

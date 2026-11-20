@@ -68,5 +68,32 @@ def test_dev_promotion_requires_approved_service_binding(release, failure):
 def test_dev_staff_ui_allows_the_location_map_hosts():
     env = deployment.location_env("staff-portal-ui")
     assert "https://tile.openstreetmap.org" in env["CSP_SRC_IMG"].split()
+    assert "https://garage.development.oanstaging.com" in env["CSP_SRC_IMG"].split()
     assert "https://minio-farmer.development.oanstaging.com" in env["CSP_SRC_IMG"].split()
     assert "https://api.open-meteo.com" in env["CSP_SRC_CONNECT"].split()
+
+
+def test_dev_object_store_host_is_garage_and_csp_allows_it(release):
+    host = "garage.development.oanstaging.com"
+    values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com",
+                         "minioHost": "minio-farmer.development.oanstaging.com"}}
+    prepared = deployment.prepare(values, release[0], ECR, TAG)
+    assert prepared["global"]["minioHost"] == host
+    assert "https://" + host in deployment.location_env("staff-portal-ui")["CSP_SRC_IMG"].split()
+    assert deployment.object_store_env("staff-portal-api") == {"REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT": host}
+    assert deployment.object_store_env("staff-portal-ui") == {}
+    assert deployment.object_store_overlay("staging-legacy") == {}
+
+
+def test_guard_allows_only_the_reviewed_object_store_host(release):
+    before, after = release
+    name = "REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT"
+    staff_before = next(d for d in before if d["kind"] == "Deployment" and d["metadata"]["name"].endswith("-staff-portal-api"))
+    staff_after = next(d for d in after if d["kind"] == "Deployment" and d["metadata"]["name"].endswith("-staff-portal-api"))
+    deployment.pod(staff_before)["containers"][0]["env"].append({"name": name, "value": "minio-farmer.development.oanstaging.com"})
+    env = deployment.pod(staff_after)["containers"][0]["env"]
+    env[:] = [e for e in env if e["name"] != name] + [{"name": name, "value": "garage.development.oanstaging.com"}]
+    deployment.validate(before, after, ECR, TAG)
+    env[-1]["value"] = "unreviewed.example.org"
+    with pytest.raises(ValueError):
+        deployment.validate(before, after, ECR, TAG)
