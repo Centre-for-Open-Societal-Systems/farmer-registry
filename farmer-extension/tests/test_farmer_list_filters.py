@@ -50,8 +50,56 @@ def test_every_filter_is_a_core_type_on_a_mapped_column():
         assert name in UPSTREAM_COLUMNS or _oan_farmer_field(name), name
 
 
-def test_the_list_shows_land_plots_and_mobile_number():
-    for name, label in (("total_land_area", "Total land (hectares)"), ("total_plots", "Total plots"),
-                        ("primary_phone_number", "Mobile number")):
-        assert f"'{name}', '{label}'" in SEED, name
+def _result_schema():
+    match = re.search(r"""SET "search_result_schema" = '(\[.*?\])'::json\s+WHERE "register_id" = 'a1a4d25a-""",
+                      SEED, re.DOTALL)
+    assert match, "the Farmer search_result_schema is written out in 05_registers.sql"
+    return json.loads(match.group(1).replace("''", "'"))
+
+
+def test_the_list_shows_land_plots_and_mobile_number_first():
+    # The staff portal's card and list views show the first six result columns.
+    schema = sorted(_result_schema(), key=lambda f: f["order"])
+    assert [f["field_name"] for f in schema[:6]] == [
+        "functional_record_id", "first_name", "last_name", "primary_phone_number", "total_land_area", "total_plots"]
+    labels = {f["field_name"]: f["display_label"] for f in schema}
+    assert labels["total_land_area"] == "Total land (hectares)"
+    assert labels["total_plots"] == "Total plots"
+    assert labels["primary_phone_number"] == "Mobile number"
+    assert labels["last_name"] == "Grandfather's name"
     assert _oan_farmer_field("total_plots") and _oan_farmer_field("primary_phone_number")
+
+
+def test_the_list_api_still_returns_every_column():
+    names = [f["field_name"] for f in _result_schema()]
+    assert len(names) == len(set(names)) == 15
+    assert {"middle_name", "gender", "birth_date", "region_name", "zone_name", "woreda_name", "kebele_name",
+            "marital_status", "education_level"} <= set(names)
+    assert sorted(f["order"] for f in _result_schema()) == list(range(1, 16))
+
+
+def test_registration_date_is_filled_at_migration_from_the_first_approval():
+    app = (SRC / "app.py").read_text(encoding="utf-8")
+    fill = app[app.index("LIST_SUMMARY_BACKFILL = ("):app.index("async def fill_list_summary")]
+    statement = fill[fill.index("SET registration_date"):]
+    assert "min(h.approved_at)" in statement and "g2p_register_history_farmers" in statement
+    assert "f.last_approved_at, f.created_at" in statement
+    assert "WHERE f.registration_date IS NULL" in statement
+
+
+def test_the_derived_list_columns_have_a_header_and_two_decimals():
+    # The list's header is the translation of the field name (upstream register
+    # page: t.has(key) ? t(key) : key), not display_label; without a key the
+    # officer sees "primary_phone_number". The land total is shown as stored.
+    translations = (SRC / "meta_data/zz-oan/30_translations.sql").read_text(encoding="utf-8")
+    for name in ("primary_phone_number", "total_land_area", "total_plots"):
+        assert re.search(rf'^\s+"{name}": "[^"_]+",?$', translations, re.MULTILINE), name
+    assert re.search(r'"total_land_area": \(Numeric\(16, 2\)', FIELDS)
+
+
+def test_the_last_name_header_matches_its_display_label():
+    # The list header is t("last_name"); the label casing file sets it last, so it
+    # must say what display_label says.
+    casing = (SRC / "meta_data/zz-oan/80_label_casing.sql").read_text(encoding="utf-8")
+    labels = {f["field_name"]: f["display_label"] for f in _result_schema()}
+    assert f' "last_name": "{labels["last_name"].replace(chr(39), chr(39) * 2)}",' in casing

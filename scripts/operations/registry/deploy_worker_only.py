@@ -17,7 +17,9 @@ TOKEN_NAME = "REGISTRY_CELERY_WORKERS_AWE_TOKEN_URL"
 TOKEN_URL = "https://keycloak.development.oanstaging.com/realms/staff/protocol/openid-connect/token"
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "ci/deploy"))
 import approved_chart
+import image_names
 
 
 def command(args):
@@ -75,10 +77,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
-    if not re.fullmatch(r"[0-9a-f]{40}", args.commit) or not re.fullmatch(
-        r"\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/openg2p/farmer-registry/celery:"
-        + re.escape(args.commit[:12]) + r"@sha256:[0-9a-f]{64}", args.image
-    ):
+    if not re.fullmatch(r"[0-9a-f]{40}", args.commit) or not image_names.is_pinned_image(args.image, "celery", args.commit):
         raise ValueError("Expected a commit-pinned Farmer worker digest")
     if args.apply:
         approved_chart.require_deployable("dev")

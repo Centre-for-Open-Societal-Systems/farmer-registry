@@ -17,7 +17,7 @@ def awe_error_message(status_code, reply) -> str:
     if status_code in (401, 403):
         return "You do not have permission to do this in the approvals list. Sign in again, or ask an administrator."
     if status_code == 404:
-        return "This approval task was not found. It may have been decided already; refresh the approvals list."
+        return "This approval task was not found. It may have been decided already. Refresh the approvals list."
     if status_code == 409:
         return "This approval task has changed since you opened it. Refresh the approvals list and try again."
     return ("The approval service could not complete this. Try again in a few minutes, "

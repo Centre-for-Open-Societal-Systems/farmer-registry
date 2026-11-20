@@ -19,8 +19,19 @@ def expect(result,success,stage):
         raise RuntimeError('unexpected-'+stage+'-exit-'+str(result.returncode))
 
 
+def reviewed_grant_users(values):
+    """The staff accounts the reviewed environment values grant Dashboard Viewer (iamSetup.grantUsers)."""
+    users=((yaml.safe_load(Path(values).read_text(encoding='utf-8')) or {}).get('iamSetup') or {}).get('grantUsers')
+    if (not isinstance(users,list) or 'admin' not in users or len(set(users))!=len(users) or
+            not all(isinstance(u,str) and re.fullmatch(r'[a-z0-9][a-z0-9._-]{0,63}',u) for u in users)):
+        raise ValueError('grant-users-not-reviewed')
+    return users
+
+
 def rehearse(image,tools,chart,values):
-    if not re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/openg2p/farmer-registry/dashboard-ui:[a-f0-9]{12}@sha256:[a-f0-9]{64}',image):
+    # eoan/farmer-registry/dashboard-ui:<build version>, or the name and commit tag of a build before the eoan names.
+    if not (re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/eoan/farmer-registry/dashboard-ui:\d+\.\d+\.\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.[1-9]\d*@sha256:[a-f0-9]{64}',image)
+            or re.fullmatch(r'\d{12}\.dkr\.ecr\.ap-south-1\.amazonaws\.com/openg2p/farmer-registry/dashboard-ui:[a-f0-9]{12}@sha256:[a-f0-9]{64}',image)):
         raise ValueError('Pinned Farmer dashboard image required')
     release='farmer-registry-dashboard'
     repository,tag=image.split('@',1)[0].rsplit(':',1)
@@ -38,7 +49,8 @@ def rehearse(image,tools,chart,values):
     if setup['command']!=['/bin/sh','-c','node iam/keycloak-setup.mjs && node iam/register.mjs'] or smoke['command']!=['node','iam/smoke.mjs']:
         raise ValueError('Changed hook program requires rehearsal review')
     settings={entry['name']:entry.get('value') for entry in setup['env']}
-    if (settings.get('GRANT_USERS')!='admin' or settings.get('DASHBOARD_CLIENT_ID')!=release or
+    users=reviewed_grant_users(values)
+    if (settings.get('GRANT_USERS')!=' '.join(users) or settings.get('DASHBOARD_CLIENT_ID')!=release or
             settings.get('DASHBOARD_API_CLIENT_ID')!=release+'-api' or settings.get('DASHBOARD_ROLE')!='Dashboard Viewer' or
             settings.get('DASHBOARD_API_ROLE')!='charts:read'):
         raise ValueError('Changed access policy requires a separate rehearsal')
@@ -49,7 +61,7 @@ def rehearse(image,tools,chart,values):
         'DASHBOARD_CLIENT_ID':release,'DASHBOARD_API_CLIENT_ID':release+'-api','DASHBOARD_ROLE':'Dashboard Viewer',
         'DASHBOARD_API_ROLE':'charts:read','DASHBOARD_CLIENT_SECRET':'fixture-client-secret',
         'KEYCLOAK_ADMIN':'admin','KEYCLOAK_ADMIN_PASSWORD':'fixture-admin-password','APP_DESCRIPTION':settings['APP_DESCRIPTION'],
-        'GRANT_USERS':'admin','MAX_ATTEMPTS':'1','DASHBOARD_API_URL':BASE,'OIDC_TOKEN_URL':'',
+        'GRANT_USERS':' '.join(users),'MAX_ATTEMPTS':'1','DASHBOARD_API_URL':BASE,'OIDC_TOKEN_URL':'',
         'DASHBOARD_SMOKE_CHARTS':smoke_names}
     def rpc(method,path,body=None):
         script='const r=await fetch('+json.dumps(BASE+path)+',{method:'+json.dumps(method)+',headers:{"Content-Type":"application/json"},body:'+('undefined' if body is None else json.dumps(json.dumps(body)))+'});if(!r.ok)process.exit(1);console.log(await r.text())'
@@ -66,7 +78,7 @@ def rehearse(image,tools,chart,values):
         try:
             command(['docker','run','-d','--name',backend,'--network','none','--user','1000:1000','--read-only',
                 '--tmpfs','/tmp:uid=1000,gid=1000,size=32m','-v',str(HERE)+':/fixtures:ro',
-                '-e','FIXTURE_CLIENT_ID='+release,'-e','FIXTURE_API_CLIENT_ID='+release+'-api',
+                '-e','FIXTURE_CLIENT_ID='+release,'-e','FIXTURE_USERS='+' '.join(users),'-e','FIXTURE_API_CLIENT_ID='+release+'-api',
                 '--entrypoint','node',image,'/fixtures/fixture-server.mjs'])
             for attempt in range(30):
                 try:rpc('GET','/fixture/state');break
@@ -94,7 +106,8 @@ def rehearse(image,tools,chart,values):
             expect(run_hook(setup['command']),True,'registration-recovery')
             expect(run_hook(smoke['command']),True,'initial-smoke')
             first=rpc('GET','/fixture/state')
-            assert {key:first[key] for key in ('clients','roles','grants','applications','secrets')}=={'clients':2,'roles':2,'grants':3,'applications':1,'secrets':1}
+            assert {key:first[key] for key in ('clients','roles','grants','applications','secrets')}=={'clients':2,'roles':2,'grants':2+len(users),'applications':1,'secrets':1}
+            assert first['viewers']==users
             assert first['adminViewer'] and first['unrelatedRolePreserved']
             expect(ecr_hook(),True,'ecr-rerun')
             expect(run_hook(setup['command']),True,'registration-rerun')
@@ -107,7 +120,7 @@ def rehearse(image,tools,chart,values):
             expect(run_hook(smoke['command']),True,'smoke-recovery')
             assert rpc('GET','/fixture/state')['deniedCharts']>=4
             return {'isolatedDatabases':True,'everyEnabledHook':True,'rerun':True,'failureRecovery':True,
-                'adminGrantVerified':True,'unrelatedRolesPreserved':True,'missingOrAmbiguousUsersRejected':True,
+                'adminGrantVerified':True,'grantUsersVerified':len(users),'unrelatedRolesPreserved':True,'missingOrAmbiguousUsersRejected':True,
                 'noExternalNetwork':True,'hookJobs':sorted(jobs),'fixtureMode':'loopback-http-sqlite-kubectl-transport-shim'}
         finally:
             assert backend.startswith('dashboard-hook-rehearsal-')

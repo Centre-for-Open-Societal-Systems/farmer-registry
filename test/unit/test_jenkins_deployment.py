@@ -11,7 +11,8 @@ spec = importlib.util.spec_from_file_location("deployment", ROOT / "ci/deploy/de
 deployment = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(deployment)
 ECR = "379220350808.dkr.ecr.ap-south-1.amazonaws.com"
-TAG = "abcdef012345"
+TAG = "0.0.0-develop.42"
+COMMIT = "abcdef012345" + "a" * 28
 
 
 def helm_status(state="deployed", revision=5):
@@ -23,13 +24,59 @@ def helm_status(state="deployed", revision=5):
     ('Error: post-upgrade hooks failed: job farmer-registry-db-seed failed: BackoffLimitExceeded', 'retries'),
     ('Error: timed out waiting for the condition', 'timed out'),
     ('Error: ImagePullBackOff password=private-value', 'pull its image'),
-    ('Error: cannot patch deployment; private-value', 'resource update'),
-    ('Error: unexpected private-value', 'unclassified'),
+    ('Error: cannot patch deployment; password: private-value', 'resource update'),
+    ('Error: unexpected token=private-value', 'unclassified'),
+    ('manifest line password: private-value\nError: x', 'unclassified'),
 ])
 def test_helm_failure_diagnostics_do_not_echo_private_output(log, expected):
     result = ' '.join(deployment.upgrade_diagnostic(log))
     assert expected in result
     assert 'private-value' not in result
+
+
+@pytest.mark.parametrize("log,said", [
+    ('Error: UPGRADE FAILED: execution error at (c/templates/secret.yaml:4:3): db.password: "p" is required',
+     'execution error at (c/templates/secret.yaml:4:3): db.password: *** is required'),
+    ('Error: x {"client_secret": "p", "PGPASSWORD=p"}', '"client_secret": ***'),
+    ('Error: x postgres://user:p@db:5432/x', 'postgres://***@db:5432/x'),
+    ('Error: x Authorization: Bearer p', 'Authorization: ***'),
+    ('Error: x eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9pppp', 'Error: x ***'),
+])
+def test_helm_error_line_is_given_with_secrets_masked(log, said):
+    result = deployment.upgrade_diagnostic(log)
+    assert result[-1].startswith('Helm said: Error:')
+    assert said in result[-1]
+    assert not any(part in result[-1] for part in ('"p"', ':p@', 'Bearer p', 'eyJhbGci', '=p"'))
+
+
+@pytest.mark.parametrize("log,expected", [
+    ('Error: UPGRADE FAILED: template: c/templates/a.yaml:12:3: executing "x" at <.Values.y>: nil pointer', 'render'),
+    ("Error: values don't meet the specifications of the schema(s)", 'schema'),
+    ('Error: UPGRADE FAILED: unable to build kubernetes objects from release manifest: error validating data', 'not valid Kubernetes'),
+    ('Error: UPGRADE FAILED: Secret "s" in namespace "farmer" exists and cannot be imported into the current release',
+     'owned outside'),
+    ('Error: found in Chart.yaml, but missing in charts/ directory: postgres-init', 'dependency'),
+    ('Error: UPGRADE FAILED: admission webhook "v.k" denied the request', 'webhook'),
+])
+def test_render_and_validation_failures_are_classified(log, expected):
+    assert expected in deployment.upgrade_diagnostic(log)[0]
+
+
+def test_the_connector_render_error_shows_the_failing_value():
+    # Build 208's error, whole: at 300 characters it stopped before the field that was nil.
+    log = ('Error: template: openg2p-connector/templates/worker-deployment.yaml:48:16: executing '
+           '"openg2p-connector/templates/worker-deployment.yaml" at <include "openg2p-connector.commonEnv" .>: '
+           'error calling include: template: openg2p-connector/templates/_helpers.tpl:67:14: executing '
+           '"openg2p-connector.commonEnv" at <.Values.oanSigning.enabled>: nil pointer evaluating interface {}.enabled')
+    result = deployment.upgrade_diagnostic(log)
+    assert 'render' in result[0]
+    assert result[-1].endswith('<.Values.oanSigning.enabled>: nil pointer evaluating interface {}.enabled')
+
+
+def test_only_the_first_error_line_is_given_and_it_is_cut():
+    result = deployment.upgrade_diagnostic('Error: ' + 'a ' * 400 + '\nError: second')
+    assert len(result[-1]) > len('Helm said: ') + 300  # a nested template error keeps its tail
+    assert len(result[-1]) <= len('Helm said: ') + 601 and 'second' not in result[-1]
 
 
 @pytest.mark.parametrize("state", ["deployed", "failed"])
@@ -107,7 +154,7 @@ def release():
                 previous = copy.deepcopy(existing[key])
                 deployment.pod(previous)['containers'][0]['image'] = 'old/' + image + ':previous'
                 before.append(previous)
-        deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:{TAG}"
+        deployment.pod(existing[key])["containers"][0]["image"] = f"{ECR}/{deployment.image_names.repository(image)}:{TAG}"
     for doc in after:
         suffix = doc["metadata"]["name"].removeprefix("farmer-registry-")
         env = deployment.pod(doc)["containers"][0]["env"] if deployment.pod(doc).get("containers") else []
@@ -168,14 +215,22 @@ def test_registry_provenance_rejects_wrong_or_missing_image_digest(tmp_path, mon
     monkeypatch.chdir(tmp_path)
     path = tmp_path / "service-outcomes/registry-images.tsv"
     path.parent.mkdir()
-    commit = TAG + "a" * 28
+    commit = COMMIT
     names = {c[2] for c in deployment.COMPONENTS.values()}
-    lines = [f"{name}\t{ECR}/openg2p/farmer-registry/{name}:{TAG}\tsha256:{'b' * 64}" for name in sorted(names)]
+    lines = [f"{name}\t{ECR}/{deployment.image_names.repository(name)}:{TAG}\tsha256:{'b' * 64}" for name in sorted(names)]
     path.write_text("\n".join(lines))
     assert set(deployment.registry_provenance(ECR, TAG, commit)) == names
     path.write_text("\n".join(lines[:-1]))
     with pytest.raises(ValueError, match="Missing"):
         deployment.registry_provenance(ECR, TAG, commit)
+    # The names before eoan, or a commit12 tag, are not this build's images.
+    path.write_text("\n".join(line.replace(deployment.image_names.repository("celery"), "openg2p/farmer-registry/celery")
+                              for line in lines))
+    with pytest.raises(ValueError, match="Invalid"):
+        deployment.registry_provenance(ECR, TAG, commit)
+    path.write_text("\n".join(line.replace(TAG, "abcdef012345") for line in lines))
+    with pytest.raises(ValueError, match="Invalid"):
+        deployment.registry_provenance(ECR, "abcdef012345", commit)
 
 
 def test_prepare_retains_values_and_worker_awe_secrets(release):
@@ -361,3 +416,25 @@ def test_the_ecr_refresher_is_a_reviewed_new_resource(release):
     after.append({'kind': 'CronJob', 'metadata': {'name': 'farmer-registry-other-job'}})
     with pytest.raises(ValueError, match='Unexpected persistent resource'):
         deployment.validate(before, after, ECR, TAG)
+
+
+def test_first_eoan_deploy_replaces_the_installed_images_of_the_names_before_eoan(release):
+    # New Dev still runs openg2p/farmer-registry/<image>:<commit12>; this build moves every component to its eoan
+    # repository. Those are built images being replaced, not an optional component's image changing.
+    before, after = release
+    digest = "sha256:" + "b" * 64
+    images = {c: {"tag": TAG, "digest": digest} for _, _, c in deployment.COMPONENTS.values()}
+    installed = {(d["kind"], d["metadata"]["name"]): d for d in before}
+    for _, (kind, suffix, image) in deployment.COMPONENTS.items():
+        key = (kind, "farmer-registry-" + suffix)
+        if key in installed:
+            deployment.pod(installed[key])["containers"][0]["image"] = f"{ECR}/openg2p/farmer-registry/{image}:abcdef012345@{digest}"
+    for doc in after:
+        for container in deployment.pod(doc).get("containers", []):
+            if "/eoan/farmer-registry/" in container["image"]:
+                container["image"] = container["image"].replace(":" + TAG, ":" + TAG + "@" + digest)
+    deployment.validate(before, after, ECR, TAG, images=images)
+    dashboard = installed[("Deployment", "farmer-registry-dashboard-api")]
+    deployment.pod(dashboard)["containers"][0]["image"] = "independent/dashboard:other"
+    with pytest.raises(ValueError, match="Dashboard image must be retained"):
+        deployment.validate(before, after, ECR, TAG, images=images)

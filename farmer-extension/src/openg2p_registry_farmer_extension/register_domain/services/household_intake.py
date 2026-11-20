@@ -58,6 +58,24 @@ def _get(row, key: str):
     return row.get(key) if isinstance(row, dict) else getattr(row, key, None)
 
 
+def already_submitted(submission) -> str | None:
+    """The refusal of a second Submit: the form is final and its approval
+    request was started on the first one (a double click, or Submit pressed
+    again after a slow answer). Finalizing again would start a second
+    approval request for the same form.
+
+    One sentence without '; ': refusals that list several problems join them
+    with '; ', and the staff UI counts the parts (serverNotice.ts)."""
+    if str(getattr(submission, "draft_status", "") or "").upper() != "FINAL":
+        return None
+    when = getattr(submission, "finalized_at", None)
+    on = f" on {when:%d %b %Y}" if hasattr(when, "strftime") else ""
+    status = str(getattr(submission, "approval_status", "") or "PENDING").upper()
+    if status == "PENDING":
+        return f"This form was already submitted{on} and is waiting for approval."
+    return f"This form was already submitted{on} and was {status.lower()}."
+
+
 def _same_name(a, b) -> bool:
     return " ".join(str(a or "").split()).casefold() == " ".join(str(b or "").split()).casefold()
 
@@ -156,6 +174,37 @@ def check_farmer_household(farmers: list, household, members: list, messages: di
     validate_household_roster(household, members)
 
 
+def picks_link(schema, register_id: str) -> bool:
+    """Whether a section lets the officer pick this register's parent: a lookup
+    widget writing `<register_id>.link_internal_record_id`."""
+    from .form_integrity import _widgets
+
+    target = f"{register_id}.link_internal_record_id"
+    for widget in _widgets(schema or {}):
+        path = widget.get("widget-data-path")
+        if widget.get("widget") in ("register-lookup", "parent-lookup") and target in (
+                path.values() if isinstance(path, dict) else [path]):
+            return True
+    return False
+
+
+def removes_link(payload) -> bool:
+    """Whether a section payload clears the parent link: a record sends
+    link_internal_record_id, blank."""
+    return any(isinstance(record, dict) and "link_internal_record_id" in record
+               and is_blank(record.get("link_internal_record_id")) for record in payload or [])
+
+
+async def clear_link(register_id: str, submission_id, session) -> None:
+    """Drop the parent link on the submission's rows of one register."""
+    from .form_integrity import intake_rows
+
+    for row in await intake_rows(register_id, str(submission_id), session):
+        if not is_blank(getattr(row, "link_internal_record_id", None)):
+            row.link_internal_record_id = None
+    await session.flush()
+
+
 class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFieldsMixin, G2PFarmerIntakeFormDataService):
     """The farmer extension's intake service, with the farmer household check
     and the required fields of every registry's form (required_fields.py, ahead
@@ -164,6 +213,9 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
 
     async def finalize_submission_with_session(self, submission_id: str, session, *args, **kwargs):
         submission = await self._get_submission_or_error(submission_id, session)
+        refusal = already_submitted(submission)
+        if refusal:
+            validation_error(refusal)
         register_definition = await self._get_register_definition(submission.register_id, session)
         from ...odk.actor import ingest_active
 
@@ -266,10 +318,21 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
                     record.pop(field, None)
         from .intake_context import current_intake
 
+        # Core keeps a chosen parent link when a save sends it blank (its
+        # resolve_link_internal_record_id: "a blank or omitted link keeps a
+        # link the user already chose"). In a section where the officer picks
+        # the link, a blank one means the household was removed, so the stored
+        # link is dropped before core's save: core then resolves and checks the
+        # section without it, and the head answer in the same save is checked
+        # against no household rather than the removed one.
+        unlink = removes_link(payload) and picks_link(getattr(section, "section_ui_schema", None),
+                                                      section_register_id)
         token = current_intake.set((session, submission_id))
         gate = unattended.set(worker_save)
         try:
             if not (worker_save and submission_id):
+                if unlink and submission_id:
+                    await clear_link(section_register_id, submission_id, session)
                 return await super().save_intake_form_submission_with_session(
                     submission_id, section_id, payload, section_register_id, form_id,
                     register_id, created_by, session, documents=documents)
@@ -277,6 +340,8 @@ class HouseholdCheckedIntakeFormDataService(DirectApprovalClosed, RequiredFields
             # added (core's parent-link check): the savepoint takes the whole
             # section back, so a refused section leaves nothing behind.
             async with session.begin_nested():
+                if unlink:
+                    await clear_link(section_register_id, submission_id, session)
                 return await super().save_intake_form_submission_with_session(
                     submission_id, section_id, payload, section_register_id, form_id,
                     register_id, created_by, session, documents=documents)
@@ -334,6 +399,14 @@ async def check_farmer_submission(submission_id: str, session, submission=None, 
             held = await check_fayda_id_unique(farmer, label, session, messages, submission_id=submission_id)
             if held:
                 problems.append(held)
+            # A save goes through when Master Data cannot be read (coded_values);
+            # Submit does not, so no form reaches approval with its codes unchecked.
+            from .coded_values import master_data_unchecked
+            from .form_integrity import _plain
+            from .upstream_messages import MDS_UNAVAILABLE
+
+            if await master_data_unchecked([_plain(farmer)]):
+                problems.append(_Say(messages).text("upstream_mds_unavailable", MDS_UNAVAILABLE))
         if farmer is not None and as_bool(farmer.is_household_head):
             household = households[0] if households else None
             if household is not None and farmer.link_internal_record_id in (None, "", household.internal_record_id):

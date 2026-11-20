@@ -3,6 +3,7 @@ services/derivations.py). They need the registry platform, so they run inside
 the staff API image and are skipped elsewhere."""
 
 import asyncio
+from datetime import date, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -37,6 +38,7 @@ class _Session:
 
 
 def _farmer(**values):
+    values = {"registration_date": None, "last_approved_at": None, "created_at": None, **values}
     return SimpleNamespace(internal_record_id="f-1", phone_numbers=None, has_personal_phone=None, **values)
 
 
@@ -57,3 +59,21 @@ def test_a_farmer_without_rows_keeps_its_partner_phone_list():
     asyncio.run(derivations.refresh_farmer(_Session(farmer, [], []), "f-1"))
     assert farmer.total_plots == 0
     assert farmer.primary_phone_number == "+251911000003"
+
+
+def test_registration_date_is_the_day_of_approval():
+    farmer = _farmer(last_approved_at=datetime(2026, 11, 17, 6, 6), created_at=datetime(2026, 11, 10, 9, 0))
+    asyncio.run(derivations.refresh_farmer(_Session(farmer, [], []), "f-1"))
+    assert farmer.registration_date == date(2026, 11, 17)
+
+
+def test_registration_date_falls_back_to_the_creation_day():
+    farmer = _farmer(created_at=datetime(2026, 11, 10, 9, 0))
+    asyncio.run(derivations.refresh_farmer(_Session(farmer, [], []), "f-1"))
+    assert farmer.registration_date == date(2026, 11, 10)
+
+
+def test_a_later_approval_never_moves_the_registration_date():
+    farmer = _farmer(registration_date=date(2026, 10, 30), last_approved_at=datetime(2026, 11, 17, 6, 6))
+    asyncio.run(derivations.refresh_farmer(_Session(farmer, [], []), "f-1"))
+    assert farmer.registration_date == date(2026, 10, 30)

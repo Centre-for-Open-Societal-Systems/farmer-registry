@@ -201,3 +201,26 @@ def test_a_long_list_is_cut_after_ten_choices():
     (problem,) = coded_values.choice_problems({"language_spoken": "??"}, SAY, lists)
     assert problem.startswith("Farmer's language: choose one of Language 1, Language 2,")
     assert problem.endswith("Language 10 and 3 more.")
+
+
+# Submit does not skip the Master Data check (master_data_unchecked).
+def test_values_count_as_unchecked_when_a_list_cannot_be_read(monkeypatch):
+    async def lists(attributes):
+        return {"GENDER": LISTS["GENDER"]}
+
+    async def locations():
+        return {"ET01"}
+
+    monkeypatch.setattr(coded_values, "master_data_lists", lists)
+    monkeypatch.setattr(coded_values, "known_location_ids", locations)
+    assert asyncio.run(coded_values.master_data_unchecked([{"gender": "MALE"}])) is False
+    assert asyncio.run(coded_values.master_data_unchecked([{"gender": "MALE", "marital_status": "SINGLE"}])) is True
+
+
+def test_a_location_counts_as_unchecked_when_the_geography_cannot_be_read(monkeypatch):
+    async def locations():
+        return None
+
+    monkeypatch.setattr(coded_values, "known_location_ids", locations)
+    assert asyncio.run(coded_values.master_data_unchecked([{"geo_lowest_level_value_id": "ET01"}])) is True
+    assert asyncio.run(coded_values.master_data_unchecked([{}])) is False

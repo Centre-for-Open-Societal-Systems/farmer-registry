@@ -6,10 +6,10 @@ merged: the stage, and the build, are a success once the pull request is open.
 
   1. Read the ECR digests of the build (service-outcomes/registry-images.tsv, written by the Publish stage:
      component<TAB>image<TAB>sha256:...).
-  2. Rewrite the image tags in charts/openg2p-farmer-registry/values.yaml of oan-helm to <commit12>@sha256:<digest>
+  2. Rewrite the image tags in charts/openg2p-farmer-registry/values.yaml of oan-helm to <image tag>@sha256:<digest>
      for staffUi, staffApi, partnerApi, celeryWorker, celeryBeat, dbSeed and sanity. Only those lines change; the file is
      edited as text. The analytics/dashboard images are separate services and are not touched.
-  3. Put that change on the branch bot/farmer-images-<commit12> of the FORK of oan-helm (GH_USER/oan-helm), created from
+  3. Put that change on the branch bot/farmer-images-<image tag> of the FORK of oan-helm (GH_USER/oan-helm), created from
      the current head of the org repo's main, and open a pull request from it into
      Centre-for-Open-Societal-Systems/oan-helm main (or update the open one for the same commit).
 
@@ -42,12 +42,14 @@ import urllib.request
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
+sys.path.insert(0, str(HERE))
+import image_names  # noqa: E402
 SLUG = "Centre-for-Open-Societal-Systems/oan-helm"
 CHART = "openg2p-farmer-registry"
 VALUES_PATH = "charts/%s/values.yaml" % CHART
 DIGESTS = "service-outcomes/registry-images.tsv"
 PR_FILE = "service-outcomes/oan-helm-pr.txt"
-# chart values section under `registry:` -> ECR component (one repository per component: <registry>/<repository>/<component>)
+# chart values section under `registry:` -> image (one ECR repository per image, named by image_names.repository)
 REGISTRY = (("staffUi", "staff-ui"), ("staffApi", "staff-api"), ("partnerApi", "partner-api"), ("celeryWorker", "celery"),
             ("celeryBeat", "celery"), ("dbSeed", "db-seed"), ("sanity", "sanity-tests"))
 # A commit that changes only these files is the merge of a chart-pin pull request. It is not left
@@ -67,10 +69,10 @@ class Stop(Exception):
 
 # ---- the values file ---------------------------------------------------------------------------------------------
 
-def read_digests(text, registry=None, repository=None, image_tag=None):
+def read_digests(text, registry=None, image_tag=None):
     """{component: 'sha256:..'} from component<TAB>image<TAB>digest lines.
 
-    With `registry`, `repository` and `image_tag` the image column must be exactly <registry>/<repository>/<component>:<tag>.
+    With `registry` and `image_tag` the image column must be exactly <registry>/<repository of the component>:<tag>.
     """
     result = {}
     for line in text.splitlines():
@@ -80,16 +82,16 @@ def read_digests(text, registry=None, repository=None, image_tag=None):
         if len(parts) != 3 or not re.fullmatch(r"sha256:[0-9a-f]{64}", parts[2].strip()):
             raise ValueError("bad digest line: " + line[:80])
         component, image = parts[0].strip(), parts[1].strip()
-        if registry and image != "%s/%s/%s:%s" % (registry, repository, component, image_tag):
+        if registry and image != "%s/%s:%s" % (registry, image_names.repository(component), image_tag):
             raise ValueError("the pushed image of %s is %s, not the image of build %s" % (component, image, image_tag))
         result[component] = parts[2].strip()
     return result
 
 
 def wanted(image_tag, digests):
-    """{values section: 'commit@sha256:..'} for the registry components."""
-    if not re.fullmatch(r"[0-9a-f]{12}", image_tag):
-        raise ValueError("IMAGE_TAG must be the 12-character commit tag")
+    """{values section: '<image tag>@sha256:..'} for the registry components."""
+    if not image_names.is_tag(image_tag):
+        raise ValueError("IMAGE_TAG must be the <version>-<branch>.<build> tag of image_names.py")
     missing = sorted(set(COMPONENTS) - set(digests))
     if missing:
         raise ValueError("no ECR digest for: " + ", ".join(missing))
@@ -123,16 +125,17 @@ def _set_value(lines, start, end, key, value, indent):
     lines[found] = "%s%s: %s" % (" " * indent, key, value)
 
 
-def expected_repositories(registry, path):
-    return dict((section, "%s/%s/%s" % (registry, path, component)) for section, component in REGISTRY)
+def expected_repositories(registry):
+    return dict((section, "%s/%s" % (registry, image_names.repository(component))) for section, component in REGISTRY)
 
 
 def rewrite_values(text, registry_tags, repositories=None):
     """The values text with the new image tags; everything else is byte for byte as it was.
 
-    `repositories` ({section: expected repository}) makes the rewrite refuse an image block whose repository is not the
-    expected ECR repository.
+    `repositories` ({section: expected repository}) also moves each image block to the expected ECR repository. A block
+    on an earlier name of the same image (image_names.is_repository) is moved; any other repository is refused.
     """
+    components = dict(REGISTRY)
     lines = text.split("\n")
     top = _find(lines, r"registry:\s*", 0, len(lines))
     top_end = _block_end(lines, top, 0)
@@ -143,8 +146,11 @@ def rewrite_values(text, registry_tags, repositories=None):
         image_end = _block_end(lines, image, 4)
         if repositories and section in repositories:
             repo = lines[_find(lines, r" {6}repository: \S+", image + 1, image_end)].split(": ", 1)[1].strip()
-            if repo != repositories[section]:
+            host, _, name = repositories[section].partition("/")
+            if repo != repositories[section] and not (
+                    repo.startswith(host + "/") and image_names.is_repository(repo[len(host) + 1:], components[section])):
                 raise ValueError("%s image repository is %s, expected %s" % (section, repo, repositories[section]))
+            _set_value(lines, image + 1, image_end, "repository", repositories[section], 6)
         _set_value(lines, image + 1, image_end, "tag", tag, 6)
     return "\n".join(lines)
 
@@ -277,9 +283,8 @@ class Proposal(object):
     # -- the whole stage
     def run(self, env, root, digests_text):
         image_tag = env["IMAGE_TAG"]
-        path = env.get("ECR_REPOSITORY", "openg2p/farmer-registry")
-        tags = wanted(image_tag, read_digests(digests_text, env["ECR_REGISTRY"], path, image_tag))
-        repositories = expected_repositories(env["ECR_REGISTRY"], path)
+        tags = wanted(image_tag, read_digests(digests_text, env["ECR_REGISTRY"], image_tag))
+        repositories = expected_repositories(env["ECR_REGISTRY"])
         main_sha = self.main_head()
         text, _ = self.contents(self.upstream, "main", SLUG)
         new_text = rewrite_values(text, tags, repositories)

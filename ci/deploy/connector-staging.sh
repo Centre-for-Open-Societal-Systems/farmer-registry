@@ -31,8 +31,8 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 : "${PLAN_ONLY:=0}"
 # A build tag: the commit12 tag develop pushes, or <version>-<branch>.<build>.
 BUILD_TAG_PATTERN='^([0-9a-f]{12}|[0-9]+\.[0-9]+\.[0-9]+-[a-z0-9-]+\.[1-9][0-9]*)$'
-# The rc tag the promotion adds to the chart's images is not a build: the connector images never carry it.
-PROMOTION_TAG_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$'
+# The rc or staging tag the promotion adds to the chart's images is not a build: the connector images never carry it.
+PROMOTION_TAG_PATTERN='^[0-9]+\.[0-9]+\.[0-9]+-(rc|staging)\.[0-9]+$'
 PROMOTED_CHART="${PROMOTED_CHART:-$(ls built-chart/*.tgz 2> /dev/null | head -n 1 || true)}"
 test -f "${PROMOTED_CHART:-}" || { echo "No promoted chart archive (built-chart/*.tgz): the registry promotion must run first." >&2; exit 1; }
 STATE=$(mktemp -d)
@@ -74,13 +74,19 @@ PY
 read -r SERVICE_REPOSITORY SERVICE_DIGEST < <(promoted_service_image "$PROMOTED_CHART")
 test -n "${SERVICE_DIGEST:-}" || { echo "no staff-api digest in $PROMOTED_CHART" >&2; exit 1; }
 SOURCE_BUILD_TAG=$(promoted_source_commit "$PROMOTED_CHART")
-# staff-api, or staff-api-<RP version> under versioned names: the connector images carry the same suffix.
+# Under the eoan names (eoan/farmer-registry/staff-api-<RP version>) the connector images are registry-connector-api
+# and registry-connector-ui with no platform suffix: they are not built on the registry platform (ci/deploy/image_names.py).
+# Under the names before eoan (openg2p/farmer-registry/staff-api) they are registry-connector and registry-connector-ui.
 SERVICE_NAME=${SERVICE_REPOSITORY##*/}
-PLATFORM_SUFFIX=${SERVICE_NAME#staff-api}
 IMAGE_PREFIX=${SERVICE_REPOSITORY%/*}
 ECR_BASE=${IMAGE_PREFIX#*/}
-CONNECTOR_IMAGE_REPOSITORY="$IMAGE_PREFIX/registry-connector$PLATFORM_SUFFIX"
-CONNECTOR_UI_IMAGE_REPOSITORY="$IMAGE_PREFIX/registry-connector-ui$PLATFORM_SUFFIX"
+case "$ECR_BASE" in
+  eoan/*) CONNECTOR_NAME=registry-connector-api; CONNECTOR_UI_NAME=registry-connector-ui ;;
+  *) PLATFORM_SUFFIX=${SERVICE_NAME#staff-api}
+     CONNECTOR_NAME=registry-connector$PLATFORM_SUFFIX; CONNECTOR_UI_NAME=registry-connector-ui$PLATFORM_SUFFIX ;;
+esac
+CONNECTOR_IMAGE_REPOSITORY="$IMAGE_PREFIX/$CONNECTOR_NAME"
+CONNECTOR_UI_IMAGE_REPOSITORY="$IMAGE_PREFIX/$CONNECTOR_UI_NAME"
 ecr_digest() {
   aws ecr describe-images --region "$AWS_REGION" --repository-name "$1" --image-ids "imageTag=$2" \
     --query 'imageDetails[0].imageDigest' --output text 2> /dev/null || true
@@ -92,8 +98,8 @@ build_tags=$(printf '%s\n' "$SOURCE_BUILD_TAG" $digest_tags | grep -E "$BUILD_TA
 test -n "$build_tags" || { echo "Neither the promoted chart (oan.org/source-commit) nor staff-api $SERVICE_DIGEST names a build tag matching $BUILD_TAG_PATTERN." >&2; exit 1; }
 CONNECTOR_IMAGE_DIGEST=""
 for tag in $build_tags; do
-  CONNECTOR_IMAGE_DIGEST=$(ecr_digest "$ECR_BASE/registry-connector$PLATFORM_SUFFIX" "$tag")
-  CONNECTOR_UI_IMAGE_DIGEST=$(ecr_digest "$ECR_BASE/registry-connector-ui$PLATFORM_SUFFIX" "$tag")
+  CONNECTOR_IMAGE_DIGEST=$(ecr_digest "$ECR_BASE/$CONNECTOR_NAME" "$tag")
+  CONNECTOR_UI_IMAGE_DIGEST=$(ecr_digest "$ECR_BASE/$CONNECTOR_UI_NAME" "$tag")
   if [[ "$CONNECTOR_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ && "$CONNECTOR_UI_IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
     BUILD_TAG=$tag
     break

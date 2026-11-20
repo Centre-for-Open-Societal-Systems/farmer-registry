@@ -6,6 +6,7 @@ import { FileCellWidget } from './FileCellWidget';
 import { FARMER_PHOTO_VARIANT, FarmerPhotoWidget } from './FarmerPhotoWidget';
 import { GeoPointWidget } from './GeoPointWidget';
 import { LocalNameWidget } from './LocalNameWidget';
+import { recordWidgetConfigs } from '../intake/widgetConfigs';
 
 // The widget package uploads a section's photo, and sets the field named by
 // the widget's "image" path (record_image_document_id), only for widgets of
@@ -47,3 +48,7 @@ widgetRegistry.register({ widget: 'oan-file-cell', component: FileCellWidget as 
 widgetRegistry.register({ widget: 'oan-geo-point', component: GeoPointWidget as never });
 widgetRegistry.register({ widget: 'oan-enumerator-position', component: EnumeratorPositionWidget as never });
 widgetRegistry.register({ widget: 'oan-local-name', component: LocalNameWidget as never });
+
+// Record every registered widget's config while it is on screen, for the
+// intake Next guard (src/oan/intake/). Last, so it wraps OAN's widgets too.
+recordWidgetConfigs();

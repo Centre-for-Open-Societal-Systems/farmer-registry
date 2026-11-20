@@ -76,32 +76,32 @@ def test_a_complete_form_has_nothing_missing():
 
 def test_an_unopened_section_reports_each_required_field_by_section():
     problems = _missing({"has_national_id": False})
-    assert "Personal details: gender is required. Open Personal details, fill it in and save, then submit again." in problems
-    assert any(p.startswith("Location: farmer_geo_hierarchy is required") for p in problems)
+    assert "Personal details: Gender is required. Open Personal details, fill it in and save, then submit again." in problems
+    assert any(p.startswith("Location: Farmer geo hierarchy is required") for p in problems)
 
 
 def test_a_hidden_field_is_never_required():
     # foundational_id is shown and required only when has_national_id is Yes.
-    assert not any("foundational_id" in p for p in _missing({**COMPLETE, "has_national_id": False, "foundational_id": None}))
+    assert not any("Foundational id" in p for p in _missing({**COMPLETE, "has_national_id": False, "foundational_id": None}))
 
 
 def test_a_require_rule_makes_a_shown_field_required():
     problems = _missing({**COMPLETE, "foundational_id": ""})
-    assert problems == ["Identity: foundational_id is required. Open Identity, fill it in and save, then submit again."]
+    assert problems == ["Identity: Foundational id is required. Open Identity, fill it in and save, then submit again."]
 
 
 def test_a_conditional_requirement_follows_its_condition():
-    assert any("disability_type" in p for p in _missing({**COMPLETE, "disabled": True}))
+    assert any("Disability type" in p for p in _missing({**COMPLETE, "disabled": True}))
     assert _missing({**COMPLETE, "disabled": False}) == []
 
 
 def test_a_false_answer_counts_as_an_answer():
-    assert not any("has_national_id" in p for p in _missing({**COMPLETE, "has_national_id": False}))
+    assert not any("Has national id" in p for p in _missing({**COMPLETE, "has_national_id": False}))
 
 
 def test_a_missing_required_document_names_its_section():
     problems = _missing(dict(COMPLETE), documents={})
-    assert problems == ["Documents: identity_document_1 is required. Open Documents, add the file and save, then submit again."]
+    assert problems == ["Documents: Identity document 1 is required. Open Documents, add the file and save, then submit again."]
 
 
 def test_a_document_category_is_named_by_its_title():
@@ -157,3 +157,56 @@ def test_the_holder_is_named_by_record_name_or_names():
     assert fi.holder_name({"record_name": "Abebe Kebede"}) == "Abebe Kebede"
     assert fi.holder_name({"first_name": "Abebe", "middle_name": None, "last_name": "Kebede"}) == "Abebe Kebede"
     assert fi.holder_name({}) == "an unnamed farmer"
+
+
+def test_a_second_form_with_the_fayda_id_of_one_pending_approval_is_refused_naming_it(monkeypatch):
+    """Two ODK submissions of the same farmer: the second one's Submit finds the first, already
+    submitted and pending approval, and says which it is (the worker keeps it as a draft with
+    this reason)."""
+    import asyncio
+    from types import SimpleNamespace
+
+    async def holder(fin, *, internal_record_id, submission_id, session):
+        assert submission_id == "s-2"
+        row = SimpleNamespace(first_name="Abebe", middle_name="Kebede", last_name="Tesfaye", submission_id="s-1")
+        return "pending", (row, "2026NOV17-00001ABCDE")
+
+    monkeypatch.setattr(fi, "fayda_id_holder", holder)
+    said = asyncio.run(fi.check_fayda_id_unique(
+        {"foundational_id": "123456789012"}, "Fayda ID", None, {}, submission_id="s-2"))
+    assert "123456789012" in said and "2026NOV17-00001ABCDE" in said
+
+
+# A field the officer can no longer see is cleared on save (hidden_fields).
+IDENTITY = SECTIONS[0]["schema"]
+
+
+def test_a_field_hidden_by_its_rule_is_cleared_and_a_shown_one_is_kept():
+    hidden = fi.hidden_fields(IDENTITY, FARMER, {FARMER: {"has_national_id": False, "foundational_id": "123"}})
+    assert hidden == {"foundational_id"}
+    assert fi.hidden_fields(IDENTITY, FARMER, {FARMER: {"has_national_id": True, "foundational_id": "123"}}) == set()
+
+
+def test_a_field_one_visible_widget_writes_is_never_cleared():
+    schema = {"panels": [{"widgets": [
+        _w("foundational_id", options={"action": "show", "condition": _equals("has_national_id", True)}),
+        _w("fin_copy", path=f"{FARMER}.foundational_id"),
+    ]}]}
+    assert fi.hidden_fields(schema, FARMER, {FARMER: {"has_national_id": False}}) == set()
+
+
+def test_a_rule_reading_another_register_never_clears():
+    schema = {"panels": [{"widgets": [
+        _w("household_note", options={"action": "show", "condition": {
+            "field": f"{HOUSEHOLD}.size_of_group", "operator": "greaterThan", "value": 1}}),
+    ]}]}
+    assert fi.hidden_fields(schema, FARMER, {FARMER: {}, HOUSEHOLD: {"size_of_group": 0}}) == set()
+
+
+def test_another_register_s_fields_and_tables_are_left_alone():
+    schema = {"panels": [{"widgets": [
+        _w("size_of_group", path=f"{HOUSEHOLD}.size_of_group",
+           options={"action": "show", "condition": _equals("has_national_id", True)}),
+        _w("lands", "table", options={"action": "show", "condition": _equals("has_national_id", True)}),
+    ]}]}
+    assert fi.hidden_fields(schema, FARMER, {FARMER: {"has_national_id": False}}) == set()

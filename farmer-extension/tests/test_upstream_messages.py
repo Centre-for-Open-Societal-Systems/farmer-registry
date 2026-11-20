@@ -165,3 +165,25 @@ def test_every_problem_of_a_joined_refusal_is_reworded():
         "Household members: 1 entered, but the household size is 2. Add or remove members, or correct the "
         "household size, so they match.")
     assert reword("Something unknown; another") == "Something unknown; another"
+
+
+def test_the_household_s_own_member_count_check_is_said_plainly():
+    text = ("size_of_group is 3 but 2 household member(s) are recorded; "
+            "update the members or the size so they match")
+    assert reword(text) == ("Household members: 2 entered, but the household size is 3. Add or remove members, "
+                            "or correct the household size, so they match.")
+
+
+def test_a_row_on_a_land_that_is_not_the_farmer_s_names_no_internal_id():
+    text = ("Crop rows must be attached to one of the farmer's lands (select the land in the row); "
+            "not a land: 2b7c1e4a-0000-4000-8000-000000000001")
+    said = reword(text)
+    assert said == "Crop: a row's plot is not one of the farmer's lands. Pick the plot again in each row."
+    assert "2b7c1e4a" not in said
+
+
+def test_a_field_without_a_label_is_named_in_words_not_by_its_column():
+    assert upstream_messages.readable("birth_date") == "Birth date"
+    assert upstream_messages.readable("Gender") == "Gender"
+    assert reword("number_of_cattle must be a whole number") == (
+        "Number of cattle: is not a whole number. Enter digits only, for example 12.")

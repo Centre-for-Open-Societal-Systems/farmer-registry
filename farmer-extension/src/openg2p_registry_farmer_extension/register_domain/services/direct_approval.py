@@ -20,7 +20,7 @@ caller, whatever roles or permissions the IAM catalog grants them.
 DIRECT_APPROVAL_CODE = "AWE_APPROVAL_REQUIRED"
 DIRECT_APPROVAL_MESSAGE = (
     "This change is approved through its approval task. Open the task in the "
-    "approvals list and decide it there; a register change is never applied "
+    "approvals list and decide it there. A register change is never applied "
     "by approving it directly."
 )
 

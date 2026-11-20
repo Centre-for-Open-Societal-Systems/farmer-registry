@@ -29,6 +29,14 @@ export OAN_PROMOTED_VALUES
 # Build option LOAD_SAMPLE_DATA (default off) turns the db-seed sample records on for this delivery.
 if [ "${LOAD_SAMPLE_DATA:-false}" = true ]; then flags+=(--set registry.dbSeed.loadSampleData=true); fi
 
+# Staging pulls every image the promoted chart will pin, by digest, before anything is tagged or deployed: a dry run
+# of the same promotion (DRY_RUN=1 tags nothing) finds the develop chart of this tree and lists its images.
+rm -rf .pull-check
+DRY_RUN=1 python3 .oan-helm/scripts/ci/promote_chart.py --chart openg2p-farmer-registry --release "$HELM_RELEASE" \
+  --namespace "$HELM_NAMESPACE" --overlay environments/staging/values/farmer.yaml --output .pull-check > /dev/null
+python3 ci/deploy/pull_check.py --namespace "$HELM_NAMESPACE" --chart "$(ls .pull-check/*.tgz | head -n 1)"
+rm -rf .pull-check
+
 bash .oan-helm/scripts/ci/deliver_staging.sh openg2p-farmer-registry "$HELM_RELEASE" "$HELM_NAMESPACE" farmer.yaml \
   "${flags[@]}" --post-renderer ci/deploy/promote-renderer.sh
 

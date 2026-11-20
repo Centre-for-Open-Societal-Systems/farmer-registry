@@ -64,16 +64,40 @@ def command(args, cwd=None, input=None):
         # docker push answers a missing ECR repository with "name unknown" rather than the AWS exception name.
         if "RepositoryNotFoundException" in result.stderr or re.search(r"name unknown|repository with name \S+ does not exist", result.stderr, re.I):
             raise ServiceError("image-repository-missing")
+        if "LifecyclePolicyNotFoundException" in result.stderr:
+            raise ServiceError("lifecycle-policy-missing")
         if Path(args[0]).stem == "helm":
             from deployment import upgrade_diagnostic
             raise ServiceError("command-failed-helm", {
                 "diagnostics": upgrade_diagnostic(result.stdout + "\n" + result.stderr),
             })
         if Path(args[0]).name == "docker" and len(args) > 1 and args[1] in DOCKER_STEPS:
-            # A fixed word from our own arguments, never tool output, so a failed image build, test run or push can be told apart.
-            raise ServiceError("command-failed-docker-" + args[1])
+            # A fixed word from our own arguments, so a failed image build, test run or push can be told apart; the
+            # tool's own first error line goes into the diagnostics, masked, as for Helm.
+            raise ServiceError("command-failed-docker-" + args[1], {
+                "diagnostics": docker_diagnostic(result.stderr + "\n" + result.stdout),
+            })
         raise ServiceError("command-failed-" + Path(args[0]).name)
     return result.stdout
+
+
+DOCKER_ERROR = re.compile(r"error|denied|invalid|failed|unknown|not found|cannot|refused", re.I)
+
+
+def docker_diagnostic(log):
+    """What a failed docker step said: a class for the known cases, then its first error line, masked (deployment.masked)
+    and cut to 600 characters. Other output lines are never echoed."""
+    from deployment import _ERROR_LINE_LIMIT, masked
+
+    said = []
+    if re.search(r"tag invalid|already exists .* cannot be overwritten|repository is immutable", log, re.I):
+        said.append("The tag is already taken in an immutable ECR repository: this build pushed it, or another image "
+                    "was pushed under the same tag first.")
+    line = next((line.strip() for line in log.splitlines() if DOCKER_ERROR.search(line)), None)
+    if line:
+        line = masked(line)
+        said.append("Docker said: " + (line if len(line) <= _ERROR_LINE_LIMIT else line[:_ERROR_LINE_LIMIT] + "…"))
+    return said or ["Docker failed without an error line."]
 
 
 def relative_file(root, path):
@@ -118,12 +142,12 @@ def configuration(path=MANIFEST, environment="dev"):
             "name": "farmer-registry-dashboard-api", "release": "farmer-registry",
             "repository": "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry-dashboard-api.git",
             "chart": "helm/openg2p-farmer-registry", "imageValues": "dashboardApi.image",
-            "imageRepository": "openg2p/farmer-registry/dashboard-api",
+            "imageRepository": "eoan/farmer-registry/dashboard-api",
         }.items()):
             raise ValueError("Dashboard API must retain its Farmer chart ownership")
         if item["release"] in ("commons", "commons-services", "farmer-connector") or (item["release"] == "farmer-registry" and not embedded):
             raise ValueError("Optional service must not adopt an existing shared/Registry/old connector release")
-        if item.get("imageRepository") and not re.fullmatch(r"openg2p/[a-z0-9/-]+", item["imageRepository"]):
+        if item.get("imageRepository") and not re.fullmatch(r"eoan/[a-z0-9/-]+", item["imageRepository"]):
             raise ValueError("Invalid image repository")
     if environment == "staging":
         items = copy.deepcopy(items)
@@ -326,7 +350,8 @@ def prepare_dashboard_chart(state, values, before, installed_chart):
 
 def dashboard_hook_rehearsal(component, environment, record, chart, registry, run):
     tools = os.environ.get("COORDINATOR_IMAGE", "")
-    if not re.fullmatch(r"oan-ci/services:[a-f0-9]{12}", tools):
+    if not re.fullmatch(r"oan-ci/services:[a-f0-9]{12}", tools) and not (
+            tools.startswith("oan-ci/services:") and BUILD_TAG.fullmatch(tools.split(":", 1)[1])):
         raise ServiceError("dashboard-hook-rehearsal-tools-required")
     values_file = ROOT / "helm/environments" / environment / "services" / (component["name"] + ".yaml")
     overrides = yaml.safe_load(values_file.read_text(encoding="utf-8")) or {}
@@ -349,22 +374,54 @@ def dashboard_hook_rehearsal(component, environment, record, chart, registry, ru
     return result
 
 
+IMAGE_PATH = "eoan/farmer-registry/"
+LEGACY_IMAGE_PATH = "openg2p/farmer-registry/"
+# The build version of the Farmer develop build that runs this coordinator (ci/deploy/image_names.py tag): every
+# service image of that build is tagged with it, as the registry images are (oan-helm docs/release/naming-standard.md).
+BUILD_TAG = re.compile(r"\d+\.\d+\.\d+-[a-z0-9]+(?:-[a-z0-9]+)*\.[1-9]\d*")
+
+
 def image_repository(component, suffix):
-    return component.get("imageRepository", "openg2p/farmer-registry/" + component["name"] + suffix)
+    """eoan/farmer-registry/<image>: the service images carry no platform suffix (they are not built on it)."""
+    return component.get("imageRepository", IMAGE_PATH + component["name"] + suffix)
+
+
+def legacy_image_repository(component, suffix):
+    """The repository before the eoan names, which records of earlier builds still name."""
+    return image_repository(component, suffix).replace(IMAGE_PATH, LEGACY_IMAGE_PATH, 1)
+
+
+def build_tag(commit, overlays=None):
+    """IMAGE_TAG of this build when the pipeline sets one, else the older <commit12>[-<overlay hash12>] tag.
+
+    ECR repositories under eoan/ have immutable tags: a commit tag would be pushed again by the next build of the same
+    service commit and refused, while a build version is new on every build.
+    """
+    tag = os.environ.get("IMAGE_TAG", "")
+    if BUILD_TAG.fullmatch(tag):
+        return tag
+    tag = commit[:12]
+    if overlays:
+        tag += "-" + hashlib.sha256(json.dumps(overlays, sort_keys=True).encode()).hexdigest()[:12]
+    return tag
 
 
 def ensure_image_repository(name, template, run):
-    """Create ECR repository `name` with the tag mutability, scan-on-push and encryption of `template`."""
-    settings = json.loads(run(["aws", "ecr", "describe-repositories", "--region", "ap-south-1",
-                               "--repository-names", template, "--output", "json"]))["repositories"][0]
-    encryption = settings.get("encryptionConfiguration") or {"encryptionType": "AES256"}
-    args = ["aws", "ecr", "create-repository", "--region", "ap-south-1", "--repository-name", name,
-            "--image-tag-mutability", settings.get("imageTagMutability", "MUTABLE"),
-            "--image-scanning-configuration",
-            "scanOnPush=" + str(bool(settings.get("imageScanningConfiguration", {}).get("scanOnPush"))).lower(),
-            "--encryption-configuration", "encryptionType=" + encryption["encryptionType"]
-            + (",kmsKey=" + encryption["kmsKey"] if encryption.get("kmsKey") else "")]
-    run(args)
+    """Create a missing ECR repository with the naming standard's settings (ci/build/ecr_repository.py: immutable tags,
+    scan on push, AES256, the owner and naming tags) and the lifecycle policy of `template`, the image's repository
+    before the eoan names. Nothing else is read from `template`: an old MUTABLE repository makes no MUTABLE eoan one."""
+    sys.path.insert(0, str(ROOT / "ci/build"))
+    import ecr_repository
+
+    def call(args):
+        try:
+            return run(["aws", "ecr"] + args[:1] + ["--region", ecr_repository.REGION] + args[1:])
+        except ServiceError as error:
+            if str(error) in ("image-repository-missing", "lifecycle-policy-missing"):
+                raise ecr_repository.Missing() from None
+            raise
+
+    return ecr_repository.ensure(name, template, call)
 
 
 def build_image(component, role, spec, commit, source, registry, run, tag=None):
@@ -402,7 +459,7 @@ def build_image(component, role, spec, commit, source, registry, run, tag=None):
         if str(error) != "image-repository-missing" or not suffix:
             raise
         # A role image (-api, -ui) whose repository was never made: create it like the component's own one, push again.
-        ensure_image_repository(image_repository(component, suffix), image_repository(component, ""), run)
+        ensure_image_repository(image_repository(component, suffix), legacy_image_repository(component, ""), run)
         pushed = run(["docker", "push", image])
     matches = re.findall(r"digest: (sha256:[0-9a-f]{64})\b", pushed)
     if len(set(matches)) != 1:
@@ -443,9 +500,7 @@ def _build_resolved(component, environment, source, registry, commit, run):
                 run(["bash", str(ROOT / "ci/dashboard/verify-source.sh"), str(source)])
             overlays = {role: chart_hash(relative_file(ROOT, spec["overlay"]))
                         for role, spec in image_specs(component).items() if spec.get("overlay")}
-            tag = commit[:12]
-            if overlays:
-                tag += "-" + hashlib.sha256(json.dumps(overlays, sort_keys=True).encode()).hexdigest()[:12]
+            tag = build_tag(commit, overlays)
             for role, spec in image_specs(component).items():
                 built[role] = build_image(component, role, spec, commit, source, registry, run, tag)
             if environment == "dev" and component.get("chartSource") == "registry":
@@ -478,6 +533,25 @@ def pod(doc):
     if doc.get("kind") == "CronJob":
         spec = spec.get("jobTemplate", {}).get("spec", {})
     return spec.get("template", {}).get("spec", {})
+
+
+# Release values renamed from coss* to oan* (#234). The chart overlays and this module read the oan* names
+# only (chart_signing.py: .Values.oanSigning, .Values.oanQueue; release_handoff.py: oanRoutingTarget and
+# oanCutover), so a release installed before the rename rendered nothing for them, or failed to render
+# (.Values.oanSigning.enabled on a nil map). The upgrade saves the values under the new names.
+RENAMED_VALUES = {"cossSigning": "oanSigning", "cossQueue": "oanQueue", "cossRoutingTarget": "oanRoutingTarget",
+                  "cossCutover": "oanCutover"}
+
+
+def current_value_names(values):
+    """The release's saved values with the pre-rename keys under their oan* names; a key already saved
+    under the new name wins, and the old one is dropped either way."""
+    values = dict(values or {})
+    for old, new in RENAMED_VALUES.items():
+        if old in values:
+            value = values.pop(old)
+            values.setdefault(new, value)
+    return values
 
 
 def guard(before, after, namespace, image, release=None):
@@ -702,12 +776,14 @@ def artifact(component, record, registry):
     if not SHA.fullmatch(record.get("commit", "")) or not DIGEST.fullmatch(record.get("digest", "")):
         raise ServiceError("invalid-promotion-artifact")
     suffix = "-" + next(iter(image_specs(component))) if component.get("images") else ""
-    if record.get("repository") != registry + "/" + image_repository(component, suffix):
+    if record.get("repository") not in (registry + "/" + image_repository(component, suffix),
+                                        registry + "/" + legacy_image_repository(component, suffix)):
         raise ServiceError("promotion-repository-mismatch")
     expected_tag = record["commit"][:12]
     if record.get("overlayHashes"):
         expected_tag += "-" + hashlib.sha256(json.dumps(record["overlayHashes"], sort_keys=True).encode()).hexdigest()[:12]
-    if record.get("tag") != expected_tag or not re.fullmatch(r"[0-9a-f]{64}", record.get("chartHash", "")):
+    if (record.get("tag") != expected_tag and not BUILD_TAG.fullmatch(record.get("tag", ""))) \
+            or not re.fullmatch(r"[0-9a-f]{64}", record.get("chartHash", "")):
         raise ServiceError("invalid-promotion-artifact")
     return record["repository"] + ":" + record["tag"] + "@" + record["digest"]
 
@@ -721,7 +797,9 @@ def image_artifacts(component, record, registry):
     images = {}
     for role in component["images"]:
         image = record["images"][role]
-        if image.get("repository") != registry + "/" + image_repository(component, "-" + role) or image.get("tag") != record["tag"] or not DIGEST.fullmatch(image.get("digest", "")):
+        if image.get("repository") not in (registry + "/" + image_repository(component, "-" + role),
+                                           registry + "/" + legacy_image_repository(component, "-" + role)) \
+                or image.get("tag") != record["tag"] or not DIGEST.fullmatch(image.get("digest", "")):
             raise ServiceError("invalid-component-image-digest")
         images[role] = image["repository"] + ":" + image["tag"] + "@" + image["digest"]
     if next(iter(images.values())) != primary:
@@ -793,7 +871,7 @@ def deploy(component, environment, record, source, registry, run=command):
             if status.get("name") != release or status.get("namespace") != namespace or status.get("info", {}).get("status") != "deployed":
                 raise ServiceError("existing-deployed-release-required")
             before = docs(run(["helm", "get", "manifest", release, *args]))
-            values = yaml.safe_load(run(["helm", "get", "values", release, *args, "-o", "yaml"])) or {}
+            values = current_value_names(yaml.safe_load(run(["helm", "get", "values", release, *args, "-o", "yaml"])))
         else:
             if component.get("allowInstall") is not True:
                 raise SkipService("no-existing-release")
@@ -801,8 +879,7 @@ def deploy(component, environment, record, source, registry, run=command):
         # A connector that is already serving (cutover phase active) takes image-only rollouts: guard()
         # refuses any other change, the upgrade is atomic, and a failed smoke check rolls it back.
         # Chart, values or hook changes still go through the accepted cutover (connector_cutover.py).
-        # A release installed before the rename still carries cossCutover in its saved values.
-        cutover = values.get("oanCutover") or values.get("cossCutover") or {}
+        cutover = values.get("oanCutover") or {}
         active = component.get("kind") == "connector" and cutover.get("phase") == "active"
         if active and not status:
             raise ServiceError("active-connector-release-missing")

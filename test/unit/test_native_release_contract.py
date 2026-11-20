@@ -1,4 +1,4 @@
-"""Fence obsolete native-candidate mutation before tools, preserving legacy paths."""
+"""The reviewed native release contract, and scripts/bump-rp-version.sh failing before it writes or reaches the network."""
 import importlib.util
 import json
 import os
@@ -42,22 +42,32 @@ def test_release_contract_rejects_unreviewed_pin_drift(source, kind):
         pins.check(source)
 
 
+def test_the_reviewed_files_pass(source):
+    assert pins.check(source)["platform"] == "1.2.2-rc.625"
+
+
 @pytest.mark.skipif(not BASH, reason="Bash required")
-@pytest.mark.parametrize("args", [[], ["-n"], ["--check", "1.2.2-rc.625"], ["1.2.2-rc.625"]])
-def test_native_candidate_fenced_before_network_tools_or_mutation(source, args):
+@pytest.mark.parametrize("args, message", [([], "give the platform version"), (["-n"], "give the platform version"),
+                                           (["--check", "1.2.2-rc.681"], "run from the repository root"),
+                                           (["1.2.2-rc.681"], "run from the repository root")])
+def test_bump_fails_before_tools_network_or_writes(source, args, message):
+    # The fixture has the Dockerfiles but no chart directory, and PATH is empty: no curl, helm or python3 could run.
     before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()}
     env = dict(os.environ, PATH="")
-    result = subprocess.run([BASH, (ROOT / "scripts/bump-rp-version.sh").as_posix(), *args], cwd=source, env=env, text=True, capture_output=True, check=False)
-    assert result.returncode != 0 and "Native OAN candidate" in result.stderr
+    result = subprocess.run([BASH, (ROOT / "scripts/bump-rp-version.sh").as_posix(), *args], cwd=source, env=env,
+                            text=True, capture_output=True, check=False)
+    assert result.returncode != 0 and message in result.stderr
     assert before == {p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()}
 
 
 @pytest.mark.skipif(not BASH, reason="Bash required")
-def test_help_is_useful_without_tools_and_nonnative_fixture_keeps_legacy_path(tmp_path):
+def test_help_is_useful_without_tools_and_tools_are_checked_first(tmp_path):
     script = (ROOT / "scripts/bump-rp-version.sh").as_posix()
     env = dict(os.environ, PATH="")
     help_result = subprocess.run([BASH, script, "--help"], cwd=tmp_path, env=env, text=True, capture_output=True, check=False)
-    assert help_result.returncode == 0 and "Native OAN candidates reject" in help_result.stdout
-    legacy = subprocess.run([BASH, script, "-n"], cwd=tmp_path, env=env, text=True, capture_output=True, check=False)
-    assert legacy.returncode != 0 and "curl is required" in legacy.stderr
-    assert "Native OAN candidate:" not in legacy.stderr
+    assert help_result.returncode == 0 and "BASE_IMAGE_VERSION" in help_result.stdout and "no automatic" in help_result.stdout
+    (tmp_path / "docker/staff-ui").mkdir(parents=True)
+    (tmp_path / "docker/staff-ui/Dockerfile").write_text("FROM node:20-alpine\n")
+    (tmp_path / "helm/openg2p-farmer-registry").mkdir(parents=True)
+    missing = subprocess.run([BASH, script, "-n", "1.2.2-rc.681"], cwd=tmp_path, env=env, text=True, capture_output=True, check=False)
+    assert missing.returncode != 0 and "curl, python3 and helm are required" in missing.stderr

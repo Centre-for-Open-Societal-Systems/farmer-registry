@@ -44,6 +44,15 @@ def call() {
                     stash name: 'staging-deployment', includes: 'helm/**,ci/**,scripts/**,integrations/**,docker/**,farmer-extension/**,test/runtime/**', excludes: 'helm/**/charts/**,**/__pycache__/**', useDefaultExcludes: false
                 }
             }
+            stage('Checks green') {
+                // Nothing reaches staging unless every GitHub check of this commit passed (ci/deploy/require-green-checks.sh).
+                when { expression { env.EFFECTIVE_ACTION != 'validate-only' } }
+                steps {
+                    withCredentials([usernamePassword(credentialsId: 'oan-helm-fork-token', usernameVariable: 'GH_USER', passwordVariable: 'GH_TOKEN')]) {
+                        sh 'bash ci/deploy/require-green-checks.sh Centre-for-Open-Societal-Systems/farmer-registry "$SOURCE_COMMIT"'
+                    }
+                }
+            }
             stage('Promote and deploy') {
                 when { beforeAgent true; expression { env.EFFECTIVE_ACTION == 'promote' } }
                 agent { label 'oan-ci-deploy' }
