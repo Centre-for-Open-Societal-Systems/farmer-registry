@@ -375,6 +375,11 @@ def prepare(values, before, registry, tag, migrate_identity=False, environment="
     merge(values, location_overlay(environment))
     merge(values, outgestion_overlay(environment))
     merge(values, object_store_overlay(environment))
+    # Saved values pin MINIO_ENDPOINT per workload, which wins over global.minioHost; pin the reviewed host the same way.
+    for component, (_, suffix, _) in COMPONENTS.items():
+        for name, value in object_store_env(suffix, environment).items():
+            config[component].setdefault("envVars", {})[name] = value
+            config[component].get("envVarsFrom", {}).pop(name, None)
     merge(values, registrant_auth_overlay(environment))
     merge(values, dci_signing_overlay(environment))
     merge(values, pull_secret_overlay(environment))
