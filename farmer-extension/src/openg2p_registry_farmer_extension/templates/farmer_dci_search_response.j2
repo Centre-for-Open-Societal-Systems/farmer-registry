@@ -474,6 +474,22 @@
   "region_id": {{ geo.region_id | tojson }}, "region_name": {{ geo.region_name | tojson }},
   "zone_id": {{ geo.zone_id | tojson }}, "zone_name": {{ geo.zone_name | tojson }},
   "woreda_id": {{ geo.woreda_id | tojson }}, "woreda_name": {{ geo.woreda_name | tojson }},
-  "kebele_id": {{ geo.kebele_id | tojson }}, "kebele_name": {{ geo.kebele_name | tojson }}
+  "kebele_id": {{ geo.kebele_id | tojson }}, "kebele_name": {{ geo.kebele_name | tojson }},
+  "lands": [
+    {%- for land in (farmer.get('land') or []) %}
+    {
+      "land_uuid": {{ land.get('internal_record_id') | tojson }},
+      "land_id": {{ land.get('land_id') | tojson }},
+      "land_kebele": {{ land.get('land_kebele') | tojson }},
+      "ownership_type": {{ land.get('land_ownership_type') | tojson }},
+      "land_size": {{ land.get('land_size') | tojson }},
+      "unit": {{ land.get('unit') | tojson }},
+      "area_in_hectare": {{ land.get('area_in_hectare') | tojson }},
+      "soil_fertility": {{ land.get('soil_fertility') | tojson }},
+      "current_land_use": {{ land.get('current_land_use') | tojson }},
+      "farming_type": {{ land.get('farming_type') | tojson }}
+    }{% if not loop.last %},{% endif %}
+    {%- endfor %}
+  ]
 }
 }

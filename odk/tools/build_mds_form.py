@@ -360,7 +360,7 @@ def registry_rules() -> dict[str, dict[str, str]]:
              "For Tigrinya write them in Ge'ez (Ethiopic) letters.")}
     moved = "Select again: this is not in the place selected above."
     for level, parent in (("zone", "region"), ("woreda", "zone"), ("kebele", "woreda")):
-        rules[level] = {"constraint": f"count(instance('{level}')/root/item[name=current()][parent=${{{parent}}}]) > 0",
+        rules[level] = {"constraint": f"count(instance('{level}')/root/item[name=${{{level}}}][parent=${{{parent}}}]) > 0",
                         EN: moved}
     # 238 woredas have no kebele in Master Data's geography.
     rules["kebele"]["required"] = "count(instance('kebele')/root/item[parent=${woreda}]) > 0"
@@ -368,7 +368,7 @@ def registry_rules() -> dict[str, dict[str, str]]:
         "constraint": r"regex(., '^[A-Z]{3}-\d{4}-\d{4}-\d{4}-\d{4}-\d{6}$')",
         EN: ("Enter the Reference ID as 3 uppercase letters, four groups of 4 digits and a final group of 6 digits, "
              "separated by hyphens, for example ABC-1234-5678-9012-3456-789012.")}
-    rules["land_id"] = {"constraint": "count(../../land_info_repeat[land_id = current()]) = 1",
+    rules["land_id"] = {"constraint": "count(../../land_info_repeat[land_id = current()/.]) = 1",
                         EN: "Each plot needs a different Land ID."}
     return rules
 

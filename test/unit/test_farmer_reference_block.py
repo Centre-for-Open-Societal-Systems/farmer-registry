@@ -168,6 +168,36 @@ def test_notice_event_changes_with_a_phone_only_approval():
                       "farmer_id": "FR-000000000123", "fayda_fan_id": "1234567890123456"}
 
 
+def test_farmer_lands_in_reference_block():
+    land = {
+        "internal_record_id": "land-1",
+        "land_id": "PLOT-1",
+        "land_kebele": "Kebele 01",
+        "land_ownership_type": "OWNER",
+        "land_size": 2.5,
+        "unit": "HECTARE",
+        "area_in_hectare": 2.5,
+        "soil_fertility": "FERTILE",
+        "current_land_use": "CROP",
+        "farming_type": "MIXED",
+    }
+    block = _block({**FARMER, "land": [land]})
+    assert block["lands"] == [{
+        "land_uuid": "land-1",
+        "land_id": "PLOT-1",
+        "land_kebele": "Kebele 01",
+        "ownership_type": "OWNER",
+        "land_size": 2.5,
+        "unit": "HECTARE",
+        "area_in_hectare": 2.5,
+        "soil_fertility": "FERTILE",
+        "current_land_use": "CROP",
+        "farming_type": "MIXED",
+    }]
+    no_lands = _block(FARMER)
+    assert no_lands["lands"] == []
+
+
 def test_scope_releases_every_field_the_block_reads():
     scope = json.loads(CATALOGUE.read_text(encoding="utf-8"))["scopes"][0]
     assert scope["name"] == "farmer_reference"
@@ -180,4 +210,6 @@ def test_scope_releases_every_field_the_block_reads():
     assert {f"Farmer.{name}" for name in read} <= fields
     phone_read = set(re.findall(r"item\.get\('([a-z0-9_]+)'\)", block))
     assert {f"FarmerPhone.{name}" for name in phone_read} <= fields
+    land_read = set(re.findall(r"land\.get\('([a-z0-9_]+)'\)", block))
+    assert {f"Land.{name}" for name in land_read} <= fields
     assert not any("authentication" in f or "documents" in f or f.endswith("_by") for f in fields)
