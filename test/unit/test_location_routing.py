@@ -85,6 +85,18 @@ def test_dev_object_store_host_is_garage_and_csp_allows_it(release):
     assert deployment.object_store_overlay("staging-legacy") == {}
 
 
+def test_saved_per_workload_endpoint_is_replaced_by_the_garage_host(release):
+    host = "garage.development.oanstaging.com"
+    values = {"global": {"registryHostname": "farmer-registry.development.oanstaging.com"},
+              "registry": {"staffApi": {"envVars": {"REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT": "minio-farmer.development.oanstaging.com"}},
+                           "celeryWorker": {"envVarsFrom": {"REGISTRY_CELERY_WORKERS_MINIO_ENDPOINT": None}}}}
+    prepared = deployment.prepare(values, release[0], ECR, TAG)
+    assert prepared["registry"]["staffApi"]["envVars"]["REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT"] == host
+    assert prepared["registry"]["partnerApi"]["envVars"]["REGISTRY_PARTNER_API_MINIO_ENDPOINT"] == host
+    assert prepared["registry"]["celeryWorker"]["envVars"]["REGISTRY_CELERY_WORKERS_MINIO_ENDPOINT"] == host
+    assert "REGISTRY_CELERY_WORKERS_MINIO_ENDPOINT" not in prepared["registry"]["celeryWorker"]["envVarsFrom"]
+
+
 def test_guard_allows_only_the_reviewed_object_store_host(release):
     before, after = release
     name = "REGISTRY_STAFF_PORTAL_API_MINIO_ENDPOINT"
