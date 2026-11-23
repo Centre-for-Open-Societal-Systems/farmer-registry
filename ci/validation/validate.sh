@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
-python -m pytest -q -p no:cacheprovider test/unit
+# Coverage is reported, not enforced: no minimum until one is agreed (ci/README.md). Jenkins mounts the
+# repository read-only, so the data file goes to the temporary directory.
+COVERAGE_FILE="${TMPDIR:-/tmp}/farmer-registry.coverage" python -m pytest -q -p no:cacheprovider test/unit \
+  --cov=farmer-extension/src --cov-report=term:skip-covered
 bash -n ci/deploy/deploy-dev.sh
 bash -n ci/deploy/deploy-rc.sh
 bash -n ci/deploy/fresh-install-dev.sh ci/deploy/fresh-install-staging.sh ci/deploy/oan-renderer.sh

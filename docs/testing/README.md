@@ -12,6 +12,7 @@ bash ci/validation/validate.sh
 The Bash entrypoint also checks deployment shell behavior and the ODK transform.
 It runs unchanged in the Jenkins validation image without cloud credentials.
 Helm-specific tests skip when Helm is unavailable.
+Where each check runs in CI, and the coverage report, are described in [ci/README.md](../../ci/README.md).
 
 The 2026-10-16 staging implementation was verified locally on Windows. In this
 restricted session Python's mode-0700 temporary directories were unreadable.
