@@ -12,6 +12,9 @@ Start with [the current refactor candidate](refactor-candidate.md).
 
 ## Operations
 
+- [Deployment: environments, gates and rollback](deployment.md)
+- [Release: versions and promotion](release.md)
+- [Changelog](../CHANGELOG.md)
 - [Dev and staging delivery](operations/README.md)
 - [Merge through develop and staging; farmer counts](operations/merge-develop-staging.md)
 - [Staging RC upgrade and signed ODK cutover](operations/staging-upgrade.md)
