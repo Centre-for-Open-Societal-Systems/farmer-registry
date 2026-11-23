@@ -9,10 +9,13 @@ label of the published image, read anonymously from the Docker Hub registry API 
 
     python3 ci/build/check_rp_commit.py <rpVersion> <rpCommit>
 
+Docker Hub now and then refuses a request, so a network or HTTP error is retried, ATTEMPTS times in all.
+
 Standard library only. Exit codes: 0 match, 1 mismatch or the label cannot be read.
 """
 import json
 import sys
+import time
 import urllib.parse
 import urllib.request
 
@@ -20,6 +23,8 @@ REPOSITORY = "openg2p/openg2p-registry-staff-ui"
 REGISTRY = "https://registry-1.docker.io/v2/"
 AUTH = "https://auth.docker.io/token"
 LABEL = "org.opencontainers.image.revision"
+ATTEMPTS = 3
+WAIT_SECONDS = 10
 MANIFESTS = ", ".join((
     "application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json",
     "application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"))
@@ -54,16 +59,26 @@ def revision(version, get=fetch, token=None):
     return ((config.get("config") or {}).get("Labels") or {}).get(LABEL)
 
 
-def main(argv, get=fetch, token=None):
+def main(argv, get=fetch, token=None, sleep=time.sleep):
     if len(argv) != 3:
         print("usage: check_rp_commit.py <rpVersion> <rpCommit>", file=sys.stderr)
         return 1
     version, commit = argv[1], argv[2]
-    try:
-        found = revision(version, get, token)
-    except (OSError, ValueError, KeyError) as error:
-        print("FAIL: could not read %s of %s:%s: %s" % (LABEL, REPOSITORY, version, error), file=sys.stderr)
-        return 1
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            found = revision(version, get, token)
+            break
+        except OSError as error:
+            # urllib's HTTP and connection errors are OSErrors. A malformed answer is not retried.
+            if attempt == ATTEMPTS:
+                print("FAIL: could not read %s of %s:%s after %d attempts: %s"
+                      % (LABEL, REPOSITORY, version, ATTEMPTS, error), file=sys.stderr)
+                return 1
+            print("Docker Hub refused attempt %d of %d (%s); retrying" % (attempt, ATTEMPTS, error), file=sys.stderr)
+            sleep(WAIT_SECONDS * attempt)
+        except (ValueError, KeyError) as error:
+            print("FAIL: could not read %s of %s:%s: %s" % (LABEL, REPOSITORY, version, error), file=sys.stderr)
+            return 1
     if found != commit:
         print("FAIL: docker/staff-ui/Dockerfile BASE_IMAGE_VERSION is %s, but %s:%s was built from %s. "
               "Set both with scripts/bump-rp-version.sh." % (commit, REPOSITORY, version, found or "<no revision label>"),
