@@ -7,10 +7,9 @@ registry:
   staffUi:
     envVars:
       MASTERDATA_BACKEND_API_URL: http://commons-services-master-data-api.commons.svc.cluster.local
-      # The farmer location map: OpenStreetMap tiles (img) and the pin's
-      # elevation lookup (connect). CSP_SRC_IMG repeats the release's MinIO
-      # source because a per-directive value replaces the whole list.
-      CSP_SRC_IMG: 'self blob: data: https://minio-farmer.qa.oanstaging.com https://tile.openstreetmap.org'
+      # The farmer location map's elevation lookup (connect). CSP_SRC_IMG (object-store host and OpenStreetMap
+      # tiles) is not repeated here: it comes from oan-helm's environments/staging/values/farmer.yaml, so the
+      # object-store host is set in one place.
       CSP_SRC_CONNECT: 'self https://api.open-meteo.com'
   staffApi:
     envVars:
