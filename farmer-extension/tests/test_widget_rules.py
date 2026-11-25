@@ -267,3 +267,41 @@ def test_a_yes_no_radio_keeps_no_and_takes_only_yes_or_no():
     assert widget_rules.check_record({"other_land_owner": True}, rules, words) == []
     assert widget_rules.check_record({"other_land_owner": "perhaps"}, rules, words) == [
         'Another land owner in the household: "perhaps" is not one of the choices. Pick one from the list.']
+
+
+# G2R-595: a Fayda ID typed or pasted with whitespace around it. Synthetic values only.
+FAYDA = {"panels": [{"panels": [{"widgets": [
+    {"widget": "text", "widget-id": "foundational_id", "widget-label": "fayda_fin",
+     "widget-data-path": f"{FARMER}.foundational_id",
+     "widget-data-validation": {"pattern": "^([0-9]{12}|[0-9]{16})$", "patternMessage": "fayda_fin_format"}},
+    {"widget": "text", "widget-id": "middle_name", "widget-data-path": f"{FARMER}.middle_name"},
+]}]}]}
+FAYDA_RULES = widget_rules.collect_rules([(FARMER, FAYDA)])[FARMER]
+FAYDA_WORDS = {"fayda_fin_format": "Enter a 12-digit FIN or a 16-digit FAN, using digits only."}
+FAYDA_REFUSED = ["Fayda ID: Enter a 12-digit FIN or a 16-digit FAN, using digits only."]
+FAYDA_WORDS["fayda_fin"] = "Fayda ID"
+
+
+def _checked(record):
+    widget_rules.normalize_record(record, FAYDA_RULES)
+    return widget_rules.check_record(record, FAYDA_RULES, FAYDA_WORDS)
+
+
+def test_a_fin_or_fan_with_whitespace_around_it_is_trimmed_and_accepted():
+    for typed, kept in (("  123456789012", "123456789012"), ("123456789012 \t", "123456789012"),
+                        ("\n0123456789012345\r\n", "0123456789012345"), (" 012345678901 ", "012345678901")):
+        record = {"foundational_id": typed}
+        assert _checked(record) == [], typed
+        assert record["foundational_id"] == kept, typed
+
+
+def test_a_fayda_id_with_whitespace_inside_or_bad_digits_or_length_is_still_refused():
+    for typed in ("1234 56789012", " 1234 56789012 ", "12345678901", "1234567890123", "12345678901a",
+                  "12345678901234567"):
+        assert _checked({"foundational_id": typed}) == FAYDA_REFUSED, typed
+
+
+def test_only_the_fayda_id_is_trimmed():
+    record = {"middle_name": "  Abebe "}
+    widget_rules.normalize_record(record, FAYDA_RULES)
+    assert record["middle_name"] == "  Abebe "

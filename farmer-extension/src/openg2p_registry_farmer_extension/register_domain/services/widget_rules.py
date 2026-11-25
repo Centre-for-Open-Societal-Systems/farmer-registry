@@ -33,6 +33,9 @@ _logger = logging.getLogger("oan-widget-rules")
 
 RULE_KEYS = ("pattern", "minLength", "maxLength", "min", "max")
 
+# The farmer's Fayda ID (FIN or FAN); the staff UI trims it the same way (G2R-595).
+FAYDA_ID_FIELD = "foundational_id"
+
 # register id -> field -> rules
 Rules = dict[str, dict[str, dict]]
 
@@ -326,9 +329,16 @@ def normalize_record(record: dict, field_rules: dict[str, dict]) -> None:
 
     Only a value that is a valid number of the widget's kind is converted; any
     other value is left for check_record to report.
+
+    The Fayda ID (FIN or FAN) loses only the whitespace around it, so the
+    pattern, the duplicate check and the saved value see the digits staff meant;
+    whitespace inside it, and every other character, is left for check_record.
     """
     for field, rule in field_rules.items():
         value = record.get(field)
+        if field == FAYDA_ID_FIELD and isinstance(value, str):
+            record[field] = value.strip()
+            continue
         if rule.get("type") not in ("integer", "number") or not isinstance(value, str) or not value.strip():
             continue
         number = _number(value.strip())
