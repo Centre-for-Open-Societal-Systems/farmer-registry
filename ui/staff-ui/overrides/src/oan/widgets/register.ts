@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { FileInputWidget, HeaderSectionWidget, widgetRegistry } from '@openg2p/registry-widgets';
 import { DOCUMENT_SLOT_VARIANT, DOCUMENTS_VARIANT, DocumentsWidget } from './DocumentsWidget';
 import { EnumeratorPositionWidget } from './EnumeratorPositionWidget';
+import { FAYDA_ID_WIDGET, FaydaIdWidget } from './FaydaIdWidget';
 import { FileCellWidget } from './FileCellWidget';
 import { FARMER_PHOTO_VARIANT, FarmerPhotoWidget } from './FarmerPhotoWidget';
 import { GeoPointWidget } from './GeoPointWidget';
@@ -48,6 +49,9 @@ widgetRegistry.register({ widget: 'oan-file-cell', component: FileCellWidget as 
 widgetRegistry.register({ widget: 'oan-geo-point', component: GeoPointWidget as never });
 widgetRegistry.register({ widget: 'oan-enumerator-position', component: EnumeratorPositionWidget as never });
 widgetRegistry.register({ widget: 'oan-local-name', component: LocalNameWidget as never });
+// The Fayda ID field: the library's text input, with the whitespace around a
+// typed or pasted ID taken off before it is validated (G2R-595).
+widgetRegistry.register({ widget: FAYDA_ID_WIDGET, component: FaydaIdWidget });
 
 // Record every registered widget's config while it is on screen, for the
 // intake Next guard (src/oan/intake/). Last, so it wraps OAN's widgets too.
