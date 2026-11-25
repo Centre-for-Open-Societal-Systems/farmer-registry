@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "bash ./scripts/materialize-staff-ui.sh && bash ./scripts/ensure-app-deps.sh",
     "reset": "bash ./scripts/reset-app.sh",
+    "test:client": "bash ./scripts/materialize-staff-ui.sh && bash ./scripts/ensure-app-deps.sh && bash ./scripts/test-client.sh",
     "dev": "bash ./scripts/materialize-staff-ui.sh && bash ./scripts/ensure-app-deps.sh && npm run dev --prefix .app",
     "build": "bash ./scripts/materialize-staff-ui.sh && bash ./scripts/ensure-app-deps.sh && npm run build --prefix .app",
     "start": "bash ./scripts/materialize-staff-ui.sh && bash ./scripts/ensure-app-deps.sh && npm run start --prefix .app"

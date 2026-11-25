@@ -354,7 +354,7 @@ def test_embedded_api_deploy_uses_approved_chart_filters_jobs_and_keeps_registry
             selected = yaml.safe_load(Path(args[args.index("-f") + 1]).read_text())
             assert selected["dashboardApi"]["enabled"] is True
             assert selected["dashboardApi"]["env"] == DEV_API_AUTH
-            assert selected["dashboardApi"]["image"]["repository"] == ECR + "/openg2p/farmer-registry/dashboard-api"
+            assert selected["dashboardApi"]["image"]["repository"] == ECR + "/eoan/farmer-registry/dashboard-api"
             if args[1] == "upgrade":
                 state["upgraded"] = True
             return yaml.safe_dump_all(after)
@@ -994,24 +994,74 @@ def test_an_unlisted_docker_subcommand_keeps_the_general_reason(monkeypatch):
         coordinator.command(["docker", "login", "registry"])
 
 
-def test_a_missing_role_repository_is_created_like_the_component_repository():
+def test_a_missing_role_repository_gets_the_standard_settings_not_the_old_ones():
+    # The old repository is MUTABLE and KMS-encrypted; the eoan one is still IMMUTABLE, AES256, scanned and tagged.
     calls = []
     def run(args, **kwargs):
         calls.append(args)
-        if args[:2] == ["aws", "ecr"] and args[2] == "describe-repositories":
-            return json.dumps({"repositories": [{"imageTagMutability": "IMMUTABLE",
-                                                 "imageScanningConfiguration": {"scanOnPush": True},
-                                                 "encryptionConfiguration": {"encryptionType": "AES256"}}]})
+        if args[2] == "describe-repositories" and args[args.index("--repository-names") + 1].startswith("eoan/"):
+            raise coordinator.ServiceError("image-repository-missing")
+        if args[2] == "describe-repositories":
+            return json.dumps({"repositories": [{"imageTagMutability": "MUTABLE",
+                                                 "encryptionConfiguration": {"encryptionType": "KMS", "kmsKey": "k"}}]})
+        if args[2] == "get-lifecycle-policy":
+            return json.dumps({"lifecyclePolicyText": '{"rules":[]}'})
         return ""
-    coordinator.ensure_image_repository("openg2p/farmer-registry/registry-connector-api",
-                                        "openg2p/farmer-registry/registry-connector", run)
-    assert calls[0][calls[0].index("--repository-names") + 1] == "openg2p/farmer-registry/registry-connector"
-    create = calls[1]
-    assert create[:3] == ["aws", "ecr", "create-repository"]
-    assert create[create.index("--repository-name") + 1] == "openg2p/farmer-registry/registry-connector-api"
+    assert coordinator.ensure_image_repository("eoan/farmer-registry/registry-connector-api",
+                                               "openg2p/farmer-registry/registry-connector", run) == "created"
+    create = next(c for c in calls if c[2] == "create-repository")
+    assert create[:2] == ["aws", "ecr"] and create[create.index("--region") + 1] == "ap-south-1"
+    assert create[create.index("--repository-name") + 1] == "eoan/farmer-registry/registry-connector-api"
     assert create[create.index("--image-tag-mutability") + 1] == "IMMUTABLE"
     assert create[create.index("--image-scanning-configuration") + 1] == "scanOnPush=true"
     assert create[create.index("--encryption-configuration") + 1] == "encryptionType=AES256"
+    assert create[create.index("--tags") + 1:] == ["Key=owner,Value=farmer-registry", "Key=naming,Value=eoan-standard"]
+    put = calls[-1]
+    assert put[2] == "put-lifecycle-policy" and put[put.index("--repository-name") + 1].startswith("eoan/")
+    # Only the lifecycle policy is read from the old repository.
+    assert not any(c[2] == "describe-repositories" and "openg2p/farmer-registry/registry-connector" in c for c in calls)
+
+
+def test_a_missing_role_repository_without_an_old_policy_gets_none():
+    def run(args, **kwargs):
+        if args[2] == "describe-repositories":
+            raise coordinator.ServiceError("image-repository-missing")
+        if args[2] == "get-lifecycle-policy":
+            raise coordinator.ServiceError("lifecycle-policy-missing")
+        if args[2] == "put-lifecycle-policy":
+            raise AssertionError("no policy to copy")
+        return ""
+    assert coordinator.ensure_image_repository("eoan/farmer-registry/x-api", "openg2p/farmer-registry/x", run) == "created"
+
+
+def test_an_ecr_access_failure_is_not_taken_for_a_missing_repository():
+    def run(args, **kwargs):
+        raise coordinator.ServiceError("tool-authentication-or-authorization-failed")
+    with pytest.raises(coordinator.ServiceError, match="^tool-authentication-or-authorization-failed$"):
+        coordinator.ensure_image_repository("eoan/farmer-registry/x-api", "openg2p/farmer-registry/x", run)
+
+
+def test_a_refused_push_to_a_taken_immutable_tag_says_so(monkeypatch):
+    # Farmer develop 213: "registry-connector: failed (command-failed-docker-push)" with no diagnostics.
+    failing_run(monkeypatch, "The push refers to repository [1.dkr.ecr.ap-south-1.amazonaws.com/eoan/farmer-registry/"
+                             "registry-connector-api]\ntag invalid: The image tag '1.0.0-develop.213' already exists in the "
+                             "'eoan/farmer-registry/registry-connector-api' repository and cannot be overwritten because "
+                             "the repository is immutable.")
+    with pytest.raises(coordinator.ServiceError, match="^command-failed-docker-push$") as error:
+        coordinator.command(["docker", "push", "image"])
+    said = error.value.provenance["diagnostics"]
+    assert said[0].startswith("The tag is already taken in an immutable ECR repository")
+    assert said[1].startswith("Docker said: tag invalid: The image tag '1.0.0-develop.213' already exists")
+
+
+def test_a_docker_error_line_is_masked_and_other_output_is_not_echoed(monkeypatch):
+    failing_run(monkeypatch, "step 3/9 private build output\nERROR: failed to fetch https://user:hunter2@example.invalid/x "
+                             "token=abcdef")
+    with pytest.raises(coordinator.ServiceError) as error:
+        coordinator.command(["docker", "build", "."])
+    said = " ".join(error.value.provenance["diagnostics"])
+    assert "hunter2" not in said and "abcdef" not in said and "private build output" not in said
+    assert said.startswith("Docker said: ERROR: failed to fetch")
 
 
 @pytest.mark.parametrize("role,rehearsed", [("api", True), ("ui", False)])

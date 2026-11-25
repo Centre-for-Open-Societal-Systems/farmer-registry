@@ -56,7 +56,17 @@
         "FarmerPhone.phone_number",
         "FarmerPhone.country_code",
         "FarmerPhone.is_primary",
-        "FarmerPhone.phone_e164"
+        "FarmerPhone.phone_e164",
+        "Land.internal_record_id",
+        "Land.land_id",
+        "Land.land_kebele",
+        "Land.land_ownership_type",
+        "Land.land_size",
+        "Land.unit",
+        "Land.area_in_hectare",
+        "Land.soil_fertility",
+        "Land.current_land_use",
+        "Land.farming_type"
       ]
     }
   ]

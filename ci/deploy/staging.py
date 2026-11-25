@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ci"))
 sys.path.insert(0, str(ROOT / "ci" / "deploy"))
 from environments import configuration, validate_cluster
+import image_names
 
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
@@ -192,9 +193,14 @@ def evidence(path, source_commit, now=None, allow_first_install=False):
     if set(registry.get("images", {})) != required:
         raise ValueError("Complete tested Registry image set required")
     for component, image in registry["images"].items():
-        if (not SHA.fullmatch(image.get("sourceCommit", "")) or image.get("tag") != image["sourceCommit"][:12]
+        # Images of image_names.py, or of the names before eoan (tagged with their source commit).
+        repository = image.get("repository", "")
+        tag = image.get("tag", "")
+        if (not SHA.fullmatch(image.get("sourceCommit", ""))
+                or not (image_names.is_tag(tag) or tag == image["sourceCommit"][:12])
                 or not DIGEST.fullmatch(image.get("digest", ""))
-                or image.get("repository") != registry["registry"] + "/openg2p/farmer-registry/" + component
+                or not repository.startswith(registry["registry"] + "/")
+                or not image_names.is_repository(repository[len(registry["registry"]) + 1:], component)
                 or image.get("runtimeTested") is not True):
             raise ValueError("Unverified Registry image provenance")
         registry["images"][component] = {k: image[k] for k in ("repository", "tag", "sourceCommit", "digest", "runtimeTested")}

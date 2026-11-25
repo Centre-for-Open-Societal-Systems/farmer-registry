@@ -1,200 +1,116 @@
 #!/usr/bin/env bash
-# Bump the pinned openg2p-registry (registry-platform) version this variant
-# extends — in BOTH the Dockerfiles (ARG BASE_IMAGE_VERSION) and the Helm chart
-# dependency — atomically, so the two can never drift.
+# Move this repository to another OpenG2P registry-platform version (rpVersion) in one change.
 #
-# WHY "SAFE" LATEST
-#   A variant pins ONE version used for the Docker base images AND the chart
-#   dependency. registry-platform publishes both in lockstep per commit, but the
-#   Helm index regenerates AFTER the images are pushed, so there is a window where
-#   the newest image tag has no matching chart yet (or a chart step lagged/failed).
-#   Picking an image-only version would write a chart dependency that does not
-#   resolve. So "latest" here means the highest 0.0.0-develop.N present in BOTH
-#   the Helm index AND on Docker Hub. An explicit version is likewise verified to
-#   exist in both before anything is written.
+# As in OpenG2P, the platform version is the ARG BASE_IMAGE_VERSION default of the Dockerfiles: a Dockerfile cannot
+# read it from another file before FROM, and a plain `docker build -f docker/<role>/Dockerfile .` must work without
+# arguments. Every copy must agree (test/unit/test_base_image_pin_lockstep.py), so this script writes them together:
 #
-# Requires: bash, curl, python3, helm. Run from the repo root.
+#   docker/{staff-api,partner-api,celery,db-seed,sanity-tests}/Dockerfile   ARG BASE_IMAGE_VERSION=<rpVersion>
+#   docker/staff-ui/Dockerfile                  ARG BASE_IMAGE_VERSION=<rpCommit>, the org.opencontainers.image.revision
+#                                                label of openg2p/openg2p-registry-staff-ui:<rpVersion>
+#   helm/openg2p-farmer-registry/Chart.yaml     appVersion and the openg2p-registry dependency version
+#   helm/openg2p-farmer-registry/Chart.lock     helm dependency update
+#   ci/validation/native-release-contract.json  platformVersion (the reviewed native release contract)
+#
+# ci/deploy/oan-chart.json (the central chart archive, pinned by SHA-256) is not written: it moves in its own reviewed
+# pin change once a central chart for the new platform is published. Until then
+# test/unit/test_base_image_pin_lockstep.py names it as the one copy that differs.
+#
+# The version is always explicit: there is no automatic "latest". It must exist as an openg2p-registry chart in the
+# OpenG2P Helm index and as openg2p/openg2p-registry-staff-ui on Docker Hub. A new rpVersion means new ECR repositories
+# for the six platform images; the develop pipeline creates them (ci/build/ecr_repository.py).
+#
+#   scripts/bump-rp-version.sh <version>       write the new version
+#   scripts/bump-rp-version.sh -n <version>    check it and show what would change; write nothing
+#
+# Requires: bash, curl, python3, helm. Run from the repository root.
 set -euo pipefail
 
-# ── repo-specific: the chart dir this variant ships ───────────────────────────
-# The chart dir is the only per-repo value; everything else is derived.
 CHART_DIR="helm/openg2p-farmer-registry"
-
-REGISTRY_CHART="openg2p-registry"
 HELM_INDEX="https://openg2p.github.io/openg2p-helm/index.yaml"
-# One representative platform image; all are published together at the same tag.
-PROBE_IMAGE="openg2p/openg2p-registry-sanity-tests"
+CONTRACT="ci/validation/native-release-contract.json"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
-note() { echo "  $*"; }
 
-usage() {
-  while IFS= read -r help_line; do printf '%s\n' "$help_line"; done <<'EOF'
-Bump the pinned openg2p-registry version (Dockerfiles' ARG BASE_IMAGE_VERSION + the Helm
-chart dependency) atomically, so images and chart never drift.
-
-Usage:
-  ./scripts/bump-rp-version.sh                 Bump to the latest SAFE version.
-  ./scripts/bump-rp-version.sh <version>       Bump to a specific version.
-  ./scripts/bump-rp-version.sh -n              Show the latest SAFE version;
-  ./scripts/bump-rp-version.sh -n <version>    check a version — write NOTHING.
-  ./scripts/bump-rp-version.sh -h              This help.
-
-Native OAN candidates reject every resolving/mutating mode, including -n.
-Use the explicit native release contract and central chart profile review.
-
-Options:
-  -n, --check, --dry-run   Resolve/validate and print, but do not modify any file.
-  -h, --help               Show this help.
-
-"Latest SAFE" = the highest 0.0.0-develop.N present in BOTH the Helm index and
-Docker Hub (an image-only tag whose chart has not published yet is skipped).
-A specific <version> is accepted only if it exists in both.
-
-Examples:
-  ./scripts/bump-rp-version.sh -n              # what would 'latest' pick?
-  ./scripts/bump-rp-version.sh                 # take it
-  ./scripts/bump-rp-version.sh 0.0.0-develop.296
-EOF
-}
-
-# ── args ──────────────────────────────────────────────────────────────────────
 CHECK_ONLY=false
-VERSION_ARG=""
+VERSION=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    -h|--help)              usage; exit 0 ;;
-    -n|--check|--dry-run)   CHECK_ONLY=true; shift ;;
-    -*)                     die "unknown option '$1' (see --help)" ;;
-    *)                      [ -z "$VERSION_ARG" ] || die "unexpected extra argument '$1'"; VERSION_ARG="$1"; shift ;;
+    -h|--help)
+      # The header above, without tools: help works on an agent that has none of them.
+      n=0
+      while IFS= read -r line; do
+        n=$((n + 1)); [ "$n" -ge 2 ] || continue; [ "${line:0:1}" = "#" ] || break
+        line=${line#\#}; printf '%s\n' "${line# }"
+      done < "$0"
+      exit 0 ;;
+    -n|--check|--dry-run) CHECK_ONLY=true; shift ;;
+    -*) die "unknown option '$1' (see --help)" ;;
+    *) [ -z "$VERSION" ] || die "unexpected extra argument '$1'"; VERSION="$1"; shift ;;
   esac
 done
+[ -n "$VERSION" ] || die "give the platform version, for example: scripts/bump-rp-version.sh 1.2.2-rc.681"
+[ -f docker/staff-ui/Dockerfile ] && [ -d "$CHART_DIR" ] || die "run from the repository root"
+command -v curl >/dev/null && command -v python3 >/dev/null && command -v helm >/dev/null \
+  || die "curl, python3 and helm are required"
 
-# This legacy mutator cannot represent native Farmer parent ABI + immutable
-# central package provenance. Fence before tools, network or any file writes.
-if [[ -f ci/deploy/oan-chart.json && -f docker/celery/Dockerfile ]]; then
-  die "Native OAN candidate: legacy RP bump (including -n) is disabled. Review ci/validation/native-release-contract.json and the immutable central chart profile; no automatic RC update is supported."
-fi
-
-command -v curl    >/dev/null || die "curl is required"
-command -v python3 >/dev/null || die "python3 is required"
-command -v helm    >/dev/null || die "helm is required"
-[ -d "$CHART_DIR" ] || die "run from the repo root ($CHART_DIR not found)"
-
-# ── discover published versions ───────────────────────────────────────────────
-chart_versions() {
-  curl -fsSL "$HELM_INDEX" 2>/dev/null \
-    | grep -oE "${REGISTRY_CHART}-[0-9][^ ]*\.tgz" \
-    | sed -E "s/^${REGISTRY_CHART}-//; s/\.tgz$//" | sort -u
-}
-
-image_versions() {
-  # paginate Docker Hub tags (100/page is the max)
-  local url="https://hub.docker.com/v2/repositories/${PROBE_IMAGE}/tags?page_size=100"
-  while [ -n "$url" ] && [ "$url" != "null" ]; do
-    local page; page=$(curl -fsSL "$url" 2>/dev/null) || break
-    printf '%s' "$page" | python3 -c "import sys,json; d=json.load(sys.stdin); [print(t['name']) for t in d.get('results',[])]"
-    url=$(printf '%s' "$page" | python3 -c "import sys,json; print(json.load(sys.stdin).get('next') or '')")
-  done | sort -u
-}
-
-# highest develop version present in BOTH lists (numeric on the .N suffix)
-latest_safe() {
-  python3 - "$@" <<'PY'
-import sys
-chart=set(l.strip() for l in open(sys.argv[1]) if l.strip())
-image=set(l.strip() for l in open(sys.argv[2]) if l.strip())
-both=[v for v in chart & image if v.startswith("0.0.0-develop.")]
-if not both:
-    sys.exit("no 0.0.0-develop.N version exists in BOTH the Helm index and Docker Hub")
-both.sort(key=lambda v:int(v.rsplit(".",1)[1]))
-print(both[-1])
+INDEX=$(mktemp); trap 'rm -f "$INDEX"' EXIT
+curl -fsSL "$HELM_INDEX" -o "$INDEX" || die "could not read $HELM_INDEX"
+grep -qF "openg2p-registry-$VERSION.tgz" "$INDEX" || die "no openg2p-registry $VERSION chart in $HELM_INDEX"
+COMMIT=$(python3 - "$VERSION" <<'PY'
+import importlib.util, sys
+spec = importlib.util.spec_from_file_location("check_rp_commit", "ci/build/check_rp_commit.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+try:
+    commit = module.revision(sys.argv[1])
+except Exception as error:
+    sys.exit("openg2p/openg2p-registry-staff-ui:%s cannot be read: %s" % (sys.argv[1], error))
+if not commit:
+    sys.exit("openg2p/openg2p-registry-staff-ui:%s has no revision label" % sys.argv[1])
+print(commit)
 PY
-}
+) || die "$COMMIT"
 
-TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-echo "Resolving published openg2p-registry versions…"
-chart_versions > "$TMP/chart" || die "could not read the Helm index"
-image_versions > "$TMP/image" || die "could not read Docker Hub tags"
-[ -s "$TMP/chart" ] || die "no ${REGISTRY_CHART} versions in the Helm index"
-[ -s "$TMP/image" ] || die "no tags for ${PROBE_IMAGE} on Docker Hub"
-
-if [ -n "$VERSION_ARG" ]; then
-  VERSION="$VERSION_ARG"
-  grep -qxF "$VERSION" "$TMP/chart" || die "version '$VERSION' has no published ${REGISTRY_CHART} chart"
-  grep -qxF "$VERSION" "$TMP/image" || die "version '$VERSION' has no published ${PROBE_IMAGE} image"
-  note "requested version: $VERSION (verified in chart + images)"
-else
-  VERSION=$(latest_safe "$TMP/chart" "$TMP/image") || die "$VERSION"
-  note "latest safe develop version (in chart + images): $VERSION"
-fi
-
-# ── current pins ──────────────────────────────────────────────────────────────
-CUR_CHART=$(python3 - "$CHART_DIR/Chart.yaml" <<'PY'
-import re,sys
-s=open(sys.argv[1]).read()
-m=re.search(r'name:\s*openg2p-registry\b.*?version:\s*(\S+)', s, re.S)
-print(m.group(1) if m else "")
-PY
-)
-CUR_DOCKER=$(grep -hoE 'ARG BASE_IMAGE_VERSION=\S+' docker/*/Dockerfile | sed 's/ARG BASE_IMAGE_VERSION=//' | sort -u | tr '\n' ',' | sed 's/,$//')
-note "current: chart=$CUR_CHART  dockerfiles=$CUR_DOCKER"
-
-if [ "$CHECK_ONLY" = "true" ]; then
-  if [ "$CUR_CHART" = "$VERSION" ] && [ "$CUR_DOCKER" = "$VERSION" ]; then
-    echo "  already at $VERSION — no bump needed."
-  else
-    echo "  would bump: ${CUR_CHART} -> ${VERSION}   (run without -n to apply)"
-  fi
+CURRENT=$(python3 ci/deploy/image_names.py platform) || die "the Dockerfiles do not agree on one platform version"
+echo "rpVersion: $CURRENT -> $VERSION"
+echo "rpCommit:  $(python3 ci/deploy/image_names.py platform-commit) -> $COMMIT"
+if [ "$CHECK_ONLY" = true ]; then
+  echo "(check only: nothing written)"
   exit 0
 fi
 
-if [ "$CUR_CHART" = "$VERSION" ] && [ "$CUR_DOCKER" = "$VERSION" ]; then
-  note "already at $VERSION — nothing to do."
-  exit 0
-fi
+python3 - "$VERSION" "$COMMIT" "$CHART_DIR/Chart.yaml" "$CONTRACT" <<'PY'
+import json, re, sys
+version, commit, chart, contract = sys.argv[1:]
 
-# ── rewrite (atomic: same value to every Dockerfile + the chart dep) ──────────
-for f in docker/*/Dockerfile; do
-  grep -q 'ARG BASE_IMAGE_VERSION=' "$f" || continue
-  python3 - "$f" "$VERSION" <<'PY'
-import re,sys
-f,v=sys.argv[1],sys.argv[2]
-s=open(f).read()
-s=re.sub(r'ARG BASE_IMAGE_VERSION=\S+', f'ARG BASE_IMAGE_VERSION={v}', s)
-open(f,'w').write(s)
-PY
-done
+def rewrite(path, pattern, replacement, flags=0):
+    text = open(path, encoding="utf-8").read()
+    new, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+    if count != 1:
+        sys.exit("%s: %s not found" % (path, pattern))
+    open(path, "w", encoding="utf-8").write(new)
 
-python3 - "$CHART_DIR/Chart.yaml" "$VERSION" <<'PY'
-import re,sys
-f,v=sys.argv[1],sys.argv[2]
-s=open(f).read()
-# rewrite the version ONLY inside the openg2p-registry dependency block
-def repl(m): return re.sub(r'(version:\s*)\S+', r'\g<1>'+v, m.group(0), count=1)
-s=re.sub(r'-\s*name:\s*openg2p-registry\b.*?(?=\n\s*-\s|\n\S|\Z)', repl, s, count=1, flags=re.S)
-open(f,'w').write(s)
+for role in ("staff-api", "partner-api", "celery", "db-seed", "sanity-tests"):
+    rewrite("docker/%s/Dockerfile" % role, r"(?m)^(ARG BASE_IMAGE_VERSION=)\S+", r"\g<1>" + version)
+rewrite("docker/staff-ui/Dockerfile", r"(?m)^(ARG BASE_IMAGE_VERSION=)\S+", r"\g<1>" + commit)
+rewrite("docker/staff-ui/Dockerfile", r"(openg2p/openg2p-registry-staff-ui:)\S+?(\.?)$", r"\g<1>" + version + r"\g<2>",
+        re.M)
+rewrite(chart,r"(?m)^(appVersion:\s*)\S+", r"\g<1>" + version)
+# Only the version inside the openg2p-registry dependency block.
+rewrite(chart, r"(-\s*name:\s*openg2p-registry\b(?:(?!\n\s*-\s).)*?version:\s*)\S+", r"\g<1>" + version, re.S)
+data = json.load(open(contract, encoding="utf-8"))
+data["platformVersion"] = version
+open(contract, "w", encoding="utf-8").write(json.dumps(data, indent=2) + "\n")
 PY
 
-# refresh the dependency lock so it matches the new pin
-echo "Updating the chart dependency lock…"
 helm repo add openg2p https://openg2p.github.io/openg2p-helm >/dev/null 2>&1 || true
-helm repo update openg2p >/dev/null 2>&1 || true
-helm dependency update "$CHART_DIR" >/dev/null 2>&1 || die "helm dependency update failed for $VERSION"
-
-# ── verify + report ───────────────────────────────────────────────────────────
-NEW_CHART=$(python3 - "$CHART_DIR/Chart.yaml" <<'PY'
-import re,sys
-m=re.search(r'name:\s*openg2p-registry\b.*?version:\s*(\S+)', open(sys.argv[1]).read(), re.S)
-print(m.group(1) if m else "")
-PY
-)
-NEW_DOCKER=$(grep -hoE 'ARG BASE_IMAGE_VERSION=\S+' docker/*/Dockerfile | sed 's/ARG BASE_IMAGE_VERSION=//' | sort -u | tr '\n' ',' | sed 's/,$//')
-[ "$NEW_CHART" = "$VERSION" ] && [ "$NEW_DOCKER" = "$VERSION" ] \
-  || die "post-write check failed: chart=$NEW_CHART dockerfiles=$NEW_DOCKER (expected $VERSION)"
+helm repo update openg2p >/dev/null
+helm dependency update "$CHART_DIR" >/dev/null || die "helm dependency update failed for $VERSION"
+[ "$(python3 ci/deploy/image_names.py platform)" = "$VERSION" ] || die "post-write check failed: the Dockerfiles differ"
+python3 ci/build/check_rp_commit.py "$VERSION" "$(python3 ci/deploy/image_names.py platform-commit)"
 
 echo ""
-echo "Bumped openg2p-registry pin: ${CUR_CHART} -> ${VERSION}"
-echo "  Dockerfiles + chart dependency now aligned at ${VERSION}."
-echo "  Review, then commit:"
-echo "    git add docker helm/${CHART_DIR#helm/}/Chart.yaml && git commit"
+echo "Written: the six Dockerfiles, $CHART_DIR/Chart.yaml, $CHART_DIR/Chart.lock, $CONTRACT."
+echo "Not written: ci/deploy/oan-chart.json (the central chart pin moves in its own reviewed change)."
+echo "Run: python -m pytest test/unit/test_base_image_pin_lockstep.py"

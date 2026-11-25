@@ -7,12 +7,12 @@ Two stages of every develop build run this script:
 
 The deploy installs built-chart/ (BUILT_CHART_DIR in deploy-rc.sh), so New Dev runs exactly the archive that is published.
 
-The chart version comes from git (OpenG2P's policy, in scripts/ci/derive-version.sh of oan-helm), so the chart and images
-of a commit always belong together and nothing is committed back. The image tags and digests are written into the
+The chart version is the image tag of the build, IMAGE_TAG = <version>-<branch>.<build> from init.yaml (image_names.py;
+oan-helm docs/release/naming-standard.md, section 6), so a chart version names its images and nothing is committed back. The image tags and digests are written into the
 packaged copy only. oan-helm's publisher (scripts/ci/publish_chart.py) adds the archive and its workflow updates the
 index, CHANGELOG.md and the per-chart rollback history from the annotations set here.
 
-package needs IMAGE_TAG, SOURCE_COMMIT, ECR_REGISTRY, ECR_REPOSITORY, BRANCH_NAME and COMMIT_SUBJECT. publish needs
+package needs IMAGE_TAG, SOURCE_COMMIT, ECR_REGISTRY, BRANCH_NAME and COMMIT_SUBJECT. publish needs
 GH_TOKEN with push access to oan-helm; DRY_RUN=1 publishes nothing. Standard library only: it runs on the Jenkins agent.
 
 Exit codes: 0 done (or already published by an earlier run of this commit), 1 failure, 3 no credential.
@@ -21,7 +21,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -30,6 +29,7 @@ import tempfile
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+import image_names  # noqa: E402
 import release_images  # noqa: E402
 
 CHART = "openg2p-farmer-registry"
@@ -59,11 +59,12 @@ def fetch_publisher(work):
     return target / "scripts/ci"
 
 
-def derive_version(scripts, branch):
-    if run(["git", "rev-parse", "--is-shallow-repository"]).strip() != "false":
-        raise ValueError("a shallow clone cannot give the commit count the version needs")
-    out = run(["bash", str(scripts / "derive-version.sh")], env=dict(os.environ, REF_NAME=branch, REF_TYPE="branch"))
-    return re.search(r"(?m)^version=(\S+)$", out).group(1)
+def chart_version(env):
+    """The image tag of this build: its images and its chart share one version."""
+    version = env["IMAGE_TAG"]
+    if not image_names.is_tag(version) or not version.startswith(image_names.chart_version() + "-"):
+        raise ValueError("IMAGE_TAG %s is not <version>-<branch>.<build> of init.yaml" % version)
+    return version
 
 
 def package(env, version, work):
@@ -71,11 +72,11 @@ def package(env, version, work):
     chart = work / "chart" / CHART
     shutil.copytree(str(source), str(chart))
     digests = release_images.read_digests((ROOT / release_images.DIGESTS).read_text(encoding="utf-8"),
-                                          env["ECR_REGISTRY"], env["ECR_REPOSITORY"], env["IMAGE_TAG"])
+                                          env["ECR_REGISTRY"], env["IMAGE_TAG"])
     values = chart / "values.yaml"
     values.write_text(release_images.rewrite_values(
         values.read_text(encoding="utf-8"), release_images.wanted(env["IMAGE_TAG"], digests),
-        release_images.expected_repositories(env["ECR_REGISTRY"], env["ECR_REPOSITORY"])), encoding="utf-8")
+        release_images.expected_repositories(env["ECR_REGISTRY"])), encoding="utf-8")
     metadata = chart / "Chart.yaml"
     metadata.write_text(annotate(metadata.read_text(encoding="utf-8"), {
         "oan.org/source-repository": "Centre-for-Open-Societal-Systems/farmer-registry",
@@ -93,12 +94,11 @@ def package(env, version, work):
 
 def pin(archive, version):
     """The pin of this archive, in the shape of ci/deploy/oan-chart.json: what ci/deploy/oan_chart.py verifies."""
-    metadata = (ROOT / "helm" / CHART / "Chart.yaml").read_text(encoding="utf-8")
     return {
         "name": CHART,
         "version": version,
         "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-        "platformVersion": re.search(r"(?m)^appVersion: (\S+)$", metadata).group(1),
+        "platformVersion": image_names.platform_version(),
         "environment": "dev",
         "namespace": "farmer",
         "release": "farmer-registry",
@@ -108,7 +108,7 @@ def pin(archive, version):
 def package_build(env, work):
     shutil.rmtree(str(OUTPUT), ignore_errors=True)
     OUTPUT.mkdir()
-    version = derive_version(fetch_publisher(work), env["BRANCH_NAME"])
+    version = chart_version(env)
     archive = package(env, version, work)
     (OUTPUT / "pin.json").write_text(json.dumps(pin(archive, version), indent=2) + "\n", encoding="utf-8")
     print("packaged %s" % archive.name)

@@ -340,12 +340,12 @@ BEGIN
   -- The Fayda ID is typed by staff (approval is the control); verification is
   -- the platform's id-authentication widget on the farmer's record only.
   IF (
-    SELECT count(*) <> 1 OR bool_or(w->>'widget' IS DISTINCT FROM 'text' OR (w->>'widget-readonly')::boolean IS TRUE)
+    SELECT count(*) <> 1 OR bool_or(w->>'widget' IS DISTINCT FROM 'oan-fayda-id' OR (w->>'widget-readonly')::boolean IS TRUE)
     FROM g2p_register_sections, jsonb_path_query(section_ui_schema, 'strict $.**') w
     WHERE section_id = 'farmer_identity'
       AND jsonb_typeof(w) = 'object' AND w ? 'widget' AND w->>'widget-id' = 'foundational_id'
   ) THEN
-    RAISE EXCEPTION 'The Fayda ID on the Identity section must be one editable text widget';
+    RAISE EXCEPTION 'The Fayda ID on the Identity section must be one editable oan-fayda-id widget (the text input that trims the ID)';
   END IF;
   IF EXISTS (SELECT 1 FROM g2p_register_sections
              WHERE jsonb_path_exists(section_ui_schema, 'lax $.** ? (@.widget == "oan-identity-verification")')) THEN

@@ -33,7 +33,14 @@ npm run dev            # apply overrides, skip clone, start Next
 npm run build          # apply overrides, skip clone, build Next
 npm start              # apply overrides, skip clone, start the production server
 npm run reset          # delete .app/ and clone again
+npm run test:client    # client tests of the overrides (tests/), run in .app/
 ```
+
+`test:client` applies `overrides/`, then runs vitest and jsdom against the pinned
+upstream widget library. It installs vitest, jsdom and Testing Library into
+`.app/node_modules` only (`npm install --no-save`), so no `package.json` or
+lockfile changes. The Fayda ID field (`tests/faydaId.test.tsx`) is tested through
+its section metadata, the widget registry and a real change event.
 
 ## OAN dashboard background
 

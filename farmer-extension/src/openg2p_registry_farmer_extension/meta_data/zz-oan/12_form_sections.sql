@@ -151,7 +151,7 @@ form_layout (section_id, upstream_section_id, col, ord, w) AS (
      "widget-data-format": {"layout": "horizontal"},
      "widget-data-source": {"type": "static", "options": [{"label": "YES", "value": true}, {"label": "NO", "value": false}]}}'),
    ('farmer_identity', 'farmer_farmer_personal_identification_section_01', 1, 2,
-     '{"widget": "text", "widget-id": "foundational_id", "widget-type": "input", "widget-label": "fayda_fin",
+     '{"widget": "oan-fayda-id", "widget-id": "foundational_id", "widget-type": "input", "widget-label": "fayda_fin",
       "widget-readonly": false, "widget-required": false,
       "widget-data-path": "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd.foundational_id",
      "widget-data-placeholder": "12 or 16 digits",

@@ -181,5 +181,44 @@ class MediaTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(connector.last_poll_at)
 
 
+class WebsubContentTests(unittest.TestCase):
+    """Cases of docker/registry-connector/tests/test_extension.py, against the coordinator's image."""
+
+    class Connector:
+        def __init__(self, transport="websub", **cfg):
+            self.transport_type, self._cfg = transport, cfg
+
+        def get_source_config(self):
+            return self._cfg
+
+    def service(self):
+        from oan_connector.websub_content import install
+        from openg2p_connector_service.services.ingestion_service import IngestionService
+        install()
+        return IngestionService.__new__(IngestionService)
+
+    def test_websub_content_string_is_read_before_data_path(self):
+        notice = {"event_type": "farmer-registry.farmer-profile.changed.v1", "farmer_id": "FR-000000000000"}
+        raw = {"hub.topic": "farmer-registry.farmer-profile.changed.v1", "hub.content": json.dumps(notice)}
+        svc = self.service()
+        self.assertEqual(svc._extract_envelope(self.Connector(websub_content_envelope=True), raw), notice)
+        # A data_path whose result is not an object falls back to the whole notice, as upstream does.
+        self.assertEqual(svc._extract_envelope(self.Connector(websub_content_envelope=True, data_path="farmer_id"), raw), notice)
+        self.assertEqual(svc._extract_envelope(self.Connector(), raw), raw)  # switch off: upstream behaviour
+        self.assertEqual(svc._extract_envelope(self.Connector("odk_central", websub_content_envelope=True), raw), raw)
+
+    def test_websub_content_that_is_not_an_object_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "JSON object"):
+            self.service()._extract_envelope(self.Connector(websub_content_envelope=True), {"hub.content": "[1]"})
+
+    def test_install_is_idempotent(self):
+        from oan_connector.websub_content import install
+        from openg2p_connector_service.services.ingestion_service import IngestionService
+        install()
+        before = IngestionService._extract_envelope
+        install()
+        self.assertIs(IngestionService._extract_envelope, before)
+
+
 if __name__ == "__main__":
     unittest.main()

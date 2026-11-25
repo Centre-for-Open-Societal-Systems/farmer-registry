@@ -6,11 +6,13 @@ from . import odk_media  # noqa: F401
 from . import utc_timestamps  # noqa: F401
 from .celery_config import configure
 from .signing import install as install_signing
+from .websub_content import install as install_websub_content
 from openg2p_connector_service.worker import celery_app
 
 # The API's Run Now, beat and workers must all use the same isolated queue.
 configure(celery_app)
 install_signing()
+install_websub_content()
 
 role, *extra = sys.argv[1:] or ["api"]
 if role == "api":

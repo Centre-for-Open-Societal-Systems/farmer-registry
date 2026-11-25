@@ -11,7 +11,8 @@ pipeline {
     }
     environment {
         AWS_REGION = 'ap-south-1'
-        ECR_REPOSITORY = 'openg2p/farmer-registry'
+        // Images: eoan/farmer-registry/<image>-<RP version>:<version>-<branch>.<build>, named by ci/deploy/image_names.py
+        // from helm/openg2p-farmer-registry/Chart.yaml (appVersion is the RP version, version the version).
         HELM_RELEASE = 'farmer-registry'
         HELM_NAMESPACE = 'farmer'
         KUBECONFIG_CREDENTIAL = 'farmer-dev-kubeconfig'
@@ -31,7 +32,8 @@ pipeline {
                     if (!(commit ==~ /[0-9a-f]{40}/)) {
                         error('Could not resolve the checked-out Git commit')
                     }
-                    env.IMAGE_TAG = commit.take(12)
+                    env.IMAGE_TAG = sh(returnStdout: true,
+                        script: 'python3 ci/deploy/image_names.py tag "$BRANCH_NAME" "$BUILD_NUMBER"').trim()
                     env.SOURCE_COMMIT = commit
                     // Branch-index builds may not yet have the parameter definition, and a build started
                     // before this change still offers the retired publish-only choice: both mean deploy.
@@ -78,28 +80,23 @@ pipeline {
                           docker login --username AWS --password-stdin "$ECR_REGISTRY"
                         mkdir -p service-outcomes
                         : > service-outcomes/registry-images.tsv
+                        # The registry images only. The connector images (registry-connector-api, registry-connector-ui) have
+                        # one builder, ci/services/coordinator.py, which pushes them with this build's tag; a second push of
+                        # the same tag is refused by the immutable repository (test_publish_and_coordinator_never_share_a_repository).
                         for component in staff-api partner-api celery db-seed sanity-tests staff-ui; do
-                          image="$ECR_REGISTRY/$ECR_REPOSITORY/$component:$IMAGE_TAG"
+                          repository=$(python3 ci/deploy/image_names.py repository "$component")
+                          image="$ECR_REGISTRY/$repository:$IMAGE_TAG"
+                          # A new platform version is a new repository name, and ECR does not create repositories on push:
+                          # a missing one gets the standard settings (immutable tags, scan on push, AES256, owner and
+                          # naming tags) and the lifecycle policy of the image's repository before eoan. Tags are
+                          # immutable, so a version is pushed once: a taken one fails here.
+                          python3 ci/build/ecr_repository.py ensure "$repository" \
+                            "$(python3 ci/deploy/image_names.py legacy "$component")"
                           docker tag "oan-ci/$component:$IMAGE_TAG" "$image"
                           docker push "$image"
-                          digest=$(aws ecr describe-images --region "$AWS_REGION" \
-                            --repository-name "$ECR_REPOSITORY/$component" --image-ids "imageTag=$IMAGE_TAG" \
-                            --query 'imageDetails[0].imageDigest' --output text)
-                          printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
-                        done
-                        # The connector images (docker/registry-connector, docker/registry-connector-ui) are
-                        # not registry components, so they get their own outcome file, not registry-images.tsv.
-                        : > service-outcomes/registry-connector.tsv
-                        for component in registry-connector registry-connector-ui; do
-                          repository="$ECR_REPOSITORY/$component"
-                          aws ecr describe-repositories --region "$AWS_REGION" --repository-names "$repository" > /dev/null 2>&1 ||
-                            aws ecr create-repository --region "$AWS_REGION" --repository-name "$repository" > /dev/null
-                          docker tag "oan-ci/$component:$IMAGE_TAG" "$ECR_REGISTRY/$repository:$IMAGE_TAG"
-                          docker push "$ECR_REGISTRY/$repository:$IMAGE_TAG"
                           digest=$(aws ecr describe-images --region "$AWS_REGION" --repository-name "$repository" \
                             --image-ids "imageTag=$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text)
-                          printf '%s\t%s\t%s\n' "$component" "$ECR_REGISTRY/$repository:$IMAGE_TAG" "$digest" >> service-outcomes/registry-connector.tsv
-                          echo "$component: $ECR_REGISTRY/$repository:$IMAGE_TAG@$digest"
+                          printf '%s\t%s\t%s\n' "$component" "$image" "$digest" >> service-outcomes/registry-images.tsv
                         done
                         docker run --rm --network none --user "$(id -u):$(id -g)" \
                           -e DELIVERY_ACTION \
@@ -163,6 +160,11 @@ pipeline {
                     unstash 'dev-deployment'
                     unstash 'built-chart'
                     withCredentials([file(credentialsId: env.KUBECONFIG_CREDENTIAL, variable: 'KUBECONFIG')]) {
+                        // New Dev pulls every image the packaged chart pins, by digest, before anything is deployed.
+                        sh '''
+                            set -eu
+                            python3 ci/deploy/pull_check.py --namespace farmer --chart "$(ls built-chart/*.tgz | head -n 1)"
+                        '''
                         script {
                           def deployRegistry = {
                             try {

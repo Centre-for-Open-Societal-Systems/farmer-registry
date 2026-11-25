@@ -19,6 +19,8 @@ delivery = module("delivery", "ci/delivery.py")
 worker = module("worker_probe", "ci/validation/check_native_worker_save.py")
 ECR = "123456789012.dkr.ecr.ap-south-1.amazonaws.com"
 COMMIT = "abcdef012345" + "b" * 28
+TAG = "0.0.0-develop.42"
+names = module("image_names", "ci/deploy/image_names.py")
 COMPONENTS = ("staff-api", "partner-api", "celery", "db-seed", "sanity-tests", "staff-ui")
 
 
@@ -51,9 +53,9 @@ def published(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     path = tmp_path / "service-outcomes/registry-images.tsv"
     path.parent.mkdir()
-    path.write_text("".join(f"{component}\t{ECR}/openg2p/farmer-registry/{component}:{COMMIT[:12]}\tsha256:{'c' * 64}\n"
+    path.write_text("".join(f"{component}\t{ECR}/{names.repository(component)}:{TAG}\tsha256:{'c' * 64}\n"
                             for component in COMPONENTS), encoding="utf-8")
-    return {"ECR_REGISTRY": ECR, "IMAGE_TAG": COMMIT[:12], "SOURCE_COMMIT": COMMIT,
+    return {"ECR_REGISTRY": ECR, "IMAGE_TAG": TAG, "SOURCE_COMMIT": COMMIT,
             "DELIVERY_ACTION": "deploy"}, path
 
 
@@ -68,7 +70,7 @@ def test_publication_receipt_records_all_digests_and_no_deployment_claim(publish
     assert "cluster" not in json.dumps(result)
 
 
-@pytest.mark.parametrize("defect", ["missing", "duplicate", "digest", "repository", "source"])
+@pytest.mark.parametrize("defect", ["missing", "duplicate", "digest", "repository", "legacy", "tag", "source"])
 def test_receipt_rejects_incomplete_or_mismatched_build_provenance(published, defect):
     environment, path = published
     content = path.read_text()
@@ -79,9 +81,15 @@ def test_receipt_rejects_incomplete_or_mismatched_build_provenance(published, de
     elif defect == "digest":
         content = content.replace("sha256:", "unverified:")
     elif defect == "repository":
-        content = content.replace("/openg2p/farmer-registry/", "/openg2p/another/")
+        content = content.replace("/eoan/farmer-registry/", "/eoan/another/")
+    elif defect == "legacy":                                       # pushed under the names before eoan
+        content = content.replace(names.repository("celery"), "openg2p/farmer-registry/celery")
+    elif defect == "tag":                                          # the commit12 tag of the names before eoan
+        content = content.replace(TAG, COMMIT[:12])
+        environment["IMAGE_TAG"] = COMMIT[:12]
     else:
-        environment["SOURCE_COMMIT"] = "d" * 40
+        # The tag is the build number now, so the commit is checked for its form: a full SHA.
+        environment["SOURCE_COMMIT"] = COMMIT[:12]
     path.write_text(content)
     with pytest.raises(ValueError):
         delivery.publication(environment)
@@ -160,3 +168,14 @@ def test_a_failed_deploy_never_reaches_chart_publication():
     pipeline = (ROOT / "ci/pipelines/dev.groovy").read_text()
     deploy = pipeline.split("stage('Deploy (registry)')", 1)[1].split("stage('Build (services)')", 1)[0]
     assert "catchError" not in deploy
+
+
+def test_the_chart_version_is_the_image_tag_of_init_yaml():
+    import sys
+    sys.path.insert(0, str(ROOT / "ci/deploy"))
+    package = module("package_chart", "ci/deploy/package_chart.py")
+    version = names.chart_version()
+    assert package.chart_version({"IMAGE_TAG": version + "-develop.57"}) == version + "-develop.57"
+    for tag in ("0.0.0-develop.57" if version != "0.0.0" else "9.9.9-develop.57", "abcdef012345", version + "-develop"):
+        with pytest.raises(ValueError):
+            package.chart_version({"IMAGE_TAG": tag})
