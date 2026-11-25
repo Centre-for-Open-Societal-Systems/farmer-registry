@@ -4,6 +4,7 @@
 def call() {
     pipeline {
         agent any
+        triggers { pollSCM('H/5 * * * *') }
         options { skipDefaultCheckout(true); disableConcurrentBuilds(); retry(count: 2, conditions: [agent(), nonresumable()]); timestamps(); timeout(time: 60, unit: 'MINUTES') }
         parameters {
             booleanParam(name: 'LOAD_SAMPLE_DATA', defaultValue: false,
