@@ -126,7 +126,7 @@ def test_fresh_install_runs_only_its_own_script_with_the_backup_key():
     assert "ci/deploy/fresh-install-dev.sh" not in deploy.split("} else {", 1)[1]
 
 
-JENKINS = {"JENKINS_URL": "https://jenkins.oanstaging.com/", "JOB_NAME": "Gen2-Package/farmer-registry/develop",
+JENKINS = {"JENKINS_URL": "https://jenkins.oanstaging.com/", "JOB_NAME": "OAN Registries/farmer-registry/develop",
            "BRANCH_NAME": "develop", "BUILD_NUMBER": "30"}
 
 
@@ -138,7 +138,8 @@ def test_native_worker_probe_accepts_existing_hosted_ci_and_jenkins_only():
 
 
 @pytest.mark.parametrize("key,value", [
-    ("JENKINS_URL", ""), ("JOB_NAME", "another/job"), ("BRANCH_NAME", "staging"),
+    ("JENKINS_URL", ""), ("JOB_NAME", "another/job"), ("JOB_NAME", "Gen2-Package/farmer-registry/develop"),
+    ("BRANCH_NAME", "staging"),
     ("BUILD_NUMBER", ""), ("BUILD_NUMBER", "latest"), ("CHANGE_ID", "124"),
 ])
 def test_native_worker_probe_rejects_other_jobs_and_local_fallback(key, value):

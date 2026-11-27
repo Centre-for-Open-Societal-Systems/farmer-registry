@@ -260,7 +260,7 @@ def permitted_ci(platform, environment):
     """Keep local Docker off; allow the existing hosted CI and Jenkins route."""
     github = environment.get("GITHUB_ACTIONS") == "true"
     jenkins = (bool(environment.get("JENKINS_URL"))
-               and environment.get("JOB_NAME") == "Gen2-Package/farmer-registry/develop"
+               and environment.get("JOB_NAME") == "OAN Registries/farmer-registry/develop"
                and environment.get("BRANCH_NAME") == "develop"
                and str(environment.get("BUILD_NUMBER", "")).isdigit()
                and not environment.get("CHANGE_ID"))
