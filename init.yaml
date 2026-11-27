@@ -1,5 +1,6 @@
 # The version of this repository's builds (oan-helm docs/release/naming-standard.md, section 6).
-# Builds add -<branch>.<BUILD_NUMBER>: develop 1.0.0-develop.57, staging 1.0.0-staging.12.
+# Builds add -<branch>.<BUILD_NUMBER>: develop 1.0.1-develop.57, staging 1.0.1-staging.12.
+# Bump it when the Jenkins job is recreated: BUILD_NUMBER restarts at 1.
 # The OpenG2P platform version is not here: as in OpenG2P, it is the ARG BASE_IMAGE_VERSION default of the
 # docker/*/Dockerfile files (change it with scripts/bump-rp-version.sh).
-version: 1.0.0
+version: 1.0.1
