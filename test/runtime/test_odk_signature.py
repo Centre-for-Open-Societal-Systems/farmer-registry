@@ -13,11 +13,11 @@ import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
-sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_farmer_extension")
+sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_oan_farmer_extension")
 from openg2p_registry_core.services.g2p_ingest_service import G2PIngestService
 from openg2p_registry_core.helpers import PatternMatcher
 from fastapi import HTTPException
-from openg2p_registry_farmer_extension import odk_signature
+from openg2p_registry_oan_farmer_extension import odk_signature
 
 
 class SignatureRuntime(unittest.IsolatedAsyncioTestCase):

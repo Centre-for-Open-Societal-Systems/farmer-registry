@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-EXT = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension"
+EXT = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
 SEED_DIRS = ("meta_data", "awe_meta_data")
 COMMENT_OR_LITERAL = re.compile(r"--[^\n]*|/\*.*?\*/|'(?:[^']|'')*'", re.S)
 

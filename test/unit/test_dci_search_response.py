@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-TEMPLATES = Path(__file__).resolve().parents[2] / "farmer-extension/src/openg2p_registry_farmer_extension/templates"
+TEMPLATES = Path(__file__).resolve().parents[2] / "farmer-extension/src/openg2p_registry_oan_farmer_extension/templates"
 
 
 def test_dci_search_response_is_the_farmer_template_with_the_reference_block_last():

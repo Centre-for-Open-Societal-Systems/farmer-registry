@@ -1,1 +1,0 @@
-from .g2p_id_generator_service import G2PIdGeneratorService

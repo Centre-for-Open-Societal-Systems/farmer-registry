@@ -9,7 +9,7 @@ import pytest
 from jinja2 import Environment
 from jinja2.exceptions import UndefinedError
 
-ROOT = Path(__file__).resolve().parents[1] / 'src' / 'openg2p_registry_farmer_extension'
+ROOT = Path(__file__).resolve().parents[1] / 'src' / 'openg2p_registry_oan_farmer_extension'
 REPO = Path(__file__).resolve().parents[2]
 META = ROOT / 'meta_data'
 

@@ -10,7 +10,7 @@ import pytest
 pytest.importorskip("openg2p_registry_core")
 
 from openg2p_registry_core.errors import G2PRegistryException
-from openg2p_registry_farmer_extension.register_domain.services import derivations
+from openg2p_registry_oan_farmer_extension.register_domain.services import derivations
 
 
 def test_a_bad_typed_email_refuses_the_farmer_record():

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
-sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_farmer_extension")
+sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_oan_farmer_extension")
 intake = importlib.import_module("openg2p_registry_celery_worker.tasks.ingest_data_worker")
 change = importlib.import_module("openg2p_registry_celery_worker.tasks.change_request_ingest_worker")
 

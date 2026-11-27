@@ -4,10 +4,10 @@ from datetime import datetime
 
 from openg2p_registry_core.models import G2PRegisterAuthentication
 from openg2p_registry_core.services import g2p_registrant_authentication_service as core_service
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import models as native
-from openg2p_registry_farmer_extension.register_domain import models as oan
-from openg2p_registry_farmer_extension.register_domain import schemas
-from openg2p_registry_farmer_extension.register_domain.services.registrant_auth_compat import (
+from openg2p_registry_farmer_extension.register_domain import models as native
+from openg2p_registry_oan_farmer_extension.register_domain import models as oan
+from openg2p_registry_oan_farmer_extension.register_domain import schemas
+from openg2p_registry_oan_farmer_extension.register_domain.services.registrant_auth_compat import (
     install_registrant_auth_compat,
 )
 
@@ -45,7 +45,7 @@ def test_compat_gives_core_the_session_maker_name_once():
 
 
 def test_add_oan_columns_ddl_gives_existing_rows_a_default():
-    from openg2p_registry_farmer_extension.app import column_ddl
+    from openg2p_registry_oan_farmer_extension.app import column_ddl
     from sqlalchemy.dialects import postgresql
 
     table = oan.G2PRegisterFarmer.__table__

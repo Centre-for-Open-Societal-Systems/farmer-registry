@@ -16,7 +16,7 @@ The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`)
 
 | Path | Purpose |
 | --- | --- |
-| `farmer-extension/` | The Farmer extension, `openg2p_registry_farmer_extension`: OpenG2P's Farmer extension (`openg2p_farmer/`, unchanged) with the OAN models, services, metadata (`meta_data/zz-oan/`), ODK enrichment and reporting on top, with its tests |
+| `farmer-extension/` | The OAN Farmer extension, `openg2p_registry_oan_farmer_extension`: OpenG2P's Farmer extension (`openg2p_registry_farmer_extension`, a dependency pinned to one upstream commit) with the OAN models, services, metadata (`meta_data/zz-oan/`), ODK enrichment and reporting on top, with its tests |
 | `sample-farmer-extension/` | OpenG2P's Farmer extension as published, for comparison on upgrades; never built |
 | `ui/staff-ui/overrides/` | Registered OAN widgets and supported source overlays |
 | `docker/<component>/Dockerfile` | Images built FROM the registry platform images with the Farmer extension installed: staff-api, partner-api, celery, staff-ui, db-seed, sanity-tests |

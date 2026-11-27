@@ -4,7 +4,7 @@ import re
 import json
 
 ROOT = Path(__file__).resolve().parents[2]
-OAN_SEEDS = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data/zz-oan"
+OAN_SEEDS = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/awe_meta_data/zz-oan"
 KEYS = ("registry.change_request.farmer.default", "registry.change_request.household.default",
         "registry.intake_form.farmer.default", "registry.intake_form.household.default")
 ADMIN_RULE = '{"user_id": "admin"}'
@@ -20,7 +20,7 @@ def test_native_farmer_policy_is_carried_unmodified():
             assert re.search(re.escape("'" + key + "'") + rf", {order}, 'Stage {order} Officers', 'all'", stage)
             assert re.search(re.escape("'" + key + "'") + rf", {order}, 'user',.*" + re.escape(user), rules)
     assert "'block'" in stage
-    runtime = (ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/runtime.py").read_text()
+    runtime = (ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/runtime.py").read_text()
     assert "geo_approval" not in runtime
 
 
@@ -64,11 +64,11 @@ def test_existing_databases_are_moved_in_place_and_nothing_else_is_rewritten():
     assert "DELETE FROM" not in update and "approver_rule" not in update and "approval_policy" not in update
     others = "\n".join((OAN_SEEDS / n).read_text() for n in files if n != "50_either_officer_or_admin.sql")
     assert "DELETE FROM" not in others and "UPDATE public." not in others
-    bindings = (ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/55_default_approvals.sql").read_text()
+    bindings = (ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/zz-oan/55_default_approvals.sql").read_text()
     assert "context_field_names=NULL" in bindings
     # The seed carries the Farmer callback registration and OAN's policy only;
     # OpenG2P's Farmer policy files (sample-farmer-extension) are not shipped.
     carried = sorted(p.name for p in OAN_SEEDS.parent.iterdir() if p.is_file())
     assert carried == ["40_callback_secret.sql.tpl"]
     dockerfile = (ROOT / "docker/db-seed/Dockerfile").read_text()
-    assert re.search(r"^COPY farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data/\s+/seed/awe_meta_data/$", dockerfile, re.M)
+    assert re.search(r"^COPY farmer-extension/src/openg2p_registry_oan_farmer_extension/awe_meta_data/\s+/seed/awe_meta_data/$", dockerfile, re.M)

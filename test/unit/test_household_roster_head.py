@@ -15,15 +15,18 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PKG = "openg2p_registry_farmer_extension"
-UPSTREAM_DIR = ROOT / "farmer-extension/src" / PKG / "openg2p_farmer/register_domain/services"
+PKG = "openg2p_registry_oan_farmer_extension"
+UPSTREAM = "openg2p_registry_farmer_extension"
+# OpenG2P's Farmer extension at the pinned commit: sample-farmer-extension/ is that tree unchanged
+# (test_upstream_farmer_extension.py).
+UPSTREAM_DIR = ROOT / "sample-farmer-extension/src" / UPSTREAM / "register_domain/services"
 CHAIN = [
-    f"{PKG}.openg2p_farmer",
-    f"{PKG}.openg2p_farmer.register_domain",
-    f"{PKG}.openg2p_farmer.register_domain.services",
-    f"{PKG}.openg2p_farmer.register_domain.services.utils",
+    UPSTREAM,
+    f"{UPSTREAM}.register_domain",
+    f"{UPSTREAM}.register_domain.services",
+    f"{UPSTREAM}.register_domain.services.utils",
 ]
-ROSTER = f"{PKG}.openg2p_farmer.register_domain.services.utils.household_roster"
+ROSTER = f"{UPSTREAM}.register_domain.services.utils.household_roster"
 STUBBED = CHAIN + [
     ROSTER,
     f"{CHAIN[2]}.domain_validation_utils",
@@ -90,7 +93,7 @@ def roster(monkeypatch):
     spec.loader.exec_module(module)
     sys.modules[CHAIN[3]].household_roster = module
 
-    from openg2p_registry_farmer_extension import household_roster_head
+    from openg2p_registry_oan_farmer_extension import household_roster_head
 
     assert household_roster_head.install()
     assert household_roster_head.install()  # idempotent
@@ -192,7 +195,3 @@ def test_overlay_head_row_is_not_counted_again(roster):
     )
     assert result.size_of_group == 2
 
-
-def test_upstream_file_is_unchanged_from_the_published_copy():
-    published = ROOT / "sample-farmer-extension/src" / PKG / "register_domain/services/utils/household_roster.py"
-    assert (UPSTREAM_DIR / "utils/household_roster.py").read_text() == published.read_text()

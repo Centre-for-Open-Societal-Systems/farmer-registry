@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-TEMPLATE = (ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data"
+TEMPLATE = (ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/awe_meta_data"
             / "40_callback_secret.sql.tpl").read_text(encoding="utf-8")
 SQL = "\n".join(line for line in TEMPLATE.splitlines() if not line.lstrip().startswith("--"))
 UPSERT = re.sub(r"\s+", " ", SQL.split("ON CONFLICT", 1)[1])

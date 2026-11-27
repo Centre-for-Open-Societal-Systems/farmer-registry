@@ -13,14 +13,14 @@ import pytest
 
 pytest.importorskip("openg2p_registry_core")
 
-from openg2p_registry_farmer_extension.awe_error_message import awe_error_message
-from openg2p_registry_farmer_extension.register_domain.services import (
+from openg2p_registry_oan_farmer_extension.awe_error_message import awe_error_message
+from openg2p_registry_oan_farmer_extension.register_domain.services import (
     household_intake as hi,
 )
-from openg2p_registry_farmer_extension.register_domain.services.direct_approval import (
+from openg2p_registry_oan_farmer_extension.register_domain.services.direct_approval import (
     DIRECT_APPROVAL_MESSAGE,
 )
-from openg2p_registry_farmer_extension.register_domain.services.form_integrity import (
+from openg2p_registry_oan_farmer_extension.register_domain.services.form_integrity import (
     MESSAGES,
 )
 

@@ -148,7 +148,7 @@ helm get hooks "$HELM_RELEASE" -n "$HELM_NAMESPACE" >> "$STATE/deployed.yaml"
 guard validate "$STATE/before.yaml" "$STATE/deployed.yaml"
 check_schema
 # The seed applies metadata with ON_ERROR_STOP=0; fail the delivery if OAN's checks do not hold.
-CHECKS=farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan/90_checks.sql
+CHECKS=farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/zz-oan/90_checks.sql
 python3 scripts/operations/commons/check_seed_metadata.py "$CHECKS" > "$STATE/check_seed_metadata.py"
 kubectl exec -i -n "$HELM_NAMESPACE" deploy/farmer-registry-staff-portal-api -c staff-portal-api -- python3 - < "$STATE/check_seed_metadata.py"
 

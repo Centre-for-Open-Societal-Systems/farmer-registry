@@ -13,7 +13,7 @@ import openpyxl
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-SEED = REPO / "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan"
+SEED = REPO / "farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/zz-oan"
 FORM = REPO / "odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx"
 FARMER = "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd"
 

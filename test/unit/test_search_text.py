@@ -14,8 +14,9 @@ from pathlib import Path
 from test_metadata_consistency import columns, models
 
 ROOT = Path(__file__).resolve().parents[2]
-EXT = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension"
-NATIVE_SERVICES = EXT / "openg2p_farmer/register_domain/services"
+EXT = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
+# OpenG2P's services at the pinned commit; sample-farmer-extension/ is that tree unchanged.
+NATIVE_SERVICES = ROOT / "sample-farmer-extension/src/openg2p_registry_farmer_extension/register_domain/services"
 
 # register_domain/services/__init__.py registers FarmerPhoneService under the FarmerPhone register's name.
 OAN_SERVICES = {"FarmerPhone": (EXT / "register_domain/services/farmer_phone.py", "FarmerPhoneService")}

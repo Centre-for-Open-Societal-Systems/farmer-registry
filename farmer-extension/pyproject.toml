@@ -3,14 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openg2p-registry-farmer-extension"
-description = "OpenG2P Registry Farmer Extension with the OpenAgriNet layer"
+name = "openg2p-registry-oan-farmer-extension"
+description = "The OpenAgriNet layer on OpenG2P's Registry Farmer Extension"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MPL-2.0" }
 dependencies = [
   "openg2p-fastapi-common >=1.1.2",
   "openg2p-g2pconnect-common-lib >=1.1.0",
+  # OpenG2P's Farmer extension, built from the commit below (see [tool.oan.upstream-farmer-extension]).
+  "openg2p-registry-farmer-extension ==1.0.3",
 ]
 dynamic = ["version"]
 
@@ -18,7 +20,19 @@ dynamic = ["version"]
 Repository = "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry"
 
 [tool.hatch.version]
-path = "src/openg2p_registry_farmer_extension/__init__.py"
+path = "src/openg2p_registry_oan_farmer_extension/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/openg2p_registry_farmer_extension"]
+packages = ["src/openg2p_registry_oan_farmer_extension"]
+
+# The OpenG2P Farmer extension this package builds on. Upstream reports version 1.0.3 on
+# later commits too (1.2 among them), so the commit identifies it. docker/staff-api,
+# partner-api and celery build it as a wheel from this commit (ARG
+# UPSTREAM_FARMER_EXTENSION_COMMIT, the same value); `tree` is the git tree of the commit's
+# farmer-extension/, which ../sample-farmer-extension/ is, unchanged.
+# test/unit/test_upstream_farmer_extension.py keeps them in step.
+[tool.oan.upstream-farmer-extension]
+repository = "https://github.com/OpenG2P/farmer-registry.git"
+commit = "19597f7c15e13adf93ce85a630bede8a8826b84e"
+subdirectory = "farmer-extension"
+tree = "bc7d21bea2e92c4c527db9bb3f5cc762702e8ad0"

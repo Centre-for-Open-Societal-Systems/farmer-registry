@@ -12,10 +12,10 @@ import pytest
 
 pytest.importorskip("openg2p_registry_core")
 
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import (
+from openg2p_registry_farmer_extension.register_domain import (
     models as native,
 )
-from openg2p_registry_farmer_extension.register_domain import models as oan
+from openg2p_registry_oan_farmer_extension.register_domain import models as oan
 from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.ext.compiler import compiles

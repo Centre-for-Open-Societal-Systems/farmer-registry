@@ -17,7 +17,7 @@ from openg2p_registry_core.models import OutgoingRawDataPayload
 
 _path = (
     Path(__file__).parents[1]
-    / "src/openg2p_registry_farmer_extension/register_domain/services/outgest_json.py"
+    / "src/openg2p_registry_oan_farmer_extension/register_domain/services/outgest_json.py"
 )
 _spec = importlib.util.spec_from_file_location("oan_outgest_json_test", _path)
 module = importlib.util.module_from_spec(_spec)

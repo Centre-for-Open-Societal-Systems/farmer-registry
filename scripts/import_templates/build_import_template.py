@@ -115,7 +115,7 @@ def lists_from_pack(pack):
     return dict(sorted(found.items()))
 
 
-JINJA = REPO / "farmer-extension" / "src" / "openg2p_registry_farmer_extension" / "templates" / "farmer_file_import_intake.j2"
+JINJA = REPO / "farmer-extension" / "src" / "openg2p_registry_oan_farmer_extension" / "templates" / "farmer_file_import_intake.j2"
 BLOCK = re.compile(r"(\{#- BEGIN code lists:.*?-#\}\n)(.*?)(\{#- END code lists -#\})", re.DOTALL)
 
 

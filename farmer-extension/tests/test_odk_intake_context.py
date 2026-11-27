@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 from openg2p_registry_core.errors import G2PRegistryException
 
-from openg2p_registry_farmer_extension.register_domain.services import intake_context
+from openg2p_registry_oan_farmer_extension.register_domain.services import intake_context
 
 
 def test_normal_domain_validation_keeps_its_original_parent_link():

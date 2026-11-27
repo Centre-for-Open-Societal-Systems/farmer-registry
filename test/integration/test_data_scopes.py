@@ -23,7 +23,7 @@ import pytest
 
 pytest.importorskip("openg2p_registry_core")
 
-EXTENSION = Path(__file__).resolve().parents[2] / "farmer-extension/src/openg2p_registry_farmer_extension"
+EXTENSION = Path(__file__).resolve().parents[2] / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
 META = EXTENSION / "meta_data"
 DB_URL = os.environ.get("FR_TEST_DB_URL", "postgresql+asyncpg://postgres:postgres@localhost:55432/fr_test")
 CONTROLLER = "farmer-registry"
@@ -59,9 +59,9 @@ def _run(coro):
 
 @pytest.fixture(scope="module")
 def published():
-    sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_farmer_extension")
+    sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_oan_farmer_extension")
     sys.modules["openg2p_registry_extensions.register_domain.models"] = importlib.import_module(
-        "openg2p_registry_farmer_extension.register_domain.models")
+        "openg2p_registry_oan_farmer_extension.register_domain.models")
     from openg2p_fastapi_common.context import dbengine
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import create_async_engine

@@ -1,15 +1,21 @@
 # Farmer extension
 
-`openg2p_registry_farmer_extension`, laid out as OpenG2P's registry extension
+`openg2p_registry_oan_farmer_extension`, laid out as OpenG2P's registry extension
 documentation describes: the registry images are the platform images with this
 package installed, selected with
-`REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension`.
+`REGISTRY_EXTENSION_MODULE=openg2p_registry_oan_farmer_extension`.
 
-OpenG2P's Farmer extension (1.0.3, the code of the published Farmer images) is
-kept unchanged in `openg2p_farmer/`; `../sample-farmer-extension/` holds it as
-published, to diff against on an upgrade. The OpenAgriNet layer is the package
-top level: each module re-exports `openg2p_farmer` and redefines the classes it
-extends under the same names, because the platform resolves domain classes by
+OpenG2P's Farmer extension (1.0.3, the code of the published Farmer images) is a
+dependency: the distribution `openg2p-registry-farmer-extension`, import name
+`openg2p_registry_farmer_extension`, which each Python image builds as a wheel from
+the OpenG2P/farmer-registry commit pinned under `[tool.oan.upstream-farmer-extension]`
+in `pyproject.toml` (upstream reports 1.0.3 on later commits too, so the commit is
+what identifies it). `../sample-farmer-extension/` is that commit's `farmer-extension/`
+tree unchanged (`test/unit/test_upstream_farmer_extension.py` checks the git tree
+hash), to diff against on an upgrade and for the tests that read upstream source
+without a platform. This package, `openg2p-registry-oan-farmer-extension`, is the
+OpenAgriNet layer: each module re-exports the Farmer extension's and redefines the
+classes it extends under the same names, because the platform resolves domain classes by
 name on these modules. `__init__.py` makes the platform's
 `openg2p_registry_extensions.*` names resolve to the modules already loaded here.
 
@@ -21,7 +27,6 @@ name on these modules. `__init__.py` makes the platform's
 | `register_domain/ethiopian_calendar.py` | Gregorian and Ethiopian calendar conversion |
 | `register_domain/services/` | the farmer domain services, each extended with the derived values (`derivations.py`) and the section widgets' value rules (`widget_rules.py`); the FarmerPhone service |
 | `app.py` | the farmer initializer, plus migration of OAN registers |
-| `openg2p_farmer/` | OpenG2P's Farmer extension code, unchanged |
 | `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `zz-oan/` (applied after the Farmer tree) and OAN's templates (`farmer_dci_search_response.j2` is upstream's DCI template plus OAN's `farmer_reference` block) |
 | `tests/` | `uv run --no-project --with pytest pytest farmer-extension/tests` |
 

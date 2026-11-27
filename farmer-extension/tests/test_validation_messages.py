@@ -15,10 +15,10 @@ from openg2p_registry_core.schemas.intake_form import (
     IntakeSubmissionValidationIssue,
     ValidateIntakeFormSubmissionData,
 )
-from openg2p_registry_farmer_extension.register_domain.services import (
+from openg2p_registry_oan_farmer_extension.register_domain.services import (
     household_intake as hi,
 )
-from openg2p_registry_farmer_extension.register_domain.services.farmer_phone import (
+from openg2p_registry_oan_farmer_extension.register_domain.services.farmer_phone import (
     FarmerPhoneService,
 )
 
@@ -102,7 +102,7 @@ def _saving(monkeypatch, message):
         return created_by
 
     monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
-    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr("openg2p_registry_oan_farmer_extension.odk.actor.ingest_actor", passthrough)
     monkeypatch.setattr(hi.RequiredFieldsMixin, "save_intake_form_submission_with_session", platform_save)
     return service.save_intake_form_submission_with_session("s-1", "sec", [{}], "reg", "form", "reg", "alex", None)
 
@@ -185,8 +185,8 @@ def test_validate_says_an_unknown_household_in_plain_words(monkeypatch):
 
 
 def _farmer_service(monkeypatch, lists, geo=None):
-    from openg2p_registry_farmer_extension.register_domain import services as extension
-    from openg2p_registry_farmer_extension.register_domain.services import coded_values
+    from openg2p_registry_oan_farmer_extension.register_domain import services as extension
+    from openg2p_registry_oan_farmer_extension.register_domain.services import coded_values
 
     class Client:
         async def _post(self, path, payload=None, pagination=None):
@@ -210,7 +210,7 @@ GENDERS = {"GENDER": {"MALE": "Male", "FEMALE": "Female"}}
 
 
 def test_a_farmer_with_listed_codes_and_a_fayda_id_is_accepted(monkeypatch):
-    from openg2p_registry_farmer_extension.register_domain.services import form_integrity
+    from openg2p_registry_oan_farmer_extension.register_domain.services import form_integrity
 
     async def nobody_else_holds_it(*args, **kwargs):
         return None

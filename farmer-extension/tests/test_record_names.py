@@ -10,7 +10,7 @@ import types
 from pathlib import Path
 
 _package = types.ModuleType("oan_register_domain")
-_package.__path__ = [str(Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension/register_domain")]
+_package.__path__ = [str(Path(__file__).parents[1] / "src/openg2p_registry_oan_farmer_extension/register_domain")]
 sys.modules.setdefault("oan_register_domain", _package)
 names = importlib.import_module("oan_register_domain.record_names")
 compose = names.compose

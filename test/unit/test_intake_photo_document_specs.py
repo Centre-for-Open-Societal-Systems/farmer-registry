@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-ZZ_OAN = REPO / "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan"
+ZZ_OAN = REPO / "farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/zz-oan"
 
 
 def _sql_jsonb(sql_text: str, marker: str):

@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 _ROOT = Path(__file__).parents[2]
-_PATH = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension/register_domain/services/upstream_messages.py"
+_PATH = Path(__file__).parents[1] / "src/openg2p_registry_oan_farmer_extension/register_domain/services/upstream_messages.py"
 _spec = importlib.util.spec_from_file_location("upstream_messages", _PATH)
 upstream_messages = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(upstream_messages)
@@ -61,7 +61,8 @@ ALREADY_EXPLAINED = (
 def _upstream_messages():
     """Every message the farmer extension passes to validation_error, with
     each f-string placeholder filled by a sample value."""
-    for path in (_ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/openg2p_farmer").rglob("*.py"):
+    # OpenG2P's extension at the pinned commit; sample-farmer-extension/ is that tree unchanged.
+    for path in (_ROOT / "sample-farmer-extension/src/openg2p_registry_farmer_extension").rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "validation_error" and node.args):
                 continue

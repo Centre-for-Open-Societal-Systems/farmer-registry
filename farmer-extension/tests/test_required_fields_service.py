@@ -11,10 +11,10 @@ import pytest
 pytest.importorskip("openg2p_registry_core")
 
 from openg2p_registry_core.errors import G2PRegistryException
-from openg2p_registry_farmer_extension.register_domain.services import (
+from openg2p_registry_oan_farmer_extension.register_domain.services import (
     household_intake as hi,
 )
-from openg2p_registry_farmer_extension.register_domain.services import (
+from openg2p_registry_oan_farmer_extension.register_domain.services import (
     required_fields as rf,
 )
 
@@ -211,7 +211,7 @@ def _service(monkeypatch, problems):
     monkeypatch.setattr(hi, "check_farmer_submission", farmer_checks)
     monkeypatch.setattr(hi.G2PFarmerIntakeFormDataService, "finalize_submission_with_session",
                         platform_finalize, raising=False)
-    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.worker_token.service_token", no_token)
+    monkeypatch.setattr("openg2p_registry_oan_farmer_extension.odk.worker_token.service_token", no_token)
     return service, submission, calls
 
 
@@ -280,7 +280,7 @@ def test_a_save_by_the_worker_skips_the_section_check_and_a_person_does_not(monk
         return "saved"
 
     monkeypatch.setattr(rf.RequiredFieldsMixin, "refuse_missing_on_save", refuse)
-    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr("openg2p_registry_oan_farmer_extension.odk.actor.ingest_actor", passthrough)
     monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
     monkeypatch.setattr(hi.G2PFarmerIntakeFormDataService, "save_intake_form_submission_with_session",
                         platform_save, raising=False)
@@ -320,7 +320,7 @@ def test_outside_an_ingest_task_nothing_is_held_back():
 
 
 def test_the_ingest_task_starts_and_drops_its_refusals():
-    from openg2p_registry_farmer_extension.odk import actor
+    from openg2p_registry_oan_farmer_extension.odk import actor
 
     task = SimpleNamespace(name=actor.INGEST_TASK)
     actor._record_ingest(sender=task, kwargs={"ingest_id": "i-1"})
@@ -365,7 +365,7 @@ def _refusing_save(monkeypatch, failure=None):
         return {}
 
     monkeypatch.setattr(rf.RequiredFieldsMixin, "refuse_missing_on_save", lambda *a, **k: asyncio.sleep(0))
-    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr("openg2p_registry_oan_farmer_extension.odk.actor.ingest_actor", passthrough)
     monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
     monkeypatch.setattr(service, "_get_submission_or_error", get_submission, raising=False)
     monkeypatch.setattr(service, "_messages", no_messages, raising=False)
@@ -462,7 +462,7 @@ def test_later_sections_of_the_register_survive_a_refused_one(monkeypatch, inges
     async def no_messages():
         return {}
 
-    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr("openg2p_registry_oan_farmer_extension.odk.actor.ingest_actor", passthrough)
     monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
     monkeypatch.setattr(service, "_get_submission_or_error", get_submission, raising=False)
     monkeypatch.setattr(service, "_messages", no_messages, raising=False)
@@ -489,7 +489,7 @@ def test_a_reason_is_kept_once(ingest):
 
 
 def test_a_section_writes_only_its_editable_input_fields():
-    from openg2p_registry_farmer_extension.register_domain.services.form_integrity import section_fields
+    from openg2p_registry_oan_farmer_extension.register_domain.services.form_integrity import section_fields
 
     schema = {"panels": [{"widgets": [
         {"widget": "text", "widget-id": "name", "widget-data-path": f"{FARMER}.first_name_local"},
@@ -527,7 +527,7 @@ def test_a_person_saving_strips_nothing_and_is_refused(monkeypatch, ingest):
         return {}
 
     monkeypatch.setattr(rf.RequiredFieldsMixin, "refuse_missing_on_save", lambda *a, **k: asyncio.sleep(0))
-    monkeypatch.setattr("openg2p_registry_farmer_extension.odk.actor.ingest_actor", passthrough)
+    monkeypatch.setattr("openg2p_registry_oan_farmer_extension.odk.actor.ingest_actor", passthrough)
     monkeypatch.setattr(service, "_get_section_or_error", section, raising=False)
     monkeypatch.setattr(service, "_messages", no_messages, raising=False)
     monkeypatch.setattr(hi.G2PFarmerIntakeFormDataService, "save_intake_form_submission_with_session",
@@ -550,8 +550,8 @@ class _Rows:
 
 
 def test_submit_waits_when_master_data_cannot_check_the_farmer_s_codes(monkeypatch):
-    from openg2p_registry_farmer_extension.register_domain import services
-    from openg2p_registry_farmer_extension.register_domain.services import (
+    from openg2p_registry_oan_farmer_extension.register_domain import services
+    from openg2p_registry_oan_farmer_extension.register_domain.services import (
         coded_values,
         form_integrity,
     )
@@ -568,7 +568,7 @@ def test_submit_waits_when_master_data_cannot_check_the_farmer_s_codes(monkeypat
     import sys
     import types
 
-    from openg2p_registry_farmer_extension.register_domain import models
+    from openg2p_registry_oan_farmer_extension.register_domain import models
 
     # At run time the platform serves the registry's models under this name.
     for name in ("openg2p_registry_extensions", "openg2p_registry_extensions.register_domain"):

@@ -15,11 +15,11 @@ RUN rm -rf /seed/meta_data/* /seed/awe_meta_data/* /seed/templates/* /seed/seed-
 # OpenG2P's Farmer metadata with OAN's layer in zz-oan/, applied after the whole
 # Farmer tree. OAN replaces the Farmer approval policy (awe_meta_data/zz-oan/), so
 # the extension carries only the Farmer callback registration besides it.
-COPY farmer-extension/src/openg2p_registry_farmer_extension/meta_data/     /seed/meta_data/
-COPY farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data/ /seed/awe_meta_data/
+COPY farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/     /seed/meta_data/
+COPY farmer-extension/src/openg2p_registry_oan_farmer_extension/awe_meta_data/ /seed/awe_meta_data/
 
 # Templates are uploaded with LOAD_TEMPLATES=true under their file names.
-COPY farmer-extension/src/openg2p_registry_farmer_extension/templates/ /seed/templates/
+COPY farmer-extension/src/openg2p_registry_oan_farmer_extension/templates/ /seed/templates/
 
 COPY farmer-extension/reporting/ /seed/oan-reporting/
 COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql

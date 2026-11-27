@@ -12,7 +12,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from openg2p_registry_farmer_extension.register_domain.services.g2p_register_domain_service_land import (
+from openg2p_registry_oan_farmer_extension.register_domain.services.g2p_register_domain_service_land import (
     LAND_REGISTER_ID,
     G2PRegisterDomainServiceLand,
 )
