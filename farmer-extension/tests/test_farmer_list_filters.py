@@ -1,4 +1,4 @@
-"""The farmer list's filters and result columns (zz-oan/05_registers.sql), read
+"""The farmer list's filters and result columns (site-configuration/05_registers.sql), read
 from the seed itself, so they run without the registry installed.
 
 Core's FilterBuilder accepts at most 10 filter fields, its filter types are
@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 SRC = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension"
-SEED = (SRC / "meta_data/zz-oan/05_registers.sql").read_text(encoding="utf-8")
+SEED = (SRC / "meta_data/site-configuration/05_registers.sql").read_text(encoding="utf-8")
 FIELDS = (SRC / "register_domain/fields.py").read_text(encoding="utf-8")
 CORE_FILTER_TYPES = {"dropdown", "text", "date_range", "number_range", "boolean"}
 # Columns of the upstream farmer table and core's register mixin used here.
@@ -91,7 +91,7 @@ def test_the_derived_list_columns_have_a_header_and_two_decimals():
     # The list's header is the translation of the field name (upstream register
     # page: t.has(key) ? t(key) : key), not display_label; without a key the
     # officer sees "primary_phone_number". The land total is shown as stored.
-    translations = (SRC / "meta_data/zz-oan/30_translations.sql").read_text(encoding="utf-8")
+    translations = (SRC / "meta_data/site-configuration/30_translations.sql").read_text(encoding="utf-8")
     for name in ("primary_phone_number", "total_land_area", "total_plots"):
         assert re.search(rf'^\s+"{name}": "[^"_]+",?$', translations, re.MULTILINE), name
     assert re.search(r'"total_land_area": \(Numeric\(16, 2\)', FIELDS)
@@ -100,6 +100,6 @@ def test_the_derived_list_columns_have_a_header_and_two_decimals():
 def test_the_last_name_header_matches_its_display_label():
     # The list header is t("last_name"); the label casing file sets it last, so it
     # must say what display_label says.
-    casing = (SRC / "meta_data/zz-oan/80_label_casing.sql").read_text(encoding="utf-8")
+    casing = (SRC / "meta_data/site-configuration/80_label_casing.sql").read_text(encoding="utf-8")
     labels = {f["field_name"]: f["display_label"] for f in _result_schema()}
     assert f' "last_name": "{labels["last_name"].replace(chr(39), chr(39) * 2)}",' in casing

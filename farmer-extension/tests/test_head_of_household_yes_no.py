@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 META = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension/meta_data"
-OVERLAY = META / "zz-oan/92_head_of_household_yes_no.sql"
+OVERLAY = META / "site-configuration/92_head_of_household_yes_no.sql"
 SEED = META / "register-metadata/g2p_register_sections.sql"
 SECTIONS = {"farmer_household_household_member_section_02", "household_household_household_member_section_02"}
 MEMBER_REGISTER = "52979fdd-220c-48dd-8de0-0a434e786427"

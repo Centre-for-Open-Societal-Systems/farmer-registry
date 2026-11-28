@@ -5,13 +5,12 @@ documentation describes: the registry images are the platform images with this
 package installed, selected with
 `REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension`.
 
-OpenG2P's Farmer extension (1.0.3, the code of the published Farmer images) is
-kept unchanged in `openg2p_farmer/`; `../sample-farmer-extension/` holds it as
-published, to diff against on an upgrade. The OpenAgriNet layer is the package
-top level: each module re-exports `openg2p_farmer` and redefines the classes it
-extends under the same names, because the platform resolves domain classes by
-name on these modules. `__init__.py` makes the platform's
-`openg2p_registry_extensions.*` names resolve to the modules already loaded here.
+The package owns the Farmer Registry domain: models, schemas, services, migration,
+ingestion, metadata and templates. It uses the OpenG2P platform directly;
+no separate Farmer extension is installed. The original Farmer model and service
+behavior was adapted from OpenG2P/farmer-registry at `19597f7c` (MPL-2.0).
+`__init__.py` keeps the platform's `openg2p_registry_extensions.*` aliases pointed
+at the same module objects to avoid declaring tables twice.
 
 | Path | Holds |
 |---|---|
@@ -20,9 +19,9 @@ name on these modules. `__init__.py` makes the platform's
 | `register_domain/derived.py` | the values derived rather than typed (land totals in hectares, location names, Ethiopian calendar dates, phone numbers, the farmer's search text), with no framework imports |
 | `register_domain/ethiopian_calendar.py` | Gregorian and Ethiopian calendar conversion |
 | `register_domain/services/` | the farmer domain services, each extended with the derived values (`derivations.py`) and the section widgets' value rules (`widget_rules.py`); the FarmerPhone service |
-| `app.py` | the farmer initializer, plus migration of OAN registers |
-| `openg2p_farmer/` | OpenG2P's Farmer extension code, unchanged |
-| `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `zz-oan/` (applied after the Farmer tree) and OAN's templates (`farmer_dci_search_response.j2` is upstream's DCI template plus OAN's `farmer_reference` block) |
+| `app.py` | the platform initializer and Farmer Registry database migrations |
+| `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `site-configuration/` (applied after the Farmer tree) and OAN's templates (`farmer_dci_search_response.j2` is upstream's DCI template plus OAN's `farmer_reference` block) |
+| `reporting/` | reporting views and geographic-level sync |
 | `tests/` | `uv run --no-project --with pytest pytest farmer-extension/tests` |
 
 Images are built FROM the registry platform images (`docker/<component>/Dockerfile`).
@@ -267,7 +266,7 @@ raise first.
 
 ## Data migrations in the metadata layer
 
-`zz-oan/17_multi_choice.sql` (block 1) and `zz-oan/21_renamed_section_data.sql` rewrite
+`site-configuration/17_multi_choice.sql` (block 1) and `site-configuration/21_renamed_section_data.sql` rewrite
 rows in the register, history and intake tables that earlier seeds wrote. They are data
 migrations, not configuration: retire them once every environment has applied them.
 
@@ -276,4 +275,4 @@ migrations, not configuration: retire them once every environment has applied th
 The db-seed image carries configuration only. The OAN theme (palette, background images,
 logo) and the sample data are checked out from OAN `openg2p-data` at one pinned
 `OPENG2P_DATA_REF`; `scripts/themes/build_theme_sql.py farmer` renders the theme into
-`zz-oan/90_oan_theme.sql`. The factory `OpenG2P-theme` row stays as it is today.
+`site-configuration/90_oan_theme.sql`. The factory `OpenG2P-theme` row stays as it is today.

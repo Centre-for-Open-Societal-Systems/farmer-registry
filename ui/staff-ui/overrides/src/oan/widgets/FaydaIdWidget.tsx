@@ -18,7 +18,7 @@ export const FAYDA_ID_WIDGET = 'oan-fayda-id';
  * pattern stays as the section metadata has it. Whitespace inside the ID, a
  * wrong digit or a wrong length still fail it.
  *
- * Section metadata (zz-oan/12_form_sections.sql), unchanged but for the type:
+ * Section metadata (site-configuration/12_form_sections.sql), unchanged but for the type:
  *   widget: "oan-fayda-id"
  *   widget-label, widget-required, widget-readonly, widget-data-path,
  *   widget-data-placeholder, widget-data-helptext, widget-data-tooltip,

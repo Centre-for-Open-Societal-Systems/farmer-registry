@@ -6,14 +6,61 @@ from .config import Settings
 _config = Settings.get_config()
 
 from openg2p_fastapi_common.context import dbengine
-from openg2p_registry_farmer_extension.openg2p_farmer.app import Initializer as FarmerInitializer
+from openg2p_fastapi_common.app import Initializer as BaseInitializer
+from openg2p_registry_core.app import Initializer as CoreInitializer
 from sqlalchemy import text
 
-# The farmer initializer migrates its mapped classes directly, so the OAN
-# columns must be appended to them before any migration runs.
 from .register_domain import models as _oan_models
 
+from .register_domain.services.g2p_register_domain_service_farmer import G2PRegisterDomainServiceFarmer
+from .register_domain.services.g2p_register_domain_service_household import G2PRegisterDomainServiceHousehold
+from .register_domain.services.g2p_register_domain_service_household_member import G2PRegisterDomainServiceHouseholdMember
+
 _logger = logging.getLogger(_config.logging_default_logger_name)
+
+# Parent tables must precede their dependents. Use the table-declaring Farmer models.
+FARMER_REGISTERS = (
+    (
+        _oan_models.G2PRegisterHousehold,
+        _oan_models.G2PRegisterHistoryHousehold,
+        _oan_models.G2PIntakeFormHousehold,
+    ),
+    (
+        _oan_models.G2PRegisterHouseholdMember,
+        _oan_models.G2PRegisterHistoryHouseholdMember,
+        _oan_models.G2PIntakeFormHouseholdMember,
+    ),
+    (
+        _oan_models._FarmerRegister,
+        _oan_models.G2PRegisterHistoryFarmer,
+        _oan_models._FarmerIntakeForm,
+    ),
+    (
+        _oan_models.G2PRegisterMembershipDetails,
+        _oan_models.G2PRegisterHistoryMembershipDetails,
+        _oan_models.G2PIntakeFormMembershipDetails,
+    ),
+    (
+        _oan_models.G2PRegisterLand,
+        _oan_models.G2PRegisterHistoryLand,
+        _oan_models.G2PIntakeFormLand,
+    ),
+    (
+        _oan_models.G2PRegisterFarmInputs,
+        _oan_models.G2PRegisterHistoryFarmInputs,
+        _oan_models.G2PIntakeFormFarmInputs,
+    ),
+    (
+        _oan_models.G2PRegisterCrop,
+        _oan_models.G2PRegisterHistoryCrop,
+        _oan_models.G2PIntakeFormCrop,
+    ),
+    (
+        _oan_models.G2PRegisterLivestock,
+        _oan_models.G2PRegisterHistoryLivestock,
+        _oan_models.G2PIntakeFormLivestock,
+    ),
+)
 
 # OAN registers, in parent-before-child order: (register, history, intake form).
 OAN_REGISTERS: list[tuple] = [
@@ -21,11 +68,15 @@ OAN_REGISTERS: list[tuple] = [
 ]
 
 
-class Initializer(FarmerInitializer):
-    """The farmer extension's initializer, then OAN's registers."""
+class Initializer(BaseInitializer):
+    """Initialize the Farmer Registry on the shared registry platform."""
 
     def initialize(self, **kwargs):
-        super().initialize(**kwargs)
+        super().initialize()
+        CoreInitializer().initialize()
+        G2PRegisterDomainServiceFarmer()
+        G2PRegisterDomainServiceHousehold()
+        G2PRegisterDomainServiceHouseholdMember()
         from .runtime import install
 
         install()
@@ -43,7 +94,13 @@ class Initializer(FarmerInitializer):
         install_household_roster_head()
 
     def migrate_database(self, args):
-        super().migrate_database(args)
+        async def migrate_registers():
+            _logger.info("Migrating Farmer Registry tables")
+            for register, history, intake in FARMER_REGISTERS:
+                for model in (register, history, intake):
+                    await model.create_migrate()
+
+        asyncio.run(migrate_registers())
         # The farmer migration ran in its own event loop, which is closed now, and
         # the pooled connections belong to it. Drop them without closing them.
         dbengine.get().sync_engine.dispose(close=False)
@@ -73,9 +130,6 @@ async def add_oan_columns() -> None:
     absent, and every query of that register would fail. Columns are only
     added, never changed or dropped.
     """
-    from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import (
-        models as farmer_models,
-    )
     from sqlalchemy import inspect as sa_inspect
 
     from .register_domain.fields import OAN_FIELDS
@@ -84,7 +138,7 @@ async def add_oan_columns() -> None:
     async with engine.begin() as conn:
         for mnemonic in OAN_FIELDS:
             for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm"):
-                table = getattr(farmer_models, f"{prefix}{mnemonic}").__table__
+                table = getattr(_oan_models, f"{prefix}{mnemonic}").__table__
                 present = await conn.run_sync(
                     lambda sconn, name=table.name: {c["name"] for c in sa_inspect(sconn).get_columns(name)}
                     if sa_inspect(sconn).has_table(name) else None)
@@ -181,7 +235,6 @@ async def rename_records() -> None:
     own transaction. A table that fails is logged and skipped, so a bad row
     never stops the migration.
     """
-    from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import models as farmer_models
     from sqlalchemy import bindparam, select, update
     from sqlalchemy import inspect as sa_inspect
 
@@ -189,7 +242,7 @@ async def rename_records() -> None:
 
     engine = dbengine.get()
     tables = [
-        (mnemonic, getattr(farmer_models if mnemonic != "FarmerPhone" else _oan_models, f"{prefix}{mnemonic}").__table__)
+        (mnemonic, getattr(_oan_models, f"{prefix}{mnemonic}").__table__)
         for mnemonic in COMPOSERS
         for prefix in ("G2PRegister", "G2PRegisterHistory")
     ]

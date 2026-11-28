@@ -8,7 +8,6 @@ import importlib.util
 import re
 from pathlib import Path
 
-_ROOT = Path(__file__).parents[2]
 _PATH = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension/register_domain/services/upstream_messages.py"
 _spec = importlib.util.spec_from_file_location("upstream_messages", _PATH)
 upstream_messages = importlib.util.module_from_spec(_spec)
@@ -61,7 +60,14 @@ ALREADY_EXPLAINED = (
 def _upstream_messages():
     """Every message the farmer extension passes to validation_error, with
     each f-string placeholder filled by a sample value."""
-    for path in (_ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/openg2p_farmer").rglob("*.py"):
+    # These are the Farmer validators whose messages pass through reword().
+    validators = (
+        *_PATH.parent.glob("g2p_register_domain_service_*.py"),
+        _PATH.with_name("domain_validation_utils.py"),
+        _PATH.with_name("household_submission_validation.py"),
+        _PATH.with_name("land_link_validation.py"),
+    )
+    for path in validators:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "validation_error" and node.args):
                 continue

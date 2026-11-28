@@ -4,7 +4,6 @@ from datetime import datetime
 
 from openg2p_registry_core.models import G2PRegisterAuthentication
 from openg2p_registry_core.services import g2p_registrant_authentication_service as core_service
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import models as native
 from openg2p_registry_farmer_extension.register_domain import models as oan
 from openg2p_registry_farmer_extension.register_domain import schemas
 from openg2p_registry_farmer_extension.register_domain.services.registrant_auth_compat import (
@@ -16,7 +15,7 @@ STAMPS = ("last_authentication_status", "last_authenticated_at", "authentication
 
 def test_farmer_model_carries_core_authentication_mixin_on_the_native_table():
     assert issubclass(oan.G2PRegisterFarmer, G2PRegisterAuthentication)
-    assert oan.G2PRegisterFarmer.__table__ is native.G2PRegisterFarmer.__table__
+    assert oan.G2PRegisterFarmer.__table__ is oan._FarmerRegister.__table__
     for name in STAMPS + ("authentication_expiry_notified", "authentication_token"):
         assert name in oan.G2PRegisterFarmer.__table__.c, name
     # The intake form has no outcome: verification is of the approved record.

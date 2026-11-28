@@ -12,17 +12,17 @@ FROM openg2p/openg2p-registry-db-seed:${BASE_IMAGE_VERSION}
 # The platform image ships the reference registry's seed; only Farmer's is applied.
 RUN rm -rf /seed/meta_data/* /seed/awe_meta_data/* /seed/templates/* /seed/seed-data/*
 
-# OpenG2P's Farmer metadata with OAN's layer in zz-oan/, applied after the whole
-# Farmer tree. OAN replaces the Farmer approval policy (awe_meta_data/zz-oan/), so
-# the extension carries only the Farmer callback registration besides it.
+# The platform runs SQL in path order. site-configuration/ runs after the
+# base registry metadata. The AWE directory holds the approval policy and
+# the callback secret template, which the platform handles separately.
 COPY farmer-extension/src/openg2p_registry_farmer_extension/meta_data/     /seed/meta_data/
 COPY farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data/ /seed/awe_meta_data/
 
 # Templates are uploaded with LOAD_TEMPLATES=true under their file names.
 COPY farmer-extension/src/openg2p_registry_farmer_extension/templates/ /seed/templates/
 
-COPY farmer-extension/reporting/ /seed/oan-reporting/
-COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql
+COPY docker/db-seed/sync_geo_levels.py /seed/oan-reporting/sync_geo_levels.py
+COPY docker/db-seed/reporting_views.sql /seed/reporting_views.sql
 
 # Sample data (LOAD_SAMPLE_DATA=true). The platform image checks out openg2p-data
 # at /openg2p-data; this one checks out the OAN copy at a pinned commit in its place:
@@ -40,10 +40,11 @@ RUN rm -rf /openg2p-data && mkdir -p /openg2p-data && cd /openg2p-data \
 # (OpenG2P/registry-platform docker/db-seed/mds_client.py at e7e6e269), unchanged.
 # Platform images after rc.557 ship it as /seed/mds_client.py; drop this copy
 # when the platform pin moves past it.
-COPY --chmod=755 docker/db-seed/mds_client.py docker/db-seed/load_sample_data.py /seed/
+COPY --chmod=755 docker/db-seed/mds_client.py /seed/
+COPY --chmod=755 docker/db-seed/load_sample_data.py /seed/
 
 # OAN theme: the staff-portal theme (palette, background image, logo) is data in
 # openg2p-data (themes/oan_theme), checked out above at the one pinned commit.
 # Render this registry's entry into the seed tree; it sorts after the registry
-# configuration (zz-oan/) and points it at the oan_theme row.
-RUN mkdir -p /seed/meta_data/zz-oan  && cd /openg2p-data  && python3 scripts/themes/build_theme_sql.py farmer > /seed/meta_data/zz-oan/90_oan_theme.sql
+# configuration (site-configuration/) and points it at the oan_theme row.
+RUN mkdir -p /seed/meta_data/site-configuration  && cd /openg2p-data  && python3 scripts/themes/build_theme_sql.py farmer > /seed/meta_data/site-configuration/90_oan_theme.sql

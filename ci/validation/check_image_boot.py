@@ -3,8 +3,7 @@
 The platform selects the extension with REGISTRY_EXTENSION_MODULE and publishes it
 as openg2p_registry_extensions. The check confirms that the Farmer extension is
 the one selected, that the platform's alias names resolve to the modules loaded
-under the real name (one module object, so mapped tables are declared once), and
-that the OAN classes are the ones the platform resolves by name.
+under the real name (one module object, so mapped tables are declared once), and that the domain classes resolve from the Farmer Registry package.
 Run inside an image:  python /repo/ci/validation/check_image_boot.py <role>
 """
 import importlib
@@ -35,6 +34,5 @@ for name in SHARED:
 models = importlib.import_module("openg2p_registry_extensions.register_domain.models")
 for cls in ("G2PRegisterFarmer", "G2PIntakeFormFarmer", "G2PRegisterFarmerPhone"):
     assert getattr(models, cls).__module__.startswith(PACKAGE + ".register_domain.models"), cls
-openg2p_farmer = sys.modules[PACKAGE + ".openg2p_farmer"]
-print(json.dumps({"image_boot": "PASS", "role": role, "extension": PACKAGE,
-                  "version": alias.__version__, "openg2p_farmer_version": openg2p_farmer.__version__}))
+assert importlib.util.find_spec("openg2p_registry_oan_farmer_extension") is None
+print(json.dumps({"image_boot": "PASS", "role": role, "extension": PACKAGE, "version": alias.__version__}))

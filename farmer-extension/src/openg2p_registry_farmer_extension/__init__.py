@@ -1,12 +1,6 @@
 __version__ = "1.0.3+oan.1"
 __variant__ = "farmer"
 
-# OpenG2P's Farmer extension 1.0.3 is kept verbatim in ``openg2p_farmer``; this
-# package is that extension with the OpenAgriNet layer on top. The modules here
-# re-export ``openg2p_farmer`` and redefine the classes OAN extends under the
-# same names, so the platform, which resolves domain classes by name on these
-# modules, gets the OAN versions.
-#
 # The platform selects this package through REGISTRY_EXTENSION_MODULE and publishes
 # it as ``openg2p_registry_extensions`` by assigning the package object in
 # sys.modules. That aliases the package only. An import of an alias-name

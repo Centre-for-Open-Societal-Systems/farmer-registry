@@ -1,6 +1,6 @@
 """The web intake and the ODK form ask for the same answers.
 
-For each question that both of them ask, the web seed (zz-oan SQL) and the
+For each question that both of them ask, the web seed (site-configuration SQL) and the
 XLSForm must agree on when an answer is mandatory: always, only for one answer
 of another question, or never. A change on one side alone fails here.
 """
@@ -13,7 +13,7 @@ import openpyxl
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-SEED = REPO / "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/zz-oan"
+SEED = REPO / "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/site-configuration"
 FORM = REPO / "odk/ATI_Farmers_Profile_ODK_Form_v4.xlsx"
 FARMER = "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd"
 

@@ -12,9 +12,6 @@ import pytest
 
 pytest.importorskip("openg2p_registry_core")
 
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import (
-    models as native,
-)
 from openg2p_registry_farmer_extension.register_domain import models as oan
 from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
@@ -41,9 +38,9 @@ def _array(type_, compiler, **kw):
 def session():
     configure_mappers()
     engine = create_engine("sqlite://")
-    classes = [native.G2PRegisterFarmer, native.G2PRegisterLand, native.G2PRegisterCrop,
-               native.G2PRegisterLivestock, native.G2PRegisterMembershipDetails,
-               native.G2PRegisterFarmInputs, native.G2PIntakeFormLand]
+    classes = [oan._FarmerRegister, oan.G2PRegisterLand, oan.G2PRegisterCrop,
+               oan.G2PRegisterLivestock, oan.G2PRegisterMembershipDetails,
+               oan.G2PRegisterFarmInputs, oan.G2PIntakeFormLand]
     for cls in classes:
         cls.__table__.create(engine, checkfirst=True)
     with Session(engine) as db:
@@ -62,20 +59,20 @@ def flushed(db, row):
 
 
 def test_native_rows_store_the_readable_name(session):
-    assert flushed(session, native.G2PRegisterFarmer(first_name="Berhanu", middle_name="Abebe", last_name="Assefa")) \
+    assert flushed(session, oan._FarmerRegister(first_name="Berhanu", middle_name="Abebe", last_name="Assefa")) \
         == "Berhanu Abebe Assefa"
-    assert flushed(session, native.G2PRegisterLand(land_size=1.25, unit="HECTARE", current_land_use="GRAZING")) \
+    assert flushed(session, oan.G2PRegisterLand(land_size=1.25, unit="HECTARE", current_land_use="GRAZING")) \
         == "1.25 Hectare, Grazing"
-    assert flushed(session, native.G2PRegisterCrop(commodity="CROP_TEFF", season="SEASON_MEHER")) == "Teff, Meher"
-    assert flushed(session, native.G2PRegisterLivestock(livestock_type="LSTK_CATTLE", breed="BREED_LOCAL")) \
+    assert flushed(session, oan.G2PRegisterCrop(commodity="CROP_TEFF", season="SEASON_MEHER")) == "Teff, Meher"
+    assert flushed(session, oan.G2PRegisterLivestock(livestock_type="LSTK_CATTLE", breed="BREED_LOCAL")) \
         == "Cattle (Local)"
-    assert flushed(session, native.G2PRegisterMembershipDetails(primary_cooperative_name="Tsehay Primary Cooperative")) \
+    assert flushed(session, oan.G2PRegisterMembershipDetails(primary_cooperative_name="Tsehay Primary Cooperative")) \
         == "Tsehay Primary Cooperative"
-    assert flushed(session, native.G2PRegisterFarmInputs(fertilizer_use=True)) == "Farm inputs (fertilizer)"
+    assert flushed(session, oan.G2PRegisterFarmInputs(fertilizer_use=True)) == "Farm inputs (fertilizer)"
 
 
 def test_an_update_renames_the_row(session):
-    land = native.G2PRegisterLand(land_size=1, unit="HECTARE", current_land_use="GRAZING")
+    land = oan.G2PRegisterLand(land_size=1, unit="HECTARE", current_land_use="GRAZING")
     assert flushed(session, land) == "1 Hectare, Grazing"
     land.land_size = 2
     session.flush()
@@ -88,9 +85,9 @@ def test_oan_farmer_subclass_stores_all_three_names(session):
 
 
 def test_a_row_naming_nothing_keeps_the_platforms_name(session):
-    assert flushed(session, native.G2PRegisterLand()) == "Land"
+    assert flushed(session, oan.G2PRegisterLand()) == "Land"
 
 
 def test_a_flushed_intake_form_keeps_its_application_reference(session):
-    form = native.G2PIntakeFormLand(land_size=3, unit="HECTARE", application_reference="APP-1")
+    form = oan.G2PIntakeFormLand(land_size=3, unit="HECTARE", application_reference="APP-1")
     assert flushed(session, form) == "3 Hectare APP-1"

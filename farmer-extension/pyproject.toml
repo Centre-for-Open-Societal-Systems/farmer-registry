@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openg2p-registry-farmer-extension"
-description = "OpenG2P Registry Farmer Extension with the OpenAgriNet layer"
+description = "OpenAgriNet Farmer Registry domain for the OpenG2P Registry Platform"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MPL-2.0" }

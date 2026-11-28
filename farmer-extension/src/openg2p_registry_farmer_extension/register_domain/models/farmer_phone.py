@@ -8,7 +8,7 @@ the farmer itself (fields.py), not a table.
 
 from openg2p_registry_core.models import G2PRegister, G2PRegisterHistory
 from openg2p_registry_core.models.g2p_intake_form import G2PIntakeForm
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.models.farmer import (
+from openg2p_registry_farmer_extension.register_domain.models.farmer import (
     G2PIntakeFormFarmer,
 )
 from sqlalchemy import Boolean, String, select

@@ -1,5 +1,3 @@
-# Everything the farmer extension provides, then OAN's additions below. Core
-# resolves classes by name on this module, so a name defined here wins.
 import asyncio
 import json
 import time
@@ -7,9 +5,17 @@ import time
 from openg2p_fastapi_common.context import dbengine
 from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryException
 from openg2p_registry_core.services import G2PRegisterDomainService
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain import services as _farmer
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services import *
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.domain_validation_utils import (
+from .g2p_register_domain_service_crop import G2PRegisterDomainServiceCrop
+from .g2p_register_domain_service_farmer import G2PRegisterDomainServiceFarmer
+from .g2p_register_domain_service_farm_inputs import G2PRegisterDomainServiceFarmInputs
+from .g2p_register_domain_service_household import G2PRegisterDomainServiceHousehold
+from .g2p_register_domain_service_household_member import G2PRegisterDomainServiceHouseholdMember
+from .g2p_register_domain_service_livestock import G2PRegisterDomainServiceLivestock
+from .g2p_register_domain_service_land import G2PRegisterDomainServiceLand
+from .g2p_register_domain_service_membership_details import G2PRegisterDomainServiceMembershipDetails
+from .g2p_register_domain_service_poverty_score import G2PRegisterDomainServicePovertyScore
+from .g2p_intake_form_data_service_farmer import G2PFarmerIntakeFormDataService
+from .domain_validation_utils import (
     validation_error,
 )
 from sqlalchemy import text
@@ -159,10 +165,8 @@ def _with_widget_rules(name: str, base: type) -> type:
                  "_checks_master_data": name == _PREFIX + "Farmer"})
 
 
-# One subclass per farmer domain service, under the same name, so every
-# register, including one the farmer extension adds later, gets the rules.
-for _name in dir(_farmer):
-    _base = getattr(_farmer, _name)
+# Wrap the domain services exported for platform discovery.
+for _name, _base in tuple(globals().items()):
     if (
         _name.startswith(_PREFIX)
         and isinstance(_base, type)

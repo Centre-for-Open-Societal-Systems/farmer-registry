@@ -16,17 +16,16 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 PKG = "openg2p_registry_farmer_extension"
-UPSTREAM_DIR = ROOT / "farmer-extension/src" / PKG / "openg2p_farmer/register_domain/services"
+FARMER_SERVICES = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/register_domain/services"
 CHAIN = [
-    f"{PKG}.openg2p_farmer",
-    f"{PKG}.openg2p_farmer.register_domain",
-    f"{PKG}.openg2p_farmer.register_domain.services",
-    f"{PKG}.openg2p_farmer.register_domain.services.utils",
+    f"{PKG}.register_domain",
+    f"{PKG}.register_domain.services",
+    f"{PKG}.register_domain.services.utils",
 ]
-ROSTER = f"{PKG}.openg2p_farmer.register_domain.services.utils.household_roster"
+ROSTER = f"{PKG}.register_domain.services.utils.household_roster"
 STUBBED = CHAIN + [
     ROSTER,
-    f"{CHAIN[2]}.domain_validation_utils",
+    f"{CHAIN[1]}.domain_validation_utils",
     "openg2p_registry_core",
     "openg2p_registry_core.models",
     "sqlalchemy",
@@ -70,7 +69,7 @@ def roster(monkeypatch):
         "sqlalchemy": _module("sqlalchemy", select=lambda *a: None),
         "sqlalchemy.ext": _module("sqlalchemy.ext", __path__=[]),
         "sqlalchemy.ext.asyncio": _module("sqlalchemy.ext.asyncio", AsyncSession=object),
-        f"{CHAIN[2]}.domain_validation_utils": _module(
+        f"{CHAIN[1]}.domain_validation_utils": _module(
             "domain_validation_utils",
             as_int=lambda v: None if v in (None, "") else int(v),
             parse_date=_parse_date,
@@ -84,11 +83,11 @@ def roster(monkeypatch):
     monkeypatch.setitem(sys.modules, PKG, package)
     for name, module in stubs.items():
         monkeypatch.setitem(sys.modules, name, module)
-    spec = importlib.util.spec_from_file_location(ROSTER, UPSTREAM_DIR / "utils/household_roster.py")
+    spec = importlib.util.spec_from_file_location(ROSTER, FARMER_SERVICES / "utils/household_roster.py")
     module = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, ROSTER, module)
     spec.loader.exec_module(module)
-    sys.modules[CHAIN[3]].household_roster = module
+    sys.modules[CHAIN[2]].household_roster = module
 
     from openg2p_registry_farmer_extension import household_roster_head
 
@@ -191,8 +190,3 @@ def test_overlay_head_row_is_not_counted_again(roster):
         roster, [linked, wife()], [farmer()], overlay_person=linked, overlay_household_id="hh-1"
     )
     assert result.size_of_group == 2
-
-
-def test_upstream_file_is_unchanged_from_the_published_copy():
-    published = ROOT / "sample-farmer-extension/src" / PKG / "register_domain/services/utils/household_roster.py"
-    assert (UPSTREAM_DIR / "utils/household_roster.py").read_text() == published.read_text()

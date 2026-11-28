@@ -6,7 +6,8 @@ a cluster. ci/validation/check_native_metadata.py replays the seed in a disposab
 same files statically, so it needs no database or platform image and runs on every push in under a second.
 
 The model's columns are read from source with ast, without importing it:
-  * the farmer extension's mixins (openg2p_farmer/register_domain/models/*.py) and OAN's farmer phone register
+  * the farmer extension's mixins (OpenG2P's register_domain/models/*.py at the pinned commit, read from
+    the existing Farmer models) and OAN's farmer phone register
   * OAN's added columns (register_domain/fields.py, OAN_FIELDS)
   * the platform base classes the registers inherit from (CORE_COLUMNS below)
 """
@@ -18,7 +19,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 EXT = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension"
-NATIVE_MODELS = EXT / "openg2p_farmer/register_domain/models"
 OAN_MODELS = EXT / "register_domain/models"
 
 # The platform base classes' columns (openg2p_registry_core.models, g2p_register.py and
@@ -48,7 +48,7 @@ CORE_COLUMNS = {
 def models():
     """{register mnemonic: columns} and {table name: register mnemonic}, read from the model source."""
     mixins, registers, tables = {}, {}, {}
-    for path in sorted(NATIVE_MODELS.glob("*.py")) + [OAN_MODELS / "farmer_phone.py"]:
+    for path in sorted(OAN_MODELS.glob("*.py")):
         for node in ast.parse(path.read_text()).body:
             if not isinstance(node, ast.ClassDef):
                 continue

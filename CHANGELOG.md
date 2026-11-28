@@ -6,6 +6,12 @@ the git log and the pull requests.
 
 ## [Unreleased]
 
+### Changed
+
+- Consolidate the Farmer Registry domain into `openg2p_registry_farmer_extension` (G2R-635).
+  The staff API, partner API and Celery install that one package on the OpenG2P platform.
+  The seed image takes metadata and templates from the package; the sample loader and reporting SQL stay under `docker/db-seed/`.
+
 ### Added
 
 - Guard tests for contracts between files that nothing checks at runtime (#342, #343, #344):

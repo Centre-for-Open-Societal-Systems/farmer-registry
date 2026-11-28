@@ -1,7 +1,7 @@
 """Domain service of the FarmerPhone register (models/farmer_phone.py)."""
 
 from openg2p_registry_core.services import G2PRegisterDomainService
-from openg2p_registry_farmer_extension.openg2p_farmer.register_domain.services.domain_validation_utils import (
+from openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils import (
     as_bool,
     is_blank,
     validation_error,

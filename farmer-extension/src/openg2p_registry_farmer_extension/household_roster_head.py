@@ -120,7 +120,7 @@ def drop_listed_farmers(candidates: list[dict], farmers: list[dict]) -> list[dic
 def install() -> bool:
     """Idempotent: upstream's union_roster_people ignores member rows that repeat a farmer."""
     try:
-        from .openg2p_farmer.register_domain.services.utils import household_roster
+        from openg2p_registry_farmer_extension.register_domain.services.utils import household_roster
     except ImportError:
         return False
     original = household_roster.union_roster_people

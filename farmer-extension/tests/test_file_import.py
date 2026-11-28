@@ -50,7 +50,7 @@ def test_import_configuration_has_a_fixed_id_and_points_at_the_form_own_data_mod
 
 
 def test_data_model_key_paths_pattern_and_template_rows_are_upserts_on_the_import_envelope():
-    seed = sql('zz-oan', SEED)
+    seed = sql('site-configuration', SEED)
     assert f"('{MODEL}','FILE_IMPORT_TO_FARMER_INTAKE','$.headers.sender_id=>^Staff Portal$',NULL,TRUE)" in seed
     assert (f"('{MODEL}_key_path','{MODEL}','$.headers.message_id','$.headers.sender_id',"
             f"'$.headers.signature','$.body','FALSE','')") in seed

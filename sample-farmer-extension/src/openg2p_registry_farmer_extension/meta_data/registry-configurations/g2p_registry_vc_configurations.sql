@@ -1,1 +1,0 @@
--- No seed data for g2p_registry_vc_configurations
