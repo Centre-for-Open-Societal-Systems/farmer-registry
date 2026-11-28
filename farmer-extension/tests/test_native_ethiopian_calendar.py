@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SQL = Path(__file__).resolve().parents[1] / "src/openg2p_registry_oan_farmer_extension/meta_data/zz-oan/15_sections.sql"
+SQL = Path(__file__).resolve().parents[1] / "src/openg2p_registry_oan_farmer_extension/meta_data/site-configuration/15_sections.sql"
 
 
 def test_staff_ui_is_built_on_a_platform_with_the_calendar():

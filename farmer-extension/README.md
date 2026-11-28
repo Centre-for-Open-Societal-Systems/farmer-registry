@@ -27,7 +27,7 @@ name on these modules. `__init__.py` makes the platform's
 | `register_domain/ethiopian_calendar.py` | Gregorian and Ethiopian calendar conversion |
 | `register_domain/services/` | the farmer domain services, each extended with the derived values (`derivations.py`) and the section widgets' value rules (`widget_rules.py`); the FarmerPhone service |
 | `app.py` | the farmer initializer, plus migration of OAN registers |
-| `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `zz-oan/` (applied after the Farmer tree) and OAN's templates (`farmer_dci_search_response.j2` is upstream's DCI template plus OAN's `farmer_reference` block) |
+| `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `site-configuration/` (applied after the Farmer tree) and OAN's templates (`farmer_dci_search_response.j2` is upstream's DCI template plus OAN's `farmer_reference` block) |
 | `tests/` | `uv run --no-project --with pytest pytest farmer-extension/tests` |
 
 Images are built FROM the registry platform images (`docker/<component>/Dockerfile`).
@@ -272,7 +272,7 @@ raise first.
 
 ## Data migrations in the metadata layer
 
-`zz-oan/17_multi_choice.sql` (block 1) and `zz-oan/21_renamed_section_data.sql` rewrite
+`site-configuration/17_multi_choice.sql` (block 1) and `site-configuration/21_renamed_section_data.sql` rewrite
 rows in the register, history and intake tables that earlier seeds wrote. They are data
 migrations, not configuration: retire them once every environment has applied them.
 
@@ -281,4 +281,4 @@ migrations, not configuration: retire them once every environment has applied th
 The db-seed image carries configuration only. The OAN theme (palette, background images,
 logo) and the sample data are checked out from OAN `openg2p-data` at one pinned
 `OPENG2P_DATA_REF`; `scripts/themes/build_theme_sql.py farmer` renders the theme into
-`zz-oan/90_oan_theme.sql`. The factory `OpenG2P-theme` row stays as it is today.
+`site-configuration/90_oan_theme.sql`. The factory `OpenG2P-theme` row stays as it is today.

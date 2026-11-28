@@ -6,7 +6,7 @@
 -- that names the farmer's data it holds (farmer_lands, farmer_crops_intake).
 -- No upstream section id or mnemonic has that form, so they cannot collide.
 --
--- The image copies this folder to /seed/meta_data/zz-oan/, so it runs after the
+-- The image copies this folder to /seed/meta_data/site-configuration/, so it runs after the
 -- farmer seed has upserted its own rows. Every OAN row is derived from the
 -- upstream row on each run, so upstream changes to a section reach the OAN copy
 -- the next time the seed runs. Upstream rows are never updated; 20_layout.sql

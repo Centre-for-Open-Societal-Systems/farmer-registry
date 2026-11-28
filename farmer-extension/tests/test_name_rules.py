@@ -25,7 +25,7 @@ name_rules = importlib.util.module_from_spec(_spec)
 sys.modules["name_rules"] = name_rules
 _spec.loader.exec_module(name_rules)
 
-_SEED = (_ROOT / "meta_data/zz-oan/19_name_rules.sql").read_text(encoding="utf-8")
+_SEED = (_ROOT / "meta_data/site-configuration/19_name_rules.sql").read_text(encoding="utf-8")
 PATTERN = re.search(r"\$pattern\$(.*?)\$pattern\$", _SEED, re.S).group(1)
 
 ACCEPT = ["Abebe", "አበበ", "O'Neil", "O\u2019Neil", "Mary-Jane", "Abebe Kebede", "José", "Nu\u0301ñez", "a" * 100]
@@ -136,9 +136,9 @@ def test_the_seed_applies_the_rule_to_every_name_field_and_has_its_message():
     for field in name_rules.NAME_LABELS:
         assert f"'{field}'" in _SEED
     assert "'patternMessage', 'name_letters_only'" in _SEED
-    translations = (_ROOT / "meta_data/zz-oan/30_translations.sql").read_text(encoding="utf-8")
+    translations = (_ROOT / "meta_data/site-configuration/30_translations.sql").read_text(encoding="utf-8")
     assert '"name_letters_only":' in translations
-    plain = (_ROOT / "meta_data/zz-oan/89_plain_pattern_messages.sql").read_text(encoding="utf-8")
+    plain = (_ROOT / "meta_data/site-configuration/89_plain_pattern_messages.sql").read_text(encoding="utf-8")
     assert '"name_letters_only": "Use letters only; spaces, apostrophes and hyphens are allowed."' in plain
-    checks = (_ROOT / "meta_data/zz-oan/90_checks.sql").read_text(encoding="utf-8")
+    checks = (_ROOT / "meta_data/site-configuration/90_checks.sql").read_text(encoding="utf-8")
     assert "'Use letters only; spaces, apostrophes and hyphens are allowed.'" in checks

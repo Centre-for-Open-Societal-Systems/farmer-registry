@@ -1,7 +1,7 @@
 -- "Import from file" entry for the Farmer intake form (farmer_ingestion_intake),
 -- the staff portal's native bulk upload (OpenG2P registry design: bulk upload).
 -- Its file-import data model (file_import_to_farmer_intake, seeded in
--- zz-oan/61_file_import_to_farmer_intake.sql) has key paths, a pass-through
+-- site-configuration/61_file_import_to_farmer_intake.sql) has key paths, a pass-through
 -- pattern and a Jinja template that take one flat CSV/Excel row per intake. The
 -- ODK data model (odk_to_farmer_intake) belongs to the ODK connector and is not
 -- used here. The configuration id is fixed

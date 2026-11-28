@@ -39,7 +39,7 @@ function FileOrVariant(props: Props) {
 widgetRegistry.register({ widget: 'file', component: FileOrVariant });
 
 // Dates use upstream's date widget, set to the Ethiopian calendar in metadata
-// ("widget-data-format": {"calendar": "ethiopic"}, zz-oan/15_sections.sql).
+// ("widget-data-format": {"calendar": "ethiopic"}, site-configuration/15_sections.sql).
 
 // OAN's own widget types. A widget with an object "widget-data-path" saves
 // every field it names (sectionSnapshot.ts), so each of these saves its pair

@@ -270,7 +270,7 @@ LIMIT 50;
 | Piece | Where |
 |---|---|
 | Import configuration | `meta_data/registry-configurations/g2p_registry_import_file_configurations.sql` |
-| Data model `file_import_to_farmer_intake` with its key paths (`$.headers.*`, payload `$.body`), its pass-through pattern, and its template and document rows | `meta_data/zz-oan/61_file_import_to_farmer_intake.sql` |
+| Data model `file_import_to_farmer_intake` with its key paths (`$.headers.*`, payload `$.body`), its pass-through pattern, and its template and document rows | `meta_data/site-configuration/61_file_import_to_farmer_intake.sql` |
 | Pass-through enricher | `ingestion_pipeline/enricher_services/pass_through.py` (`G2PPassThroughEnricherService`, the same name Livestock registers) |
 | Jinja template, with the generated code-list block | `templates/farmer_file_import_intake.j2` |
 | Template workbook, header-only CSV, code-list snapshot | `import-templates/` |

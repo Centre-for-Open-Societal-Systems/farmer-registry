@@ -3,7 +3,7 @@
 A name is 1 to 100 characters: letters (any script, Ge'ez included), combining
 marks, spaces, apostrophes and hyphens, with at least one letter. The staff UI
 applies the same rule from the name widgets' `widget-data-validation`
-(meta_data/zz-oan/19_name_rules.sql); this module covers what has no browser:
+(meta_data/site-configuration/19_name_rules.sql); this module covers what has no browser:
 ODK submissions, partner messages and API change requests.
 
 The Crop register refuses any other name, so Farmer must not accept one that

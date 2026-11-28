@@ -15,7 +15,7 @@ Commons services. See [service coordination](operations/coordinated-services-rol
 [dashboard delivery](dashboard-delivery.md).
 
 On install and on every upgrade, the post-install hooks replay the seed (`meta_data/`, `awe_meta_data/`) and run the
-sanity smoke tests. The seed is idempotent (`test/unit/test_seed_on_conflict.py`), and `zz-oan/90_checks.sql` fails
+sanity smoke tests. The seed is idempotent (`test/unit/test_seed_on_conflict.py`), and `site-configuration/90_checks.sql` fails
 the hook when the forms are wrong.
 
 ## Environments

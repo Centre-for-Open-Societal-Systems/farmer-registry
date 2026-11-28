@@ -2,8 +2,8 @@
 
 An approval is routed by policy_key across two databases seeded by different files:
   * registry: g2p_registry_awe_policy_configurations binds a register or intake form to a policy_key
-    (meta_data/awe-integration/, re-keyed by meta_data/zz-oan/55_default_approvals.sql on the same config ids)
-  * AWE: approval_policy, approval_stage and approver_rule (awe_meta_data/zz-oan/)
+    (meta_data/awe-integration/, re-keyed by meta_data/site-configuration/55_default_approvals.sql on the same config ids)
+  * AWE: approval_policy, approval_stage and approver_rule (awe_meta_data/)
 Nothing checks the join at runtime: a binding to a key the AWE does not have leaves the change request or intake
 without an approval, and the stage and rule seeds insert through a JOIN on policy_key and stage_order, so a
 mistyped key or order inserts nothing.
@@ -14,20 +14,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 META = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data"
-AWE = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/awe_meta_data/zz-oan"
+AWE = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/awe_meta_data"
 ID = r"'([0-9a-f-]+)'"
 
 
 def register_ids():
     """The register ids defined by the register definitions, upstream's and OAN's."""
-    paths = [META / "register-metadata/g2p_register_definitions.sql", *sorted(META.glob("zz-oan/05_*.sql"))]
+    paths = [META / "register-metadata/g2p_register_definitions.sql", *sorted(META.glob("site-configuration/05_*.sql"))]
     return {i for path in paths for i in re.findall(rf"\(\s*{ID}\s*,\s*'[A-Za-z]+'", path.read_text())}
 
 
 def bindings():
     """{config id: (scope, register id, intake form id, policy type, policy key)} after the seed has run."""
     found = {}
-    # The seed replays meta_data in path order, so zz-oan's row for a config id is the one that stays.
+    # The seed replays meta_data in path order, so site-configuration's row for a config id is the one that stays.
     for path in sorted(META.rglob("*.sql")):
         text = path.read_text()
         if "g2p_registry_awe_policy_configurations" not in text:
