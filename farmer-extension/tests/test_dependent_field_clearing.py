@@ -1,13 +1,13 @@
 import unittest
 
 from openg2p_registry_core.errors import G2PRegistryException
-from openg2p_registry_oan_farmer_extension.register_domain.services.g2p_register_domain_service_farmer import (
+from openg2p_registry_farmer_extension.register_domain.services.g2p_register_domain_service_farmer import (
     G2PRegisterDomainServiceFarmer,
 )
-from openg2p_registry_oan_farmer_extension.register_domain.services.g2p_register_domain_service_household_member import (
+from openg2p_registry_farmer_extension.register_domain.services.g2p_register_domain_service_household_member import (
     G2PRegisterDomainServiceHouseholdMember,
 )
-from openg2p_registry_oan_farmer_extension.register_domain.services.g2p_register_domain_service_membership_details import (
+from openg2p_registry_farmer_extension.register_domain.services.g2p_register_domain_service_membership_details import (
     G2PRegisterDomainServiceMembershipDetails,
 )
 

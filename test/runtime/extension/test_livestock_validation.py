@@ -1,7 +1,7 @@
 """Validate the Farmer form's optional livestock section."""
 import unittest
 from openg2p_registry_core.errors import G2PRegistryException
-from openg2p_registry_oan_farmer_extension.register_domain.services.g2p_register_domain_service_livestock import G2PRegisterDomainServiceLivestock
+from openg2p_registry_farmer_extension.register_domain.services.g2p_register_domain_service_livestock import G2PRegisterDomainServiceLivestock
 
 class TestLivestockRows(unittest.IsolatedAsyncioTestCase):
     async def validate(self, rows):

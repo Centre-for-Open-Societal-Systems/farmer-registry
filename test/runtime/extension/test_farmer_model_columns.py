@@ -17,7 +17,7 @@ import unittest
 from sqlalchemy import inspect, select
 from sqlalchemy.dialects import postgresql
 
-from openg2p_registry_oan_farmer_extension.register_domain.models.farmer import (
+from openg2p_registry_farmer_extension.register_domain.models.farmer import (
     G2PIntakeFormFarmer,
     G2PRegisterFarmer,
     G2PRegisterHistoryFarmer,

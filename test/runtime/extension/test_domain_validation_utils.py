@@ -8,7 +8,7 @@ import unittest
 from datetime import date
 
 from openg2p_registry_core.errors import G2PRegistryException
-from openg2p_registry_oan_farmer_extension.register_domain.services.domain_validation_utils import (
+from openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils import (
     normalize_coordinates,
     sync_ethiopic_date_pair,
 )

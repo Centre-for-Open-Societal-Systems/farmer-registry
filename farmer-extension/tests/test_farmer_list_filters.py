@@ -8,7 +8,7 @@ import json
 import re
 from pathlib import Path
 
-SRC = Path(__file__).parents[1] / "src/openg2p_registry_oan_farmer_extension"
+SRC = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension"
 SEED = (SRC / "meta_data/site-configuration/05_registers.sql").read_text(encoding="utf-8")
 FIELDS = (SRC / "register_domain/fields.py").read_text(encoding="utf-8")
 CORE_FILTER_TYPES = {"dropdown", "text", "date_range", "number_range", "boolean"}

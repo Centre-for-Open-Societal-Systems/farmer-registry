@@ -87,7 +87,7 @@ def initialize(host):
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "source": source}
     print(json.dumps({"resolved_worker_save_callables": resolved}), flush=True)
     package_names = ("openg2p-registry-core", "openg2p-registry-celery-worker",
-                     "openg2p-registry-oan-farmer-extension")
+                     "openg2p-registry-farmer-extension")
     packages = {name: importlib.metadata.version(name) for name in package_names}
     contract = json.loads((ROOT / "ci/validation/native-release-contract.json").read_text(encoding="utf-8"))
     assert packages == contract["observedInstalledPackages"], "Installed native package contract changed without review"
@@ -318,7 +318,7 @@ def run():
             raise RuntimeError("Owned PostgreSQL did not become ready")
         native("ddl", database)
         files = []
-        for package in ("farmer-extension/src/openg2p_registry_oan_farmer_extension",):
+        for package in ("farmer-extension/src/openg2p_registry_farmer_extension",):
             files += sorted((ROOT / package / "meta_data").rglob("*.sql"))
         for path in files:
             command("docker", "exec", "-i", db, "psql", "-X", "-U", "postgres", "-d", "native_worker_save", "-v", "ON_ERROR_STOP=1", data=path.read_bytes())

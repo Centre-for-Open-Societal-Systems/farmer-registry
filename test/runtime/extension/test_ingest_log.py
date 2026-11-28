@@ -11,7 +11,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from openg2p_registry_oan_farmer_extension import ingest_log
+from openg2p_registry_farmer_extension import ingest_log
 
 
 class TestIngestLog(unittest.TestCase):

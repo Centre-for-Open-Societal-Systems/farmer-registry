@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("openg2p_registry_core")
 from openg2p_registry_core.models import G2PRegisterHistory
 from openg2p_registry_core.models.enum import ChangeRequestSourceEnum
-from openg2p_registry_oan_farmer_extension import history_change_request_source
+from openg2p_registry_farmer_extension import history_change_request_source
 from sqlalchemy import create_engine, insert, select
 from sqlalchemy.orm import Session
 

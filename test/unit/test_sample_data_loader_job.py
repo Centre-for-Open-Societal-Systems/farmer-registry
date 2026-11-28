@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 TEMPLATES = ROOT / 'helm/openg2p-farmer-registry/templates'
 JOB = (TEMPLATES / 'sample-data-loader.yaml').read_text(encoding='utf-8')
 MDS_ENV = (TEMPLATES / '_mds-api-env.tpl').read_text(encoding='utf-8')
-LOADER = (ROOT / 'farmer-extension/src/openg2p_registry_oan_farmer_extension/load_sample_data.py').read_text(encoding='utf-8')
+LOADER = (ROOT / 'docker/db-seed/load_sample_data.py').read_text(encoding='utf-8')
 MDS_CLIENT = (ROOT / 'docker/db-seed/mds_client.py').read_text(encoding='utf-8')
 
 

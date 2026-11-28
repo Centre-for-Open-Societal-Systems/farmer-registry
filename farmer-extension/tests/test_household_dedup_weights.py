@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 
-_META = Path(__file__).parents[1] / "src/openg2p_registry_oan_farmer_extension/meta_data/register-metadata"
+_META = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension/meta_data/register-metadata"
 HOUSEHOLD = "9055ab43-c85d-4833-bd00-ca657bb72644"
 
 

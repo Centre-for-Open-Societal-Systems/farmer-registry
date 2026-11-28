@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch
 
 from openg2p_registry_core.services import G2PGeoHierarchyService
 
-from openg2p_registry_oan_farmer_extension.register_domain.services import (
+from openg2p_registry_farmer_extension.register_domain.services import (
     G2PRegisterDomainServiceFarmer,
 )
 

@@ -13,7 +13,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-PACKAGE_NAME = "openg2p_registry_oan_farmer_extension"
+PACKAGE_NAME = "openg2p_registry_farmer_extension"
 PACKAGE = Path(__file__).resolve().parents[1] / "src" / PACKAGE_NAME
 OWN = ['registry.change_request.farmer','registry.change_request.farmer.default','registry.change_request.household','registry.change_request.household.default','registry.intake_form.farmer','registry.intake_form.farmer.default','registry.intake_form.household','registry.intake_form.household.default']
 FOREIGN = ['registry.change_request.cropsown.default','registry.change_request.cropsown-farmer.default','registry.intake_form.cropsown.default','registry.change_request.livestock.default','registry.change_request.livestock-farmer.default','registry.intake_form.livestock.default']

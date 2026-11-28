@@ -6,7 +6,7 @@ pytest.importorskip("openg2p_registry_core")
 from openg2p_registry_core.schemas.register_payload import RecordHistoryData, RecordHistoryListData
 from openg2p_registry_core.schemas.register_response import RecordHistoryDataResponseBody
 
-from openg2p_registry_oan_farmer_extension import history_without_change_request
+from openg2p_registry_farmer_extension import history_without_change_request
 
 
 def _row(**extra):

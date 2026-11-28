@@ -5,7 +5,7 @@ from pathlib import Path
 
 EXTENSION = (
     Path(__file__).resolve().parents[2]
-    / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
+    / "farmer-extension/src/openg2p_registry_farmer_extension"
 )
 
 

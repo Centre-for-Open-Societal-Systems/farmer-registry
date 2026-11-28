@@ -15,7 +15,7 @@ from pathlib import Path
 from jinja2 import ChainableUndefined, Environment
 
 ROOT = Path(__file__).resolve().parents[2]
-EXTENSION = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
+EXTENSION = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension"
 TEMPLATES = EXTENSION / "templates"
 
 
@@ -253,7 +253,7 @@ def test_republish_uses_the_json_safe_fanout_by_default(monkeypatch):
     async def fanout_outgest_rows_json(*args, **kwargs):
         calls.append(kwargs)
 
-    stub = types.ModuleType("openg2p_registry_oan_farmer_extension.register_domain.services.outgest_json")
+    stub = types.ModuleType("openg2p_registry_farmer_extension.register_domain.services.outgest_json")
     stub.fanout_outgest_rows_json = fanout_outgest_rows_json
     monkeypatch.setitem(sys.modules, stub.__name__, stub)
     assert republish.json_safe_fanout() is fanout_outgest_rows_json

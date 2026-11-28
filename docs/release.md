@@ -11,7 +11,7 @@ How a Farmer Registry version is numbered, built and promoted. Where each versio
 | Build version: image tag and chart version | `<version>-<branch>.<BUILD_NUMBER>` ([`ci/deploy/image_names.py`](../ci/deploy/image_names.py)) | `1.0.1-develop.57` |
 | Staging version | the rc of a develop build, added by the staging promotion | |
 | OpenG2P platform (`rpVersion`) | `ARG BASE_IMAGE_VERSION` in `docker/*/Dockerfile`, `Chart.yaml`, `Chart.lock` and the native contract | `1.2.2-rc.625` |
-| Farmer extension package | `__version__` in `farmer-extension/src/openg2p_registry_oan_farmer_extension/__init__.py` | `1.0.3+oan.1` |
+| Farmer extension package | `__version__` in `farmer-extension/src/openg2p_registry_farmer_extension/__init__.py` | `1.0.3+oan.1` |
 
 The six platform images carry `-<rpVersion>` in their repository name, so a platform bump starts new ECR repositories:
 `eoan/farmer-registry/staff-api-1.2.2-rc.625:1.0.1-develop.57`. ECR tags are immutable, and deployments pin images by

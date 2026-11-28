@@ -1,12 +1,12 @@
 # Farmer extension
 
-`openg2p_registry_oan_farmer_extension`, laid out as OpenG2P's registry extension
+`openg2p_registry_farmer_extension`, laid out as OpenG2P's registry extension
 documentation describes: the registry images are the platform images with this
 package installed, selected with
-`REGISTRY_EXTENSION_MODULE=openg2p_registry_oan_farmer_extension`.
+`REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension`.
 
 The package owns the Farmer Registry domain: models, schemas, services, migration,
-ingestion, metadata, templates and reporting. It uses the OpenG2P platform directly;
+ingestion, metadata and templates. It uses the OpenG2P platform directly;
 no separate Farmer extension is installed. The original Farmer model and service
 behavior was adapted from OpenG2P/farmer-registry at `19597f7c` (MPL-2.0).
 `__init__.py` keeps the platform's `openg2p_registry_extensions.*` aliases pointed

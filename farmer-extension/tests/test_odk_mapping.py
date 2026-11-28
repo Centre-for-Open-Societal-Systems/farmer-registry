@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from jinja2 import Environment, StrictUndefined
-from openg2p_registry_oan_farmer_extension.odk import enricher
-from openg2p_registry_oan_farmer_extension.odk.transform import SECTIONS, intake_sections
+from openg2p_registry_farmer_extension.odk import enricher
+from openg2p_registry_farmer_extension.odk.transform import SECTIONS, intake_sections
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -31,7 +31,7 @@ def example():
 
 def test_prepared_sections_render_as_native_json_with_mds_codes_and_exact_roster():
     sections = intake_sections(example())
-    template = Environment(undefined=StrictUndefined).from_string((ROOT/"src/openg2p_registry_oan_farmer_extension/templates/odk_to_farmer_intake.j2").read_text())
+    template = Environment(undefined=StrictUndefined).from_string((ROOT/"src/openg2p_registry_farmer_extension/templates/odk_to_farmer_intake.j2").read_text())
     assert json.loads(template.render(expanded={"oan_intake_sections":sections})) == sections
     assert set(sections) == set(SECTIONS) and len(SECTIONS) == 15
     assert sections['farmer_identity'][0]['foundational_id'] == '001234567890'
@@ -155,7 +155,7 @@ def test_native_schema_accepts_multi_answer_fields_and_native_validator_checks_e
     import asyncio
     from openg2p_registry_core.errors import G2PRegistryException
     from openg2p_registry_core.services.g2p_attribute_value_validator import G2PAttributeValueValidator
-    from openg2p_registry_oan_farmer_extension.register_domain import schemas, models
+    from openg2p_registry_farmer_extension.register_domain import schemas, models
 
     class CodedLists(G2PAttributeValueValidator):
         @property

@@ -15,7 +15,7 @@ No source/runtime changes or tests were executed for this read-only investigatio
 
 ## Shipped metadata
 
-In Farmer `farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/register-metadata/`:
+In Farmer `farmer-extension/src/openg2p_registry_farmer_extension/meta_data/register-metadata/`:
 
 - `g2p_intake_form_definitions.sql:1`: `household_ingestion_intake`, form `9055ab43-c85d-4833-bd00-ca657bb72650`, Household register `9055ab43-c85d-4833-bd00-ca657bb72644`, one verification, ingestion-only. Farmer has a separate Farmer-subject ingestion form.
 - `g2p_intake_form_ui_tabs.sql:3` and `g2p_intake_form_ui_tab_sections.sql:7` bind household information, household location and household members only. No Farmer identity, Farmer land/crop/input/membership sections are bound to this household form in these base bindings.

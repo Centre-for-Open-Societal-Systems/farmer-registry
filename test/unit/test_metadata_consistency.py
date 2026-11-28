@@ -18,7 +18,7 @@ from functools import cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-EXT = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
+EXT = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension"
 OAN_MODELS = EXT / "register_domain/models"
 
 # The platform base classes' columns (openg2p_registry_core.models, g2p_register.py and

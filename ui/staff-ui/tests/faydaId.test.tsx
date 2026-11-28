@@ -22,7 +22,7 @@ import '../overrides/src/oan/widgets/register';
 
 const SQL = path.join(
     __dirname,
-    '../../../farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/site-configuration/12_form_sections.sql',
+    '../../../farmer-extension/src/openg2p_registry_farmer_extension/meta_data/site-configuration/12_form_sections.sql',
 );
 const FARMER = 'a1a4d25a-1cd4-4356-abac-985a0b3c6bcd';
 

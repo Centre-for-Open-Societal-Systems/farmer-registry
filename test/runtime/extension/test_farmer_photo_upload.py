@@ -27,10 +27,10 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from openg2p_registry_oan_farmer_extension.register_domain.services import (
+from openg2p_registry_farmer_extension.register_domain.services import (
     g2p_register_domain_service_farmer as farmer_service_module,
 )
-from openg2p_registry_oan_farmer_extension.register_domain.services.g2p_register_domain_service_farmer import (
+from openg2p_registry_farmer_extension.register_domain.services.g2p_register_domain_service_farmer import (
     G2PRegisterDomainServiceFarmer,
 )
 

@@ -22,7 +22,7 @@ from collections import OrderedDict
 
 from openg2p_registry_core.models import G2PRegisterChangeRequestPayload
 from openg2p_registry_core.models.enum import ChangeActionEnum
-from openg2p_registry_oan_farmer_extension.register_domain.services.domain_validation_utils import (
+from openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils import (
     as_bool,
     is_blank,
     validation_error,

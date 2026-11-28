@@ -12,14 +12,14 @@ import json
 import re
 from pathlib import Path
 
-META = Path(__file__).parents[1] / "src/openg2p_registry_oan_farmer_extension/meta_data"
+META = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension/meta_data"
 OVERLAY = META / "site-configuration/92_head_of_household_yes_no.sql"
 SEED = META / "register-metadata/g2p_register_sections.sql"
 SECTIONS = {"farmer_household_household_member_section_02", "household_household_household_member_section_02"}
 MEMBER_REGISTER = "52979fdd-220c-48dd-8de0-0a434e786427"
 
 _spec = importlib.util.spec_from_file_location(
-    "widget_rules", Path(__file__).parents[1] / "src/openg2p_registry_oan_farmer_extension/register_domain/services/widget_rules.py")
+    "widget_rules", Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension/register_domain/services/widget_rules.py")
 widget_rules = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(widget_rules)
 

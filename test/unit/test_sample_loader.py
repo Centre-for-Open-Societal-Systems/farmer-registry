@@ -15,7 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SEED = ROOT / "docker/db-seed"
-LOADER = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/load_sample_data.py"
+LOADER = ROOT / "docker/db-seed/load_sample_data.py"
 
 
 @pytest.fixture(scope="module")

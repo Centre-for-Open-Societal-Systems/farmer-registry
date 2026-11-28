@@ -13,8 +13,8 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-META = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data"
-AWE = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/awe_meta_data"
+META = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/meta_data"
+AWE = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data"
 ID = r"'([0-9a-f-]+)'"
 
 

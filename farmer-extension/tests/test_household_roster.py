@@ -2,7 +2,7 @@ import unittest
 from datetime import date
 from types import SimpleNamespace
 
-from openg2p_registry_oan_farmer_extension.register_domain.services.utils.household_roster import (
+from openg2p_registry_farmer_extension.register_domain.services.utils.household_roster import (
     apply_household_roster_counts,
     compute_household_roster_counts,
     union_roster_people,

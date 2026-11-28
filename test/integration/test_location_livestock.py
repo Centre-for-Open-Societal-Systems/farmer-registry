@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 
 ROOT = Path(__file__).resolve().parents[2]
-META = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/register-metadata"
+META = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/meta_data/register-metadata"
 FARMER = "a1a4d25a-1cd4-4356-abac-985a0b3c6bcd"
 LIVESTOCK = "4bcb88a3-fc5e-44d2-abc6-e2c68670c5bb"
 FORM = "a1a4d25a-1cd4-4356-abac-8782382649"
@@ -71,7 +71,7 @@ async def main():
         G2PIntakeFormDataService, G2PIntakeFormLinkService,
     )
     from openg2p_registry_core.models import G2PIntakeFormSubmission
-    from openg2p_registry_oan_farmer_extension.register_domain.models import (
+    from openg2p_registry_farmer_extension.register_domain.models import (
         G2PIntakeFormFarmer, G2PIntakeFormLivestock,
     )
     engine = create_async_engine("postgresql+asyncpg://postgres:fixture@farmer-qa-db/postgres")
@@ -169,9 +169,9 @@ if __name__ == "__main__":
     fixture = ThreadingHTTPServer(("127.0.0.1", 0), MasterDataFixture)
     os.environ["REGISTRY_CORE_MASTER_DATA_API_URL"] = "http://127.0.0.1:" + str(fixture.server_port)
     threading.Thread(target=fixture.serve_forever, daemon=True).start()
-    sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_oan_farmer_extension")
+    sys.modules["openg2p_registry_extensions"] = importlib.import_module("openg2p_registry_farmer_extension")
     for part in ("register_domain", "register_domain.models", "register_domain.schemas", "register_domain.services"):
-        sys.modules["openg2p_registry_extensions." + part] = importlib.import_module("openg2p_registry_oan_farmer_extension." + part)
+        sys.modules["openg2p_registry_extensions." + part] = importlib.import_module("openg2p_registry_farmer_extension." + part)
     try:
         asyncio.run(main())
     finally:

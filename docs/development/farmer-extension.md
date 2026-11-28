@@ -1,6 +1,6 @@
 # OpenG2P Registry Farmer Extension
 
-`openg2p_registry_oan_farmer_extension` is the Farmer Registry domain package. See the [package guide](../../farmer-extension/README.md).
+`openg2p_registry_farmer_extension` is the Farmer Registry domain package. See the [package guide](../../farmer-extension/README.md).
 
 Extension package for the [OpenG2P Registry Platform](https://github.com/OpenG2P/openg2p-registry-gen2-core) that implements the domain of a **Farmer Registry** — a registry of farmers, their households, lands, crops, livestock, farm inputs and membership details, used to target, enrol and deliver agricultural and social-protection programmes.
 

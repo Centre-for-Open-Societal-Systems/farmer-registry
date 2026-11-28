@@ -8,8 +8,8 @@ import json
 import logging
 
 # Absolute: tests load this file by path, with no parent package.
-from openg2p_registry_oan_farmer_extension.register_domain.derived import ingested_email
-from openg2p_registry_oan_farmer_extension.register_domain.name_rules import name_problems
+from openg2p_registry_farmer_extension.register_domain.derived import ingested_email
+from openg2p_registry_farmer_extension.register_domain.name_rules import name_problems
 
 _logger = logging.getLogger(__name__)
 

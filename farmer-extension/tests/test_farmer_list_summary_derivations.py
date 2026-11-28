@@ -10,7 +10,7 @@ import pytest
 
 pytest.importorskip("openg2p_registry_core")
 
-from openg2p_registry_oan_farmer_extension.register_domain.services import derivations
+from openg2p_registry_farmer_extension.register_domain.services import derivations
 
 
 class _Result:

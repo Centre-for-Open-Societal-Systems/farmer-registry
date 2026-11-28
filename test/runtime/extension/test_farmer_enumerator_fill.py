@@ -10,7 +10,7 @@ import unittest
 from datetime import date, datetime
 from types import SimpleNamespace
 
-from openg2p_registry_oan_farmer_extension.register_domain.services.g2p_register_domain_service_farmer import (
+from openg2p_registry_farmer_extension.register_domain.services.g2p_register_domain_service_farmer import (
     G2PRegisterDomainServiceFarmer,
 )
 

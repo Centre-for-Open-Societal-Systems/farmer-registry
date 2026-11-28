@@ -17,7 +17,7 @@ ENTRY_POINTS = {
     "celery-worker": "openg2p_registry_celery_worker.main",
     "celery-beat": "openg2p_registry_celery_beat.main",
 }
-PACKAGE = "openg2p_registry_oan_farmer_extension"
+PACKAGE = "openg2p_registry_farmer_extension"
 SHARED = ("app", "config", "register_domain.models", "register_domain.schemas", "register_domain.services",
           "register_domain.id_generator", "ingestion_pipeline.enricher_services", "score_compute.services")
 
@@ -34,5 +34,5 @@ for name in SHARED:
 models = importlib.import_module("openg2p_registry_extensions.register_domain.models")
 for cls in ("G2PRegisterFarmer", "G2PIntakeFormFarmer", "G2PRegisterFarmerPhone"):
     assert getattr(models, cls).__module__.startswith(PACKAGE + ".register_domain.models"), cls
-assert importlib.util.find_spec("openg2p_registry_farmer_extension") is None
+assert importlib.util.find_spec("openg2p_registry_oan_farmer_extension") is None
 print(json.dumps({"image_boot": "PASS", "role": role, "extension": PACKAGE, "version": alias.__version__}))

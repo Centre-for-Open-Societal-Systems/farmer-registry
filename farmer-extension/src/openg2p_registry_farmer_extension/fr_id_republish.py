@@ -97,7 +97,7 @@ def json_safe_fanout():
     them and the payload write rolls back; fanout_outgest_rows_json passes the JSON-safe
     hierarchy that runtime.install() creates.
     """
-    from openg2p_registry_oan_farmer_extension.register_domain.services.outgest_json import (
+    from openg2p_registry_farmer_extension.register_domain.services.outgest_json import (
         fanout_outgest_rows_json,
     )
 
@@ -122,7 +122,7 @@ class _Queries:
     async def farmer(self, session, internal_record_id: str):
         from sqlalchemy import select
 
-        from openg2p_registry_oan_farmer_extension.register_domain.models import (
+        from openg2p_registry_farmer_extension.register_domain.models import (
             G2PRegisterFarmer,
         )
 

@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 
 from openg2p_registry_core.errors import G2PRegistryException
-from openg2p_registry_oan_farmer_extension.register_domain.services.household_submission_validation import (
+from openg2p_registry_farmer_extension.register_domain.services.household_submission_validation import (
     validate_household_roster,
 )
 

@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 
-from openg2p_registry_oan_farmer_extension.register_domain.services.ethiopian_calendar import (
+from openg2p_registry_farmer_extension.register_domain.services.ethiopian_calendar import (
     ethiopic_month_length,
     ethiopic_to_gregorian,
     gregorian_to_ethiopic,

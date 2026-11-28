@@ -7,7 +7,7 @@ import pytest
 pytest.importorskip("openg2p_registry_core")
 
 from openg2p_registry_core.errors import G2PRegistryException
-from openg2p_registry_oan_farmer_extension.register_domain.services import (
+from openg2p_registry_farmer_extension.register_domain.services import (
     household_intake as hi,
 )
 
@@ -139,7 +139,7 @@ class _Session:
 def test_clear_link_drops_the_link_on_the_submission_rows(monkeypatch):
     import asyncio
 
-    from openg2p_registry_oan_farmer_extension.register_domain.services import (
+    from openg2p_registry_farmer_extension.register_domain.services import (
         form_integrity,
     )
 

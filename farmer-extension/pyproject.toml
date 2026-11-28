@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openg2p-registry-oan-farmer-extension"
+name = "openg2p-registry-farmer-extension"
 description = "OpenAgriNet Farmer Registry domain for the OpenG2P Registry Platform"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -18,7 +18,7 @@ dynamic = ["version"]
 Repository = "https://github.com/Centre-for-Open-Societal-Systems/farmer-registry"
 
 [tool.hatch.version]
-path = "src/openg2p_registry_oan_farmer_extension/__init__.py"
+path = "src/openg2p_registry_farmer_extension/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/openg2p_registry_oan_farmer_extension"]
+packages = ["src/openg2p_registry_farmer_extension"]

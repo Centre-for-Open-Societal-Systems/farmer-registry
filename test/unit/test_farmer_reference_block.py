@@ -13,7 +13,7 @@ from pathlib import Path
 from jinja2 import ChainableUndefined, Environment, Undefined
 
 ROOT = Path(__file__).resolve().parents[2]
-EXTENSION = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
+EXTENSION = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension"
 TEMPLATES = EXTENSION / "templates"
 CATALOGUE = EXTENSION / "meta_data/data-scopes/farmer_reference.json"
 

@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-PKG = "openg2p_registry_oan_farmer_extension"
-FARMER_SERVICES = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/register_domain/services"
+PKG = "openg2p_registry_farmer_extension"
+FARMER_SERVICES = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension/register_domain/services"
 CHAIN = [
     f"{PKG}.register_domain",
     f"{PKG}.register_domain.services",
@@ -89,7 +89,7 @@ def roster(monkeypatch):
     spec.loader.exec_module(module)
     sys.modules[CHAIN[2]].household_roster = module
 
-    from openg2p_registry_oan_farmer_extension import household_roster_head
+    from openg2p_registry_farmer_extension import household_roster_head
 
     assert household_roster_head.install()
     assert household_roster_head.install()  # idempotent

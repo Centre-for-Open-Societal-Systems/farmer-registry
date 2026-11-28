@@ -18,7 +18,7 @@ import yaml
 from jinja2 import Environment
 
 ROOT = Path(__file__).resolve().parents[2]
-EXT = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
+EXT = ROOT / "farmer-extension/src/openg2p_registry_farmer_extension"
 VALUES = ROOT / "helm/openg2p-farmer-registry/values.yaml"
 
 # Scope ids that are not top-level keys today. The sanity names are the section scopes of a later platform's data

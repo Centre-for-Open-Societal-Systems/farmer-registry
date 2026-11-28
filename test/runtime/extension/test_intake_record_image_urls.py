@@ -21,10 +21,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from openg2p_registry_core.services import G2PIntakeFormDataService
 
-from openg2p_registry_oan_farmer_extension.register_domain.services import (
+from openg2p_registry_farmer_extension.register_domain.services import (
     g2p_intake_form_data_service as service_module,
 )
-from openg2p_registry_oan_farmer_extension.register_domain.services.g2p_intake_form_data_service import (
+from openg2p_registry_farmer_extension.register_domain.services.g2p_intake_form_data_service import (
     SECTION_PAYLOAD_READERS,
     attach_record_image_urls,
     install_record_image_url_resolution,

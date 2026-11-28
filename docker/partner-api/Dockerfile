@@ -4,7 +4,7 @@ FROM openg2p/openg2p-registry-partner-api:${BASE_IMAGE_VERSION}
 
 # Selects this registry's domain extension; the platform publishes it as
 # openg2p_registry_extensions.
-ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_oan_farmer_extension
+ENV REGISTRY_EXTENSION_MODULE=openg2p_registry_farmer_extension
 
 COPY farmer-extension/ /app/farmer-extension/
 RUN pip install --no-cache-dir /app/farmer-extension

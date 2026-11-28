@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-_ROOT = Path(__file__).parents[1] / "src/openg2p_registry_oan_farmer_extension"
+_ROOT = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension"
 _spec = importlib.util.spec_from_file_location("name_rules", _ROOT / "register_domain/name_rules.py")
 name_rules = importlib.util.module_from_spec(_spec)
 sys.modules["name_rules"] = name_rules

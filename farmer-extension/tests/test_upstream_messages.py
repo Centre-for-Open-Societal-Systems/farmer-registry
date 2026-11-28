@@ -8,7 +8,7 @@ import importlib.util
 import re
 from pathlib import Path
 
-_PATH = Path(__file__).parents[1] / "src/openg2p_registry_oan_farmer_extension/register_domain/services/upstream_messages.py"
+_PATH = Path(__file__).parents[1] / "src/openg2p_registry_farmer_extension/register_domain/services/upstream_messages.py"
 _spec = importlib.util.spec_from_file_location("upstream_messages", _PATH)
 upstream_messages = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(upstream_messages)

@@ -10,10 +10,10 @@ pytest.importorskip("openg2p_registry_core")
 
 from openg2p_registry_core.errors import G2PRegistryException
 
-from openg2p_registry_oan_farmer_extension.register_domain.services import (
+from openg2p_registry_farmer_extension.register_domain.services import (
     attribute_messages as am,
 )
-from openg2p_registry_oan_farmer_extension.register_domain.services.upstream_messages import (
+from openg2p_registry_farmer_extension.register_domain.services.upstream_messages import (
     MDS_UNAVAILABLE,
 )
 

@@ -73,7 +73,7 @@ def main():
         run(seed, 'metadata-seed')
         run(seed, 'metadata-seed-rerun')
         run(['docker', 'exec', pg, 'psql', '-X', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', database,
-             '-f', '/repo/farmer-extension/src/openg2p_registry_oan_farmer_extension/reporting/reporting_views.sql'], 'reporting')
+             '-f', '/repo/docker/db-seed/reporting_views.sql'], 'reporting')
         counts = json.loads(sql("SELECT json_build_object('farmers',(SELECT count(*) FROM g2p_register_farmers),'intakes',(SELECT count(*) FROM g2p_intake_form_farmers),'metadata',(SELECT count(*) FROM g2p_register_definitions),'coordinates',(SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name ~ '^g2p_(register_|register_history_|intake_form_)(farmers|households|household_members|lands)$' AND column_name IN ('latitude','longitude','altitude') AND data_type IN ('real','double precision')))").strip())
         if counts['farmers'] != 0 or counts['intakes'] != 0 or counts['metadata'] < 1 or counts['coordinates'] != 36:
             raise RuntimeError('Bootstrap did not produce an empty compatible register')

@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 _SEED = (Path(__file__).resolve().parents[1]
-         / "src/openg2p_registry_oan_farmer_extension/meta_data/site-configuration/87_readable_remaining_text.sql")
+         / "src/openg2p_registry_farmer_extension/meta_data/site-configuration/87_readable_remaining_text.sql")
 _TEXT = _SEED.read_text(encoding="utf-8")
 
 
@@ -56,7 +56,7 @@ def test_task_and_history_words_are_sentence_case():
 
 
 _LABELS = (Path(__file__).resolve().parents[1]
-           / "src/openg2p_registry_oan_farmer_extension/meta_data/site-configuration/87_readable_text_labels.sql").read_text(encoding="utf-8")
+           / "src/openg2p_registry_farmer_extension/meta_data/site-configuration/87_readable_text_labels.sql").read_text(encoding="utf-8")
 
 
 def test_the_fourth_pass_labels_say_what_the_field_holds():

@@ -1,4 +1,4 @@
-from openg2p_registry_oan_farmer_extension.awe_error_message import awe_error_message
+from openg2p_registry_farmer_extension.awe_error_message import awe_error_message
 
 
 def test_a_plain_sentence_is_kept():
