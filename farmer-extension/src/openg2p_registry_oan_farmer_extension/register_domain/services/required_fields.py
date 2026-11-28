@@ -32,7 +32,7 @@ import contextvars
 import logging
 from datetime import datetime
 
-from openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils import (
+from openg2p_registry_oan_farmer_extension.register_domain.services.domain_validation_utils import (
     validation_error,
 )
 

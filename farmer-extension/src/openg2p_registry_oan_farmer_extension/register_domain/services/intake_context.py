@@ -7,7 +7,7 @@ Change requests and normal domain validation retain the upstream path.
 """
 from contextvars import ContextVar
 
-from openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils import validation_error
+from openg2p_registry_oan_farmer_extension.register_domain.services.domain_validation_utils import validation_error
 
 current_intake = ContextVar("oan_current_intake", default=None)
 

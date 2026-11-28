@@ -3,7 +3,7 @@ from typing import Dict
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from openg2p_registry_core.interfaces import G2PPayloadEnricherInterface
-from openg2p_registry_extensions.register_domain.models import G2PRegisterHouseholdMember
+from ...register_domain.models import G2PRegisterHouseholdMember
 
 
 _logger = logging.getLogger('g2p-payload-enricher-service')

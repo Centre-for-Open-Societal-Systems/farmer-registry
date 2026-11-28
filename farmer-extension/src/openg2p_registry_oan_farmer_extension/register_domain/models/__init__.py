@@ -1,11 +1,34 @@
-# Everything the farmer extension provides, then OAN's additions below. Core
-# resolves classes by name on this module, so a name defined here wins.
 import logging
 
 from openg2p_registry_core.models import G2PRegisterAuthentication
 from openg2p_registry_core.models.g2p_register import _populate_record_name, _populate_search_text
-from openg2p_registry_farmer_extension.register_domain import models as _farmer
-from openg2p_registry_farmer_extension.register_domain.models import *
+from .farmer import (
+    G2PRegisterFarmer as _FarmerRegister, G2PRegisterHistoryFarmer,
+    G2PIntakeFormFarmer as _FarmerIntakeForm,
+)
+from .household import G2PRegisterHousehold, G2PRegisterHistoryHousehold, G2PIntakeFormHousehold
+from .household_member import G2PRegisterHouseholdMember, G2PRegisterHistoryHouseholdMember, G2PIntakeFormHouseholdMember
+from .crop import G2PRegisterCrop, G2PRegisterHistoryCrop, G2PIntakeFormCrop
+from .land import G2PRegisterLand, G2PRegisterHistoryLand, G2PIntakeFormLand
+from .farm_inputs import G2PRegisterFarmInputs, G2PRegisterHistoryFarmInputs, G2PIntakeFormFarmInputs
+from .livestock import G2PRegisterLivestock, G2PRegisterHistoryLivestock, G2PIntakeFormLivestock
+from .membership_details import G2PRegisterMembershipDetails, G2PRegisterHistoryMembershipDetails, G2PIntakeFormMembershipDetails
+from .enums import (
+    DisabilityTypeEnum,
+    DisabilitySeverityEnum,
+    LanguageSpokenEnum,
+    LandOwnershipTypeEnum,
+    LandSizeUnitEnum,
+    CurrentLandUseEnum,
+    FarmingTypeEnum,
+    CropEndUseEnum,
+    LivestockSystemEnum,
+    FarmerClusterRoleEnum,
+    RelationshipToTheHeadEnum,
+)
+
+G2PRegisterFarmer = _FarmerRegister
+G2PIntakeFormFarmer = _FarmerIntakeForm
 from sqlalchemy import event
 from sqlalchemy.orm import column_property, mapped_column
 
@@ -26,7 +49,7 @@ def _add_oan_columns() -> None:
     """Append each OAN field to the register, history and intake classes."""
     for mnemonic, fields in OAN_FIELDS.items():
         for prefix in ("G2PRegister", "G2PRegisterHistory", "G2PIntakeForm"):
-            cls = getattr(_farmer, f"{prefix}{mnemonic}")
+            cls = globals()[f"{prefix}{mnemonic}"]
             for name, (column_type, _) in fields.items():
                 if name not in cls.__table__.c:  # importing twice must not add twice
                     setattr(cls, name, mapped_column(column_type, nullable=True))
@@ -35,7 +58,7 @@ def _add_oan_columns() -> None:
 _add_oan_columns()
 
 
-class G2PRegisterFarmer(_farmer.G2PRegisterFarmer, G2PRegisterAuthentication):
+class G2PRegisterFarmer(_FarmerRegister, G2PRegisterAuthentication):
     """Registered OAN model subclass on the native Farmer table.
 
     Core's registrant authentication mixin puts the outcome of a Fayda
@@ -57,7 +80,7 @@ def _map_authentication_columns_on_native_class() -> None:
     through its native class, whose to_dict walks every table column. Map the
     same columns on that class so a native instance carries them as well.
     """
-    native = _farmer.G2PRegisterFarmer
+    native = _FarmerRegister
     mapper = native.__mapper__
     for name in G2PRegisterFarmer.__mapper__.c.keys():
         if name in mapper.c or name not in native.__table__.c:
@@ -68,7 +91,7 @@ def _map_authentication_columns_on_native_class() -> None:
 _map_authentication_columns_on_native_class()
 
 
-class G2PIntakeFormFarmer(_farmer.G2PIntakeFormFarmer):
+class G2PIntakeFormFarmer(_FarmerIntakeForm):
     """Intake discovery resolves this exported subclass by its native name."""
 
     def get_search_text_fields(self) -> str:
@@ -127,8 +150,12 @@ def _readable_name_interceptor(mnemonic: str, intake: bool):
 
 for _mnemonic in READABLE_NAME_REGISTERS:
     for _prefix in ("G2PRegister", "G2PIntakeForm"):
+        if _mnemonic == "Farmer":
+            _model = _FarmerRegister if _prefix == "G2PRegister" else _FarmerIntakeForm
+        else:
+            _model = globals()[f"{_prefix}{_mnemonic}"]
         event.listen(
-            getattr(_farmer, f"{_prefix}{_mnemonic}").record_name,
+            _model.record_name,
             "set",
             _readable_name_interceptor(_mnemonic, _prefix == "G2PIntakeForm"),
             retval=True,

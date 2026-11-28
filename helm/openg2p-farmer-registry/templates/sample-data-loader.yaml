@@ -1,5 +1,5 @@
 {{/*
-Farmer sample-data loader (docker/db-seed/load_sample_data.py), run as this chart's own hook Job.
+Farmer sample-data loader (farmer-extension/src/openg2p_registry_oan_farmer_extension/load_sample_data.py), run as this chart's own hook Job.
 
 The loader needs Master Data's API settings and the public staff IAM URL. The platform's db-seed
 Job (openg2p-registry 1.2.x) does not pass them and has no setting for extra environment. Helm 3

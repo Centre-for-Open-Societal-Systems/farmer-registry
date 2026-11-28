@@ -5,19 +5,12 @@ documentation describes: the registry images are the platform images with this
 package installed, selected with
 `REGISTRY_EXTENSION_MODULE=openg2p_registry_oan_farmer_extension`.
 
-OpenG2P's Farmer extension (1.0.3, the code of the published Farmer images) is a
-dependency: the distribution `openg2p-registry-farmer-extension`, import name
-`openg2p_registry_farmer_extension`, which each Python image builds as a wheel from
-the OpenG2P/farmer-registry commit pinned under `[tool.oan.upstream-farmer-extension]`
-in `pyproject.toml` (upstream reports 1.0.3 on later commits too, so the commit is
-what identifies it). `../sample-farmer-extension/` is that commit's `farmer-extension/`
-tree unchanged (`test/unit/test_upstream_farmer_extension.py` checks the git tree
-hash), to diff against on an upgrade and for the tests that read upstream source
-without a platform. This package, `openg2p-registry-oan-farmer-extension`, is the
-OpenAgriNet layer: each module re-exports the Farmer extension's and redefines the
-classes it extends under the same names, because the platform resolves domain classes by
-name on these modules. `__init__.py` makes the platform's
-`openg2p_registry_extensions.*` names resolve to the modules already loaded here.
+The package owns the Farmer Registry domain: models, schemas, services, migration,
+ingestion, metadata, templates and reporting. It uses the OpenG2P platform directly;
+no separate Farmer extension is installed. The original Farmer model and service
+behavior was adapted from OpenG2P/farmer-registry at `19597f7c` (MPL-2.0).
+`__init__.py` keeps the platform's `openg2p_registry_extensions.*` aliases pointed
+at the same module objects to avoid declaring tables twice.
 
 | Path | Holds |
 |---|---|
@@ -26,8 +19,9 @@ name on these modules. `__init__.py` makes the platform's
 | `register_domain/derived.py` | the values derived rather than typed (land totals in hectares, location names, Ethiopian calendar dates, phone numbers, the farmer's search text), with no framework imports |
 | `register_domain/ethiopian_calendar.py` | Gregorian and Ethiopian calendar conversion |
 | `register_domain/services/` | the farmer domain services, each extended with the derived values (`derivations.py`) and the section widgets' value rules (`widget_rules.py`); the FarmerPhone service |
-| `app.py` | the farmer initializer, plus migration of OAN registers |
+| `app.py` | the platform initializer and Farmer Registry database migrations |
 | `meta_data/`, `awe_meta_data/`, `templates/` | OpenG2P's Farmer seed content, with the OAN layer in `site-configuration/` (applied after the Farmer tree) and OAN's templates (`farmer_dci_search_response.j2` is upstream's DCI template plus OAN's `farmer_reference` block) |
+| `reporting/` | reporting views and geographic-level sync |
 | `tests/` | `uv run --no-project --with pytest pytest farmer-extension/tests` |
 
 Images are built FROM the registry platform images (`docker/<component>/Dockerfile`).

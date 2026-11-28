@@ -21,7 +21,6 @@
   "observedInstalledPackages": {
     "openg2p-registry-core": "1.2.1",
     "openg2p-registry-celery-worker": "1.2.1",
-    "openg2p-registry-farmer-extension": "1.0.3",
     "openg2p-registry-oan-farmer-extension": "1.0.3+oan.1"
   },
   "nativeWorkerSaveAcceptance": "REQUIRED; distribution versions alone are not ABI proof"

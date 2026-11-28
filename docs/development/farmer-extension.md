@@ -1,11 +1,6 @@
 # OpenG2P Registry Farmer Extension
 
-In this repository OpenG2P's Farmer extension is a pinned dependency
-(`openg2p_registry_farmer_extension`, built from the OpenG2P/farmer-registry commit in
-`farmer-extension/pyproject.toml`), with the OpenAgriNet layer,
-`openg2p_registry_oan_farmer_extension`, on top ([farmer-extension/README.md](../../farmer-extension/README.md));
-`sample-farmer-extension/` is the extension as OpenG2P publishes it. The rest of
-this page describes OpenG2P's Farmer domain.
+`openg2p_registry_oan_farmer_extension` is the Farmer Registry domain package. See the [package guide](../../farmer-extension/README.md).
 
 Extension package for the [OpenG2P Registry Platform](https://github.com/OpenG2P/openg2p-registry-gen2-core) that implements the domain of a **Farmer Registry** — a registry of farmers, their households, lands, crops, livestock, farm inputs and membership details, used to target, enrol and deliver agricultural and social-protection programmes.
 
@@ -36,10 +31,8 @@ Every register and supporting table has a `*_history` twin for version snapshots
 
 ## Install (from source)
 
-OpenG2P's Farmer extension first, from the commit `farmer-extension/pyproject.toml` pins
-(`[tool.oan.upstream-farmer-extension]`), then the OAN layer, as the Dockerfiles do:
+Use an environment with the matching OpenG2P Registry Platform installed (the API and Celery Dockerfiles use the pinned platform images):
 
 ```bash
-pip install "git+https://github.com/OpenG2P/farmer-registry.git@19597f7c15e13adf93ce85a630bede8a8826b84e#subdirectory=farmer-extension"
 pip install farmer-extension/
 ```

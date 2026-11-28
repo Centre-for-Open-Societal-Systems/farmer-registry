@@ -86,7 +86,7 @@ def initialize(host):
         resolved[name] = {"module": method.__module__, "qualname": method.__qualname__,
             "sha256": hashlib.sha256(source.encode()).hexdigest(), "source": source}
     print(json.dumps({"resolved_worker_save_callables": resolved}), flush=True)
-    package_names = ("openg2p-registry-core", "openg2p-registry-celery-worker", "openg2p-registry-farmer-extension",
+    package_names = ("openg2p-registry-core", "openg2p-registry-celery-worker",
                      "openg2p-registry-oan-farmer-extension")
     packages = {name: importlib.metadata.version(name) for name in package_names}
     contract = json.loads((ROOT / "ci/validation/native-release-contract.json").read_text(encoding="utf-8"))

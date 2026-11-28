@@ -21,8 +21,8 @@ COPY farmer-extension/src/openg2p_registry_oan_farmer_extension/awe_meta_data/ /
 # Templates are uploaded with LOAD_TEMPLATES=true under their file names.
 COPY farmer-extension/src/openg2p_registry_oan_farmer_extension/templates/ /seed/templates/
 
-COPY farmer-extension/reporting/ /seed/oan-reporting/
-COPY farmer-extension/reporting/reporting_views.sql /seed/reporting_views.sql
+COPY farmer-extension/src/openg2p_registry_oan_farmer_extension/reporting/ /seed/oan-reporting/
+COPY farmer-extension/src/openg2p_registry_oan_farmer_extension/reporting/reporting_views.sql /seed/reporting_views.sql
 
 # Sample data (LOAD_SAMPLE_DATA=true). The platform image checks out openg2p-data
 # at /openg2p-data; this one checks out the OAN copy at a pinned commit in its place:
@@ -40,7 +40,8 @@ RUN rm -rf /openg2p-data && mkdir -p /openg2p-data && cd /openg2p-data \
 # (OpenG2P/registry-platform docker/db-seed/mds_client.py at e7e6e269), unchanged.
 # Platform images after rc.557 ship it as /seed/mds_client.py; drop this copy
 # when the platform pin moves past it.
-COPY --chmod=755 docker/db-seed/mds_client.py docker/db-seed/load_sample_data.py /seed/
+COPY --chmod=755 docker/db-seed/mds_client.py /seed/
+COPY --chmod=755 farmer-extension/src/openg2p_registry_oan_farmer_extension/load_sample_data.py /seed/
 
 # OAN theme: the staff-portal theme (palette, background image, logo) is data in
 # openg2p-data (themes/oan_theme), checked out above at the one pinned commit.

@@ -15,6 +15,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SEED = ROOT / "docker/db-seed"
+LOADER = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/load_sample_data.py"
 
 
 @pytest.fixture(scope="module")
@@ -23,9 +24,12 @@ def loader():
     saved = {name: sys.modules.get(name) for name in stubs}
     sys.modules.update(stubs)
     try:
-        spec = importlib.util.spec_from_file_location("farmer_sample_loader", SEED / "load_sample_data.py")
+        spec = importlib.util.spec_from_file_location("farmer_sample_loader", LOADER)
         module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+        # The seed image copies the platform client next to the loader.
+        with pytest.MonkeyPatch.context() as env:
+            env.syspath_prepend(str(SEED))
+            spec.loader.exec_module(module)
         yield module
     finally:
         for name, module in saved.items():
@@ -36,7 +40,7 @@ def loader():
 
 
 def test_loader_signs_in_like_the_portal_and_never_changes_keycloak():
-    source = (SEED / "load_sample_data.py").read_text(encoding="utf-8")
+    source = LOADER.read_text(encoding="utf-8")
     code = "\n".join(line for line in source.splitlines() if not line.lstrip().startswith("#"))
     # No password grant, no Keycloak admin API, no direct register writes.
     for forbidden in ("grant_type", "KEYCLOAK_ADMIN", "admin-cli", "/admin/realms", "directAccessGrants",

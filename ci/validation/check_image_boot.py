@@ -3,14 +3,10 @@
 The platform selects the extension with REGISTRY_EXTENSION_MODULE and publishes it
 as openg2p_registry_extensions. The check confirms that the Farmer extension is
 the one selected, that the platform's alias names resolve to the modules loaded
-under the real name (one module object, so mapped tables are declared once), and
-that the OAN classes are the ones the platform resolves by name, each subclassing
-OpenG2P's Farmer extension class of the same name from its own installed
-distribution.
+under the real name (one module object, so mapped tables are declared once), and that the domain classes resolve from the Farmer Registry package.
 Run inside an image:  python /repo/ci/validation/check_image_boot.py <role>
 """
 import importlib
-import importlib.metadata
 import json
 import os
 import sys
@@ -22,7 +18,6 @@ ENTRY_POINTS = {
     "celery-beat": "openg2p_registry_celery_beat.main",
 }
 PACKAGE = "openg2p_registry_oan_farmer_extension"
-UPSTREAM = "openg2p_registry_farmer_extension"
 SHARED = ("app", "config", "register_domain.models", "register_domain.schemas", "register_domain.services",
           "register_domain.id_generator", "ingestion_pipeline.enricher_services", "score_compute.services")
 
@@ -39,11 +34,5 @@ for name in SHARED:
 models = importlib.import_module("openg2p_registry_extensions.register_domain.models")
 for cls in ("G2PRegisterFarmer", "G2PIntakeFormFarmer", "G2PRegisterFarmerPhone"):
     assert getattr(models, cls).__module__.startswith(PACKAGE + ".register_domain.models"), cls
-upstream_models = importlib.import_module(UPSTREAM + ".register_domain.models")
-for cls in ("G2PRegisterFarmer", "G2PIntakeFormFarmer"):
-    assert issubclass(getattr(models, cls), getattr(upstream_models, cls)), cls
-upstream = sys.modules[UPSTREAM]
-print(json.dumps({"image_boot": "PASS", "role": role, "extension": PACKAGE,
-                  "version": alias.__version__, "upstream_farmer_extension": UPSTREAM,
-                  "upstream_farmer_extension_version": importlib.metadata.version("openg2p-registry-farmer-extension"),
-                  "upstream_farmer_extension_file": upstream.__file__}))
+assert importlib.util.find_spec("openg2p_registry_farmer_extension") is None
+print(json.dumps({"image_boot": "PASS", "role": role, "extension": PACKAGE, "version": alias.__version__}))

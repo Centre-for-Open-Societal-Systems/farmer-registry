@@ -16,8 +16,7 @@ The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`)
 
 | Path | Purpose |
 | --- | --- |
-| `farmer-extension/` | The OAN Farmer extension, `openg2p_registry_oan_farmer_extension`: OpenG2P's Farmer extension (`openg2p_registry_farmer_extension`, a dependency pinned to one upstream commit) with the OAN models, services, metadata (`meta_data/site-configuration/`), ODK enrichment and reporting on top, with its tests |
-| `sample-farmer-extension/` | OpenG2P's Farmer extension as published, for comparison on upgrades; never built |
+| `farmer-extension/` | The Farmer Registry domain package, `openg2p_registry_oan_farmer_extension`, with models, services, migrations, seed metadata, templates, reporting and ODK ingestion. |
 | `ui/staff-ui/overrides/` | Registered OAN widgets and supported source overlays |
 | `docker/<component>/Dockerfile` | Images built FROM the registry platform images with the Farmer extension installed: staff-api, partner-api, celery, staff-ui, db-seed, sanity-tests |
 | `docker/db-seed/` | The seed image: the registry platform's db-seed with the Farmer extension's metadata, approval policy, templates, reporting views and sample loader |
@@ -31,7 +30,7 @@ The layout follows the OpenG2P registry repositories (`OpenG2P/farmer-registry`)
 | `docs/` | Current guides |
 
 Sample data lives only in [openg2p-data](https://github.com/Centre-for-Open-Societal-Systems/openg2p-data).
-The db-seed image's sample loader (`docker/db-seed/load_sample_data.py`, run only with
+The db-seed image's sample loader (`farmer-extension/src/openg2p_registry_oan_farmer_extension/load_sample_data.py`, run only with
 `LOAD_SAMPLE_DATA=true`) reads the sample people from Master Data's API and their farm facts
 from the ETH-OAN pack. It enters each person as a farmer intake and approves it like any other:
 stage 1 as `alex.carter`, stage 2 as `nina.patel`, signed in through the staff portal's sign-in

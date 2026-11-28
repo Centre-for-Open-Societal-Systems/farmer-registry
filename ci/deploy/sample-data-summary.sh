@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Print the sample loader's SUMMARY line (docker/db-seed/load_sample_data.py) after a delivery with LOAD_SAMPLE_DATA=true.
+# Print the sample loader's SUMMARY line (farmer-extension/src/openg2p_registry_oan_farmer_extension/load_sample_data.py) after a delivery with LOAD_SAMPLE_DATA=true.
 # The loader always exits 0 so that sample data never fails the registry upgrade; this step is how the pipeline still shows
 # "SUCCESS, but only 0 of 21 loaded". It exits 1 when the summary is missing or not OK, and the pipeline turns that into
 # UNSTABLE. Read-only: kubectl get and logs on the hook Job helm left in place (delete policy before-hook-creation).

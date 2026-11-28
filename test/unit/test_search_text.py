@@ -15,8 +15,7 @@ from test_metadata_consistency import columns, models
 
 ROOT = Path(__file__).resolve().parents[2]
 EXT = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension"
-# OpenG2P's services at the pinned commit; sample-farmer-extension/ is that tree unchanged.
-NATIVE_SERVICES = ROOT / "sample-farmer-extension/src/openg2p_registry_farmer_extension/register_domain/services"
+FARMER_SERVICES = ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/register_domain/services"
 
 # register_domain/services/__init__.py registers FarmerPhoneService under the FarmerPhone register's name.
 OAN_SERVICES = {"FarmerPhone": (EXT / "register_domain/services/farmer_phone.py", "FarmerPhoneService")}
@@ -24,7 +23,7 @@ OAN_SERVICES = {"FarmerPhone": (EXT / "register_domain/services/farmer_phone.py"
 
 def search_text_reads():
     """{register mnemonic: field names its construct_search_text reads}."""
-    services = {path: None for path in sorted(NATIVE_SERVICES.glob("g2p_register_domain_service_*.py"))}
+    services = {path: None for path in sorted(FARMER_SERVICES.glob("g2p_register_domain_service_*.py"))}
     services.update({path: (mnemonic, name) for mnemonic, (path, name) in OAN_SERVICES.items()})
     reads = {}
     for path, oan in services.items():

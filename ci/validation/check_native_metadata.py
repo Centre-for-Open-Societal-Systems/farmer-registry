@@ -206,7 +206,7 @@ def run():
                     raise RuntimeError(f'{path.relative_to(ROOT)}: {error}') from error
             snapshots.append(native('snapshot').decode().splitlines()[-1])
         assert snapshots[0] == snapshots[1], 'Repeated metadata differs'
-        reporting = (ROOT/'farmer-extension/reporting/reporting_views.sql').read_bytes()
+        reporting = (ROOT/'farmer-extension/src/openg2p_registry_oan_farmer_extension/reporting/reporting_views.sql').read_bytes()
         for attempt in (1,2):
             command('docker','exec','-i',database,'psql','-X','-U','postgres','-d','metadata_check',
                 '-v','ON_ERROR_STOP=1',data=reporting)

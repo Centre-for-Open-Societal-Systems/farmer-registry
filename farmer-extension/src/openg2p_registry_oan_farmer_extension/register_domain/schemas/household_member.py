@@ -37,4 +37,3 @@ class G2PIntakeFormSchemaHouseholdMember(G2PIntakeFormSchemaBase, G2PRegisterBas
     Inherits fields from G2PRegisterBaseSchema, G2PPersonSchema, and G2PGeoSchema.
     Attributes inherited from G2PSchemaHouseholdMember are specific to the Household Member domain and are included in the intake form schema for data collection.
     """
-

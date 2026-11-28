@@ -8,13 +8,9 @@ the git log and the pull requests.
 
 ### Changed
 
-- OpenG2P's Farmer extension is a dependency instead of a copy in the OAN package (G2R-635). The OAN layer is its
-  own distribution, `openg2p-registry-oan-farmer-extension` (module `openg2p_registry_oan_farmer_extension`, the
-  images' `REGISTRY_EXTENSION_MODULE`). The staff-api, partner-api and celery images build
-  `openg2p-registry-farmer-extension` as a wheel from OpenG2P/farmer-registry `19597f7c`, the commit whose
-  `farmer-extension/` is `sample-farmer-extension/` and the 1.0.3 code the copy held, so no table, column or
-  behaviour changes. Upstream's 1.2 Farmer extension is not taken here: it moves and removes farmer and household
-  columns.
+- Consolidate the Farmer Registry domain into `openg2p_registry_oan_farmer_extension` (G2R-635).
+  The staff API, partner API and Celery install that one package on the OpenG2P platform.
+  The seed image takes its metadata, templates and reporting SQL from the same source.
 
 ### Added
 

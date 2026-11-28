@@ -10,16 +10,7 @@ KEYS = ("registry.change_request.farmer.default", "registry.change_request.house
 ADMIN_RULE = '{"user_id": "admin"}'
 
 
-def test_native_farmer_policy_is_carried_unmodified():
-    base = ROOT / "sample-farmer-extension/src/openg2p_registry_farmer_extension/awe_meta_data"
-    stage = (base / "20_approval_stage.sql").read_text()
-    rules = (base / "30_approver_rule.sql").read_text()
-    for key in ("registry.change_request.farmer", "registry.change_request.household",
-                "registry.intake_form.farmer", "registry.intake_form.household"):
-        for order, user in ((1, "alex.carter"), (2, "nina.patel")):
-            assert re.search(re.escape("'" + key + "'") + rf", {order}, 'Stage {order} Officers', 'all'", stage)
-            assert re.search(re.escape("'" + key + "'") + rf", {order}, 'user',.*" + re.escape(user), rules)
-    assert "'block'" in stage
+def test_farmer_runtime_does_not_install_geographic_approval():
     runtime = (ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/runtime.py").read_text()
     assert "geo_approval" not in runtime
 
@@ -67,7 +58,6 @@ def test_existing_databases_are_moved_in_place_and_nothing_else_is_rewritten():
     bindings = (ROOT / "farmer-extension/src/openg2p_registry_oan_farmer_extension/meta_data/site-configuration/55_default_approvals.sql").read_text()
     assert "context_field_names=NULL" in bindings
     # The seed carries the Farmer callback registration and OAN's policy only;
-    # OpenG2P's Farmer policy files (sample-farmer-extension) are not shipped.
     carried = sorted(p.name for p in OAN_SEEDS.glob("*.sql.tpl"))
     assert carried == ["40_callback_secret.sql.tpl"]
     dockerfile = (ROOT / "docker/db-seed/Dockerfile").read_text()

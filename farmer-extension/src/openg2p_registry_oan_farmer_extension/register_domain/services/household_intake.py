@@ -15,15 +15,13 @@ farmer of it is its head. Otherwise the message says which change request to
 raise first. Nothing reaches a register without its own approval.
 """
 
-from openg2p_registry_farmer_extension.register_domain.services import (
-    G2PFarmerIntakeFormDataService,
-)
-from openg2p_registry_farmer_extension.register_domain.services.domain_validation_utils import (
+from .g2p_intake_form_data_service_farmer import G2PFarmerIntakeFormDataService
+from openg2p_registry_oan_farmer_extension.register_domain.services.domain_validation_utils import (
     as_bool,
     is_blank,
     validation_error,
 )
-from openg2p_registry_farmer_extension.register_domain.services.household_submission_validation import (
+from openg2p_registry_oan_farmer_extension.register_domain.services.household_submission_validation import (
     validate_household_roster,
 )
 from openg2p_registry_core.errors import G2PRegistryErrorCodes, G2PRegistryException
